@@ -37,6 +37,12 @@
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html,body { width:100%; height:100%; overflow:hidden; background:var(--sky-3); font-family:var(--font-ui); color:#fff; }
 #game-canvas { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+/* #20 iOS hardening: a hold must never become text selection, the Copy/Look Up
+   callout, or a stolen gesture — selection + callout are OFF app-wide, and every
+   play surface fully owns its touches (no scroll/zoom/callout hijack mid-hold). */
+* { -webkit-touch-callout: none; }
+html, body, .screen, .panel, #hud, #stick-layer, #scheme-ui, #touch-controls, button, .racer-tile, .track-card { -webkit-user-select: none; user-select: none; }
+#touch-controls, #scheme-ui, .tc-btn { touch-action: none; }
 .hidden { display:none !important; }
 button { font-family:inherit; cursor:pointer; }
 
@@ -74,8 +80,8 @@ button { font-family:inherit; cursor:pointer; }
 @keyframes landpop { 0%{ transform:scale(1.6) } 100%{ transform:scale(1) } }
 #item-icon { font-size:40px; line-height:1; transition:transform .13s ease; }
 #item-name { font-size:8.5px; font-weight:700; text-align:center; padding:2px 6px 0; letter-spacing:.2px; line-height:1.05; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.8); }
-#top-btns { position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; }
-.icon-btn { width:44px; height:44px; border-radius:50%; border:3px solid var(--ink-pure); background:var(--chip-dark); font-size:20px; color:#fff; box-shadow:0 3px 0 rgba(10,10,20,.5); }
+#top-btns { position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; z-index:30; }
+.icon-btn { width:44px; height:44px; border-radius:50%; border:3px solid var(--ink-pure); background:var(--chip-dark); font-size:20px; color:#fff; box-shadow:0 3px 0 rgba(10,10,20,.5); pointer-events:auto; touch-action:manipulation; cursor:pointer; position:relative; z-index:30; }
 #wrong-way { position:absolute; top:22%; left:50%; transform:translateX(-50%); font-family:var(--font-display); font-size:34px; color:#ff5252; -webkit-text-stroke:1.5px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure); animation:blink .5s infinite alternate; white-space:nowrap; }
 @keyframes blink { from{opacity:1} to{opacity:.35} }
 /* Countdown numerals: giant checker-filled display type (POLISH.md §2.4) */
@@ -93,12 +99,12 @@ button { font-family:inherit; cursor:pointer; }
   radial-gradient(circle 4% at 12% 58%, rgba(12,6,26,.8) 60%, rgba(12,6,26,0) 75%); }
 
 /* ---------- Touch controls ---------- */
-#touch-controls { position:fixed; inset:auto 0 0 0; z-index:6; display:flex; justify-content:space-between; padding:0 12px calc(108px + env(safe-area-inset-bottom)) 12px; pointer-events:none; }
+#touch-controls { position:fixed; inset:auto 0 0 0; z-index:6; display:flex; justify-content:space-between; padding:0 12px calc(10px + env(safe-area-inset-bottom)) 12px; pointer-events:none; }
 .tc-cluster { display:flex; gap:12px; align-items:flex-end; pointer-events:auto; }
-.tc-btn { width:74px; height:74px; border-radius:50%; border:3px solid rgba(255,255,255,.6); background:rgba(10,16,40,.55); color:#fff; font-family:var(--font-ui); font-size:24px; font-weight:700; touch-action:none; user-select:none; -webkit-user-select:none; }
+.tc-btn { width:clamp(54px, 15vmin, 74px); height:clamp(54px, 15vmin, 74px); border-radius:50%; border:3px solid rgba(255,255,255,.6); background:rgba(10,16,40,.55); color:#fff; font-family:var(--font-ui); font-size:clamp(14px, 4.2vmin, 24px); font-weight:700; touch-action:none; user-select:none; -webkit-user-select:none; }
 .tc-btn.active { background:rgba(255,217,0,.8); color:var(--ink); }
-.tc-small { width:62px; height:62px; font-size:13px; }
-.tc-gas { width:88px; height:88px; background:rgba(46,160,67,.55); }
+.tc-small { width:clamp(48px, 13vmin, 62px); height:clamp(48px, 13vmin, 62px); font-size:12px; }
+.tc-gas { width:clamp(64px, 18vmin, 88px); height:clamp(64px, 18vmin, 88px); background:rgba(46,160,67,.55); }
 .tc-brake { background:rgba(200,50,50,.5); font-size:15px; }
 @media (pointer:fine) { #touch-controls { display:none !important; } }
 
@@ -139,7 +145,7 @@ h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95;
 .racer-title { font-size:12px; font-weight:700; opacity:.75; }
 .racer-quote { font-size:12.5px; font-style:italic; opacity:.92; margin:7px 0 8px; min-height:30px; }
 .stat-row { display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:700; letter-spacing:.5px; margin-top:3px; }
-.stat-row span { width:44px; opacity:.75; }
+.stat-row span { width:98px; opacity:.75; }
 .stat-track { flex:1; height:7px; background:rgba(20,33,61,.16); border-radius:4px; overflow:hidden; }
 .stat-fill { height:100%; border-radius:4px; }
 #track-row { display:flex; gap:10px; flex-wrap:wrap; }
@@ -189,6 +195,16 @@ h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95;
 #stick-layer { position:fixed; inset:0; z-index:6; display:none; touch-action:none; }
 .stick { position:absolute; width:112px; height:112px; border-radius:50%; border:2px solid rgba(255,255,255,.55); background:rgba(255,255,255,.07); transform:translate(-50%,-50%); display:none; pointer-events:none; }
 .stick-nub { position:absolute; left:50%; top:50%; width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,.5); transform:translate(-50%,-50%); }
+/* BRAKE state (#17 v3): unmissable — red base, red nub, BRAKE label while engaged */
+.stick-brake-label { position:absolute; left:50%; bottom:6px; transform:translateX(-50%); display:none; font-size:12px; font-weight:800; letter-spacing:.06em; color:#fff; white-space:nowrap; pointer-events:none; }
+.stick.braking { border-color:#ff5147; background:rgba(255,45,32,.30); box-shadow:0 0 0 4px rgba(255,45,32,.25), 0 0 24px rgba(255,45,32,.45); }
+.stick.braking .stick-nub { background:#ff5147; }
+.stick.braking .stick-brake-label { display:block; }
+/* Grace latch (#17 final): during the ~250ms hold after a Dual Stick lift, the stick stays lit gold */
+.stick.latched { border-color:#ffd94a; background:rgba(255,217,74,.16); box-shadow:0 0 18px rgba(255,217,74,.35); }
+.stick.latched .stick-nub { background:#ffd94a; }
+.stick.latched::after { content:'GAS HELD'; position:absolute; left:50%; bottom:6px; transform:translateX(-50%); font-size:10px; font-weight:800; letter-spacing:.06em; color:#ffd94a; white-space:nowrap; }
+.stick.latched[id="stick-a"]::after { content:'HELD'; }
 #scheme-ui { position:fixed; inset:0; z-index:7; pointer-events:none; }
 #scheme-ui .tc-btn { position:absolute; pointer-events:auto; display:none; }
 body[data-scheme="stick1"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; left:16px; top:50%; transform:translateY(-50%); width:84px; height:84px; }
@@ -234,11 +250,13 @@ body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; le
 .tile-emoji { display:flex; align-items:center; justify-content:center; font-size:52px; }
 .tile-name { font-size:16px; font-weight:700; margin-top:7px; line-height:1.1; }
 .tile-title { font-size:11px; font-weight:700; opacity:.7; }
-.tile-viz { display:flex; align-items:center; justify-content:center; gap:7px; margin-top:4px; }
-.radar { width:58px; height:54px; flex:none; }
-.radar-ring { fill:none; stroke:rgba(20,33,61,.3); stroke-width:1; }
-.radar-lab { fill:var(--ink); opacity:.75; font-size:8px; font-weight:700; text-anchor:middle; }
-.tile-pips { font-size:11.5px; font-weight:700; letter-spacing:.4px; opacity:.9; white-space:nowrap; }
+.tile-viz { display:flex; flex-direction:column; align-items:center; gap:3px; margin-top:4px; }
+.pie { width:58px; height:54px; flex:none; }
+.pie-num { fill:#fff; font-size:10.5px; font-weight:900; text-anchor:middle; paint-order:stroke; stroke:rgba(0,0,0,.5); stroke-width:3px; }
+.tile-legend { width:100%; max-width:132px; font-size:9.5px; font-weight:800; letter-spacing:.3px; }
+.tile-legend div { display:flex; align-items:center; gap:5px; margin-top:1px; }
+.tile-legend i { width:8px; height:8px; border-radius:2px; flex:none; }
+.tile-legend b { margin-left:auto; font-size:10.5px; }
 #racer-detail { margin-top:12px; display:flex; gap:14px; align-items:flex-start; background:linear-gradient(180deg,#ffffff 0%,#eaf6ff 100%); border:3px solid var(--ink); border-radius:18px; box-shadow:0 5px 0 rgba(20,33,61,.9), inset 0 2px 0 #fff; color:var(--ink); padding:12px; }
 #detail-media { position:relative; flex:none; }
 #detail-main { flex:1; min-width:0; text-align:left; }

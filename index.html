@@ -23,10 +23,12 @@
 <div id="hud" class="hidden">
   <div id="hud-left">
     <img id="hud-portrait" alt="">
-    <div id="pos-big">8<span id="pos-suffix">th</span></div>
-    <div id="lap-label">LAP 1/3</div>
-    <div id="time-label">0:00.0</div>
-    <div id="best-lap-label"></div>
+    <div id="hud-left-text">
+      <div id="pos-big">8<span id="pos-suffix">th</span></div>
+      <div id="lap-label">LAP 1/3</div>
+      <div id="time-label">0:00.0</div>
+      <div id="best-lap-label"></div>
+    </div>
   </div>
   <div id="hud-right">
     <canvas id="minimap" width="176" height="176"></canvas>
@@ -36,19 +38,24 @@
     <div id="speed-wrap"><span id="speed-num">0</span><span id="speed-unit">MPH</span></div>
     <div id="drift-wrap"><div id="drift-bar"><div id="drift-fill"></div></div><div id="drift-label">DRIFT</div></div>
   </div>
-  <div id="item-slot"><div id="item-icon">·</div><div id="item-name"></div></div>
   <div id="top-btns">
     <button id="btn-gyro" class="icon-btn hidden" title="Toggle tilt steering">🧭</button>
     <button id="btn-mute" class="icon-btn" title="Mute (M)">🔊</button>
     <button id="btn-pause" class="icon-btn" title="Pause (P)">⏸</button>
   </div>
+  <!-- Top-centre stack (mobile ergonomics): on touch layouts the player's left
+       thumb covers the bottom-left, so the item slot + race feed live up here,
+       directly under the button row. Bottom half = controls only. -->
+  <div id="top-stack">
+    <div id="item-slot"><div id="item-icon">·</div><div id="item-name"></div></div>
+    <div id="autog-note" class="hidden">🚗 AUTO-GAS ON — just steer!</div>
+    <div id="race-feed"></div>
+  </div>
   <div id="wrong-way" class="hidden">⚠️ WRONG WAY ⚠️</div>
   <div id="center-msg"></div>
   <div id="rev-meter" class="hidden"><div id="rev-zone"></div><div id="rev-fill"></div><div id="rev-label">REV</div></div>
   <div id="toast"></div>
-  <div id="bark"></div>
   <div id="ink-overlay" class="hidden"></div>
-  <div id="autog-note" class="hidden">🚗 AUTO-GAS ON — just steer!</div>
 </div>
 
 <!-- ============ CONTROL LAB: floating sticks / pedal + scheme buttons ============ -->
@@ -135,6 +142,9 @@
       <button class="scheme-btn qual-btn" data-q="low">🔅 Low</button>
     </div>
 
+    <h2 class="section-title">6 · Item guide — what they actually do</h2>
+    <div id="items-legend"></div>
+
     <button id="btn-start">🏎️ START RACE</button>
     <div id="best-info"></div>
     <div id="pad-info">🎮 No gamepad detected — connect any Bluetooth/USB controller and press a button.</div>
@@ -149,11 +159,9 @@
       </div>
       <div class="help-box">
         <h3>Items favour the losers. That's the point.</h3>
-        <p>💰 <b>Series A</b> boost · 💧 <b>Data Leak</b> trap · 📜 <b>Subpoena</b> straight shot · 🐦 <b>Viral Tweet</b> homing<br>
-        ⚖️ <b>Antitrust Suit</b> hunts 1st place — swat it down with the 📣 <b>Spin Team</b> horn · ⭐ <b>Viral Moment</b> invincible<br>
-        📉 <b>Market Crash</b> wrecks everyone ahead · 💣 <b>Pink Slip</b> timed bomb · 📰 <b>Smear Campaign</b> inks everyone ahead<br>
-        👻 <b>Insider Trading</b> steals an item, turns you ghost · 🏆 <b>Series F</b> 5 s re-boost window<br>
-        🛟 <b>Government Bailout</b> auto-drives last place back into the fight</p>
+        <p>Leaders only draw defence — traps, Subpoenas, the Spin Team. Last place gets the full comeback kit.
+        The one counter that matters: ⚖️ <b>Antitrust Suit</b> hunts 1st place, and a well-timed 📣 <b>Spin Team</b> swats it out of the air.
+        Full plain-language rundown of all 13 items in section 6 above.</p>
       </div>
       <div class="help-box">
         <h3>The skill move</h3>

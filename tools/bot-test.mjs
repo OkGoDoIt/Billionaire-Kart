@@ -92,7 +92,7 @@ try {
   // Headless SwiftShader renders at a few fps and the game clock is dt-clamped,
   // so speed the game clock up and key every wait to RACE time, not wall-clock.
   await page.evaluate(() => { BK.start(0, 0); BK.skipCountdown(); BK.autopilot(true); BK.setTimescale(3); });
-  await page.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+  await page.waitForFunction(() => BK.state().state === 'racing', { timeout: 90000, polling: 400 });
   const s0 = await page.evaluate(() => BK.state());
   console.log('Race start: player continuous =', s0.player.continuous.toFixed(1), '| rank', s0.player.rank);
   const waitRaceTime = async t => page.waitForFunction(tt => BK.state().raceTime >= tt, { timeout: 300000, polling: 500 }, t);
@@ -154,7 +154,7 @@ try {
   await page2.waitForFunction(() => window.BK && document.querySelectorAll('.racer-tile').length === 17, { timeout: 90000 });
   const schemeOk = await page2.evaluate(() => {
     const out = {};
-    for (const s of ['buttons', 'stick1', 'sticks2', 'autog']) {
+    for (const s of ['buttons', 'stick1', 'sticks2', 'autog', 'dualstick']) {
       document.querySelector(`#screen-menu [data-scheme="${s}"]`).click();
       out[s] = document.body.dataset.scheme === s && localStorage.getItem('bk_touch_scheme') === s;
     }
@@ -171,15 +171,28 @@ try {
   const stickFire = (type, x, y, id = 42) => page2.evaluate((t, cx, cy, pid) => {
     document.getElementById('stick-layer').dispatchEvent(new PointerEvent(t, { pointerId: pid, clientX: cx, clientY: cy, bubbles: true, pointerType: 'touch', isPrimary: true }));
   }, type, x, y, id);
-  // Scheme 2 (One-Thumb Stick v2): press-and-HOLD on the right side = full gas (#17)
+  // Scheme 2 (Thumbstick v3, #17): press-and-HOLD on the right side = full gas
+  await mkdir(join(ROOT, 'screenshots', 'pr-stick-v3'), { recursive: true });
   await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="stick1"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
-  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 90000, polling: 400 });
   await stickFire('pointerdown', 700, 215);
   await stickFire('pointermove', 700, 140);
   await page2.waitForFunction(() => BK.state().player.speed > 6, { timeout: 30000, polling: 300 });
-  console.log('One-Thumb Stick: hold produced speed ✓');
+  console.log('Thumbstick: hold produced speed ✓');
   await page2.screenshot({ path: join(ROOT, 'screenshots/mobile.png') });
   console.log('Saved screenshots/mobile.png (932x430 landscape)');
+  // #17 v3: pull DOWN past the threshold = FULL brake — the stick must show its red
+  // BRAKE state and speed must fall off a cliff (binary, not proportional)
+  const vBrake = await page2.evaluate(() => BK.state().player.speed);
+  await stickFire('pointermove', 700, 300); // dy = +85 from the 215 origin
+  await page2.waitForFunction(() => document.getElementById('stick-a').classList.contains('braking'), { timeout: 10000 });
+  console.log('Thumbstick: BRAKE visual state engaged ✓');
+  await page2.screenshot({ path: join(ROOT, 'screenshots', 'pr-stick-v3', 'thumbstick-brake-mobile.png') });
+  await page2.waitForFunction(v => BK.state().player.speed < v - 3, { timeout: 30000, polling: 300 }, vBrake);
+  console.log('Thumbstick: binary brake dropped speed ✓');
+  await stickFire('pointermove', 700, 215); // back to centre: brake releases, gas resumes
+  await page2.waitForFunction(() => !document.getElementById('stick-a').classList.contains('braking'), { timeout: 10000 });
+  console.log('Thumbstick: brake state cleared on release ✓');
   await stickFire('pointerup', 700, 140);
   // One-Thumb: a tap on the LEFT zone fires the item (down+up in one evaluate so the tap window is deterministic)
   const tapFire = (x, y, id) => page2.evaluate((cx, cy, pid) => {
@@ -190,17 +203,17 @@ try {
   await page2.evaluate(() => BK.giveItem('boost'));
   await tapFire(150, 215, 43);
   if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: stick1 left-zone tap did not fire the item');
-  console.log('One-Thumb Stick: left-zone tap fired item ✓');
+  console.log('Thumbstick: left-zone tap fired item ✓');
   // #17: flick up + release fires the item
   await page2.evaluate(() => BK.giveItem('boost'));
   await stickFire('pointerdown', 700, 215, 44);
   await page2.evaluate(() => { const el = document.getElementById('stick-layer'); const mk = y => el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 44, clientX: 700, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true })); mk(205); mk(140); });
   await stickFire('pointerup', 700, 140, 44);
   if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: stick1 flick-up + release did not fire item');
-  console.log('One-Thumb Stick v2: flick-up + release fired item ✓');
+  console.log('Thumbstick: flick-up + release fired item ✓');
   // Scheme 4 (Auto-Gas): tap gestures fire items; the kart also accelerates by itself
   await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="autog"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
-  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 90000, polling: 400 });
   await stickFire('pointerdown', 300, 215, 50);
   await stickFire('pointermove', 345, 215, 50); // steering finger holds a line
   await page2.evaluate(() => BK.giveItem('boost'));
@@ -215,7 +228,7 @@ try {
   console.log('Auto-Gas: kart accelerated with zero throttle input ✓');
   // Scheme 3 (Pedal & Stick): right-side hold = instant gas; flick up = item
   await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="sticks2"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
-  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 90000, polling: 400 });
   await stickFire('pointerdown', 700, 215, 77);
   await page2.waitForFunction(() => BK.state().player.speed > 6, { timeout: 30000, polling: 300 });
   console.log('Pedal & Stick: right-side hold = gas ✓');
@@ -228,10 +241,55 @@ try {
   if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: pedal flick-up did not fire item');
   console.log('Pedal & Stick: flick-up fired item ✓');
   await stickFire('pointerup', 700, 215, 77);
+  // #17 v3 NEW scheme — Dual Stick (Roger's final assignment): right stick drives, left stick steers
+  await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="dualstick"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
+  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 90000, polling: 400 });
+  await stickFire('pointerdown', 700, 215, 88); // right stick: press-and-hold = full gas
+  await page2.waitForFunction(() => BK.state().player.speed > 14, { timeout: 30000, polling: 300 });
+  if (await page2.evaluate(() => BK.state().touch.throttle) !== 1) throw new Error('ASSERT FAILED: dualstick right hold did not give full throttle');
+  console.log('Dual Stick: right-stick hold = full gas ✓');
+  await page2.screenshot({ path: join(ROOT, 'screenshots', 'pr-stick-v3', 'dualstick-mobile.png') });
+  // Right-tap = DRIFT HOP mid-drive: lift + tap + re-grab + left deflection in ONE
+  // evaluate, so the ~250ms grace latch bridges the lift and speed never dips
+  const vHop = await page2.evaluate(() => BK.state().player.speed);
+  await page2.evaluate(() => {
+    const el = document.getElementById('stick-layer');
+    const ev = (t, pid, x, y) => el.dispatchEvent(new PointerEvent(t, { pointerId: pid, clientX: x, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true }));
+    ev('pointerup', 88, 700, 215);               // right thumb lifts (gas latches)
+    ev('pointerdown', 92, 700, 215); ev('pointerup', 92, 700, 215); // right quick tap = hop
+    ev('pointerdown', 94, 700, 215);             // right thumb lands again — gas never cut
+    ev('pointerdown', 91, 200, 215); ev('pointermove', 91, 295, 215); // left stick deflects
+  });
+  await page2.waitForFunction(() => BK.state().player.drifting === true, { timeout: 20000, polling: 300 });
+  const vDrift = await page2.evaluate(() => BK.state().player.speed);
+  if (!(vDrift >= vHop - 1.5)) throw new Error(`ASSERT FAILED: speed dipped through the hop: ${vHop.toFixed(1)} -> ${vDrift.toFixed(1)}`);
+  console.log('Dual Stick: right-tap hop + left deflection = drift, speed held by grace latch ✓');
+  await stickFire('pointerup', 295, 215, 91);
+  await stickFire('pointerup', 700, 215, 94);
+  // Left quick tap = ITEM
+  await page2.evaluate(() => BK.giveItem('boost'));
+  await tapFire(200, 215, 93);
+  if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: dualstick left tap did not fire item');
+  console.log('Dual Stick: left tap fired item ✓');
+  // Right flick up + release = ITEM
+  await stickFire('pointerdown', 700, 215, 88);
+  await page2.evaluate(() => BK.giveItem('boost'));
+  await page2.evaluate(() => { const el = document.getElementById('stick-layer'); const mk = y => el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 88, clientX: 700, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true })); mk(205); mk(140); });
+  await stickFire('pointerup', 700, 140, 88);
+  if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: dualstick flick-up + release did not fire item');
+  console.log('Dual Stick: right flick-up + release fired item ✓');
+  // Grace latch: lift the right thumb — throttle must HOLD, then cut after ~250ms
+  await stickFire('pointerdown', 700, 215, 88);
+  await page2.waitForFunction(() => BK.state().touch.throttle === 1, { timeout: 10000, polling: 100 });
+  await stickFire('pointerup', 700, 215, 88);
+  if (await page2.evaluate(() => BK.state().touch.throttle) !== 1) throw new Error('ASSERT FAILED: grace latch did not hold throttle after lift');
+  await new Promise(r => setTimeout(r, 500));
+  if (await page2.evaluate(() => BK.state().touch.throttle) !== 0) throw new Error('ASSERT FAILED: grace latch did not expire after ~250ms');
+  console.log('Dual Stick: grace latch holds throttle, then expires ✓');
   // #16 P0: HUD pause button must respond in EVERY scheme — real tap -> pause menu -> Quit -> menu
-  for (const s of ['buttons', 'stick1', 'sticks2', 'autog']) {
+  for (const s of ['buttons', 'stick1', 'sticks2', 'autog', 'dualstick']) {
     await page2.evaluate(sc => { document.querySelector(`#screen-menu [data-scheme="${sc}"]`).click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); }, s);
-    await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+    await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 90000, polling: 400 });
     const box = await page2.evaluate(() => { const b = document.getElementById('btn-pause').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; });
     await page2.touchscreen.tap(box.x, box.y);
     await page2.waitForFunction(() => !document.getElementById('screen-pause').classList.contains('hidden'), { timeout: 15000 });
@@ -239,6 +297,33 @@ try {
     await page2.waitForFunction(() => BK.state().state === 'menu', { timeout: 15000 });
     console.log(`#16 pause -> menu verified in scheme: ${s} ✓`);
   }
+  // #20 iOS hardening: selection/callout off, context menu suppressed, and a stolen
+  // pointer (pointercancel) must reset input cleanly — no stuck throttle
+  const iosFix = await page2.evaluate(() => {
+    const cs = getComputedStyle(document.body);
+    const menuEv = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    const menuNotPrevented = document.getElementById('game-canvas').dispatchEvent(menuEv);
+    const selEv = new Event('selectstart', { bubbles: true, cancelable: true });
+    const selNotPrevented = document.body.dispatchEvent(selEv);
+    return {
+      userSelect: cs.userSelect || cs.webkitUserSelect || '',
+      stickTouchAction: getComputedStyle(document.getElementById('stick-layer')).touchAction,
+      contextmenuPrevented: !menuNotPrevented,
+      selectstartPrevented: !selNotPrevented,
+    };
+  });
+  console.log('#20 iOS hardening:', JSON.stringify(iosFix));
+  if (iosFix.userSelect !== 'none') throw new Error('ASSERT FAILED: user-select is not none on body');
+  if (iosFix.stickTouchAction !== 'none') throw new Error('ASSERT FAILED: stick layer touch-action is not none');
+  if (!iosFix.contextmenuPrevented) throw new Error('ASSERT FAILED: contextmenu not suppressed');
+  if (!iosFix.selectstartPrevented) throw new Error('ASSERT FAILED: selectstart not suppressed');
+  await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="stick1"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
+  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 90000, polling: 400 });
+  await stickFire('pointerdown', 700, 215, 61);
+  await page2.waitForFunction(() => BK.state().touch.throttle === 1, { timeout: 10000, polling: 100 });
+  await stickFire('pointercancel', 700, 215, 61); // Safari steals the pointer mid-hold
+  await page2.waitForFunction(() => BK.state().touch.throttle === 0, { timeout: 10000, polling: 100 });
+  console.log('#20: pointercancel mid-hold resets input cleanly (no stuck gas) ✓');
   await page2.close();
 
   // ---- assertions ----

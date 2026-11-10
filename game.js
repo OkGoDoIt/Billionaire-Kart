@@ -178,8 +178,8 @@ let centerUntil = 0, toastUntil = 0, barkUntil = 0, inkUntil = 0;
 let hitstopT = 0, revHeld = 0, revOverWarned = false, lastRank = 0; // fun-pass: hitstop, rocket-start, position toasts
 const keys = {};
 const touchFlags = { left: false, right: false, gas: false, brake: false, drift: false };
-/* CONTROL LAB: four switchable touch schemes, persisted. Analog stick values funnel into playerInput. */
-const TOUCH_SCHEMES = ['buttons', 'stick1', 'sticks2', 'autog'];
+/* CONTROL LAB: five switchable touch schemes, persisted. Analog stick values funnel into playerInput. */
+const TOUCH_SCHEMES = ['buttons', 'stick1', 'sticks2', 'autog', 'dualstick'];
 let touchScheme = 'buttons';
 try { const s = localStorage.getItem('bk_touch_scheme'); if (TOUCH_SCHEMES.includes(s)) touchScheme = s; } catch (e) { }
 const touchAnalog = { steer: 0, throttle: 0, brake: 0 };
@@ -216,9 +216,9 @@ function setTouchScheme(s, silent) {
   document.body.dataset.scheme = s;
   document.querySelectorAll('.scheme-btn').forEach(b => b.classList.toggle('selected', b.dataset.scheme === s));
   stickPointers.clear(); touchAnalog.steer = 0; touchAnalog.throttle = 0; touchAnalog.brake = 0;
-  for (const id of ['stick-a', 'stick-b']) { const el = $(id); if (el) el.style.display = 'none'; }
+  for (const id of ['stick-a', 'stick-b']) { const el = $(id); if (el) { el.style.display = 'none'; el.classList.remove('braking'); } }
   refreshTouchUI();
-  if (!silent) showToast({ buttons: '🕹️ Touch: Buttons', stick1: '👍 Touch: One-Thumb Stick — drag right side', sticks2: '✌️ Touch: Two Sticks', autog: '🚗 Touch: Auto-Gas — just steer!' }[s]);
+  if (!silent) showToast({ buttons: '🕹️ Touch: Buttons', stick1: '👍 Touch: Thumbstick — hold right side = gas', sticks2: '✌️ Touch: Pedal & Stick', autog: '🚗 Touch: Auto-Gas — just steer!', dualstick: '🕹️ Touch: Dual Stick — left steers, right drives' }[s]);
 }
 let touchUiSig = '';
 function refreshTouchUI() {
@@ -1271,7 +1271,7 @@ function playerInput() {
   if (keys['ArrowUp'] || keys['KeyW'] || touchFlags.gas) throttle = 1;
   if (keys['ArrowDown'] || keys['KeyS'] || touchFlags.brake) brake = 1;
   if (keys['ShiftLeft'] || keys['ShiftRight'] || touchFlags.drift) drift = true;
-  // analog touch sticks (Control Lab) — yield to held digital steer keys, feed throttle/brake proportionally
+  // analog touch sticks (Control Lab) — steering is proportional; throttle/brake from the gas sticks are binary (#17 v3)
   if (!keys['ArrowLeft'] && !keys['KeyA'] && !keys['ArrowRight'] && !keys['KeyD'] && !touchFlags.left && !touchFlags.right && Math.abs(touchAnalog.steer) > 0.02) steer = touchAnalog.steer;
   throttle = Math.max(throttle, touchAnalog.throttle);
   brake = Math.max(brake, touchAnalog.brake);
@@ -1302,7 +1302,7 @@ function playerInput() {
     if (Math.abs(steer) > 0.85) { if (!steerFullSince) steerFullSince = elapsed; if (elapsed - steerFullSince > 0.25) drift = true; }
     else steerFullSince = 0;
   } else steerFullSince = 0;
-  // Pedal & Stick tap-to-drift-hop: a right-side tap latches drift, which fires when the steer stick deflects and releases (with boost) when it centres
+  // Tap-to-drift-hop latch (Pedal & Stick pedal tap / Dual Stick right-stick tap): drift fires when the steer input deflects and releases (with boost) when it centres
   if (driftTap.active) {
     if (Math.abs(touchAnalog.steer) > 0.25) { drift = true; driftTap.started = true; }
     else if (driftTap.started) { driftTap.active = false; driftTap.started = false; }
@@ -1339,6 +1339,15 @@ function bindInputs() {
   window.addEventListener('pointerup', () => mouse.down = false);
   window.addEventListener('pointermove', e => { mouse.x = e.clientX / window.innerWidth; mouse.lastMove = elapsed; });
   cv.addEventListener('contextmenu', e => e.preventDefault());
+  // #20: iOS gesture suppression — Safari must never steal a hold for selection,
+  // the callout menu, or a pinch gesture (that theft arrives as pointercancel and
+  // silently dropped the gas). Input is pointerId-tracked (stick layer below and
+  // per-button handlers), and every pointercancel is handled per-pointer.
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('gesturechange', e => e.preventDefault());
+  document.addEventListener('selectstart', e => e.preventDefault());
+  window.addEventListener('pointercancel', () => { mouse.down = false; });
   // touch buttons
   const bindHold = (id, prop) => {
     const el = $(id);
@@ -1358,39 +1367,86 @@ function bindInputs() {
   document.querySelectorAll('.smart-btn').forEach(b => b.addEventListener('click', () => { const order = ['auto', 'on', 'off']; setSmartMode(order[(order.indexOf(smartMode) + 1) % 3]); }));
   document.querySelectorAll('.adrift-btn').forEach(b => b.addEventListener('click', () => { const order = ['auto', 'on', 'off']; setAutoDriftMode(order[(order.indexOf(autoDriftMode) + 1) % 3]); }));
   const layer = $('stick-layer');
-  const stickEls = { steer: $('stick-a'), main: $('stick-a'), pedal: $('stick-b') };
+  const stickEls = { steer: $('stick-a'), main: $('stick-a'), pedal: $('stick-b'), dsteer: $('stick-a'), dpedal: $('stick-b') };
   const axisVal = d => { const a = Math.abs(d); if (a < 10) return 0; const v = clamp((a - 10) / 50, 0, 1); return Math.sign(d) * v * (0.65 + 0.35 * v); }; // 10px deadzone, full deflection at 60px, mild curve
   const zoneTaken = z => { for (const r of stickPointers.values()) if (r.zone === z) return true; return false; };
   const moveNub = (rec, dx, dy) => { if (!rec.el) return; const l = Math.hypot(dx, dy), m = l > 34 ? 34 / l : 1; rec.el.firstElementChild.style.transform = `translate(calc(-50% + ${(dx * m).toFixed(1)}px), calc(-50% + ${(dy * m).toFixed(1)}px))`; };
+  // Gas sticks (Thumbstick main / Pedal / Dual-Stick right) are BINARY (#17 v3): any
+  // press = FULL gas; pull down past 24px = FULL brake/reverse while held. No
+  // proportional throttle/brake anywhere. Brake engagement is impossible to miss:
+  // a haptic pulse on the rising edge + the stick turns red with a BRAKE label.
+  const applyGasStick = (rec, y, dy, flickOnRelease) => {
+    const braking = dy > 24;
+    touchAnalog.brake = braking ? 1 : 0;
+    touchAnalog.throttle = braking ? 0 : 1;
+    if (braking !== !!rec.braking) {
+      rec.braking = braking;
+      if (rec.el) rec.el.classList.toggle('braking', braking);
+      if (braking && navigator.vibrate) { try { navigator.vibrate(35); } catch (e) { } } // unmistakable: you are braking now
+    }
+    const now = performance.now();
+    rec.hist = (rec.hist || []).filter(s => now - s.t < 260); rec.hist.push({ t: now, y });
+    if (rec.hist.length > 1 && rec.hist[0].y - y >= 48) { // quick 48px upward flick
+      if (flickOnRelease) rec.flickArmed = true; // fires on release (see releaseStick)
+      else if (!rec.flicked) { rec.flicked = true; fireItem(); } // pedal: fires the moment it crosses
+    }
+  };
   const applyStick = (rec, x, y) => {
     const dx = x - rec.ox, dy = y - rec.oy;
     rec.maxDrag = Math.max(rec.maxDrag || 0, Math.hypot(dx, dy));
     moveNub(rec, dx, dy);
-    if (rec.zone === 'main') { // One-Thumb v2 (#17): HOLD = full gas (no vertical throttle axis); X = steer; pull DOWN + hold = brake; flick UP + release = item
+    if (rec.zone === 'main') { // Thumbstick v3 (#17): HOLD = full gas; X = steer (proportional); pull DOWN + hold = full brake; flick UP + release = item
       touchAnalog.steer = axisVal(dx);
-      const b = clamp((dy - 24) / 36, 0, 1);
-      touchAnalog.brake = b; touchAnalog.throttle = b > 0.03 ? 0 : 1;
-      const now = performance.now();
-      rec.hist = (rec.hist || []).filter(s => now - s.t < 260); rec.hist.push({ t: now, y });
-      if (!rec.flickArmed && rec.hist.length > 1 && rec.hist[0].y - y >= 48) rec.flickArmed = true; // fires on release (see releaseStick)
+      applyGasStick(rec, y, dy, true);
     }
-    else if (rec.zone === 'steer') touchAnalog.steer = axisVal(dx);
-    else if (rec.zone === 'pedal') { // hold = full gas; drag down past 24px = proportional brake; quick flick UP = ITEM
-      const b = clamp((dy - 24) / 36, 0, 1); touchAnalog.brake = b; touchAnalog.throttle = b > 0.03 ? 0 : 1;
-      const now = performance.now();
-      rec.hist = (rec.hist || []).filter(s => now - s.t < 260); rec.hist.push({ t: now, y });
-      if (!rec.flicked && rec.hist.length > 1 && rec.hist[0].y - y >= 48) { rec.flicked = true; fireItem(); } // crossed 48px upward within ~250ms — gas resumes on its own if still held
-    }
+    else if (rec.zone === 'steer' || rec.zone === 'dsteer') touchAnalog.steer = axisVal(dx);
+    else if (rec.zone === 'pedal') applyGasStick(rec, y, dy, false); // Pedal & Stick: hold = gas, flick UP fires at once, tap = drift hop
+    else if (rec.zone === 'dpedal') applyGasStick(rec, y, dy, true); // Dual Stick right: same binary gas/brake, flick UP + release = item
+  };
+  // Dual Stick grace latch (#17 final): a quick thumb lift must not stall the kart —
+  // throttle (and steering) HOLD for ~250ms after release, the stick stays on screen
+  // lit gold, and a re-touch inside the window cancels the cut entirely.
+  const dsLatch = { gasToken: 0, steerToken: 0 };
+  const latchGas = el => {
+    const tok = ++dsLatch.gasToken;
+    if (el) { el.style.display = 'block'; el.classList.add('latched'); }
+    setTimeout(() => {
+      if (dsLatch.gasToken !== tok || zoneTaken('dpedal')) return;
+      touchAnalog.throttle = 0; touchAnalog.brake = 0;
+      if (el) { el.style.display = 'none'; el.classList.remove('latched'); }
+    }, 250);
+  };
+  const latchSteer = el => {
+    const tok = ++dsLatch.steerToken;
+    if (el) { el.style.display = 'block'; el.classList.add('latched'); }
+    setTimeout(() => {
+      if (dsLatch.steerToken !== tok || zoneTaken('dsteer')) return;
+      touchAnalog.steer = 0;
+      if (el) { el.style.display = 'none'; el.classList.remove('latched'); }
+    }, 250);
   };
   const releaseStick = rec => {
-    if (rec.el) rec.el.style.display = 'none';
+    if (rec.el) { rec.el.style.display = 'none'; rec.el.classList.remove('braking'); }
+    rec.braking = false;
     if (rec.zone === 'steer') touchAnalog.steer = 0;
+    if (rec.zone === 'dsteer') { // Dual Stick left (#17 final): drag = steer; quick tap = ITEM; a drag release LATCHES the steer value briefly
+      if (performance.now() - rec.t0 < 220 && (rec.maxDrag || 0) < 12) { fireItem(); touchAnalog.steer = 0; }
+      else latchSteer(rec.el);
+    }
     if (rec.zone === 'main') { if (rec.flickArmed) fireItem(); touchAnalog.steer = 0; touchAnalog.throttle = 0; touchAnalog.brake = 0; } // flick-up + release fires the item; plain release = coast
+    if (rec.zone === 'dpedal') { // Dual Stick right (#17 final): flick+release = item; quick tap = DRIFT HOP; plain release LATCHES the gas
+      if (rec.flickArmed) fireItem();
+      if (rec.braking) { touchAnalog.throttle = 0; touchAnalog.brake = 0; if (rec.el) rec.el.style.display = 'none'; }
+      else {
+        if (performance.now() - rec.t0 < 220 && (rec.maxDrag || 0) < 12) { driftTap.active = true; driftTap.started = false; driftTap.expires = elapsed + 1.2; } // tap = DRIFT HOP (fires when the left stick deflects)
+        latchGas(rec.el);
+      }
+    }
     if (rec.zone === 'pedal') {
       if (performance.now() - rec.t0 < 220 && (rec.maxDrag || 0) < 12) { driftTap.active = true; driftTap.started = false; driftTap.expires = elapsed + 1.2; } // quick tap = DRIFT HOP (gas blip on touchdown is intended)
       touchAnalog.throttle = 0; touchAnalog.brake = 0;
     }
-    if (rec.zone === 'itemzone' && performance.now() - rec.t0 < 300 && (rec.maxDrag || 0) < 14) fireItem(); // One-Thumb: left side is the no-aim item zone
+    if (rec.zone === 'itemzone' && performance.now() - rec.t0 < 300 && (rec.maxDrag || 0) < 14) fireItem(); // Thumbstick: left side is the no-aim item zone
     if (rec.zone === 'tap' && performance.now() - rec.t0 < 200 && (rec.maxDrag || 0) < 12) fireItem(); // Auto-Gas: second-finger tap = item
     if (rec.zone === 'steer' && touchScheme === 'autog' && performance.now() - rec.t0 < 200 && (rec.maxDrag || 0) < 12) fireItem(); // Auto-Gas: a tap when not steering = item
   };
@@ -1399,13 +1455,16 @@ function bindInputs() {
     let zone = null;
     if (touchScheme === 'stick1') zone = e.clientX < window.innerWidth * 0.4 ? 'itemzone' : 'main'; // right ~60% drives; left ~40% is the tap-for-item zone
     else if (touchScheme === 'sticks2') zone = e.clientX < window.innerWidth / 2 ? 'steer' : 'pedal';
+    else if (touchScheme === 'dualstick') zone = e.clientX < window.innerWidth / 2 ? 'dsteer' : 'dpedal'; // left = steer (+ tap = item), right = drive (+ tap = drift hop)
     else if (touchScheme === 'autog') zone = zoneTaken('steer') ? 'tap' : 'steer'; // second finger taps for item while the first keeps steering
     if (!zone || (zone !== 'tap' && zoneTaken(zone)) || stickPointers.has(e.pointerId)) return;
     try { layer.setPointerCapture(e.pointerId); } catch (err) { }
     const rec = { zone, ox: e.clientX, oy: e.clientY, t0: performance.now(), maxDrag: 0, el: stickEls[zone] || null, hist: null, flicked: false, flickArmed: false };
     stickPointers.set(e.pointerId, rec);
-    if (rec.el) { rec.el.style.display = 'block'; rec.el.style.left = e.clientX + 'px'; rec.el.style.top = e.clientY + 'px'; moveNub(rec, 0, 0); }
-    if (zone === 'pedal') touchAnalog.throttle = 1; // instant full gas on touchdown
+    if (zone === 'dpedal') dsLatch.gasToken++; // re-touch inside the grace window: gas was never cut
+    if (zone === 'dsteer') dsLatch.steerToken++;
+    if (rec.el) { rec.el.style.display = 'block'; rec.el.classList.remove('latched'); rec.el.style.left = e.clientX + 'px'; rec.el.style.top = e.clientY + 'px'; moveNub(rec, 0, 0); }
+    if (zone === 'pedal' || zone === 'dpedal') touchAnalog.throttle = 1; // instant full gas on touchdown
     applyStick(rec, e.clientX, e.clientY);
     e.preventDefault();
   });
@@ -1703,7 +1762,8 @@ window.BK = {
     const p = playerKart();
     return {
       state: gameState, paused, raceTime,
-      player: p ? { pos: [p.pos.x, p.pos.y, p.pos.z], continuous: p.continuous, speed: p.speed, lap: clamp(Math.floor(Math.max(p.continuous, 0) / N) + 1, 1, LAPS), rank: rankOf(p), finished: p.finished, finishTime: p.finishTime, item: p.item, heading: p.heading, bailoutT: p.bailoutT, ghostT: p.ghostT, hornT: p.hornT, goldenT: p.goldenT, inkT: p.inkT } : null,
+      touch: { steer: touchAnalog.steer, throttle: touchAnalog.throttle, brake: touchAnalog.brake },
+      player: p ? { pos: [p.pos.x, p.pos.y, p.pos.z], continuous: p.continuous, speed: p.speed, lap: clamp(Math.floor(Math.max(p.continuous, 0) / N) + 1, 1, LAPS), rank: rankOf(p), finished: p.finished, finishTime: p.finishTime, item: p.item, heading: p.heading, drifting: p.drifting, driftCharge: p.driftCharge, bailoutT: p.bailoutT, ghostT: p.ghostT, hornT: p.hornT, goldenT: p.goldenT, inkT: p.inkT } : null,
       karts: karts.map(k => ({ name: k.racer.name, continuous: k.continuous, speed: k.speed, finished: k.finished, pos: [k.pos.x, k.pos.z] })),
     };
   },

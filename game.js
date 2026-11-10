@@ -193,6 +193,7 @@ function setAutoDriftMode(m) {
 }
 let steerFullSince = 0;
 function popItemSlot() { const ic = $('item-icon'); ic.style.transform = 'scale(1.45)'; setTimeout(() => { ic.style.transform = ''; }, 130); }
+function fxTransition(kind, fn, origin) { if (window.BKFX && BKFX.transition) BKFX.transition(kind, fn, origin); else fn(); } // polish wipes (POLISH.md §2.8) — no hard cuts between screens
 function fireItem() { // every touch item gesture routes through here: haptic pulse + slot pop + use
   if (gameState !== 'racing' || paused) return;
   if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { } }
@@ -885,7 +886,13 @@ function aiInput(k, dt) {
 function grantItem(k) {
   if (k.item) return;
   k.item = rollItem(rankOf(k));
-  if (k.isPlayer) { updateItemSlot(); A.pickup(); showToast(`${ITEMS[k.item].icon} ${ITEMS[k.item].name}!`); }
+  if (k.isPlayer) {
+    const it = ITEMS[k.item];
+    // Item roulette (POLISH.md §2.5.1): the slot spins for 850 ms and lands on the
+    // real item; useItem is blocked while BKFX.spinning. Falls back to instant reveal.
+    if (window.BKFX && BKFX.roulette(it, ITEMS, { tick: i => A.tone(840 + i * 45, 0.03, 'square', 0.016), land: () => { A.pickup(); showToast(`${it.icon} ${it.name}!`); } })) return;
+    updateItemSlot(); A.pickup(); showToast(`${it.icon} ${it.name}!`);
+  }
 }
 function updateItemBoxes(dt) {
   for (const b of itemBoxes) {
@@ -938,6 +945,7 @@ function bombMesh() {
   return g;
 }
 function useItem(k) {
+  if (k.isPlayer && window.BKFX && BKFX.spinning) return; // roulette drama is protected (POLISH.md §2.5.1)
   if (!k.item || k.spinT > 0 || gameState !== 'racing') return;
   const id = k.item;
   // Series F (golden): first press opens a 5 s window and boosts; presses inside the
@@ -1170,6 +1178,7 @@ function showToast(text, dur = 2.1) { const t = $('toast'); t.textContent = text
 function showBark(text, dur = 2.6) { const b = $('bark'); b.textContent = text; b.style.opacity = 1; barkUntil = elapsed + dur; }
 function showInk(dur = 3) { $('ink-overlay').classList.remove('hidden'); inkUntil = elapsed + dur; } // Smear Campaign splat on the player's screen
 function updateItemSlot() {
+  if (window.BKFX && BKFX.spinning) BKFX.cancel(); // authoritative refresh kills any stale roulette
   const p = playerKart(); if (!p) return;
   const slot = $('item-slot');
   if (p.item) { $('item-icon').textContent = ITEMS[p.item].icon; $('item-name').textContent = ITEMS[p.item].name; slot.classList.add('has-item'); }
@@ -1384,10 +1393,10 @@ function bindInputs() {
   window.addEventListener('gamepadconnected', e => { $('pad-info').textContent = `🎮 Gamepad connected: ${e.gamepad.id.slice(0, 42)} — you're good to go.`; });
   window.addEventListener('gamepaddisconnected', () => { $('pad-info').textContent = '🎮 Gamepad disconnected.'; });
   $('btn-resume').addEventListener('click', togglePause);
-  $('btn-restart').addEventListener('click', () => { $('screen-pause').classList.add('hidden'); paused = false; startRace(); });
-  $('btn-quit').addEventListener('click', quitToMenu);
-  $('btn-again').addEventListener('click', () => { $('screen-results').classList.add('hidden'); startRace(); });
-  $('btn-change').addEventListener('click', quitToMenu);
+  $('btn-restart').addEventListener('click', () => fxTransition('checker', () => { $('screen-pause').classList.add('hidden'); paused = false; startRace(); }));
+  $('btn-quit').addEventListener('click', () => fxTransition('checker', quitToMenu));
+  $('btn-again').addEventListener('click', () => fxTransition('checker', () => { $('screen-results').classList.add('hidden'); startRace(); }));
+  $('btn-change').addEventListener('click', () => fxTransition('checker', quitToMenu));
 }
 const isTouchDevice = () => ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
@@ -1448,6 +1457,7 @@ function showResults() {
     return `<tr class="${r.k.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td>${rp ? `<img class="res-portrait" src="${rp}" alt="">` : r.k.racer.emoji + ' '}${r.k.racer.name}</td><td>${fmtTime(r.t)}${r.proj ? ' est.' : ''}</td></tr>`;
   }).join('');
   $('screen-results').classList.remove('hidden');
+  if (window.BKFX && BKFX.burst) BKFX.burst(); // star burst over the swap (POLISH.md §2.8)
 }
 
 /* ================= MENU ================= */
@@ -1475,15 +1485,14 @@ function updateDetail() {
   const r = RACERS[selectedRacer], p = portraitOf(selectedRacer);
   const bar = (label, v) => `<div class="stat-row"><span>${label}</span><div class="stat-track"><div class="stat-fill" style="width:${v / 5 * 100}%;background:#${r.color.toString(16).padStart(6, '0')}"></div></div></div>`;
   const trait = traitOf(r);
-  $('racer-detail').innerHTML = `
-    ${p ? `<img class="detail-portrait" src="${p}" alt="${r.name} portrait">` : `<div class="detail-portrait detail-emoji" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>`}
-    <div class="detail-body">
+  $('detail-media').innerHTML = p ? `<img class="detail-portrait" src="${p}" alt="${r.name} portrait">` : `<div class="detail-portrait detail-emoji" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>`;
+  $('detail-main').innerHTML = `
       <div class="detail-name" id="detail-name">${r.name}</div>
       <div class="racer-title">${r.title}</div>
       <div class="racer-quote">${r.quote}</div>
       ${bar('SPEED', r.spd)}${bar('ACCEL', r.acc)}${bar('GRIP', r.grip)}
-      ${trait ? `<div class="detail-trait">${trait}</div>` : ''}
-    </div>`;
+      ${trait ? `<div class="detail-trait">${trait}</div>` : ''}`;
+  if (window.BKTT) BKTT.setRacer(selectedRacer); // polish turntable (desktop detail panel), if active
 }
 function buildMenu() {
   $('racer-grid').innerHTML = RACERS.map((r, i) => {
@@ -1510,7 +1519,7 @@ function buildMenu() {
     difficulty = parseInt(btn.dataset.diff);
     document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.diff) === difficulty));
   }));
-  $('btn-start').addEventListener('click', startRace);
+  $('btn-start').addEventListener('click', e => fxTransition('checker', startRace, { x: e.clientX, y: e.clientY }));
   updateBestInfo();
 }
 
@@ -1643,6 +1652,76 @@ window.BK = {
   trackLen() { return segLen * N; },
   player() { const p = playerKart(); return p ? { pos: p.pos, continuous: p.continuous, speed: p.speed, heading: p.heading, rank: rankOf(p) } : null; },
 };
+
+/* ================= TURNTABLE (POLISH.md §2.2) =================
+   Live 3D kart on a podium inside the desktop character-select detail panel.
+   Its own tiny renderer + scene — the race renderer/scene are never touched.
+   Reuses makeKart() for the model; the stage kart is spliced straight back out
+   of the race-state array in the same synchronous step. Desktop-only
+   (>=1024px, where the detail panel is the side column); on any failure the
+   2D portrait simply stays (window.BKTT nulled, panel never gets .tt-on). */
+window.BKTT = (function () {
+  let R = null, holder = null, cur = -1, alive = false, spin = 0, last = performance.now(), t0 = 0, lastW = 0, lastH = 0;
+  const active = () => window.innerWidth >= 1024 && !$('screen-menu').classList.contains('hidden');
+  function disposeGroup(g) { g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); }); }
+  function init() {
+    const cv = document.createElement('canvas'); cv.id = 'stage-canvas';
+    $('detail-media').appendChild(cv);
+    const r = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true }); // preserve: showcase canvas must hold its frame for screenshots/compositors
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const sc = new THREE.Scene();
+    const c2 = document.createElement('canvas'); c2.width = 4; c2.height = 256;
+    const g2 = c2.getContext('2d'); const gr = g2.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, '#4fc3f7'); gr.addColorStop(0.55, '#29b6f6'); gr.addColorStop(1, '#0288d1');
+    g2.fillStyle = gr; g2.fillRect(0, 0, 4, 256);
+    sc.background = new THREE.CanvasTexture(c2);
+    const cam = new THREE.PerspectiveCamera(38, 1, 0.1, 60);
+    cam.position.set(0, 2.7, 7.4); cam.lookAt(0, 1.15, 0);
+    sc.add(new THREE.HemisphereLight(0xcfeaff, 0x2e4a22, 0.95));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.0); sun.position.set(4, 6, 3); sc.add(sun);
+    const grp = new THREE.Group(); sc.add(grp);
+    const podium = new THREE.Mesh(new THREE.CylinderGeometry(2.35, 2.5, 0.35, 36), new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: 0.6, metalness: 0.3 }));
+    podium.position.y = 0.175; grp.add(podium);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.36, 0.055, 10, 48), new THREE.MeshStandardMaterial({ color: 0xffd900, emissive: 0xcc9900, emissiveIntensity: 0.7, roughness: 0.35 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = 0.36; grp.add(ring);
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(1.75, 28), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 }));
+    blob.rotation.x = -Math.PI / 2; blob.position.y = 0.365; grp.add(blob);
+    const hold = new THREE.Group(); hold.position.y = 0.35; grp.add(hold);
+    R = { r, sc, cam, grp, hold };
+  }
+  function setRacer(i) {
+    cur = i;
+    if (!R) return;
+    if (holder) { R.hold.remove(holder); disposeGroup(holder); holder = null; }
+    const before = karts.length;
+    const tk = makeKart(i, false);
+    karts.length = before; // the stage kart never enters race state
+    if (tk.nameSpr) { tk.mesh.remove(tk.nameSpr); if (tk.nameSpr.material) { if (tk.nameSpr.material.map) tk.nameSpr.material.map.dispose(); tk.nameSpr.material.dispose(); } }
+    holder = tk.mesh;
+    R.hold.add(holder);
+    t0 = performance.now();
+  }
+  function frame() {
+    requestAnimationFrame(frame);
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!active()) { if (alive) { alive = false; $('racer-detail').classList.remove('tt-on'); } return; }
+    if (!R) { try { init(); setRacer(cur >= 0 ? cur : selectedRacer); } catch (e) { window.BKTT = null; return; } }
+    if (!alive) { alive = true; $('racer-detail').classList.add('tt-on'); }
+    const media = $('detail-media'), w = media.clientWidth, h = media.clientHeight;
+    if (w && (w !== lastW || h !== lastH)) { lastW = w; lastH = h; R.r.setSize(w, h, false); R.cam.aspect = w / h; R.cam.updateProjectionMatrix(); }
+    spin += dt * 0.35; R.grp.rotation.y = spin;
+    if (holder) {
+      const pop = Math.min(1, (now - t0) / 380);
+      const f = 1 + 2.70158 * Math.pow(pop - 1, 3) + 1.70158 * Math.pow(pop - 1, 2); // easeOutBack
+      holder.scale.setScalar(0.6 + 0.4 * f);
+      holder.position.y = Math.sin(now / 1000 * 2.2) * 0.03;
+    }
+    R.r.render(R.sc, R.cam);
+  }
+  requestAnimationFrame(frame);
+  return { setRacer };
+})();
 
 /* ================= BOOT ================= */
 initRenderer();

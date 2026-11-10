@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Billionaire Kart: AI Arms Race</title>
 <meta name="description" content="A parody party kart racer. Seventeen tech moguls to pick from, eight on track. Position-weighted chaos items. Drift boosts. Zero antitrust immunity.">
-<meta name="theme-color" content="#0b1026">
+<meta name="theme-color" content="#29b6f6">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="preload" href="assets/fonts/luckiestguy-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/fredoka-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
@@ -75,15 +77,17 @@
 
 <!-- ============ MENU ============ -->
 <div id="screen-menu" class="screen">
+  <div class="menu-cloud c1"></div><div class="menu-cloud c2"></div>
   <div class="menu-inner">
     <div class="title-block">
       <div class="title-kicker">🏁 THE AI ARMS RACE, BUT IT'S A KART GAME 🏁</div>
-      <h1>BILLIONAIRE<br>KART</h1>
+      <h1>BILLIONAIRE<br><span class="kart-word">KART</span></h1>
       <div class="tagline">Eight egos. One trophy. Zero antitrust immunity.</div>
+      <div class="checker title-checker"></div>
     </div>
 
     <h2 class="section-title">1 · Pick your mogul</h2>
-    <div id="select-wrap"><div id="racer-grid"></div><aside id="racer-detail"></aside></div>
+    <div id="select-wrap"><div id="racer-grid"></div><aside id="racer-detail"><div id="detail-media"></div><div id="detail-main"></div></aside></div>
 
     <h2 class="section-title">2 · Pick your track</h2>
     <div id="track-row">
@@ -151,9 +155,9 @@
     </div>
     <button class="smart-btn big-btn">🧭 Smart steering: Auto (Auto-Gas only)</button>
     <button class="adrift-btn big-btn">🌀 Auto-drift: Auto (Auto-Gas only)</button>
-    <button id="btn-resume" class="big-btn">▶ Resume</button>
+    <button id="btn-resume" class="big-btn primary">▶ Resume</button>
     <button id="btn-restart" class="big-btn">↻ Restart race</button>
-    <button id="btn-quit" class="big-btn">🏠 Quit to menu</button>
+    <button id="btn-quit" class="big-btn danger">🏠 Quit to menu</button>
   </div>
 </div>
 
@@ -163,7 +167,7 @@
     <h2 id="results-title">🏆 Results</h2>
     <div id="results-sub"></div>
     <table id="results-table"></table>
-    <button id="btn-again" class="big-btn">🏎️ Race again</button>
+    <button id="btn-again" class="big-btn primary">🏎️ Race again</button>
     <button id="btn-change" class="big-btn">👤 Change racer / track</button>
   </div>
 </div>
@@ -171,6 +175,7 @@
 <div id="loading">Loading… if this sticks, check your connection (Three.js loads from CDN once, then it's cached offline).</div>
 
 <script src="portraits.js"></script>
+<script src="ui-fx.js"></script>
 <script type="module" src="game.js"></script>
 </body>
 </html>

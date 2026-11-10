@@ -18,6 +18,13 @@
   --curve-out:cubic-bezier(.16,1,.3,1);
   --curve-in:cubic-bezier(.5,0,.9,.4);
   --hud-shadow:-2px 0 0 var(--ink-pure),2px 0 0 var(--ink-pure),0 -2px 0 var(--ink-pure),0 2px 0 var(--ink-pure),0 4px 0 rgba(0,0,0,.45);
+  /* Safe-area insets (notch / Dynamic Island): every anchored HUD cluster,
+     the title screen and the menus offset by these so nothing renders off the
+     edge or behind the camera cut-out, in either orientation. */
+  --sa-t:env(safe-area-inset-top, 0px);
+  --sa-r:env(safe-area-inset-right, 0px);
+  --sa-b:env(safe-area-inset-bottom, 0px);
+  --sa-l:env(safe-area-inset-left, 0px);
 }
 /* The three text treatments (POLISH.md §1.3) */
 .txt-display{ font-family:var(--font-display); color:#fff; letter-spacing:.02em; -webkit-text-stroke:2px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure),0 6px 14px rgba(0,0,0,.35); }
@@ -48,26 +55,39 @@ button { font-family:inherit; cursor:pointer; }
 
 /* ---------- HUD ---------- */
 #hud { position:fixed; inset:0; pointer-events:none; z-index:9; }
-#hud-left { position:absolute; top:14px; left:16px; }
+/* Top-left cluster: portrait and position text sit SIDE BY SIDE in a flex row —
+   the stacked layout let the 46px portrait overlap the position numeral on
+   landscape phones ("4TH" rendered as "TH"). They can never collide now. */
+#hud-left { position:absolute; top:calc(14px + var(--sa-t)); left:calc(16px + var(--sa-l)); display:flex; gap:10px; align-items:flex-start; }
+#hud-left-text { min-width:0; }
 #pos-big { font-family:var(--font-display); font-size:72px; line-height:.95; color:#fff; -webkit-text-stroke:2px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure),0 6px 12px rgba(0,0,0,.35); }
 #pos-suffix { font-size:32px; }
 #lap-label { font-family:var(--font-ui); font-size:21px; font-weight:700; font-style:italic; letter-spacing:1px; margin-top:2px; color:#fff; text-shadow:var(--hud-shadow); }
 #time-label { font-family:var(--font-ui); font-size:16px; font-weight:700; font-style:italic; color:#fff; text-shadow:var(--hud-shadow); font-variant-numeric:tabular-nums; }
 #best-lap-label { font-family:var(--font-ui); font-size:13px; font-weight:600; font-style:italic; color:#fff; text-shadow:var(--hud-shadow); font-variant-numeric:tabular-nums; }
-#hud-right { position:absolute; top:12px; right:12px; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+#hud-right { position:absolute; top:calc(12px + var(--sa-t)); right:calc(12px + var(--sa-r)); display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
 #minimap { background:var(--chip-dark); border-radius:14px; border:3px solid rgba(255,255,255,.55); }
 #standings { background:var(--chip-dark); border-radius:10px; border:2px solid rgba(255,255,255,.25); padding:6px 10px; font-size:13px; font-weight:600; line-height:1.5; min-width:158px; font-variant-numeric:tabular-nums; }
 #standings .me { color:var(--gold-2); }
 #standings .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
-#hud-bottom { position:absolute; right:18px; bottom:16px; text-align:right; }
+#hud-bottom { position:absolute; right:calc(18px + var(--sa-r)); bottom:calc(16px + var(--sa-b)); text-align:right; }
 #speed-num { font-family:var(--font-ui); font-size:52px; font-weight:700; font-style:italic; color:#fff; text-shadow:var(--hud-shadow); font-variant-numeric:tabular-nums; }
 #speed-unit { font-family:var(--font-ui); font-size:16px; font-weight:700; font-style:italic; color:#fff; text-shadow:var(--hud-shadow); margin-left:5px; }
 #drift-wrap { margin-top:4px; }
 #drift-bar { width:170px; height:10px; background:rgba(10,14,30,.5); border:2px solid rgba(255,255,255,.5); border-radius:6px; overflow:hidden; margin-left:auto; }
 #drift-fill { height:100%; width:0%; background:#6cf; border-radius:6px; transition:background .15s; }
 #drift-label { font-size:11px; font-weight:700; font-style:italic; letter-spacing:2px; color:#fff; text-shadow:var(--hud-shadow); margin-top:2px; }
+/* Input-aware layout (Addendum 3). CLASSIC (default — keyboard/mouse/gamepad,
+   no on-screen controls rendered): #top-stack is display:contents, so the item
+   slot sits in its original lower-left corner and the feed stacks above it.
+   TOUCH (body.touch-ui, set by refreshTouchUI exactly when on-screen controls
+   render): the stack becomes a centred column under the button row — item
+   slot, Auto-Gas note, feed — because the player's thumbs own the bottom. */
+#top-stack { display:contents; }
+body.touch-ui #top-stack { position:absolute; top:calc(112px + var(--sa-t)); left:50%; transform:translateX(-50%); z-index:12; display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; }
 /* Item slot: MK circle (POLISH.md §2.5) — ink ring, gold inner ring when holding, roulette states */
-#item-slot { position:absolute; left:16px; bottom:16px; width:96px; height:96px; background:radial-gradient(circle at 50% 32%, rgba(38,52,96,.88), rgba(5,10,25,.94)); border:5px solid var(--ink-pure); border-radius:50%; box-shadow:0 5px 0 rgba(10,10,20,.55), inset 0 0 0 3px rgba(255,255,255,.28), inset 0 3px 0 rgba(255,255,255,.35); display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; transition:transform .06s; }
+#item-slot { position:absolute; left:calc(16px + var(--sa-l)); bottom:calc(16px + var(--sa-b)); width:96px; height:96px; background:radial-gradient(circle at 50% 32%, rgba(38,52,96,.88), rgba(5,10,25,.94)); border:5px solid var(--ink-pure); border-radius:50%; box-shadow:0 5px 0 rgba(10,10,20,.55), inset 0 0 0 3px rgba(255,255,255,.28), inset 0 3px 0 rgba(255,255,255,.35); display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; transition:transform .06s; }
+body.touch-ui #item-slot { position:relative; left:auto; bottom:auto; flex:none; }
 #item-slot:active { transform:scale(.9); }
 #item-slot.has-item { box-shadow:0 5px 0 rgba(10,10,20,.55), inset 0 0 0 3px var(--yellow), inset 0 3px 0 rgba(255,255,255,.35), 0 0 22px rgba(255,217,0,.5); animation:slotpop .35s var(--curve-pop), slotpulse 1.6s ease-in-out .4s infinite; }
 @keyframes slotpop { 0%{transform:scale(.68)} 55%{transform:scale(1.16)} 100%{transform:scale(1)} }
@@ -80,15 +100,29 @@ button { font-family:inherit; cursor:pointer; }
 @keyframes landpop { 0%{ transform:scale(1.6) } 100%{ transform:scale(1) } }
 #item-icon { font-size:40px; line-height:1; transition:transform .13s ease; }
 #item-name { font-size:8.5px; font-weight:700; text-align:center; padding:2px 6px 0; letter-spacing:.2px; line-height:1.05; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.8); }
-#top-btns { position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; z-index:30; }
+#top-btns { position:absolute; top:calc(12px + var(--sa-t)); left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; z-index:30; }
 .icon-btn { width:44px; height:44px; border-radius:50%; border:3px solid var(--ink-pure); background:var(--chip-dark); font-size:20px; color:#fff; box-shadow:0 3px 0 rgba(10,10,20,.5); pointer-events:auto; touch-action:manipulation; cursor:pointer; position:relative; z-index:30; }
-#wrong-way { position:absolute; top:22%; left:50%; transform:translateX(-50%); font-family:var(--font-display); font-size:34px; color:#ff5252; -webkit-text-stroke:1.5px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure); animation:blink .5s infinite alternate; white-space:nowrap; }
+#wrong-way { position:absolute; top:58%; left:50%; transform:translateX(-50%); font-family:var(--font-display); font-size:34px; color:#ff5252; -webkit-text-stroke:1.5px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure); animation:blink .5s infinite alternate; white-space:nowrap; }
 @keyframes blink { from{opacity:1} to{opacity:.35} }
 /* Countdown numerals: giant checker-filled display type (POLISH.md §2.4) */
 #center-msg { position:absolute; top:32%; left:50%; transform:translate(-50%,-50%) rotate(-6deg); font-family:var(--font-display); font-size:min(30vh,250px); line-height:1; letter-spacing:.02em; text-align:center; white-space:nowrap; background:repeating-conic-gradient(#ffd900 0% 25%, #ffb300 0% 50%); background-size:.5em .5em; -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff) drop-shadow(0 7px 0 rgba(10,10,20,.85)); }
-#toast { position:absolute; top:16%; left:50%; transform:translateX(-50%); font-family:var(--font-display); font-size:30px; letter-spacing:.02em; color:var(--yellow); -webkit-text-stroke:1.5px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure),0 5px 12px rgba(0,0,0,.4); text-align:center; opacity:0; transition:opacity .25s; white-space:nowrap; }
-#bark { position:absolute; bottom:19%; left:50%; transform:translateX(-50%); max-width:86vw; background:rgba(255,255,255,.97); color:var(--ink); border:3px solid var(--ink); font-size:17px; font-weight:600; padding:9px 16px; border-radius:16px; box-shadow:0 4px 0 rgba(20,33,61,.85); opacity:0; transition:opacity .25s; text-align:center; }
-#bark:after { content:""; position:absolute; left:50%; bottom:-11px; transform:translateX(-50%); border:9px solid transparent; border-top-color:var(--ink); border-bottom:0; }
+/* Toast: settings confirmations + countdown rocket-start hints ONLY (all race
+   events moved to #race-feed). It hangs BELOW the top-center button row
+   (12px + 44px buttons = clears at ~62px) — the old top:9-16% placement put it
+   directly under/behind the sound & pause buttons on landscape phones. */
+#toast { position:absolute; top:calc(70px + var(--sa-t)); left:50%; transform:translateX(-50%); z-index:20; max-width:94vw; font-family:var(--font-display); font-size:30px; letter-spacing:.02em; color:var(--yellow); -webkit-text-stroke:1.5px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure),0 5px 12px rgba(0,0,0,.4); text-align:center; opacity:0; transition:opacity .25s; }
+/* Race feed: barks, item grants/effects and position changes land here —
+   never mid-screen. CLASSIC: lower-left, stacked above the corner item slot.
+   TOUCH: inside the top-centre stack, directly under the slot. Max 3 entries
+   (JS-capped), auto-fading. */
+#race-feed { position:absolute; left:calc(16px + var(--sa-l)); bottom:calc(124px + var(--sa-b)); display:flex; flex-direction:column; align-items:flex-start; gap:4px; max-width:min(46vw,350px); pointer-events:none; }
+body.touch-ui #race-feed { position:static; align-items:center; max-width:min(88vw,350px); }
+.feed-item { width:max-content; max-width:100%; text-align:left; background:var(--chip-dark); border-left:4px solid var(--yellow); border-radius:8px; padding:4px 10px; font-size:13.5px; font-weight:600; line-height:1.3; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.65); opacity:1; transition:opacity .3s; animation:feedin .18s var(--curve-out); }
+body.touch-ui .feed-item { text-align:center; border-left:none; border-bottom:3px solid var(--yellow); }
+.feed-item.bark { border-left-color:#fff; font-style:italic; }
+body.touch-ui .feed-item.bark { border-bottom-color:#fff; }
+.feed-item.out { opacity:0; }
+@keyframes feedin { from{ opacity:0; transform:translateY(-6px) } to{ opacity:1; transform:none } }
 #ink-overlay { position:fixed; inset:0; z-index:7; pointer-events:none; background:
   radial-gradient(ellipse 34% 26% at 22% 30%, rgba(12,6,26,.88) 55%, rgba(12,6,26,0) 72%),
   radial-gradient(ellipse 28% 34% at 74% 22%, rgba(12,6,26,.85) 55%, rgba(12,6,26,0) 72%),
@@ -99,7 +133,7 @@ button { font-family:inherit; cursor:pointer; }
   radial-gradient(circle 4% at 12% 58%, rgba(12,6,26,.8) 60%, rgba(12,6,26,0) 75%); }
 
 /* ---------- Touch controls ---------- */
-#touch-controls { position:fixed; inset:auto 0 0 0; z-index:6; display:flex; justify-content:space-between; padding:0 12px calc(10px + env(safe-area-inset-bottom)) 12px; pointer-events:none; }
+#touch-controls { position:fixed; inset:auto 0 0 0; z-index:6; display:flex; justify-content:space-between; padding:0 calc(12px + var(--sa-r)) calc(10px + var(--sa-b)) calc(12px + var(--sa-l)); pointer-events:none; }
 .tc-cluster { display:flex; gap:12px; align-items:flex-end; pointer-events:auto; }
 .tc-btn { width:clamp(54px, 15vmin, 74px); height:clamp(54px, 15vmin, 74px); border-radius:50%; border:3px solid rgba(255,255,255,.6); background:rgba(10,16,40,.55); color:#fff; font-family:var(--font-ui); font-size:clamp(14px, 4.2vmin, 24px); font-weight:700; touch-action:none; user-select:none; -webkit-user-select:none; }
 .tc-btn.active { background:rgba(255,217,0,.8); color:var(--ink); }
@@ -118,9 +152,9 @@ button { font-family:inherit; cursor:pointer; }
 .menu-cloud.c1 { width:230px; height:54px; top:9%; left:-40px; animation:clouddrift 62s ease-in-out infinite alternate; }
 .menu-cloud.c2 { width:170px; height:42px; top:26%; right:-30px; animation:clouddrift 88s ease-in-out infinite alternate-reverse; }
 @keyframes clouddrift { from{ transform:translateX(0) } to{ transform:translateX(9vw) } }
-#screen-pause { background:linear-gradient(180deg, rgba(41,182,246,.5), rgba(20,33,61,.78)); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; overflow:hidden; }
-#screen-results { background:rgba(4,8,22,.55); display:flex; align-items:center; justify-content:center; overflow:hidden; }
-.menu-inner { position:relative; z-index:1; max-width:880px; margin:0 auto; padding:28px 18px 96px; }
+#screen-pause { background:linear-gradient(180deg, rgba(41,182,246,.5), rgba(20,33,61,.78)); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; overflow:hidden; padding:calc(10px + var(--sa-t)) calc(10px + var(--sa-r)) calc(10px + var(--sa-b)) calc(10px + var(--sa-l)); }
+#screen-results { background:rgba(4,8,22,.55); display:flex; align-items:center; justify-content:center; overflow:hidden; padding:calc(10px + var(--sa-t)) calc(10px + var(--sa-r)) calc(10px + var(--sa-b)) calc(10px + var(--sa-l)); }
+.menu-inner { position:relative; z-index:1; max-width:880px; margin:0 auto; padding:calc(28px + var(--sa-t)) calc(18px + var(--sa-r)) calc(96px + var(--sa-b)) calc(18px + var(--sa-l)); }
 .title-block { text-align:center; margin-bottom:10px; }
 .title-kicker { display:inline-block; font-size:13px; font-weight:700; letter-spacing:2px; color:var(--yellow); text-shadow:var(--hud-shadow); }
 h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95; letter-spacing:.01em; color:#fff; -webkit-text-stroke:3px var(--ink-pure); text-shadow:0 4px 0 var(--ink-pure),0 9px 20px rgba(0,40,80,.4); }
@@ -132,11 +166,15 @@ h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95;
 .logo-billionaire { display:block; font-size:min(14.5vw,92px); line-height:.95; }
 .logo-kart { display:block; font-size:min(19vw,124px); line-height:.92; letter-spacing:.03em; }
 .logo-kart span { color:var(--lc); }
-.logo-ribbon { position:absolute; right:-12px; bottom:-15px; transform:rotate(-6deg); font-family:var(--font-display); font-size:clamp(14px,3.2vw,23px); letter-spacing:.05em; white-space:nowrap; }
+/* Title pill contrast fix: the ribbon lives inside the h1, whose 3px ink
+   -webkit-text-stroke + hard shadow painted the small pill text near-black on
+   dark red. Cancel the inherited stroke/shadow on the pill and set bold cream
+   text with its own subtle outline so it pops on the red. */
+.logo-ribbon { position:absolute; right:-12px; bottom:-15px; transform:rotate(-6deg); font-family:var(--font-display); font-size:clamp(14px,3.2vw,23px); letter-spacing:.05em; white-space:nowrap; color:#fff8e1; -webkit-text-stroke:0; text-shadow:0 2px 0 rgba(10,10,20,.6), 0 1px 5px rgba(0,0,0,.4), 1px 0 0 rgba(10,10,20,.45), -1px 0 0 rgba(10,10,20,.45); }
 .tap-start { margin-top:30px; font-size:clamp(19px,4.4vw,27px); color:var(--yellow); animation:tappulse 1.2s ease-in-out infinite; }
 .title-hero .tagline { margin-top:30px; } /* clear the lockup ribbon cocked over its bottom-right */
 @keyframes tappulse { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.06) } }
-.hero-corners { position:absolute; left:16px; right:16px; bottom:12px; display:flex; justify-content:space-between; font-size:11px; font-weight:600; letter-spacing:.06em; color:rgba(255,255,255,.78); text-shadow:0 1px 0 rgba(10,10,20,.5); pointer-events:none; }
+.hero-corners { position:absolute; left:calc(16px + var(--sa-l)); right:calc(16px + var(--sa-r)); bottom:calc(12px + var(--sa-b)); display:flex; justify-content:space-between; font-size:11px; font-weight:600; letter-spacing:.06em; color:rgba(255,255,255,.78); text-shadow:0 1px 0 rgba(10,10,20,.5); pointer-events:none; }
 @media (prefers-reduced-motion: reduce) { .tap-start { animation:none; } .logo-lockup { animation:none; } }
 @keyframes logobob { from{ transform:rotate(-2deg) translateY(-4px) } to{ transform:rotate(-2deg) translateY(5px) } }
 .tagline { font-size:19px; font-weight:600; color:#fff; text-shadow:0 2px 0 rgba(10,10,20,.55),0 3px 10px rgba(0,40,80,.45); margin-top:10px; }
@@ -161,6 +199,12 @@ h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95;
 #btn-start { display:block; width:100%; margin-top:30px; padding:17px; font-family:var(--font-display); font-size:28px; letter-spacing:.03em; color:#fff; text-shadow:0 2px 0 rgba(0,60,20,.55); background:linear-gradient(180deg,#7dff8a,#00c853 55%,#00a844); border:3px solid var(--ink); border-radius:999px; box-shadow:0 6px 0 var(--ink), inset 0 2px 0 rgba(255,255,255,.65); transition:transform .08s var(--curve-snap), box-shadow .08s; }
 #btn-start:active { transform:translateY(4px) scale(.99); box-shadow:0 1px 0 var(--ink); }
 #best-info, #pad-info { text-align:center; margin-top:12px; font-size:14px; font-weight:600; color:#fff; text-shadow:0 2px 0 rgba(10,10,20,.5); }
+/* Item guide (menu section 6): one row per item, built from ITEMS in game.js */
+#items-legend { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:8px; }
+.item-row { display:flex; gap:10px; align-items:flex-start; background:linear-gradient(180deg,#ffffff 0%,#eaf6ff 100%); border:3px solid var(--ink); border-radius:14px; box-shadow:0 4px 0 rgba(20,33,61,.9), inset 0 2px 0 #fff; color:var(--ink); padding:9px 12px; text-align:left; }
+.item-ic { font-size:26px; line-height:1.15; flex:none; }
+.item-name { font-size:15px; font-weight:700; }
+.item-desc { font-size:12.5px; font-weight:500; line-height:1.4; opacity:.85; }
 .help-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-top:26px; }
 .help-box { background:linear-gradient(180deg,#ffffff 0%,#eaf6ff 100%); border:3px solid var(--ink); border-radius:18px; box-shadow:0 5px 0 rgba(20,33,61,.9), inset 0 2px 0 #fff; color:var(--ink); padding:13px 15px; font-size:13.5px; font-weight:500; line-height:1.55; }
 .help-box h3 { font-size:15px; font-weight:700; margin-bottom:6px; color:var(--red-dark); }
@@ -176,12 +220,17 @@ h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95;
 #results-table td, #results-table th { padding:6px 8px; border-bottom:2px solid rgba(20,33,61,.14); text-align:left; }
 #results-table th { font-weight:700; }
 #results-table tr.me td { background:var(--yellow); color:var(--ink); font-weight:700; }
-#loading { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); z-index:20; background:rgba(0,0,0,.7); padding:8px 14px; border-radius:10px; font-size:13px; font-weight:600; }
+#loading { position:fixed; bottom:calc(10px + var(--sa-b)); left:50%; transform:translateX(-50%); z-index:20; background:rgba(0,0,0,.7); padding:8px 14px; border-radius:10px; font-size:13px; font-weight:600; }
 @media (max-width:640px) {
   #pos-big { font-size:46px; } #pos-suffix{font-size:21px;} #lap-label{font-size:15px;}
   #minimap { width:104px; height:104px; } #standings { display:none; }
-  #speed-num { font-size:36px; } #item-slot { width:74px; height:74px; bottom:auto; top:120px; } #item-icon{font-size:31px;} #item-name{font-size:7.5px;}
-  #center-msg { font-size:min(22vh,150px); } #toast { font-size:19px; top:13%; } #bark{font-size:14px; bottom:26%;}
+  #speed-num { font-size:36px; } #item-slot { width:80px; height:80px; } #item-icon{font-size:33px;} #item-name{font-size:7.5px;}
+  #center-msg { font-size:min(22vh,150px); } #toast { font-size:19px; top:calc(64px + var(--sa-t)); }
+  body.touch-ui #top-stack { top:calc(100px + var(--sa-t)); }
+  #hud-portrait { width:40px; height:40px; }
+  #race-feed { bottom:calc(104px + var(--sa-b)); }
+  body.touch-ui #race-feed { max-width:88vw; }
+  .feed-item { font-size:12.5px; }
   #drift-bar { width:110px; }
   .logo-billionaire, .logo-kart { -webkit-text-stroke-width:2px; }
 }
@@ -213,22 +262,31 @@ body[data-scheme="stick1"] #scheme-ui:not(.hidden) #btn-item2 { display:flex; le
 body[data-scheme="sticks2"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; right:20px; bottom:118px; width:66px; height:66px; }
 body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-brake2 { display:flex; right:22px; bottom:24px; width:88px; height:88px; }
 body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; left:122px; bottom:24px; width:78px; height:78px; }
-#autog-note { position:absolute; top:60px; left:50%; transform:translateX(-50%); background:var(--chip-dark); border:3px solid var(--yellow); color:var(--yellow); padding:5px 14px; border-radius:999px; font-weight:700; font-size:14px; letter-spacing:.05em; white-space:nowrap; }
+/* Classic placement sits below the toast zone (70px + ~36px) so a countdown
+   hint never lands on it; in touch mode it's a stack child instead. */
+#autog-note { position:absolute; top:calc(114px + var(--sa-t)); left:50%; transform:translateX(-50%); background:var(--chip-dark); border:3px solid var(--yellow); color:var(--yellow); padding:5px 14px; border-radius:999px; font-weight:700; font-size:14px; letter-spacing:.05em; white-space:nowrap; }
+body.touch-ui #autog-note { position:static; transform:none; flex:none; }
 
 /* ================= LANDSCAPE PHONES (playtest fix: no HUD collisions) ================= */
 @media (max-height: 500px) {
   #standings { display:none !important; }
   #minimap { width:100px; height:100px; }
-  #hud-right { top:8px; right:8px; }
-  #hud-bottom { top:116px; bottom:auto; right:10px; }
+  #hud-right { top:calc(8px + var(--sa-t)); right:calc(8px + var(--sa-r)); }
+  #hud-bottom { top:116px; bottom:auto; right:calc(10px + var(--sa-r)); }
   #speed-num { font-size:34px; }
   #drift-bar { width:110px; }
   #pos-big { font-size:44px; }
-  #toast { top:9%; font-size:19px; }
-  #autog-note { top:8px; }
+  #hud-portrait { width:38px; height:38px; }
+  #toast { top:calc(62px + var(--sa-t)); font-size:19px; }
+  body.touch-ui #top-stack { top:calc(92px + var(--sa-t)); }
+  #item-slot { width:76px; height:76px; }
+  #item-icon { font-size:32px; }
+  #race-feed { bottom:calc(100px + var(--sa-b)); max-width:320px; }
+  body.touch-ui #race-feed { max-width:320px; }
+  .feed-item { font-size:12px; padding:3px 8px; }
   .tc-btn { width:60px; height:60px; font-size:12px; }
   .tc-gas { width:76px; height:76px; }
-  #touch-controls { padding:0 10px calc(8px + env(safe-area-inset-bottom)); }
+  #touch-controls { padding:0 calc(10px + var(--sa-r)) calc(8px + var(--sa-b)) calc(10px + var(--sa-l)); }
 }
 
 /* ================= CHARACTER SELECT v2 ================= */
@@ -279,7 +337,7 @@ body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; le
   .detail-portrait { width:86px; height:86px; }
   .detail-name { font-size:20px; }
 }
-#hud-portrait { width:46px; height:46px; border-radius:10px; object-fit:cover; border:3px solid var(--ink-pure); display:none; margin-bottom:4px; }
+#hud-portrait { width:46px; height:46px; flex:none; border-radius:10px; object-fit:cover; border:3px solid var(--ink-pure); display:none; }
 .res-portrait { width:26px; height:26px; border-radius:6px; object-fit:cover; vertical-align:middle; margin-right:7px; }
 
 /* ---------- Screen wipes (POLISH.md §2.8, driven by ui-fx.js) ---------- */

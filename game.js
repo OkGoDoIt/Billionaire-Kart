@@ -1719,9 +1719,9 @@ function showResults() {
 /* ---- Character Select v2: portrait tiles + radar stats + detail panel ---- */
 const PKEYS = ['elon', 'sam', 'zuck', 'bezos', 'jensen', 'satya', 'dario', 'demis', 'trump', 'cook', 'larrysergey', 'bill', 'thiel', 'holmes', 'ellison', 'murdoch', 'soros'];
 function portraitOf(i) { const P = window.BK_PORTRAITS || {}; return P[PKEYS[i]] || null; }
-function statCols(r) { // [light, base, dark] shades of the racer colour for the pie slices + legend
-  const base = new THREE.Color(r.color);
-  return ['#' + base.clone().lerp(new THREE.Color(0xffffff), 0.32).getHexString(), '#' + base.getHexString(), '#' + base.clone().multiplyScalar(0.5).getHexString()];
+const STAT_COLS = ['#e63946', '#fb8500', '#219ebc']; // FIXED per-stat colours (#18, Roger spec change): SPEED red, ACCELERATION orange, GRIP blue — identical on every racer for readability
+function statCols(r) { // fixed stat palette for the pie slices + legend (no longer shades of the racer colour)
+  return STAT_COLS;
 }
 function pieSVG(r) { // Character Select v3 (#18): pie with three slices proportional to SPEED / ACCELERATION / GRIP
   const cols = statCols(r);
@@ -1749,14 +1749,14 @@ function traitOf(r) { // the special-trait line — every claim here matches a r
 }
 function updateDetail() {
   const r = RACERS[selectedRacer], p = portraitOf(selectedRacer);
-  const bar = (label, v) => `<div class="stat-row"><span>${label}</span><div class="stat-track"><div class="stat-fill" style="width:${v / 5 * 100}%;background:#${r.color.toString(16).padStart(6, '0')}"></div></div></div>`;
+  const bar = (label, v, col) => `<div class="stat-row"><span>${label}</span><div class="stat-track"><div class="stat-fill" style="width:${v / 5 * 100}%;background:${col}"></div></div></div>`;
   const trait = traitOf(r);
   $('detail-media').innerHTML = p ? `<img class="detail-portrait" src="${p}" alt="${r.name} portrait">` : `<div class="detail-portrait detail-emoji" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>`;
   $('detail-main').innerHTML = `
       <div class="detail-name" id="detail-name">${r.name}</div>
       <div class="racer-title">${r.title}</div>
       <div class="racer-quote">${r.quote}</div>
-      ${bar('SPEED', r.spd)}${bar('ACCELERATION', r.acc)}${bar('GRIP', r.grip)}
+      ${bar('SPEED', r.spd, STAT_COLS[0])}${bar('ACCELERATION', r.acc, STAT_COLS[1])}${bar('GRIP', r.grip, STAT_COLS[2])}
       ${trait ? `<div class="detail-trait">${trait}</div>` : ''}`;
   if (window.BKTT) BKTT.setRacer(selectedRacer); // polish turntable (desktop detail panel), if active
 }

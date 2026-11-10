@@ -6,6 +6,13 @@ import * as GMAT from './gfx/materials.js';
 import { setupRenderer, applySky, setupLights, sunFollow, applyFog, SKY_URLS } from './gfx/environment.js';
 import { createPost } from './gfx/post.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { def as datacenterDef, dress as dressDatacenter } from './tracks/datacenter.js';
+import { def as watersDef, dress as dressWaters } from './tracks/waters.js';
+import { def as whitehouseDef, dress as dressWhitehouse } from './tracks/whitehouse.js';
+import { TRACK as META_TRACK, build as buildMetaverse } from './tracks/metaverse.js';
+import { TRACK as WEWORK_TRACK, build as buildWeWork } from './tracks/wework.js';
+import { TRACK as BURNING_TRACK, build as buildBurningMan } from './tracks/burningman.js';
+import { TRACK as BAHAMAS_TRACK, build as buildBahamas } from './tracks/bahamas.js';
 
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -60,7 +67,15 @@ const TRACKS = [
     points: [[0,-260],[150,-215],[235,-110],[205,10],[265,110],[170,205],[40,245],[-95,205],[-215,225],[-265,105],[-215,-15],[-255,-130],[-140,-215]] },
   { name: 'Mars GP', sky: 0xe8906a, fog: 0xe8a37c, ground: 0xa5502f, roadSeed: 2, skyKey: 'mars', fogKey: 'marsSunset',
     points: [[0,-240],[190,-190],[250,-40],[150,60],[230,170],[90,250],[-60,205],[-170,255],[-260,140],[-190,20],[-265,-90],[-170,-190],[-70,-160]] },
+  datacenterDef, watersDef, whitehouseDef,
+  META_TRACK, WEWORK_TRACK, BURNING_TRACK, BAHAMAS_TRACK,
 ];
+const TRACK_DRESSING = { 2: dressDatacenter, 3: dressWaters, 4: dressWhitehouse }; // Batch 1 dress(ctx) registry (#10)
+const TRACK_MODULES = [null, null, null, null, null, buildMetaverse, buildWeWork, buildBurningMan, buildBahamas]; // Batch 3 build(ctx) registry, indices 5-8 (#12)
+if (window.BK_TRACKS) for (const t of window.BK_TRACKS) TRACKS.push(t); // Batch 2 classic-script tracks (Bliss/Tunnel/Davos) register as indices 9-11 (#11)
+let trackFx = null, lastPlayerLap = 1, trackAnimators = []; // trackFx: Batch 1 {update,onLap}; trackAnimators: Batch 3 per-frame hooks
+let currentDef = null; // Batch 2: active track def (buildWorld sets it; drives tick / countdownView / chime)
+function sceneryContext() { return { THREE, scene, samples, normals, tangents, N, HALF_W, trackCenter, rand, clamp, scatterPos, headingOf, clouds, canvasTexture, billboardTexture, stripGeometry, animators: trackAnimators }; }
 const BILLBOARDS = ['AGI COMING SOON™', 'GPU GO BRRR', 'THIS SIGN COST $4.20', 'NOW HIRING: PROMPT WHISPERERS', 'MARS OR BUST', 'YOUR DATA HERE', 'NOT FINANCIAL ADVICE', 'SYNERGY DOWNSHIFT AHEAD', 'PIVOT! PIVOT!', 'DISRUPTING TRAFFIC SINCE 2026'];
 
 /* ================= ITEMS ================= */
@@ -414,11 +429,14 @@ function buildWorld(trackIdx, field) {
   if (scene) scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map && !m.map.userData.shared) m.map.dispose(); m.dispose(); }); } });
   if (!scene) scene = new THREE.Scene(); else scene.clear(); // one persistent scene — the post composer holds a RenderPass to it
   const tr = TRACKS[trackIdx];
-  const preset = applyFog(scene, tr.fogKey); // fog colour matched to the sky horizon
+  currentDef = tr;
+  const preset = applyFog(scene, tr.fogKey || 'valleyDay'); // fog colour matched to the sky horizon
+  if (!tr.fogKey && tr.fog !== undefined) { scene.fog.color.set(tr.fog); scene.fog.near = tr.fogNear ?? 210; scene.fog.far = tr.fogFar ?? 640; } // module tracks carry authored fog instead of a preset key
   renderer.toneMappingExposure = preset.exposure;
   const { sun, hemi } = setupLights(scene, { shadowMapSize: window.innerWidth < 700 ? 1024 : 2048, hemiGround: tr.ground });
   sunLight = sun; hemiLight = hemi;
-  applySky(renderer, scene, SKY_URLS[tr.skyKey], { envIntensity: preset.envIntensity }).catch(() => { }); // fire-and-forget: panorama + IBL pop in a frame or two, never blocks race start
+  if (tr.skyKey) applySky(renderer, scene, SKY_URLS[tr.skyKey], { envIntensity: preset.envIntensity }).catch(() => { }); // fire-and-forget: panorama + IBL pop in a frame or two, never blocks race start
+  else if (tr.sky !== undefined) { scene.background = new THREE.Color(tr.sky); scene.environment = null; } // module tracks: authored sky colour, no panorama
   if (post) post.applyQuality(localStorage.getItem('bk-quality') || 'auto', { sun: sunLight }); // sun is rebuilt per track — re-apply the shadow hint
   karts = []; bananas = []; projectiles = []; itemBoxes = []; clouds = []; bombs = [];
 
@@ -441,7 +459,7 @@ function buildWorld(trackIdx, field) {
 
   const shTex = mars ? GTEX.sandTexture({}) : GTEX.concreteTexture();
   shTex.repeat.set(1, 60);
-  const shoulder = new THREE.Mesh(stripGeometry(HALF_W + 2.6, 0.0), new THREE.MeshStandardMaterial({ map: shTex, roughness: 0.95 }));
+  const shoulder = new THREE.Mesh(stripGeometry(HALF_W + 2.6, 0.0), tr.shoulder !== undefined ? new THREE.MeshStandardMaterial({ color: tr.shoulder, roughness: 0.95 }) : new THREE.MeshStandardMaterial({ map: shTex, roughness: 0.95 }));
   shoulder.receiveShadow = true; scene.add(shoulder);
   const aTex = GTEX.asphaltTextures(); // strip UVs: v spans ~495 over a lap, so repeat.y ~0.45 ≈ 220 tiles
   aTex.map.repeat.set(1, 0.45); aTex.roughnessMap.repeat.set(1, 0.45); aTex.bumpMap.repeat.set(1, 0.45);
@@ -457,12 +475,14 @@ function buildWorld(trackIdx, field) {
   line.rotation.x = -Math.PI / 2; line.position.y = 0.06; startGroup.add(line);
   const poleMat = GMAT.flatProp(0x22242a);
   for (const sx of [-1, 1]) { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 9, 8), poleMat); pole.position.set(sx * (HALF_W + 1.2), 4.5, 0); startGroup.add(pole); }
-  const bannerTex = canvasTexture(1024, 128, (g, w, h) => { g.fillStyle = '#14213d'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd94a'; g.font = '900 74px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('🏁 BILLIONAIRE KART 🏁', w / 2, h / 2); });
+  const bannerTex = canvasTexture(1024, 128, (g, w, h) => { g.fillStyle = '#14213d'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd94a'; g.font = '900 74px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(tr.banner || '🏁 BILLIONAIRE KART 🏁', w / 2, h / 2); });
   const banner = new THREE.Mesh(new THREE.BoxGeometry(HALF_W * 2 + 3, 3.2, 0.4), GMAT.emissiveScreen(0xffffff, { intensity: 1.1, map: bannerTex }));
   banner.position.y = 8.6; startGroup.add(banner);
   scene.add(startGroup);
 
   buildScenery(trackIdx);
+  trackFx = null; lastPlayerLap = 1;
+  if (TRACK_DRESSING[trackIdx]) trackFx = TRACK_DRESSING[trackIdx](sceneryContext()) || null;
   buildItemBoxes();
   currentField.forEach(ri => scene.add(makeKart(ri, ri === selectedRacer).mesh));
   initParticles();
@@ -477,10 +497,15 @@ function scatterPos(minLat, maxLat) {
 }
 
 function buildScenery(trackIdx) {
+  const modBuild = TRACK_MODULES[trackIdx];
+  if (modBuild) { trackAnimators = []; modBuild(sceneryContext()); return; } // Batch 3: module ships its own full dressing (own signage/set piece/sky)
   const mars = trackIdx === 1;
-  // trees (valley) or rocks (mars) — instanced
+  const tr = TRACKS[trackIdx];
+  // trees (valley) or rocks (mars) — instanced; module tracks bring their own dressing, so the valley branch is track-0 only
   const COUNT = 140;
-  if (!mars) {
+  if (tr.buildDressing) {
+    tr.buildDressing(sceneryContext()); // Batch 2 dressing; shared billboards/grandstand/clouds below still run
+  } else if (trackIdx === 0) {
     const trunkM = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.32, 0.5, 2.6, 6), GMAT.flatProp(0x7a4a21), COUNT);
     const leafM = new THREE.InstancedMesh(new THREE.ConeGeometry(2.3, 5.6, 8), GMAT.flatProp(0x2e7d32), COUNT);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
@@ -497,7 +522,7 @@ function buildScenery(trackIdx) {
       const b = new THREE.Mesh(new THREE.BoxGeometry(rand(9, 18), hgt, rand(9, 18)), towerMat);
       b.position.set(p.x, hgt / 2, p.z); b.rotation.y = Math.random() * Math.PI; scene.add(b);
     }
-  } else {
+  } else if (mars) {
     const rockM = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.6), GMAT.flatProp(0x7e3b22), COUNT);
     const m = new THREE.Matrix4(), e = new THREE.Euler(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
     for (let i = 0; i < COUNT; i++) {
@@ -520,8 +545,9 @@ function buildScenery(trackIdx) {
     rocket.position.copy(rp); scene.add(rocket);
   }
   // joke billboards
-  BILLBOARDS.forEach((text, i) => {
-    const idx = Math.floor(i / BILLBOARDS.length * N + N * 0.06) % N;
+  const BB = tr.billboards || BILLBOARDS;
+  BB.forEach((text, i) => {
+    const idx = Math.floor(i / BB.length * N + N * 0.06) % N;
     const side = i % 2 ? 1 : -1, s = samples[idx], n = normals[idx];
     const g = new THREE.Group();
     g.position.set(s.x + n.x * side * (HALF_W + 9), 0, s.z + n.z * side * (HALF_W + 9));
@@ -538,7 +564,7 @@ function buildScenery(trackIdx) {
   const stand = new THREE.Group();
   stand.position.set(s.x + n.x * (HALF_W + 17), 0, s.z + n.z * (HALF_W + 17));
   stand.lookAt(s.x, 0, s.z);
-  const seatCols = [0xd23b2e, 0xf2f2f2, 0x1877f2, 0xffd94a];
+  const seatCols = tr.standColors || [0xd23b2e, 0xf2f2f2, 0x1877f2, 0xffd94a];
   for (let r = 0; r < 4; r++) {
     const tier = new THREE.Mesh(new THREE.BoxGeometry(34, 1.6, 3.4), GMAT.flatProp(seatCols[r % 4]));
     tier.position.set(0, 1 + r * 1.7, -r * 3); stand.add(tier);
@@ -547,12 +573,14 @@ function buildScenery(trackIdx) {
   roof.position.set(0, 9.6, -4.5); stand.add(roof);
   scene.add(stand);
   // clouds — soft billboard sprites (gfx cloud texture), drifting in animate()
-  const cloudTex = GTEX.cloudSprite();
-  for (let i = 0; i < 14; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false }));
-    sp.scale.set(rand(26, 40), rand(10, 15), 1);
-    sp.position.set(rand(-520, 520), rand(75, 125), rand(-520, 520));
-    clouds.push(sp); scene.add(sp);
+  if (!tr.noClouds) {
+    const cloudTex = GTEX.cloudSprite();
+    for (let i = 0; i < 14; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false }));
+      sp.scale.set(rand(26, 40), rand(10, 15), 1);
+      sp.position.set(rand(-520, 520), rand(75, 125), rand(-520, 520));
+      clouds.push(sp); scene.add(sp);
+    }
   }
 }
 
@@ -1636,6 +1664,7 @@ function startRace() {
   camHeading = playerKart().heading;
   camera.position.copy(playerKart().pos).add(new THREE.Vector3(0, 30, -30));
   gameState = 'countdown'; countdownT = 3.6; lastCount = 99; raceTime = 0;
+  if (currentDef && currentDef.chime === 'xp') [660, 523, 784, 880].forEach((f, i) => A.tone(f, 0.5, 'sine', 0.055, 0, i * 0.14)); // Bliss-only XP start chime (#11)
   revHeld = 0; revOverWarned = false; lastRank = 0; hitstopT = 0;
   showCenter('', 0); updateItemSlot(); drawMinimap();
 }
@@ -1813,6 +1842,14 @@ function updateCamera(dt) {
     sunFollow(sunLight, trackCenter, [80, 130, 60]);
     return;
   }
+  if (gameState === 'countdown' && currentDef && currentDef.countdownView) {
+    const cv = currentDef.countdownView;
+    camera.position.set(cv.pos[0], cv.pos[1], cv.pos[2]);
+    camera.lookAt(cv.look[0], cv.look[1], cv.look[2]);
+    setFov(55, dt);
+    sunFollow(sunLight, trackCenter, [80, 130, 60]);
+    return;
+  }
   camHeading = lerpAngle(camHeading, p.velHeading, clamp((gameState === 'countdown' ? 6 : 3.4) * dt, 0, 1));
   const fwd = forwardVec(camHeading);
   const desired = p.pos.clone().addScaledVector(fwd, -14.5); desired.y = 6.2;
@@ -1877,6 +1914,7 @@ function animate() {
     }
     if (gameState === 'racing' || gameState === 'countdown') updateHUD(dt);
     updateParticles(dt);
+    for (const fn of trackAnimators) fn(dt, elapsed);
     updateCamera(dt);
     // name labels: shrink + fade as a kart gets close — a label must never wallpaper the screen (playtest fix)
     for (const k of karts) {
@@ -1886,6 +1924,12 @@ function animate() {
       k.nameSpr.scale.set(8.4 * s, 2.1 * s, 1);
       k.nameSpr.material.opacity = d < 7 ? clamp((d - 2.5) / 4.5, 0.12, 1) : 1;
     }
+    if (trackFx) {
+      const pk = playerKart();
+      const lapNow = pk ? clamp(Math.floor(Math.max(pk.continuous, 0) / N) + 1, 1, LAPS) : 1;
+      if (trackFx.onLap && lapNow !== lastPlayerLap) { const done = lapNow - 1; lastPlayerLap = lapNow; trackFx.onLap(done); }
+      if (trackFx.update) trackFx.update(dt, elapsed);
+    }
     refreshTouchUI();
     if (elapsed > centerUntil && $('center-msg').textContent) $('center-msg').textContent = '';
     if (elapsed > toastUntil) $('toast').style.opacity = 0;
@@ -1893,6 +1937,7 @@ function animate() {
     if (elapsed > inkUntil) $('ink-overlay').classList.add('hidden');
   }
   if (!post && scene) { post = createPost(renderer, scene, camera); post.applyQuality(localStorage.getItem('bk-quality') || 'auto', { sun: sunLight }); } // lazy: scene is persistent, so the composer's RenderPass stays valid across rebuilds
+  if (scene && currentDef && currentDef.tick) currentDef.tick(dt, elapsed);
   if (post) post.render(); else renderer.render(scene, camera);
   if (firstFrame) { firstFrame = false; $('loading').style.display = 'none'; }
 }

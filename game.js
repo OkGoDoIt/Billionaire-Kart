@@ -159,7 +159,8 @@ const A = {
 };
 
 /* ================= CORE STATE ================= */
-const N = 900, HALF_W = 11, LAPS = 3;
+const N = 900, HALF_W = 11;
+let LAPS = 3; // mutable so the sim harness can run shorter races (BK.setLaps)
 let renderer, scene, camera, sunLight, hemiLight;
 let curve, samples = [], tangents = [], normals = [], segLen = 1.8, trackCenter = new THREE.Vector3();
 let karts = [], bananas = [], projectiles = [], itemBoxes = [], clouds = [], bombs = [];
@@ -169,8 +170,62 @@ let selectedRacer = 0, selectedTrack = 0, difficulty = 1;
 const DIFF_MUL = [0.90, 0.955, 1.0];
 let camHeading = 0, camFov = 62, shake = 0, menuAngle = 0.6, hudTimer = 0, progRate = 0, prevPlayerCont = 0;
 let centerUntil = 0, toastUntil = 0, barkUntil = 0, inkUntil = 0;
+let hitstopT = 0, revHeld = 0, revOverWarned = false, lastRank = 0; // fun-pass: hitstop, rocket-start, position toasts
 const keys = {};
 const touchFlags = { left: false, right: false, gas: false, brake: false, drift: false };
+/* CONTROL LAB: four switchable touch schemes, persisted. Analog stick values funnel into playerInput. */
+const TOUCH_SCHEMES = ['buttons', 'stick1', 'sticks2', 'autog'];
+let touchScheme = 'buttons';
+try { const s = localStorage.getItem('bk_touch_scheme'); if (TOUCH_SCHEMES.includes(s)) touchScheme = s; } catch (e) { }
+const touchAnalog = { steer: 0, throttle: 0, brake: 0 };
+const stickPointers = new Map(); // pointerId -> { zone, ox, oy }
+const driftTap = { active: false, started: false, expires: 0 }; // Pedal & Stick tap-to-drift-hop latch
+let smartMode = 'auto'; // 'auto' = ON for Auto-Gas only; explicit user choice persists across schemes
+try { const m = localStorage.getItem('bk_smart_steer'); if (['auto', 'on', 'off'].includes(m)) smartMode = m; } catch (e) { }
+function smartSteerOn() { return smartMode === 'on' || (smartMode === 'auto' && touchScheme === 'autog'); }
+let autoDriftMode = 'auto'; // Auto-Drift assist: hold steer >85% for >0.25s = drift (Mario Kart Tour Simple style). 'auto' = ON for Auto-Gas only
+try { const m = localStorage.getItem('bk_auto_drift'); if (['auto', 'on', 'off'].includes(m)) autoDriftMode = m; } catch (e) { }
+function autoDriftOn() { return autoDriftMode === 'on' || (autoDriftMode === 'auto' && touchScheme === 'autog'); }
+function setAutoDriftMode(m) {
+  autoDriftMode = m;
+  try { localStorage.setItem('bk_auto_drift', m); } catch (e) { }
+  document.querySelectorAll('.adrift-btn').forEach(b => b.textContent = `🌀 Auto-drift: ${m === 'auto' ? 'Auto (Auto-Gas only)' : m.toUpperCase()}`);
+}
+let steerFullSince = 0;
+function popItemSlot() { const ic = $('item-icon'); ic.style.transform = 'scale(1.45)'; setTimeout(() => { ic.style.transform = ''; }, 130); }
+function fireItem() { // every touch item gesture routes through here: haptic pulse + slot pop + use
+  if (gameState !== 'racing' || paused) return;
+  if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { } }
+  popItemSlot();
+  useItem(playerKart());
+}
+function setSmartMode(m) {
+  smartMode = m;
+  try { localStorage.setItem('bk_smart_steer', m); } catch (e) { }
+  document.querySelectorAll('.smart-btn').forEach(b => b.textContent = `🧭 Smart steering: ${m === 'auto' ? 'Auto (Auto-Gas only)' : m.toUpperCase()}`);
+}
+function setTouchScheme(s, silent) {
+  if (!TOUCH_SCHEMES.includes(s)) return;
+  touchScheme = s;
+  try { localStorage.setItem('bk_touch_scheme', s); } catch (e) { }
+  document.body.dataset.scheme = s;
+  document.querySelectorAll('.scheme-btn').forEach(b => b.classList.toggle('selected', b.dataset.scheme === s));
+  stickPointers.clear(); touchAnalog.steer = 0; touchAnalog.throttle = 0; touchAnalog.brake = 0;
+  for (const id of ['stick-a', 'stick-b']) { const el = $(id); if (el) el.style.display = 'none'; }
+  refreshTouchUI();
+  if (!silent) showToast({ buttons: '🕹️ Touch: Buttons', stick1: '👍 Touch: One-Thumb Stick — drag right side', sticks2: '✌️ Touch: Two Sticks', autog: '🚗 Touch: Auto-Gas — just steer!' }[s]);
+}
+let touchUiSig = '';
+function refreshTouchUI() {
+  const inRace = gameState !== 'menu' && !$('hud').classList.contains('hidden');
+  const touch = isTouchDevice();
+  const sig = `${touchScheme}|${inRace}|${touch}|${gameState}`;
+  if (sig === touchUiSig) return; touchUiSig = sig;
+  $('touch-controls').classList.toggle('hidden', !(touch && inRace && touchScheme === 'buttons'));
+  $('scheme-ui').classList.toggle('hidden', !(touch && inRace && touchScheme !== 'buttons'));
+  $('stick-layer').style.display = (touch && inRace && touchScheme !== 'buttons') ? 'block' : 'none';
+  $('autog-note').classList.toggle('hidden', !(touchScheme === 'autog' && inRace));
+}
 const mouse = { down: false, x: 0.5, lastMove: -99 };
 const gyro = { enabled: false, steer: 0, baseGamma: null, baseBeta: null };
 let debugInput = { throttle: null, steer: null, brake: null, drift: null };
@@ -527,15 +582,16 @@ function makeKart(racerIdx, isPlayer) {
   if (racerIdx === 3) { add(new THREE.BoxGeometry(1.15, 1.15, 1.15), new THREE.MeshLambertMaterial({ color: 0xb5823c }), 0, 1.6, -1.6); }
   if (racerIdx === 4) { add(new THREE.BoxGeometry(1.5, 0.1, 0.5), new THREE.MeshStandardMaterial({ color: 0x76b900, emissive: 0x76b900, emissiveIntensity: 1.4 }), 0, 0.78, 2.35); }
 
-  root.add(nameSprite(r, isPlayer));
+  const nameSpr = nameSprite(r, isPlayer);
+  root.add(nameSpr);
   const kart = {
-    racerIdx, racer: r, isPlayer, mesh: root, tilt, wheels: [wFL, wFR, wRL, wRR], pivots: [pivotL, pivotR],
+    racerIdx, racer: r, isPlayer, mesh: root, nameSpr, tilt, wheels: [wFL, wFR, wRL, wRR], pivots: [pivotL, pivotR],
     pos: new THREE.Vector3(), heading: 0, velHeading: 0, speed: 0, steerVis: 0, spinVis: 0,
     continuous: 0, sampleIdx: 0, lateral: 0, finished: false, finishTime: null, projected: false, autopilot: false,
     item: null, spinT: 0, shrinkT: 0, starT: 0, boostT: 0, driftCharge: 0, drifting: false, starTouchCd: 0,
     bailoutT: 0, ghostT: 0, hornT: 0, goldenT: 0, goldenCd: 0, inkT: 0,
     sputterT: 0, sputterClock: 0, nextSputter: rand(6, 14),
-    lapStart: 0, lastLapTime: null, bestLap: null, lapsDone: 0, offroad: false,
+    lapStart: 0, lastLapTime: null, bestLap: null, lapsDone: 0, offroad: false, offroadDeep: false,
     ai: { lane: rand(-5, 5), laneT: rand(1, 3), itemT: rand(2, 6), skill: r.aiSkill ?? rand(0.97, 1.03), driftHeld: false },
   };
   karts.push(kart);
@@ -618,9 +674,10 @@ function updateParticles(dt) {
 
 /* ================= PHYSICS ================= */
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+let simFairPlayer = false; // sim harness only: treat the autopilot "player" exactly like an AI kart
 function topSpeedOf(k) {
   let base = 40 + (k.racer.spd - 3) * 1.8;
-  if (!k.isPlayer) {
+  if (!k.isPlayer || simFairPlayer) {
     base *= DIFF_MUL[difficulty] * k.ai.skill;
     const p = playerKart();
     if (p && gameState === 'racing') base *= 1 + clamp(clamp((p.continuous - k.continuous) / N, -1, 1) * 0.16, -0.055, 0.095); // rubber-band
@@ -630,7 +687,7 @@ function topSpeedOf(k) {
   if (k.ghostT > 0) base *= 1.07;
   if (k.inkT > 0) base *= 0.88;
   if (k.bailoutT > 0) base *= 1.30;
-  if (k.offroad) base *= 0.5;
+  if (k.offroad) base *= k.offroadDeep ? 0.55 : 0.72; // playtest retune: grass hurts, deep rough hurts more — neither kills you
   return base;
 }
 function updateProgress(k) {
@@ -640,6 +697,7 @@ function updateProgress(k) {
   k.continuous += delta; k.sampleIdx = newIdx;
   k.lateral = lateralAt(k.pos, newIdx);
   k.offroad = Math.abs(k.lateral) > HALF_W - 0.6;
+  k.offroadDeep = Math.abs(k.lateral) > HALF_W + 2.4;
   if (Math.abs(k.lateral) > HALF_W + 5) { // wall clamp
     k.pos.addScaledVector(normals[newIdx], -(Math.sign(k.lateral) * (Math.abs(k.lateral) - (HALF_W + 5))));
     k.speed *= 0.86;
@@ -680,6 +738,7 @@ function updateKart(k, input, dt) {
   k.starTouchCd = Math.max(0, k.starTouchCd - dt);
   k.ghostT = Math.max(0, k.ghostT - dt); k.hornT = Math.max(0, k.hornT - dt); k.inkT = Math.max(0, k.inkT - dt);
   k.goldenCd = Math.max(0, k.goldenCd - dt);
+  k.sputterT = Math.max(0, k.sputterT - dt); // generic: rocket-start sputter + Holmes (her trigger logic is below)
   if (k.goldenT > 0) { // Series F window expiry releases the item slot
     k.goldenT -= dt;
     if (k.goldenT <= 0 && k.item === 'golden') { k.item = null; if (k.isPlayer) updateItemSlot(); }
@@ -690,8 +749,7 @@ function updateKart(k, input, dt) {
   }
   // Holmes sputter: every 6–14 s a 15% chance check → 1.2 s power loss (high stats, high risk)
   if (k.racer.sputter) {
-    if (k.sputterT > 0) k.sputterT -= dt;
-    else if (gameState === 'racing' && !k.finished) {
+    if (k.sputterT <= 0 && gameState === 'racing' && !k.finished) {
       k.sputterClock += dt;
       if (k.sputterClock >= k.nextSputter) {
         k.sputterClock = 0; k.nextSputter = rand(6, 14);
@@ -724,15 +782,17 @@ function updateKart(k, input, dt) {
     }
     else if (input.throttle > 0) k.speed += (21 + (k.racer.acc - 3) * 2.4) * input.throttle * dt * (k.speed < 0 ? 2.2 : 1);
     else if (k.speed > 0) k.speed = Math.max(0, k.speed - 10 * dt);
-    if (input.brake) { if (k.speed > 1) k.speed -= 34 * dt; else k.speed = Math.max(-11, k.speed - 14 * dt); }
+    const brakeVal = input.brake === true ? 1 : (input.brake || 0); // analog brake (touch sticks) or digital
+    if (brakeVal > 0.05) { if (k.speed > 1) k.speed -= 34 * brakeVal * dt; else k.speed = Math.max(-11, k.speed - 14 * brakeVal * dt); }
     k.speed -= k.speed * 0.22 * dt;
-    if (k.speed > cap) k.speed = Math.max(cap, k.speed - 30 * dt);
+    if (k.offroad) k.speed -= k.speed * 0.38 * dt; // sustained grass bleeds speed — brief clips are cheap, corner-cutting is not (balance guard)
+    if (k.speed > cap) k.speed = Math.max(cap, k.speed - (k.offroad ? 16 : 30) * dt); // gentle settle onto the grass cap instead of a wall of drag
     if (k.speed < -11) k.speed = -11;
 
     const wantDrift = input.drift && Math.abs(input.steer) > 0.25 && k.speed > 13;
     if (wantDrift) {
       if (!k.drifting) { k.drifting = true; k.driftCharge = 0; }
-      k.driftCharge += dt * (k.racerIdx === 6 ? 1.3 : 1);
+      k.driftCharge += dt * (k.racerIdx === 6 ? 1.45 : 1.15); // fun pass: blue (0.7) in ~0.6 s — earnable on real corners; orange (1.4) rewards the long ones
       if (Math.random() < 0.75) {
         const col = k.driftCharge >= 1.4 ? [0xffa53a] : k.driftCharge >= 0.7 ? [0x66ccff] : [0xdddddd];
         spawnParticles(k.pos.clone().addScaledVector(forwardVec(k.heading), -1.4), { count: 2, colors: col, speed: 2.5, life: 0.4, up: 1.5, gravity: -2 });
@@ -780,7 +840,7 @@ function spinKart(k) {
   if (k.starT > 0 || k.spinT > 0 || k.ghostT > 0) return; // Viral Moment & Insider-Trading ghost shrug off spins
   k.spinT = 1.15; k.speed *= 0.3; k.drifting = false; k.driftCharge = 0;
   spawnParticles(k.pos, { count: 14, colors: [0xcccccc, 0xffd94a], speed: 5, life: 0.6, up: 4 });
-  if (k.isPlayer) { A.hit(); shake = Math.max(shake, 0.55); showBark(`${k.racer.name}: “${pick(k.racer.barks.hit)}”`); }
+  if (k.isPlayer) { A.hit(); shake = Math.max(shake, 0.55); hitstopT = Math.max(hitstopT, 0.06); showBark(`${k.racer.name}: “${pick(k.racer.barks.hit)}”`); }
   else if (k.pos.distanceTo(playerKart().pos) < 55 && Math.random() < 0.45) showBark(`${k.racer.name}: “${pick(k.racer.barks.hit)}”`);
 }
 
@@ -888,7 +948,7 @@ function useItem(k) {
     if (first) k.goldenT = 5;
     k.goldenCd = 0.7;
     k.boostT = Math.max(k.boostT, 0.95);
-    if (k.isPlayer) { A.use(); A.boostSnd(); if (first) showToast('🏆 SERIES F — keep hitting ITEM to re-boost!'); }
+    if (k.isPlayer) { A.use(); A.boostSnd(); if (first) { [660, 880, 1108].forEach((f, i) => A.tone(f, 0.12, 'square', 0.055, 0, i * 0.07)); showToast('🏆 SERIES F — keep hitting ITEM to re-boost!'); } }
     return;
   }
   k.item = null;
@@ -959,7 +1019,7 @@ function useItem(k) {
     if (holders.length) { const v = pick(holders); stolen = v.item; if (v.item === 'golden') v.goldenT = 0; v.item = null; if (v.isPlayer) updateItemSlot(); }
     k.item = stolen;
     spawnParticles(k.pos, { count: 20, colors: [0xcbb2ff, 0xffffff], speed: 4, life: 0.7, up: 4, gravity: 0 });
-    if (k.isPlayer) { updateItemSlot(); showToast(`👻 Insider Trading — stole ${ITEMS[stolen].name}!`); }
+    if (k.isPlayer) { A.tone(880, 0.35, 'sine', 0.09, -520); updateItemSlot(); showToast(`👻 Insider Trading — stole ${ITEMS[stolen].name}!`); }
   } else if (id === 'blooper') {
     const victims = karts.filter(o => o !== k && o.continuous > k.continuous && !o.finished);
     for (const v of victims) {
@@ -967,7 +1027,7 @@ function useItem(k) {
       spawnParticles(v.pos, { count: 14, colors: [0x1a1030, 0x3a2060], speed: 5, life: 0.6, up: 4, gravity: -2 });
       if (v.isPlayer) showInk();
     }
-    if (k.isPlayer) showToast(victims.length ? '📰 Smear Campaign launched!' : '📰 Smear Campaign — nobody ahead to smear');
+    if (k.isPlayer) { A.noise(0.3, 0.11, 480); showToast(victims.length ? '📰 Smear Campaign launched!' : '📰 Smear Campaign — nobody ahead to smear'); }
     else if (victims.includes(playerKart())) showToast('📰 You\'ve been SMEARED!');
   } else if (id === 'bomb') {
     const mesh = bombMesh();
@@ -1045,6 +1105,7 @@ function updateProjectiles(dt) {
         if (dx * dx + dz * dz < 6.3) {
           if (o.starT <= 0) spinKart(o);
           else spawnParticles(p.mesh.position, { count: 8, colors: [0xffe066], speed: 4, life: 0.4, up: 3, gravity: 0 });
+          if (p.owner.isPlayer) hitstopT = Math.max(hitstopT, 0.045); // landing a hit should *thunk*
           dead = true; break;
         }
       }
@@ -1135,6 +1196,13 @@ function updateHUD(dt) {
     $('standings').innerHTML = sortedKarts().map((k, i) =>
       `<div class="${k.isPlayer ? 'me' : ''}"><span class="dot" style="background:#${k.racer.color.toString(16).padStart(6, '0')}"></span>${i + 1}. ${k.racer.name}${k.finished ? ' ✓' : ''}</div>`).join('');
     drawMinimap();
+    if (gameState === 'racing' && !p.finished && raceTime > 2) { // position-change feedback, podium-relevant only (no spam)
+      if (lastRank > 0 && rank !== lastRank) {
+        if (rank <= 3 && rank < lastRank) showToast(rank === 1 ? '🥇 P1 — YOU LEAD!' : `🏆 P${rank}!`, 1.25);
+        else if (lastRank === 1 && rank > 1) showToast('⚠️ Lost the lead!', 1.25);
+      }
+      lastRank = rank;
+    }
   }
 }
 
@@ -1153,14 +1221,19 @@ function resetPlayerToTrack() {
   p.speed = 0; p.spinT = 0; p.drifting = false; p.driftCharge = 0;
 }
 function playerInput() {
-  let steer = 0, throttle = 0, brake = false, drift = false;
+  let steer = 0, throttle = 0, brake = 0, drift = false;
   if (keys['ArrowLeft'] || keys['KeyA'] || touchFlags.left) steer -= 1;
   if (keys['ArrowRight'] || keys['KeyD'] || touchFlags.right) steer += 1;
   if (keys['ArrowUp'] || keys['KeyW'] || touchFlags.gas) throttle = 1;
-  if (keys['ArrowDown'] || keys['KeyS'] || touchFlags.brake) brake = true;
+  if (keys['ArrowDown'] || keys['KeyS'] || touchFlags.brake) brake = 1;
   if (keys['ShiftLeft'] || keys['ShiftRight'] || touchFlags.drift) drift = true;
+  // analog touch sticks (Control Lab) — yield to held digital steer keys, feed throttle/brake proportionally
+  if (!keys['ArrowLeft'] && !keys['KeyA'] && !keys['ArrowRight'] && !keys['KeyD'] && !touchFlags.left && !touchFlags.right && Math.abs(touchAnalog.steer) > 0.02) steer = touchAnalog.steer;
+  throttle = Math.max(throttle, touchAnalog.throttle);
+  brake = Math.max(brake, touchAnalog.brake);
+  if (touchScheme === 'autog' && gameState === 'racing') throttle = brake > 0.05 ? 0 : 1; // Auto-Gas: always on unless braking (countdown excluded — rev for your own rocket start)
   if (mouse.down) { throttle = 1; const ms = clamp((mouse.x - 0.5) * 2.8, -1, 1); if (Math.abs(ms) > 0.12) steer = ms; }
-  if (gyro.enabled) steer = gyro.steer;
+  if (gyro.enabled) steer = gyro.steer; // gyro on => stick X is ignored (gyro wins steering)
   // gamepad
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   for (const gp of pads) {
@@ -1170,7 +1243,7 @@ function playerInput() {
     if (gp.buttons[14]?.pressed) steer = -1;
     if (gp.buttons[15]?.pressed) steer = 1;
     if ((gp.buttons[7]?.value || 0) > 0.25 || gp.buttons[0]?.pressed) throttle = 1;
-    if ((gp.buttons[6]?.value || 0) > 0.25 || gp.buttons[1]?.pressed) brake = true;
+    if ((gp.buttons[6]?.value || 0) > 0.25 || gp.buttons[1]?.pressed) brake = 1;
     if (gp.buttons[4]?.pressed || gp.buttons[5]?.pressed) drift = true;
     const itemNow = !!gp.buttons[2]?.pressed;
     if (itemNow && !padItemPrev && gameState === 'racing' && !paused) useItem(playerKart());
@@ -1179,6 +1252,26 @@ function playerInput() {
     if (startNow && !padStartPrev) togglePause();
     padStartPrev = startNow;
     break;
+  }
+  // Auto-Drift assist: full-lock steer held >0.25s initiates a drift by itself (sustains while held)
+  if (autoDriftOn() && gameState === 'racing') {
+    if (Math.abs(steer) > 0.85) { if (!steerFullSince) steerFullSince = elapsed; if (elapsed - steerFullSince > 0.25) drift = true; }
+    else steerFullSince = 0;
+  } else steerFullSince = 0;
+  // Pedal & Stick tap-to-drift-hop: a right-side tap latches drift, which fires when the steer stick deflects and releases (with boost) when it centres
+  if (driftTap.active) {
+    if (Math.abs(touchAnalog.steer) > 0.25) { drift = true; driftTap.started = true; }
+    else if (driftTap.started) { driftTap.active = false; driftTap.started = false; }
+    else if (elapsed > driftTap.expires) driftTap.active = false;
+  }
+  // Smart Steering (Real Racing 3 style): gentle nudge toward the racing line — authority capped at 25%, ~0 mid-drift so it never fights a drift line
+  const pk = playerKart();
+  if (smartSteerOn() && pk && gameState === 'racing' && pk.speed > 5 && !pk.autopilot) {
+    const ti = wrapIdx(pk.sampleIdx + Math.round(clamp(pk.speed * 0.55, 10, 26)));
+    const tp = samples[ti].clone().addScaledVector(normals[ti], -pk.lateral * 0.45);
+    const dSteer = clamp(-angNorm(Math.atan2(tp.x - pk.pos.x, tp.z - pk.pos.z) - pk.heading) * 1.9, -1, 1);
+    const w = pk.drifting ? 0.06 : 0.25;
+    steer = steer * (1 - w) + dSteer * w;
   }
   if (debugInput.steer != null) steer = debugInput.steer;
   if (debugInput.throttle != null) throttle = debugInput.throttle;
@@ -1212,7 +1305,63 @@ function bindInputs() {
   };
   bindHold('btn-left', 'left'); bindHold('btn-right', 'right'); bindHold('btn-gas', 'gas');
   bindHold('btn-brake', 'brake'); bindHold('btn-drift', 'drift');
-  $('btn-item').addEventListener('pointerdown', e => { e.preventDefault(); if (gameState === 'racing' && !paused) useItem(playerKart()); });
+  $('btn-item').addEventListener('pointerdown', e => { e.preventDefault(); fireItem(); });
+  $('item-slot').addEventListener('pointerdown', e => { e.preventDefault(); fireItem(); }); // the big slot itself is the button (human playtest fix) — pointerdown, haptic + pop via fireItem
+  // ---- Control Lab: floating stick / pedal layer (Pointer Events, per-pointerId zones, multi-touch safe) ----
+  bindHold('btn-drift2', 'drift'); bindHold('btn-brake2', 'brake');
+  $('btn-item2').addEventListener('pointerdown', e => { e.preventDefault(); fireItem(); });
+  document.querySelectorAll('.scheme-btn').forEach(b => b.addEventListener('click', () => { A.init(); setTouchScheme(b.dataset.scheme); }));
+  document.querySelectorAll('.smart-btn').forEach(b => b.addEventListener('click', () => { const order = ['auto', 'on', 'off']; setSmartMode(order[(order.indexOf(smartMode) + 1) % 3]); }));
+  document.querySelectorAll('.adrift-btn').forEach(b => b.addEventListener('click', () => { const order = ['auto', 'on', 'off']; setAutoDriftMode(order[(order.indexOf(autoDriftMode) + 1) % 3]); }));
+  const layer = $('stick-layer');
+  const stickEls = { steer: $('stick-a'), main: $('stick-a'), pedal: $('stick-b') };
+  const axisVal = d => { const a = Math.abs(d); if (a < 10) return 0; const v = clamp((a - 10) / 50, 0, 1); return Math.sign(d) * v * (0.65 + 0.35 * v); }; // 10px deadzone, full deflection at 60px, mild curve
+  const zoneTaken = z => { for (const r of stickPointers.values()) if (r.zone === z) return true; return false; };
+  const moveNub = (rec, dx, dy) => { if (!rec.el) return; const l = Math.hypot(dx, dy), m = l > 34 ? 34 / l : 1; rec.el.firstElementChild.style.transform = `translate(calc(-50% + ${(dx * m).toFixed(1)}px), calc(-50% + ${(dy * m).toFixed(1)}px))`; };
+  const applyStick = (rec, x, y) => {
+    const dx = x - rec.ox, dy = y - rec.oy;
+    rec.maxDrag = Math.max(rec.maxDrag || 0, Math.hypot(dx, dy));
+    moveNub(rec, dx, dy);
+    if (rec.zone === 'main') { touchAnalog.steer = axisVal(dx); touchAnalog.throttle = dy < 0 ? axisVal(-dy) : 0; touchAnalog.brake = dy > 0 ? axisVal(dy) : 0; }
+    else if (rec.zone === 'steer') touchAnalog.steer = axisVal(dx);
+    else if (rec.zone === 'pedal') { // hold = full gas; drag down past 24px = proportional brake; quick flick UP = ITEM
+      const b = clamp((dy - 24) / 36, 0, 1); touchAnalog.brake = b; touchAnalog.throttle = b > 0.03 ? 0 : 1;
+      const now = performance.now();
+      rec.hist = (rec.hist || []).filter(s => now - s.t < 260); rec.hist.push({ t: now, y });
+      if (!rec.flicked && rec.hist.length > 1 && rec.hist[0].y - y >= 48) { rec.flicked = true; fireItem(); } // crossed 48px upward within ~250ms — gas resumes on its own if still held
+    }
+  };
+  const releaseStick = rec => {
+    if (rec.el) rec.el.style.display = 'none';
+    if (rec.zone === 'main' || rec.zone === 'steer') touchAnalog.steer = 0;
+    if (rec.zone === 'main') { touchAnalog.throttle = 0; touchAnalog.brake = 0; } // release = coast (gentle engine braking in physics)
+    if (rec.zone === 'pedal') {
+      if (performance.now() - rec.t0 < 220 && (rec.maxDrag || 0) < 12) { driftTap.active = true; driftTap.started = false; driftTap.expires = elapsed + 1.2; } // quick tap = DRIFT HOP (gas blip on touchdown is intended)
+      touchAnalog.throttle = 0; touchAnalog.brake = 0;
+    }
+    if (rec.zone === 'itemzone' && performance.now() - rec.t0 < 300 && (rec.maxDrag || 0) < 14) fireItem(); // One-Thumb: left side is the no-aim item zone
+    if (rec.zone === 'tap' && performance.now() - rec.t0 < 200 && (rec.maxDrag || 0) < 12) fireItem(); // Auto-Gas: second-finger tap = item
+    if (rec.zone === 'steer' && touchScheme === 'autog' && performance.now() - rec.t0 < 200 && (rec.maxDrag || 0) < 12) fireItem(); // Auto-Gas: a tap when not steering = item
+  };
+  layer.addEventListener('pointerdown', e => {
+    if (touchScheme === 'buttons' || paused) return;
+    let zone = null;
+    if (touchScheme === 'stick1') zone = e.clientX < window.innerWidth * 0.4 ? 'itemzone' : 'main'; // right ~60% drives; left ~40% is the tap-for-item zone
+    else if (touchScheme === 'sticks2') zone = e.clientX < window.innerWidth / 2 ? 'steer' : 'pedal';
+    else if (touchScheme === 'autog') zone = zoneTaken('steer') ? 'tap' : 'steer'; // second finger taps for item while the first keeps steering
+    if (!zone || (zone !== 'tap' && zoneTaken(zone)) || stickPointers.has(e.pointerId)) return;
+    try { layer.setPointerCapture(e.pointerId); } catch (err) { }
+    const rec = { zone, ox: e.clientX, oy: e.clientY, t0: performance.now(), maxDrag: 0, el: stickEls[zone] || null, hist: null, flicked: false };
+    stickPointers.set(e.pointerId, rec);
+    if (rec.el) { rec.el.style.display = 'block'; rec.el.style.left = e.clientX + 'px'; rec.el.style.top = e.clientY + 'px'; moveNub(rec, 0, 0); }
+    if (zone === 'pedal') touchAnalog.throttle = 1; // instant full gas on touchdown
+    applyStick(rec, e.clientX, e.clientY);
+    e.preventDefault();
+  });
+  layer.addEventListener('pointermove', e => { const rec = stickPointers.get(e.pointerId); if (rec) applyStick(rec, e.clientX, e.clientY); });
+  const endPointer = e => { const rec = stickPointers.get(e.pointerId); if (rec) { releaseStick(rec); stickPointers.delete(e.pointerId); } };
+  layer.addEventListener('pointerup', endPointer);
+  layer.addEventListener('pointercancel', endPointer);
   $('btn-pause').addEventListener('click', togglePause);
   $('btn-mute').addEventListener('click', toggleMute);
   $('btn-gyro').addEventListener('click', async () => {
@@ -1250,12 +1399,15 @@ function startRace() {
   $('screen-results').classList.add('hidden');
   $('screen-pause').classList.add('hidden');
   $('hud').classList.remove('hidden');
-  $('touch-controls').classList.toggle('hidden', !isTouchDevice());
+  const hp = portraitOf(selectedRacer), hpEl = $('hud-portrait');
+  if (hp) { hpEl.src = hp; hpEl.style.display = 'block'; } else hpEl.style.display = 'none';
+  touchUiSig = ''; refreshTouchUI();
   if (isTouchDevice()) $('btn-gyro').classList.remove('hidden');
   buildWorld(selectedTrack, sampleField()); // fresh random 7 opponents from the pool every race
   camHeading = playerKart().heading;
   camera.position.copy(playerKart().pos).add(new THREE.Vector3(0, 30, -30));
   gameState = 'countdown'; countdownT = 3.6; lastCount = 99; raceTime = 0;
+  revHeld = 0; revOverWarned = false; lastRank = 0; hitstopT = 0;
   showCenter('', 0); updateItemSlot(); drawMinimap();
 }
 function quitToMenu() {
@@ -1291,25 +1443,64 @@ function showResults() {
   $('results-title').textContent = myRank === 1 ? '🏆 YOU WIN!' : `🏁 You finished ${myRank}${SUFFIX[myRank]}`;
   const winner = rows[0].k;
   $('results-sub').innerHTML = `${winner.racer.name}: “${winner.racer.barks.win}”<br>Your time: <b>${p.finishTime != null ? fmtTime(p.finishTime) : 'DNF'}</b>${p.bestLap ? ` · Best lap: <b>${fmtTime(p.bestLap)}</b>` : ''} · ${TRACKS[selectedTrack].name}`;
-  $('results-table').innerHTML = '<tr><th>#</th><th>Racer</th><th>Time</th></tr>' + rows.map((r, i) =>
-    `<tr class="${r.k.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td>${r.k.racer.emoji} ${r.k.racer.name}</td><td>${fmtTime(r.t)}${r.proj ? ' est.' : ''}</td></tr>`).join('');
+  $('results-table').innerHTML = '<tr><th>#</th><th>Racer</th><th>Time</th></tr>' + rows.map((r, i) => {
+    const rp = portraitOf(r.k.racerIdx);
+    return `<tr class="${r.k.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td>${rp ? `<img class="res-portrait" src="${rp}" alt="">` : r.k.racer.emoji + ' '}${r.k.racer.name}</td><td>${fmtTime(r.t)}${r.proj ? ' est.' : ''}</td></tr>`;
+  }).join('');
   $('screen-results').classList.remove('hidden');
 }
 
 /* ================= MENU ================= */
+/* ---- Character Select v2: portrait tiles + radar stats + detail panel ---- */
+const PKEYS = ['elon', 'sam', 'zuck', 'bezos', 'jensen', 'satya', 'dario', 'demis', 'trump', 'cook', 'larrysergey', 'bill', 'thiel', 'holmes', 'ellison', 'murdoch', 'soros'];
+function portraitOf(i) { const P = window.BK_PORTRAITS || {}; return P[PKEYS[i]] || null; }
+function radarSVG(r) { // precomputed string per tile — triangle radar over faint 1..5 rings, zero runtime cost
+  const col = '#' + r.color.toString(16).padStart(6, '0');
+  const pt = (v, ang, cx = 32, cy = 30, R = 21) => { const rad = (ang - 90) * Math.PI / 180, d = v / 5 * R; return `${(cx + Math.cos(rad) * d).toFixed(1)},${(cy + Math.sin(rad) * d).toFixed(1)}`; };
+  const ring = f => [0, 120, 240].map(a => pt(5 * f, a)).join(' ');
+  const lab = (t, ang) => { const rad = (ang - 90) * Math.PI / 180; return `<text x="${(32 + Math.cos(rad) * 28).toFixed(1)}" y="${(30 + Math.sin(rad) * 27 + 2.5).toFixed(1)}" class="radar-lab">${t}</text>`; };
+  return `<svg class="radar" viewBox="0 0 64 60" aria-hidden="true"><polygon points="${ring(1)}" class="radar-ring"/><polygon points="${ring(0.66)}" class="radar-ring"/><polygon points="${ring(0.33)}" class="radar-ring"/><polygon points="${pt(r.spd, 0)} ${pt(r.acc, 120)} ${pt(r.grip, 240)}" fill="${col}" fill-opacity="0.55" stroke="${col}" stroke-width="1.6"/>${lab('S', 0)}${lab('A', 120)}${lab('G', 240)}</svg>`;
+}
+function traitOf(r) { // the special-trait line — every claim here matches a real mechanic in the physics/AI code
+  if (r.sputter) return '⚠️ SPECIAL: her kart randomly loses power mid-race. Vaporware drivetrain.';
+  if (r.duo) return '👥 SPECIAL: two drivers, one kart — they switch drivers instead of pit stops.';
+  if (r.consistent) return '🐢 SPECIAL: mistake-proof AI. Never spins out, never panics. The tortoise strategy.';
+  if ((r.aiSkill || 0) >= 1.06) return '👹 FINAL-BOSS CLASS: championship-grade AI when computer-controlled.';
+  if ((r.aiSkill || 0) >= 1.04) return '🔥 ELITE AI: a cut above the field when computer-controlled.';
+  if (r.name === 'Jensen') return '🟢 SPECIAL: orange drift boosts last longer — the more you race, the more you save.';
+  if (r.name === 'Dario') return '🦺 SPECIAL: charges drift boosts faster. Safety first, speed second.';
+  return '';
+}
+function updateDetail() {
+  const r = RACERS[selectedRacer], p = portraitOf(selectedRacer);
+  const bar = (label, v) => `<div class="stat-row"><span>${label}</span><div class="stat-track"><div class="stat-fill" style="width:${v / 5 * 100}%;background:#${r.color.toString(16).padStart(6, '0')}"></div></div></div>`;
+  const trait = traitOf(r);
+  $('racer-detail').innerHTML = `
+    ${p ? `<img class="detail-portrait" src="${p}" alt="${r.name} portrait">` : `<div class="detail-portrait detail-emoji" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>`}
+    <div class="detail-body">
+      <div class="detail-name" id="detail-name">${r.name}</div>
+      <div class="racer-title">${r.title}</div>
+      <div class="racer-quote">${r.quote}</div>
+      ${bar('SPEED', r.spd)}${bar('ACCEL', r.acc)}${bar('GRIP', r.grip)}
+      ${trait ? `<div class="detail-trait">${trait}</div>` : ''}
+    </div>`;
+}
 function buildMenu() {
   $('racer-grid').innerHTML = RACERS.map((r, i) => {
-    const bar = (label, v) => `<div class="stat-row"><span>${label}</span><div class="stat-track"><div class="stat-fill" style="width:${v / 5 * 100}%;background:#${r.color.toString(16).padStart(6, '0')}"></div></div></div>`;
-    return `<button class="racer-card ${i === selectedRacer ? 'selected' : ''}" data-racer="${i}">
-      <div class="racer-head"><div class="racer-chip" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>
-      <div><div class="racer-name">${r.name}</div><div class="racer-title">${r.title}</div></div></div>
-      <div class="racer-quote">${r.quote}</div>${bar('SPEED', r.spd)}${bar('ACCEL', r.acc)}${bar('GRIP', r.grip)}</button>`;
+    const p = portraitOf(i);
+    return `<button class="racer-tile ${i === selectedRacer ? 'selected' : ''}" data-racer="${i}">
+      ${p ? `<img class="tile-portrait" src="${p}" alt="" loading="lazy">` : `<div class="tile-portrait tile-emoji" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>`}
+      <div class="tile-name">${r.name}</div><div class="tile-title">${r.title}</div>
+      <div class="tile-viz">${radarSVG(r)}<div class="tile-pips">S${r.spd} · A${r.acc} · G${r.grip}</div></div>
+    </button>`;
   }).join('');
-  document.querySelectorAll('.racer-card').forEach(card => card.addEventListener('click', () => {
-    selectedRacer = parseInt(card.dataset.racer);
-    document.querySelectorAll('.racer-card').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.racer) === selectedRacer));
+  document.querySelectorAll('.racer-tile').forEach(tile => tile.addEventListener('click', () => {
+    selectedRacer = parseInt(tile.dataset.racer);
+    document.querySelectorAll('.racer-tile').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.racer) === selectedRacer));
+    updateDetail();
     buildWorld(selectedTrack);
   }));
+  updateDetail();
   document.querySelectorAll('.track-card').forEach(card => card.addEventListener('click', () => {
     selectedTrack = parseInt(card.dataset.track);
     document.querySelectorAll('.track-card').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.track) === selectedTrack));
@@ -1349,14 +1540,16 @@ function updateCamera(dt) {
   if (shake > 0) { camera.position.x += rand(-1, 1) * shake * 0.8; camera.position.y += rand(-0.5, 0.5) * shake * 0.6; shake = Math.max(0, shake - dt * 1.7); }
   const look = p.pos.clone().addScaledVector(fwd, 11); look.y = 2;
   camera.lookAt(look);
-  setFov(62 + clamp(Math.abs(p.speed) / 55, 0, 1) * 11 + (p.boostT > 0 ? 5 : 0), dt);
+  setFov(62 + clamp(Math.abs(p.speed) / 55, 0, 1) * 13 + (p.boostT > 0 ? 5 : 0), dt); // fun pass: wider speed FOV curve
   sunLight.position.set(p.pos.x + 70, 115, p.pos.z + 45);
   sunLight.target.position.copy(p.pos); sunLight.target.updateMatrixWorld();
 }
 const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.05) * timeScale;
+  const rawDt = Math.min(clock.getDelta(), 0.05);
+  if (hitstopT > 0) hitstopT -= rawDt; // hitstop: ~60 ms world-freeze on player hits (uses real time)
+  const dt = rawDt * timeScale * (hitstopT > 0 ? 0.12 : 1);
   elapsed += dt;
   if (!paused && scene) {
     if (gameState === 'menu') {
@@ -1365,15 +1558,25 @@ function animate() {
     } else if (gameState === 'countdown') {
       countdownT -= dt;
       const c = Math.ceil(countdownT);
-      if (c !== lastCount && c >= 1) { lastCount = c; showCenter(String(c), 0.95); A.beep(false); }
+      if (c !== lastCount && c >= 1) { lastCount = c; showCenter(String(c), 0.95); A.beep(false); if (c === 3) showToast('🏁 Hold GAS just before GO = ROCKET START', 1.9); }
+      // ROCKET START: sample the player's throttle through the countdown
+      const cinp = playerInput();
+      if (cinp.throttle) {
+        revHeld += dt;
+        if (revHeld > 2.3 && !revOverWarned) { revOverWarned = true; showToast('🔥 Over-revving! Ease off or you\'ll sputter!', 1.6); }
+      }
       if (countdownT <= 0) {
         gameState = 'racing'; raceTime = 0; karts.forEach(k => k.lapStart = 0);
         showCenter('GO!', 0.8); A.beep(true);
+        const pk = playerKart();
+        if (revHeld >= 0.45 && revHeld <= 1.7) { pk.boostT = 1.15; showToast('🚀 ROCKET START!'); A.boostSnd(); }
+        else if (revHeld > 2.3) { pk.sputterT = 1.0; showToast('💨 Sputtered start — too much rev!'); A.hit(); }
+        for (const k of karts) { if (k.isPlayer) continue; const r = Math.random(); if (r < 0.14) k.sputterT = 0.9; else if (r < 0.5) k.boostT = rand(0.7, 1.05); } // AI gamble too
         const opp = pick(karts.filter(k => !k.isPlayer));
         if (opp) setTimeout(() => { if (gameState === 'racing') showBark(`${opp.racer.name}: “${pick(opp.racer.barks.boost)}”`); }, 900);
       }
       spinItemBoxesVisual(dt);
-      A.engine(playerInput().throttle ? 0.4 : 0.15, true);
+      A.engine(clamp(0.15 + revHeld * 0.3, 0.15, 0.85), true);
     } else if (gameState === 'racing') {
       raceTime += dt;
       for (const k of karts) {
@@ -1393,6 +1596,15 @@ function animate() {
     if (gameState === 'racing' || gameState === 'countdown') updateHUD(dt);
     updateParticles(dt);
     updateCamera(dt);
+    // name labels: shrink + fade as a kart gets close — a label must never wallpaper the screen (playtest fix)
+    for (const k of karts) {
+      if (!k.nameSpr) continue;
+      const d = camera.position.distanceTo(k.pos);
+      const s = clamp(d / 30, k.isPlayer ? 0.5 : 0.38, 1);
+      k.nameSpr.scale.set(8.4 * s, 2.1 * s, 1);
+      k.nameSpr.material.opacity = d < 7 ? clamp((d - 2.5) / 4.5, 0.12, 1) : 1;
+    }
+    refreshTouchUI();
     if (elapsed > centerUntil && $('center-msg').textContent) $('center-msg').textContent = '';
     if (elapsed > toastUntil) $('toast').style.opacity = 0;
     if (elapsed > barkUntil) $('bark').style.opacity = 0;
@@ -1424,7 +1636,11 @@ window.BK = {
   clearInput() { debugInput = { throttle: null, steer: null, brake: null, drift: null }; },
   skipCountdown() { if (gameState === 'countdown') countdownT = Math.min(countdownT, 0.05); },
   autopilot(on) { const p = playerKart(); if (p) { p.autopilot = !!on; return p.autopilot; } return false; },
-  setTimescale(x) { timeScale = clamp(x || 1, 0.25, 6); return timeScale; },
+  setTimescale(x) { timeScale = clamp(x || 1, 0.25, 12); return timeScale; },
+  setDifficulty(d) { difficulty = clamp(Math.round(d ?? 1), 0, 2); return difficulty; },
+  setFairPlayer(b) { simFairPlayer = !!b; return simFairPlayer; },
+  setLaps(n) { LAPS = clamp(Math.round(n || 3), 1, 5); return LAPS; },
+  trackLen() { return segLen * N; },
   player() { const p = playerKart(); return p ? { pos: p.pos, continuous: p.continuous, speed: p.speed, heading: p.heading, rank: rankOf(p) } : null; },
 };
 
@@ -1433,6 +1649,10 @@ initRenderer();
 buildMenu();
 buildWorld(selectedTrack);
 bindInputs();
+document.body.dataset.scheme = touchScheme;
+document.querySelectorAll('.scheme-btn').forEach(b => b.classList.toggle('selected', b.dataset.scheme === touchScheme));
+setSmartMode(smartMode);
+setAutoDriftMode(autoDriftMode);
 animate();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => { });

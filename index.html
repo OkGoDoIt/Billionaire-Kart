@@ -20,6 +20,7 @@
 <!-- ============ HUD ============ -->
 <div id="hud" class="hidden">
   <div id="hud-left">
+    <img id="hud-portrait" alt="">
     <div id="pos-big">8<span id="pos-suffix">th</span></div>
     <div id="lap-label">LAP 1/3</div>
     <div id="time-label">0:00.0</div>
@@ -44,6 +45,18 @@
   <div id="toast"></div>
   <div id="bark"></div>
   <div id="ink-overlay" class="hidden"></div>
+  <div id="autog-note" class="hidden">🚗 AUTO-GAS ON — just steer!</div>
+</div>
+
+<!-- ============ CONTROL LAB: floating sticks / pedal + scheme buttons ============ -->
+<div id="stick-layer">
+  <div class="stick" id="stick-a"><div class="stick-nub"></div></div>
+  <div class="stick" id="stick-b"><div class="stick-nub"></div></div>
+</div>
+<div id="scheme-ui" class="hidden">
+  <button class="tc-btn" id="btn-drift2">DRIFT</button>
+  <button class="tc-btn" id="btn-item2">ITEM</button>
+  <button class="tc-btn" id="btn-brake2">BRAKE</button>
 </div>
 
 <!-- ============ TOUCH CONTROLS ============ -->
@@ -70,7 +83,7 @@
     </div>
 
     <h2 class="section-title">1 · Pick your mogul</h2>
-    <div id="racer-grid"></div>
+    <div id="select-wrap"><div id="racer-grid"></div><aside id="racer-detail"></aside></div>
 
     <h2 class="section-title">2 · Pick your track</h2>
     <div id="track-row">
@@ -84,6 +97,16 @@
       <button class="diff-btn selected" data-diff="1">🌶️ Spicy</button>
       <button class="diff-btn" data-diff="2">🤬 Unhinged</button>
     </div>
+
+    <h2 class="section-title">4 · Touch controls — Control Lab</h2>
+    <div class="scheme-row">
+      <button class="scheme-btn selected" data-scheme="buttons">🕹️ Buttons</button>
+      <button class="scheme-btn" data-scheme="stick1">👍 One-Thumb Stick</button>
+      <button class="scheme-btn" data-scheme="sticks2">🕹️ Pedal &amp; Stick</button>
+      <button class="scheme-btn" data-scheme="autog">🚗 Auto-Gas</button>
+    </div>
+    <button class="smart-btn big-btn">🧭 Smart steering: Auto (Auto-Gas only)</button>
+    <button class="adrift-btn big-btn">🌀 Auto-drift: Auto (Auto-Gas only)</button>
 
     <button id="btn-start">🏎️ START RACE</button>
     <div id="best-info"></div>
@@ -120,6 +143,14 @@
 <div id="screen-pause" class="screen hidden">
   <div class="panel">
     <h2>⏸ Paused</h2>
+    <div class="scheme-row">
+      <button class="scheme-btn" data-scheme="buttons">🕹️ Buttons</button>
+      <button class="scheme-btn" data-scheme="stick1">👍 One-Thumb</button>
+      <button class="scheme-btn" data-scheme="sticks2">🕹️ Pedal &amp; Stick</button>
+      <button class="scheme-btn" data-scheme="autog">🚗 Auto-Gas</button>
+    </div>
+    <button class="smart-btn big-btn">🧭 Smart steering: Auto (Auto-Gas only)</button>
+    <button class="adrift-btn big-btn">🌀 Auto-drift: Auto (Auto-Gas only)</button>
     <button id="btn-resume" class="big-btn">▶ Resume</button>
     <button id="btn-restart" class="big-btn">↻ Restart race</button>
     <button id="btn-quit" class="big-btn">🏠 Quit to menu</button>
@@ -139,6 +170,7 @@
 
 <div id="loading">Loading… if this sticks, check your connection (Three.js loads from CDN once, then it's cached offline).</div>
 
+<script src="portraits.js"></script>
 <script type="module" src="game.js"></script>
 </body>
 </html>

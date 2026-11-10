@@ -80,19 +80,19 @@ const BILLBOARDS = ['AGI COMING SOON™', 'GPU GO BRRR', 'THIS SIGN COST $4.20',
 
 /* ================= ITEMS ================= */
 const ITEMS = {
-  boost:    { icon: '💰', name: 'Series A Boost' },
-  banana:   { icon: '💧', name: 'Data Leak' }, // internal id stays 'banana'; everything user-visible is Data Leak
-  green:    { icon: '📜', name: 'Subpoena' },
-  red:      { icon: '🐦', name: 'Viral Tweet' },
-  blue:     { icon: '⚖️', name: 'Antitrust Suit' },
-  star:     { icon: '⭐', name: 'Viral Moment' },
-  lightning:{ icon: '📉', name: 'Market Crash' },
-  horn:     { icon: '📣', name: 'Spin Team' },
-  bomb:     { icon: '💣', name: 'Pink Slip' },
-  blooper:  { icon: '📰', name: 'Smear Campaign' },
-  boo:      { icon: '👻', name: 'Insider Trading' },
-  golden:   { icon: '🏆', name: 'Series F' },
-  bailout:  { icon: '🛟', name: 'Government Bailout' },
+  boost:    { icon: '💰', name: 'Series A Boost', desc: 'Instant speed boost — about 1.5 s of extra pace' },
+  banana:   { icon: '💧', name: 'Data Leak', desc: 'Drop a slick data puddle behind you — rivals who hit it spin out' }, // internal id stays 'banana'; everything user-visible is Data Leak
+  green:    { icon: '📜', name: 'Subpoena', desc: 'Fires straight ahead — spins out the first kart it hits' },
+  red:      { icon: '🐦', name: 'Viral Tweet', desc: 'Homes in on the kart ahead of you and spins them out' },
+  blue:     { icon: '⚖️', name: 'Antitrust Suit', desc: 'Flies to the race leader and explodes — spins everyone caught in the blast' },
+  star:     { icon: '⭐', name: 'Viral Moment', desc: 'Invincible for 6 s — shrug off hits and spin rivals just by bumping them' },
+  lightning:{ icon: '📉', name: 'Market Crash', desc: 'Shrinks every kart ahead of you for ~3.5 s — shrunk karts crawl' },
+  horn:     { icon: '📣', name: 'Spin Team', desc: 'Shockwave: destroys nearby items, spins adjacent karts — and swats an Antitrust Suit out of the air' },
+  bomb:     { icon: '💣', name: 'Pink Slip', desc: 'Drops a bomb behind you — blows on a 1.6 s fuse or on contact, spinning karts in the blast' },
+  blooper:  { icon: '📰', name: 'Smear Campaign', desc: 'Splats ink over the screen of every kart ahead of you for ~2.5 s' },
+  boo:      { icon: '👻', name: 'Insider Trading', desc: 'Turn intangible for 3 s with a small boost — and steal a random rival’s item' },
+  golden:   { icon: '🏆', name: 'Series F', desc: 'A 5 s funding window — keep tapping ITEM to re-boost until it closes' },
+  bailout:  { icon: '🛟', name: 'Government Bailout', desc: 'Auto-drives you back into the fight for up to 5.5 s — ends early when you reach 3rd' },
 };
 function rollItem(pos) { // pos 1..8 — position-weighted, the Mario Kart secret sauce
   // Fairness rules from the MK audit: 1st gets DEFENCE ONLY (leak/green/horn/boost/bomb —
@@ -210,7 +210,7 @@ let paused = false, raceTime = 0, countdownT = 0, lastCount = 99, finishDelay = 
 let selectedRacer = 0, selectedTrack = 0, difficulty = 1;
 const DIFF_MUL = [0.90, 0.955, 1.0];
 let camHeading = 0, camFov = 62, shake = 0, menuAngle = 0.6, hudTimer = 0, progRate = 0, prevPlayerCont = 0;
-let centerUntil = 0, toastUntil = 0, barkUntil = 0, inkUntil = 0;
+let centerUntil = 0, toastUntil = 0, inkUntil = 0;
 let hitstopT = 0, revHeld = 0, revOverWarned = false, lastRank = 0; // fun-pass: hitstop, rocket-start, position toasts
 const keys = {};
 const touchFlags = { left: false, right: false, gas: false, brake: false, drift: false };
@@ -263,6 +263,12 @@ function refreshTouchUI() {
   const touch = isTouchDevice();
   const sig = `${touchScheme}|${inRace}|${touch}|${gameState}`;
   if (sig === touchUiSig) return; touchUiSig = sig;
+  // Input-aware HUD layout (Addendum 3): body.touch-ui is present exactly when
+  // on-screen controls are rendered. CSS then moves the item slot + race feed
+  // to the top-centre stack (thumbs own the bottom); without it they use the
+  // classic lower-left corner. Scheme switches re-run this, so the layout
+  // follows mid-race changes immediately.
+  document.body.classList.toggle('touch-ui', touch && inRace);
   $('touch-controls').classList.toggle('hidden', !(touch && inRace && touchScheme === 'buttons'));
   $('scheme-ui').classList.toggle('hidden', !(touch && inRace && touchScheme !== 'buttons'));
   $('stick-layer').style.display = (touch && inRace && touchScheme !== 'buttons') ? 'block' : 'none';
@@ -807,8 +813,9 @@ function updateProgress(k) {
       k.lastLapTime = raceTime - k.lapStart;
       if (!k.bestLap || k.lastLapTime < k.bestLap) k.bestLap = k.lastLapTime;
       if (k.isPlayer) {
-        if (completed === LAPS - 1) showToast('🏁 FINAL LAP!');
-        else if (completed < LAPS) showToast(`LAP ${completed + 1} · ${fmtTime(k.lastLapTime)}`);
+        if (completed === LAPS - 1) showCenter('🏁 FINAL LAP!', 1.3);
+        else if (completed < LAPS) showCenter(`LAP ${completed + 1}`, 1.1);
+        showFeed(`⏱️ Lap ${completed} — ${fmtTime(k.lastLapTime)}`);
       }
     }
     k.lapStart = raceTime; k.lapsDone = completed;
@@ -854,7 +861,7 @@ function updateKart(k, input, dt) {
         k.sputterClock = 0; k.nextSputter = rand(6, 14);
         if (Math.random() < 0.15) {
           k.sputterT = 1.2;
-          if (k.isPlayer) showToast('🧪 ENGINE FAILURE?? (prototype)');
+          if (k.isPlayer) showFeed('🧪 ENGINE FAILURE?? (prototype)');
           spawnParticles(k.pos, { count: 10, colors: [0x888888, 0x555555], speed: 2, life: 0.8, up: 3, gravity: 1 });
         }
       }
@@ -897,8 +904,8 @@ function updateKart(k, input, dt) {
         spawnParticles(k.pos.clone().addScaledVector(forwardVec(k.heading), -1.4), { count: 2, colors: col, speed: 2.5, life: 0.4, up: 1.5, gravity: -2 });
       }
     } else if (k.drifting) {
-      if (k.driftCharge >= 1.4) { k.boostT = Math.max(k.boostT, k.racerIdx === 4 ? 1.7 : 1.35); if (k.isPlayer) { A.driftBoost(); showToast('🔥 ORANGE BOOST!'); } }
-      else if (k.driftCharge >= 0.7) { k.boostT = Math.max(k.boostT, 0.75); if (k.isPlayer) { A.driftBoost(); showToast('💨 Drift boost!'); } }
+      if (k.driftCharge >= 1.4) { k.boostT = Math.max(k.boostT, k.racerIdx === 4 ? 1.7 : 1.35); if (k.isPlayer) { A.driftBoost(); showFeed('🔥 ORANGE BOOST!'); } }
+      else if (k.driftCharge >= 0.7) { k.boostT = Math.max(k.boostT, 0.75); if (k.isPlayer) { A.driftBoost(); showFeed('💨 Drift boost!'); } }
       k.drifting = false; k.driftCharge = 0;
     }
     const turnRate = (1.75 + (k.racer.grip - 3) * 0.14) * (k.drifting ? 1.5 : 1);
@@ -998,8 +1005,8 @@ function grantItem(k) {
     const it = ITEMS[k.item];
     // Item roulette (POLISH.md §2.5.1): the slot spins for 850 ms and lands on the
     // real item; useItem is blocked while BKFX.spinning. Falls back to instant reveal.
-    if (window.BKFX && BKFX.roulette(it, ITEMS, { tick: i => A.tone(840 + i * 45, 0.03, 'square', 0.016), land: () => { A.pickup(); showToast(`${it.icon} ${it.name}!`); } })) return;
-    updateItemSlot(); A.pickup(); showToast(`${it.icon} ${it.name}!`);
+    if (window.BKFX && BKFX.roulette(it, ITEMS, { tick: i => A.tone(840 + i * 45, 0.03, 'square', 0.016), land: () => { A.pickup(); showFeed(`${it.icon} <b>${it.name}</b> — ${it.desc}`); } })) return;
+    updateItemSlot(); A.pickup(); showFeed(`${it.icon} <b>${it.name}</b> — ${it.desc}`);
   }
 }
 function updateItemBoxes(dt) {
@@ -1064,7 +1071,7 @@ function useItem(k) {
     if (first) k.goldenT = 5;
     k.goldenCd = 0.7;
     k.boostT = Math.max(k.boostT, 0.95);
-    if (k.isPlayer) { A.use(); A.boostSnd(); if (first) { [660, 880, 1108].forEach((f, i) => A.tone(f, 0.12, 'square', 0.055, 0, i * 0.07)); showToast('🏆 SERIES F — keep hitting ITEM to re-boost!'); } }
+    if (k.isPlayer) { A.use(); A.boostSnd(); if (first) { [660, 880, 1108].forEach((f, i) => A.tone(f, 0.12, 'square', 0.055, 0, i * 0.07)); showFeed('🏆 SERIES F — keep hitting ITEM to re-boost!'); } }
     return;
   }
   k.item = null;
@@ -1099,7 +1106,7 @@ function useItem(k) {
     const mesh = projectileMesh('blue');
     mesh.position.copy(k.pos); mesh.position.y = 7; scene.add(mesh);
     projectiles.push({ type: 'blue', mesh, owner: k, target: leader, u: k.continuous, speed: 118, life: 14, age: 0 });
-    showToast('⚖️ ANTITRUST SUIT INBOUND!');
+    showFeed('⚖️ ANTITRUST SUIT INBOUND — it\'s hunting the leader!');
     if (leader.isPlayer) A.zap();
   } else if (id === 'lightning') {
     let victims = karts.filter(o => o !== k && o.continuous > k.continuous && !o.finished);
@@ -1110,13 +1117,13 @@ function useItem(k) {
       spawnParticles(v.pos, { count: 12, colors: [0x9be7ff, 0xffffff], speed: 4, life: 0.5, up: 6, gravity: -4 });
     }
     A.zap();
-    if (k.isPlayer) showToast('📉 You crashed the market!');
-    else if (victims.includes(playerKart())) { showToast('📉 MARKET CRASH!'); shake = Math.max(shake, 0.4); }
+    if (k.isPlayer) showFeed('📉 You crashed the market!');
+    else if (victims.includes(playerKart())) { showFeed('📉 MARKET CRASH — you\'ve been shrunk!'); shake = Math.max(shake, 0.4); }
   } else if (id === 'bailout') {
     k.bailoutT = 5.5; // auto-drive: see bailoutInput/updateKart — ends early on reaching 3rd
     spawnParticles(k.pos, { count: 26, colors: [0xffd94a, 0xffffff, 0x2fb9ff], speed: 6, life: 0.8, up: 5, gravity: 0 });
-    if (k.isPlayer) { A.fanfare(); showToast('🛟 GOVERNMENT BAILOUT! Too big to fail.'); }
-    else showToast(`🛟 ${k.racer.name} got a BAILOUT!`);
+    if (k.isPlayer) { A.fanfare(); showFeed('🛟 GOVERNMENT BAILOUT! Too big to fail.'); }
+    else showFeed(`🛟 ${k.racer.name} got a BAILOUT!`);
   } else if (id === 'horn') {
     k.hornT = 0.6; // active window — also swats an arriving Antitrust Suit out of the air (updateProjectiles)
     if (k.isPlayer) A.tone(170, 0.35, 'square', 0.16, -60);
@@ -1127,7 +1134,7 @@ function useItem(k) {
     for (let i = bananas.length - 1; i >= 0; i--) if (bananas[i].pos.distanceToSquared(k.pos) < 110) { scene.remove(bananas[i].mesh); bananas.splice(i, 1); }
     for (let i = bombs.length - 1; i >= 0; i--) if (bombs[i].pos.distanceToSquared(k.pos) < 110) { scene.remove(bombs[i].mesh); bombs.splice(i, 1); }
     for (const o of karts) if (o !== k && o.pos.distanceToSquared(k.pos) < 34) spinKart(o);
-    if (k.isPlayer) { showToast('📣 SPIN TEAM — DENIED!'); shake = Math.max(shake, 0.25); }
+    if (k.isPlayer) { showFeed('📣 SPIN TEAM — DENIED!'); shake = Math.max(shake, 0.25); }
   } else if (id === 'boo') {
     k.ghostT = 3; k.boostT = Math.max(k.boostT, 0.7);
     const holders = karts.filter(o => o !== k && o.item);
@@ -1135,7 +1142,7 @@ function useItem(k) {
     if (holders.length) { const v = pick(holders); stolen = v.item; if (v.item === 'golden') v.goldenT = 0; v.item = null; if (v.isPlayer) updateItemSlot(); }
     k.item = stolen;
     spawnParticles(k.pos, { count: 20, colors: [0xcbb2ff, 0xffffff], speed: 4, life: 0.7, up: 4, gravity: 0 });
-    if (k.isPlayer) { A.tone(880, 0.35, 'sine', 0.09, -520); updateItemSlot(); showToast(`👻 Insider Trading — stole ${ITEMS[stolen].name}!`); }
+    if (k.isPlayer) { A.tone(880, 0.35, 'sine', 0.09, -520); updateItemSlot(); showFeed(`👻 Insider Trading — stole ${ITEMS[stolen].name}!`); }
   } else if (id === 'blooper') {
     const victims = karts.filter(o => o !== k && o.continuous > k.continuous && !o.finished);
     for (const v of victims) {
@@ -1143,21 +1150,21 @@ function useItem(k) {
       spawnParticles(v.pos, { count: 14, colors: [0x1a1030, 0x3a2060], speed: 5, life: 0.6, up: 4, gravity: -2 });
       if (v.isPlayer) showInk();
     }
-    if (k.isPlayer) { A.noise(0.3, 0.11, 480); showToast(victims.length ? '📰 Smear Campaign launched!' : '📰 Smear Campaign — nobody ahead to smear'); }
-    else if (victims.includes(playerKart())) showToast('📰 You\'ve been SMEARED!');
+    if (k.isPlayer) { A.noise(0.3, 0.11, 480); showFeed(victims.length ? '📰 Smear Campaign launched!' : '📰 Smear Campaign — nobody ahead to smear'); }
+    else if (victims.includes(playerKart())) showFeed('📰 You\'ve been SMEARED!');
   } else if (id === 'bomb') {
     const mesh = bombMesh();
     const pos = k.pos.clone().addScaledVector(fwd, -3.4); pos.y = 0.75;
     mesh.position.copy(pos); scene.add(mesh);
     bombs.push({ mesh, pos, owner: k, fuse: 1.6, beepT: 0 });
-    if (k.isPlayer) showToast('💣 Pink Slip armed…');
+    if (k.isPlayer) showFeed('💣 Pink Slip armed…');
   }
 }
 function explodeBomb(b) {
   spawnParticles(b.pos, { count: 44, colors: [0xffa53a, 0xff5252, 0xffd94a, 0x555555], speed: 11, life: 0.9, up: 7 });
   for (const o of karts) if (o.pos.distanceTo(b.pos) < 8.5) spinKart(o);
   if (playerKart().pos.distanceTo(b.pos) < 26) { shake = Math.max(shake, 0.6); A.hit(); }
-  if (b.owner.isPlayer || playerKart().pos.distanceTo(b.pos) < 42) showToast('💣 PINK SLIP DELIVERED!');
+  if (b.owner.isPlayer || playerKart().pos.distanceTo(b.pos) < 42) showFeed('💣 PINK SLIP DELIVERED!');
 }
 function updateBombs(dt) {
   for (let i = bombs.length - 1; i >= 0; i--) {
@@ -1180,7 +1187,7 @@ function explodeBlue(p) {
   spawnParticles(c, { count: 46, colors: [0xffa53a, 0xff5252, 0xffd94a], speed: 11, life: 0.9, up: 7 });
   for (const o of karts) if (o.pos.distanceTo(p.target.pos) < 11) spinKart(o);
   if (playerKart().pos.distanceTo(p.target.pos) < 30) { shake = Math.max(shake, 0.65); A.hit(); }
-  showToast('⚖️ ANTITRUST HITS!');
+  showFeed('⚖️ ANTITRUST HITS!');
 }
 function updateProjectiles(dt) {
   for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -1190,7 +1197,7 @@ function updateProjectiles(dt) {
       // Spin Team counterplay: an active horn (0.6 s window) swats the Suit out of the air
       if (!dead) for (const o of karts) if (o.hornT > 0 && p.mesh.position.distanceToSquared(o.pos) < 190) {
         spawnParticles(p.mesh.position, { count: 16, colors: [0xffd94a, 0xffffff], speed: 6, life: 0.5, up: 3, gravity: 0 });
-        if (o.isPlayer) showToast('📣 Antitrust Suit DENIED by the Spin Team!');
+        if (o.isPlayer) showFeed('📣 Antitrust Suit DENIED by the Spin Team!');
         dead = true; break;
       }
       if (!dead) {
@@ -1238,7 +1245,7 @@ function updateBananasAndCollisions(dt) {
       const dx = k.pos.x - b.pos.x, dz = k.pos.z - b.pos.z;
       if (dx * dx + dz * dz < 4.6) {
         if (k.starT > 0) { spawnParticles(b.pos, { count: 10, colors: [0x2fb9ff, 0x9be7ff], speed: 4, life: 0.5, up: 3 }); }
-        else { if (k.isPlayer) showToast('💧 DATA BREACH!'); spawnParticles(b.pos, { count: 12, colors: [0x2fb9ff, 0x9be7ff], speed: 4, life: 0.5, up: 3 }); spinKart(k); }
+        else { if (k.isPlayer) showFeed('💧 DATA BREACH — you hit a leak!'); spawnParticles(b.pos, { count: 12, colors: [0x2fb9ff, 0x9be7ff], speed: 4, life: 0.5, up: 3 }); spinKart(k); }
         scene.remove(b.mesh); bananas.splice(i, 1); break;
       }
     }
@@ -1313,7 +1320,31 @@ function drawMinimap() {
 }
 function showCenter(text, dur = 1.1) { $('center-msg').textContent = text; centerUntil = elapsed + dur; }
 function showToast(text, dur = 2.1) { const t = $('toast'); t.textContent = text; t.style.opacity = 1; toastUntil = elapsed + dur; }
-function showBark(text, dur = 2.6) { const b = $('bark'); b.textContent = text; b.style.opacity = 1; barkUntil = elapsed + dur; }
+/* Race feed (HUD clarity pass): barks, item grants/effects and position changes
+   live in a compact stack in the top-centre #top-stack, directly under the
+   item slot — max 3 entries, auto-fading. The middle of the screen belongs to
+   the race, and on touch layouts the bottom-left belongs to the player's thumb,
+   so nothing informational lives in either place. Center screen is reserved
+   for countdown / GO! / lap banners / finish; the top toast keeps only
+   settings confirmations and countdown rocket-start hints. */
+const feedEntries = [];
+function showFeed(html, kind = '') {
+  const box = $('race-feed'); if (!box) return;
+  const el = document.createElement('div');
+  el.className = 'feed-item' + (kind ? ' ' + kind : '');
+  el.innerHTML = html;
+  box.appendChild(el);
+  feedEntries.push({ el, until: elapsed + 2.8, out: false });
+  while (box.children.length > 3) { const old = box.firstChild; old.remove(); const i = feedEntries.findIndex(e => e.el === old); if (i >= 0) feedEntries.splice(i, 1); }
+}
+function pruneFeed() {
+  for (let i = feedEntries.length - 1; i >= 0; i--) {
+    const e = feedEntries[i];
+    if (!e.out && elapsed > e.until) { e.out = true; e.el.classList.add('out'); }
+    else if (e.out && elapsed > e.until + 0.35) { e.el.remove(); feedEntries.splice(i, 1); }
+  }
+}
+function showBark(text) { showFeed(text, 'bark'); }
 function showInk(dur = 3) { $('ink-overlay').classList.remove('hidden'); inkUntil = elapsed + dur; } // Smear Campaign splat on the player's screen
 function updateItemSlot() {
   if (window.BKFX && BKFX.spinning) BKFX.cancel(); // authoritative refresh kills any stale roulette
@@ -1354,8 +1385,8 @@ function updateHUD(dt) {
     drawMinimap();
     if (gameState === 'racing' && !p.finished && raceTime > 2) { // position-change feedback, podium-relevant only (no spam)
       if (lastRank > 0 && rank !== lastRank) {
-        if (rank <= 3 && rank < lastRank) showToast(rank === 1 ? '🥇 P1 — YOU LEAD!' : `🏆 P${rank}!`, 1.25);
-        else if (lastRank === 1 && rank > 1) showToast('⚠️ Lost the lead!', 1.25);
+        if (rank <= 3 && rank < lastRank) showFeed(rank === 1 ? '🥇 P1 — YOU LEAD!' : `🏆 P${rank}!`);
+        else if (lastRank === 1 && rank > 1) showFeed('⚠️ Lost the lead!');
       }
       lastRank = rank;
     }
@@ -1730,6 +1761,10 @@ function updateDetail() {
   if (window.BKTT) BKTT.setRacer(selectedRacer); // polish turntable (desktop detail panel), if active
 }
 function buildMenu() {
+  // Item guide (menu section 6): rendered straight from ITEMS so the plain-
+  // language descriptions can never drift from the in-game feed text.
+  $('items-legend').innerHTML = Object.values(ITEMS).map(it => `
+    <div class="item-row"><div class="item-ic">${it.icon}</div><div><div class="item-name">${it.name}</div><div class="item-desc">${it.desc}</div></div></div>`).join('');
   $('racer-grid').innerHTML = RACERS.map((r, i) => {
     const p = portraitOf(i), cols = statCols(r);
     return `<button class="racer-tile ${i === selectedRacer ? 'selected' : ''}" data-racer="${i}">
@@ -1898,7 +1933,7 @@ function animate() {
     refreshTouchUI();
     if (elapsed > centerUntil && $('center-msg').textContent) $('center-msg').textContent = '';
     if (elapsed > toastUntil) $('toast').style.opacity = 0;
-    if (elapsed > barkUntil) $('bark').style.opacity = 0;
+    pruneFeed();
     if (elapsed > inkUntil) $('ink-overlay').classList.add('hidden');
   }
   if (!post && scene) { post = createPost(renderer, scene, camera); post.applyQuality(localStorage.getItem('bk-quality') || 'auto', { sun: sunLight }); } // lazy: scene is persistent, so the composer's RenderPass stays valid across rebuilds
@@ -1925,6 +1960,8 @@ window.BK = {
     };
   },
   giveItem(id) { const p = playerKart(); if (p && ITEMS[id]) { p.item = id; updateItemSlot(); return true; } return false; },
+  grant() { const p = playerKart(); if (p) { grantItem(p); return p.item; } return null; }, // real grant path: roulette -> race-feed entry with desc
+  bark() { const o = karts.find(k => !k.isPlayer); if (o) { showBark(`${o.racer.name}: “${pick(o.racer.barks.boost)}”`); return o.racer.name; } return null; }, // demo bark for HUD screenshots
   useItem() { useItem(playerKart()); },
   setInput(o) { debugInput = { throttle: o.throttle ?? null, steer: o.steer ?? null, brake: o.brake ?? null, drift: o.drift ?? null }; },
   clearInput() { debugInput = { throttle: null, steer: null, brake: null, drift: null }; },

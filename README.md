@@ -35,11 +35,39 @@ service worker caches the app shell and the Three.js CDN module).
 |---|---|---|---|---|---|
 | **Keyboard** | A/D or ◀ ▶ | W or ▲ | S or ▼ | Space | Shift |
 | **Gamepad** (any Bluetooth/USB) | Left stick / D-pad | RT or A | LT or B | X / □ | LB / RB |
-| **Touch** | ◀ ▶ buttons | GAS | BRAKE | ITEM | DRIFT |
-| **Gyro** (touch devices, tap 🧭 in-game) | Tilt the phone | GAS button | BRAKE button | ITEM | DRIFT |
+| **Touch** | 4 switchable schemes — see *Control Lab* below | | | **tap the big item slot** (lower-left) | |
+| **Gyro** (touch devices, tap 🧭 in-game) | Tilt the phone | per scheme | per scheme | tap item slot | per scheme |
 | **Mouse** | Move mouse while holding click | Hold click | S | Space | Shift |
 
 Also: **R** reset to track · **P / Esc** pause · **M** mute. Start on a gamepad pauses too.
+**Rocket start:** during the countdown, start holding gas when the "2" shows (hold roughly
+half a second to a second and a half) for a launch boost — hold it too long and you'll sputter.
+
+### 🧪 Control Lab — four touch schemes (switch in the menu or mid-race from pause; your pick is remembered)
+
+Design rule: **ITEM gets the easiest one-shot gesture in every scheme** (it's time-critical);
+**DRIFT gets hold gestures** (you hold it through corners anyway). In every scheme, tapping the
+big item slot also fires the item, with a haptic pulse.
+
+1. **🕹️ Buttons** (default) — the classic ◀ ▶ / GAS / BRAKE / ITEM / DRIFT clusters + slot tap.
+2. **👍 One-Thumb Stick** — touch anywhere on the right ~60% of the screen and a floating stick
+   appears under your thumb: drag left/right to steer, up for gas, down to brake — all proportional
+   (10 px deadzone, full at ~60 px). Release to coast. **Item: tap anywhere on the left ~40%** —
+   no aiming, your left thumb just slaps the side of the screen. Drift: big hold-button mid-left.
+3. **🕹️ Pedal & Stick** — left thumb is a floating steering stick (X only). Right thumb is a *pedal*
+   with a four-word vocabulary: **hold** = full gas · **drag down** past ~24 px = brake (proportional) ·
+   **quick tap** = **drift hop** (Mario Kart Tour style: drift starts when you push the steer stick,
+   releases — boost and all — when you centre it) · **flick up** (~48 px, fast) = **ITEM**, gas resumes
+   if you're still holding. Slot tap still works as a fallback. Hold-to-drift button bottom-right too.
+4. **🚗 Auto-Gas** — the kart accelerates by itself; you just steer with a floating stick anywhere.
+   **Item: any quick tap** — a second finger while steering, or a tap when you're not steering.
+   BRAKE and DRIFT buttons included. "AUTO-GAS ON" shows in the HUD.
+
+Plus two assists (cycle Auto / On / Off in the menu or pause; "Auto" = on for Auto-Gas only):
+**🧭 Smart Steering** (Real Racing 3 style) — a gentle nudge toward the racing line, capped at 25%
+authority and nearly off while drifting so it never fights your line; and **🌀 Auto-Drift** — hold
+steer past 85% for a quarter second and the drift starts by itself. If tilt steering (🧭) is on,
+it wins steering and stick X is ignored.
 
 ## 🎁 Items (the losers get the good stuff)
 

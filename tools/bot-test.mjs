@@ -111,6 +111,7 @@ try {
   console.log('Final (t=%ss): player continuous = %s, lap %s, rank %s, finished %s', s1.raceTime.toFixed(1), s1.player.continuous.toFixed(1), s1.player.lap, s1.player.rank, s1.player.finished);
 
   // ---- Mobile viewport (932x430 iPhone landscape) + Control Lab smoke ----
+  await page.close(); // page 1's race keeps burning SwiftShader CPU and starves page 2's load
   // Fresh browser context: page 1 registered the PWA service worker, which would
   // otherwise control this page's navigation too and break the CDN module import.
   const ctx2 = await browser.createBrowserContext();
@@ -127,8 +128,8 @@ try {
   // The SW's stale-while-revalidate spawns background CDN fetches that hang in the
   // sandbox and would keep networkidle2 from ever settling — disable SW in the bot.
   await page2.evaluateOnNewDocument(() => { if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.reject(new Error('bot: SW disabled')); });
-  await page2.goto(url, { waitUntil: 'load', timeout: 90000 });
-  await page2.waitForFunction(() => window.BK && document.querySelectorAll('.racer-card').length === 17, { timeout: 30000 });
+  await page2.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page2.waitForFunction(() => window.BK && document.querySelectorAll('.racer-card').length === 17, { timeout: 90000 });
   const schemeOk = await page2.evaluate(() => {
     const out = {};
     for (const s of ['buttons', 'stick1', 'sticks2', 'autog']) {

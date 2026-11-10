@@ -111,8 +111,20 @@ try {
 
   // v1.1 items: horn + bailout get hard assertions; the rest get a smoke pass.
   // give+use+read happen in ONE evaluate so no frame can consume the state first.
+  // RETRY: useItem() by design refuses to fire while the player is spinT-locked
+  // (e.g. clipped by the blast of the blue shell the bot fired at t=7, or an AI
+  // hit) — a single-shot assert then reads 0 on a healthy build. Retry the
+  // give+use for a few race-seconds; a window that NEVER opens is a real bug.
+  async function useItemExpect(id, key, min, presses = 1) {
+    for (let i = 0; i < 10; i++) {
+      const v = await page.evaluate((i2, p2) => { BK.giveItem(i2); for (let j = 0; j < p2; j++) BK.useItem(); return BK.state().player; }, id, presses).then(s => s[key]);
+      if (v > min) return v;
+      await new Promise(r => setTimeout(r, 700));
+    }
+    return 0;
+  }
   await waitRaceTime(8.5);
-  const hornT = await page.evaluate(() => { BK.giveItem('horn'); BK.useItem(); return BK.state().player.hornT; });
+  const hornT = await useItemExpect('horn', 'hornT', 0);
   console.log('Spin Team horn window after use:', hornT);
   if (!(hornT > 0)) throw new Error('ASSERT FAILED: horn did not open its 0.6s window');
   await waitRaceTime(9.5);
@@ -121,11 +133,11 @@ try {
     console.log('Smoke-used item:', id);
     await waitRaceTime(9.5 + (['bomb', 'boo', 'blooper'].indexOf(id) + 1) * 0.8);
   }
-  const goldenT = await page.evaluate(() => { BK.giveItem('golden'); BK.useItem(); BK.useItem(); return BK.state().player.goldenT; });
+  const goldenT = await useItemExpect('golden', 'goldenT', 3, 2);
   console.log('Series F window after double-press:', goldenT);
   if (!(goldenT > 3)) throw new Error('ASSERT FAILED: golden window did not open');
   await waitRaceTime(14);
-  const bailoutT = await page.evaluate(() => { BK.giveItem('bailout'); BK.useItem(); return BK.state().player.bailoutT; });
+  const bailoutT = await useItemExpect('bailout', 'bailoutT', 3);
   console.log('Government Bailout timer after use:', bailoutT);
   if (!(bailoutT > 3)) throw new Error('ASSERT FAILED: bailout did not engage');
 

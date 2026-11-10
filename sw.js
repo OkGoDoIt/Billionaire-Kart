@@ -1,6 +1,6 @@
 /* Billionaire Kart service worker — cache-first for the app shell so the game
    works offline after the first load (Three.js CDN included, cached at runtime). */
-const CACHE = 'bk-v4';
+const CACHE = 'bk-v7';
 const SHELL = ['./', './index.html', './style.css', './game.js', './portraits.js', './ui-fx.js', './assets/fonts/fredoka-latin.woff2', './assets/fonts/luckiestguy-latin.woff2', './manifest.webmanifest', './gfx/textures.js', './gfx/materials.js', './gfx/environment.js', './gfx/post.js', './gfx/sky-data.js'];
 
 self.addEventListener('install', e => {

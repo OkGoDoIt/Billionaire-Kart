@@ -146,7 +146,52 @@
     if (slot) slot.classList.remove('spinning');
   }
 
-  var BKFX = { transition: transition, burst: burst, roulette: roulette, cancel: cancel };
+  /* ================= CONFETTI (POLISH.md §2.7) =================
+     DOM confetti rain for the results ceremony: ~60 pieces, gold/red/white,
+     ~2.5 s, then the layer removes itself. Reduced motion = no rain at all. */
+  function confetti() {
+    if (reduced) return;
+    var old = document.getElementById('bk-confetti');
+    if (old) old.remove();
+    var layer = document.createElement('div');
+    layer.id = 'bk-confetti';
+    layer.setAttribute('aria-hidden', 'true');
+    var colors = ['#ffd94a', '#e60012', '#ffffff', '#29b6f6', '#ffd94a', '#e60012'];
+    for (var i = 0; i < 60; i++) {
+      var p = document.createElement('div');
+      p.className = 'confetti-piece';
+      p.style.left = (Math.random() * 100) + 'vw';
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', ((Math.random() * 2 - 1) * 130).toFixed(0) + 'px');
+      p.style.setProperty('--rot', ((Math.random() * 2 - 1) * 620).toFixed(0) + 'deg');
+      p.style.animationDuration = (1.9 + Math.random() * 0.8).toFixed(2) + 's';
+      p.style.animationDelay = (Math.random() * 0.35).toFixed(2) + 's';
+      if (i % 4 === 0) p.style.borderRadius = '50%';
+      layer.appendChild(p);
+    }
+    document.body.appendChild(layer);
+    setTimeout(function () { layer.remove(); }, 3400);
+  }
+
+  /* ================= POW BURSTS (POLISH.md §3.2) =================
+     Comic starburst at a screen position when an item hit lands: star flash +
+     display-type word, ~550 ms, pointer-events none, never blocks input.
+     Reduced motion keeps the word but drops the zoom. */
+  var POW_WORDS = ['POW!', 'BAM!', 'BONK!', 'WHAM!'];
+  function pow(x, y, word) {
+    var wrap = document.createElement('div');
+    wrap.className = 'bk-pow' + (reduced ? ' reduced' : '');
+    wrap.setAttribute('aria-hidden', 'true');
+    wrap.style.left = x + 'px'; wrap.style.top = y + 'px';
+    var star = document.createElement('div'); star.className = 'bk-pow-star';
+    var txt = document.createElement('div'); txt.className = 'bk-pow-word';
+    txt.textContent = word || POW_WORDS[(Math.random() * POW_WORDS.length) | 0];
+    wrap.appendChild(star); wrap.appendChild(txt);
+    document.body.appendChild(wrap);
+    setTimeout(function () { wrap.remove(); }, reduced ? 450 : 580);
+  }
+
+  var BKFX = { transition: transition, burst: burst, roulette: roulette, cancel: cancel, confetti: confetti, pow: pow };
   Object.defineProperty(BKFX, 'spinning', { get: function () { return spin.active; } });
   window.BKFX = BKFX;
 })();

@@ -144,7 +144,28 @@ const A = {
   boostSnd() { this.noise(0.5, 0.1, 2400); this.tone(200, 0.5, 'sine', 0.06, 700); },
   zap() { this.tone(1200, 0.4, 'sawtooth', 0.12, -1150); this.noise(0.35, 0.14, 3000); },
   driftBoost() { this.tone(520, 0.3, 'square', 0.08, 500); },
-  fanfare() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.32, 'square', 0.09, 0, i * 0.13)); this.tone(1319, 0.6, 'square', 0.09, 0, 0.55); },
+  fanfare(delay = 0) { // POLISH.md §4: trumpet-ish sawtooth arpeggio C-E-G-C', two passes + shimmer, ≈1.6 s
+    [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.26, 'sawtooth', 0.05, 0, delay + i * 0.11));
+    [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.26, 'sawtooth', 0.05, 0, delay + 0.48 + i * 0.11));
+    this.tone(1319, 0.65, 'sawtooth', 0.055, 0, delay + 0.96);
+    this.tone(1568, 0.65, 'triangle', 0.04, 0, delay + 0.96);
+    this.tone(2093, 0.5, 'sine', 0.02, 0, delay + 1.1);
+  },
+  /* ---- UI cue sheet (POLISH.md §4): short, bright, major-key, well under race SFX.
+     tone() already hard-respects the mute toggle (this.muted), so every cue below
+     is covered by the one mute switch. ---- */
+  uiTick() { this.tone(1200, 0.03, 'sine', 0.018); },                                    // hover/focus move — the MK cursor tick
+  uiSelect() { this.tone(659, 0.05, 'triangle', 0.05); this.tone(880, 0.06, 'triangle', 0.05, 0, 0.045); }, // confirm: E5→A5 up-chirp
+  uiTab() { this.tone(880, 0.04, 'triangle', 0.032); this.tone(1108, 0.05, 'triangle', 0.032, 0, 0.035); }, // tab/option switch
+  uiBack() { this.tone(440, 0.05, 'triangle', 0.04); this.tone(330, 0.07, 'triangle', 0.04, 0, 0.05); },     // back/cancel: A4→E4
+  uiError() { const n = performance.now(); if (n - (this._errT || 0) < 250) return; this._errT = n; this.tone(140, 0.12, 'square', 0.055); }, // invalid tap buzz (self-throttled)
+  cheerPop() { this.tone(2400, 0.06, 'sine', 0.028); },                                  // tile-select star twinkle
+  sadTrombone() { this.tone(233, 0.22, 'sawtooth', 0.042, -12); this.tone(220, 0.36, 'sawtooth', 0.042, -20, 0.2); }, // 7th–8th, comedy not punishment
+  resultsSting(rank) { // §4 fanfare timing: lands 150 ms after the results banner
+    if (rank <= 3) this.fanfare(0.15);
+    else if (rank <= 6) [392, 523, 659].forEach((f, i) => this.tone(f, 0.16, 'triangle', 0.045, 0, 0.15 + i * 0.09));
+    else { this.tone(233, 0.22, 'sawtooth', 0.042, -12, 0.15); this.tone(220, 0.36, 'sawtooth', 0.042, -20, 0.35); }
+  },
   music(dt, racing) { // tiny bass+arp sequencer
     if (!this.ctx || this.muted || !racing) return;
     this.nextNote -= dt; if (this.nextNote > 0) return;
@@ -843,6 +864,16 @@ function spinKart(k) {
   spawnParticles(k.pos, { count: 14, colors: [0xcccccc, 0xffd94a], speed: 5, life: 0.6, up: 4 });
   if (k.isPlayer) { A.hit(); shake = Math.max(shake, 0.55); hitstopT = Math.max(hitstopT, 0.06); showBark(`${k.racer.name}: “${pick(k.racer.barks.hit)}”`); }
   else if (k.pos.distanceTo(playerKart().pos) < 55 && Math.random() < 0.45) showBark(`${k.racer.name}: “${pick(k.racer.barks.hit)}”`);
+  // POW! comic burst at the victim's screen position (POLISH.md §3.2) — display hook only
+  if (window.BKFX && BKFX.pow && (k.isPlayer || k.pos.distanceTo(playerKart().pos) < 55)) {
+    const sp = screenPos(k.pos); if (sp) BKFX.pow(sp.x, sp.y);
+  }
+}
+const _projV = new THREE.Vector3();
+function screenPos(pos) { // world position -> CSS pixels for DOM fx overlays
+  _projV.copy(pos); _projV.y += 2.4; _projV.project(camera);
+  if (_projV.z > 1) return null; // behind the camera
+  return { x: (_projV.x * 0.5 + 0.5) * window.innerWidth, y: (-_projV.y * 0.5 + 0.5) * window.innerHeight };
 }
 
 /* ================= AI ================= */
@@ -945,8 +976,8 @@ function bombMesh() {
   return g;
 }
 function useItem(k) {
-  if (k.isPlayer && window.BKFX && BKFX.spinning) return; // roulette drama is protected (POLISH.md §2.5.1)
-  if (!k.item || k.spinT > 0 || gameState !== 'racing') return;
+  if (k.isPlayer && window.BKFX && BKFX.spinning) { A.uiError(); return; } // roulette drama is protected (POLISH.md §2.5.1) — invalid tap buzzes (§4)
+  if (!k.item || k.spinT > 0 || gameState !== 'racing') { if (k.isPlayer && gameState === 'racing') A.uiError(); return; }
   const id = k.item;
   // Series F (golden): first press opens a 5 s window and boosts; presses inside the
   // window re-boost for free on a 0.7 s cooldown. The item is only consumed by expiry.
@@ -1158,6 +1189,27 @@ function computeMinimapBounds() {
   samples.forEach(s => { minX = Math.min(minX, s.x); maxX = Math.max(maxX, s.x); minZ = Math.min(minZ, s.z); maxZ = Math.max(maxZ, s.z); });
   mmBounds = { minX, maxX, minZ, maxZ };
 }
+/* Minimap portrait heads (POLISH.md §2.5): each racer's portrait is pre-rendered
+   ONCE into a small circular canvas (mmFaces); drawMinimap then just blits those.
+   Falls back to the plain colour dot until a portrait has loaded. */
+const mmFaces = {};
+function mmFace(idx) {
+  const f = mmFaces[idx];
+  if (f) return f.ready ? f.cv : null;
+  const src = portraitOf(idx), nf = { ready: false, cv: null };
+  mmFaces[idx] = nf;
+  if (!src) return null;
+  const img = new Image();
+  img.onload = () => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 26;
+    const c = cv.getContext('2d');
+    c.beginPath(); c.arc(13, 13, 12.5, 0, 7); c.clip();
+    c.drawImage(img, 0, 0, 26, 26);
+    nf.cv = cv; nf.ready = true;
+  };
+  img.src = src;
+  return null;
+}
 function drawMinimap() {
   if (!mmBounds) return;
   const W = 176, H = 176, pad = 12;
@@ -1168,9 +1220,18 @@ function drawMinimap() {
   samples.forEach((s, i) => { if (i % 6 && i !== 0) return; const X = px(s.x), Y = pz(s.z); i === 0 ? mmCtx.moveTo(X, Y) : mmCtx.lineTo(X, Y); });
   mmCtx.closePath(); mmCtx.strokeStyle = 'rgba(255,255,255,.85)'; mmCtx.lineWidth = 3; mmCtx.stroke();
   for (const k of karts) {
-    mmCtx.beginPath(); mmCtx.arc(px(k.pos.x), pz(k.pos.z), k.isPlayer ? 5.5 : 3.6, 0, 7);
-    mmCtx.fillStyle = '#' + k.racer.color.toString(16).padStart(6, '0'); mmCtx.fill();
-    if (k.isPlayer) { mmCtx.strokeStyle = '#fff'; mmCtx.lineWidth = 2; mmCtx.stroke(); }
+    const X = px(k.pos.x), Y = pz(k.pos.z), face = mmFace(k.racerIdx);
+    if (face) { // portrait head riding the line (§2.5); player bigger + yellow ring
+      const d = k.isPlayer ? 23 : 18;
+      mmCtx.drawImage(face, X - d / 2, Y - d / 2, d, d);
+      mmCtx.beginPath(); mmCtx.arc(X, Y, d / 2, 0, 7);
+      mmCtx.strokeStyle = k.isPlayer ? '#ffd900' : '#' + k.racer.color.toString(16).padStart(6, '0');
+      mmCtx.lineWidth = k.isPlayer ? 2.6 : 1.8; mmCtx.stroke();
+    } else {
+      mmCtx.beginPath(); mmCtx.arc(X, Y, k.isPlayer ? 5.5 : 3.6, 0, 7);
+      mmCtx.fillStyle = '#' + k.racer.color.toString(16).padStart(6, '0'); mmCtx.fill();
+      if (k.isPlayer) { mmCtx.strokeStyle = '#fff'; mmCtx.lineWidth = 2; mmCtx.stroke(); }
+    }
   }
 }
 function showCenter(text, dur = 1.1) { $('center-msg').textContent = text; centerUntil = elapsed + dur; }
@@ -1186,6 +1247,15 @@ function updateItemSlot() {
 }
 function updateHUD(dt) {
   const p = playerKart(); if (!p) return;
+  // Rev meter (POLISH.md §2.4): display only — mirrors the rocket-start revHeld
+  // sampling (sweet zone = the actual 0.45–1.7 s window, over-rev past 2.3 s).
+  const rm = $('rev-meter');
+  if (gameState === 'countdown') {
+    rm.classList.remove('hidden');
+    $('rev-fill').style.width = (clamp(revHeld / 2.3, 0, 1) * 100).toFixed(1) + '%';
+    rm.classList.toggle('sweet', revHeld >= 0.45 && revHeld <= 1.7);
+    rm.classList.toggle('over', revHeld > 2.3);
+  } else if (!rm.classList.contains('hidden')) rm.classList.add('hidden');
   const rank = rankOf(p);
   $('pos-big').childNodes[0].nodeValue = rank;
   $('pos-suffix').textContent = SUFFIX[rank];
@@ -1220,6 +1290,7 @@ function toggleMute() { A.muted = !A.muted; $('btn-mute').textContent = A.muted 
 function togglePause() {
   if (gameState !== 'racing' && gameState !== 'countdown') return;
   paused = !paused;
+  if (paused) A.uiTab(); // §4 tab cue as the pause menu lands
   $('screen-pause').classList.toggle('hidden', !paused);
   if (paused) A.engine(0, false);
 }
@@ -1319,9 +1390,9 @@ function bindInputs() {
   // ---- Control Lab: floating stick / pedal layer (Pointer Events, per-pointerId zones, multi-touch safe) ----
   bindHold('btn-drift2', 'drift'); bindHold('btn-brake2', 'brake');
   $('btn-item2').addEventListener('pointerdown', e => { e.preventDefault(); fireItem(); });
-  document.querySelectorAll('.scheme-btn').forEach(b => b.addEventListener('click', () => { A.init(); setTouchScheme(b.dataset.scheme); }));
-  document.querySelectorAll('.smart-btn').forEach(b => b.addEventListener('click', () => { const order = ['auto', 'on', 'off']; setSmartMode(order[(order.indexOf(smartMode) + 1) % 3]); }));
-  document.querySelectorAll('.adrift-btn').forEach(b => b.addEventListener('click', () => { const order = ['auto', 'on', 'off']; setAutoDriftMode(order[(order.indexOf(autoDriftMode) + 1) % 3]); }));
+  document.querySelectorAll('.scheme-btn').forEach(b => b.addEventListener('click', () => { A.init(); A.uiTab(); setTouchScheme(b.dataset.scheme); }));
+  document.querySelectorAll('.smart-btn').forEach(b => b.addEventListener('click', () => { A.uiTab(); const order = ['auto', 'on', 'off']; setSmartMode(order[(order.indexOf(smartMode) + 1) % 3]); }));
+  document.querySelectorAll('.adrift-btn').forEach(b => b.addEventListener('click', () => { A.uiTab(); const order = ['auto', 'on', 'off']; setAutoDriftMode(order[(order.indexOf(autoDriftMode) + 1) % 3]); }));
   const layer = $('stick-layer');
   const stickEls = { steer: $('stick-a'), main: $('stick-a'), pedal: $('stick-b') };
   const axisVal = d => { const a = Math.abs(d); if (a < 10) return 0; const v = clamp((a - 10) / 50, 0, 1); return Math.sign(d) * v * (0.65 + 0.35 * v); }; // 10px deadzone, full deflection at 60px, mild curve
@@ -1392,11 +1463,11 @@ function bindInputs() {
   });
   window.addEventListener('gamepadconnected', e => { $('pad-info').textContent = `🎮 Gamepad connected: ${e.gamepad.id.slice(0, 42)} — you're good to go.`; });
   window.addEventListener('gamepaddisconnected', () => { $('pad-info').textContent = '🎮 Gamepad disconnected.'; });
-  $('btn-resume').addEventListener('click', togglePause);
-  $('btn-restart').addEventListener('click', () => fxTransition('checker', () => { $('screen-pause').classList.add('hidden'); paused = false; startRace(); }));
-  $('btn-quit').addEventListener('click', () => fxTransition('checker', quitToMenu));
-  $('btn-again').addEventListener('click', () => fxTransition('checker', () => { $('screen-results').classList.add('hidden'); startRace(); }));
-  $('btn-change').addEventListener('click', () => fxTransition('checker', quitToMenu));
+  $('btn-resume').addEventListener('click', () => { A.uiSelect(); togglePause(); });
+  $('btn-restart').addEventListener('click', () => { A.uiSelect(); fxTransition('checker', () => { $('screen-pause').classList.add('hidden'); paused = false; startRace(); }); });
+  $('btn-quit').addEventListener('click', () => { A.uiBack(); fxTransition('checker', quitToMenu); });
+  $('btn-again').addEventListener('click', () => { A.uiSelect(); fxTransition('checker', () => { $('screen-results').classList.add('hidden'); startRace(); }); });
+  $('btn-change').addEventListener('click', () => { A.uiBack(); fxTransition('checker', quitToMenu); });
 }
 const isTouchDevice = () => ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
@@ -1454,10 +1525,16 @@ function showResults() {
   $('results-sub').innerHTML = `${winner.racer.name}: “${winner.racer.barks.win}”<br>Your time: <b>${p.finishTime != null ? fmtTime(p.finishTime) : 'DNF'}</b>${p.bestLap ? ` · Best lap: <b>${fmtTime(p.bestLap)}</b>` : ''} · ${TRACKS[selectedTrack].name}`;
   $('results-table').innerHTML = '<tr><th>#</th><th>Racer</th><th>Time</th></tr>' + rows.map((r, i) => {
     const rp = portraitOf(r.k.racerIdx);
-    return `<tr class="${r.k.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td>${rp ? `<img class="res-portrait" src="${rp}" alt="">` : r.k.racer.emoji + ' '}${r.k.racer.name}</td><td>${fmtTime(r.t)}${r.proj ? ' est.' : ''}</td></tr>`;
+    return `<tr class="res-row ${r.k.isPlayer ? 'me' : ''}" style="animation-delay:${i * 60}ms"><td>${i + 1}</td><td>${rp ? `<img class="res-portrait" src="${rp}" alt="">` : r.k.racer.emoji + ' '}${r.k.racer.name}</td><td>${fmtTime(r.t)}${r.proj ? ' est.' : ''}</td></tr>`;
   }).join('');
+  // Results ceremony (§2.7): trophy presentation for podium finishes + confetti rain.
+  const podium = myRank <= 3;
+  $('results-ceremony').classList.toggle('hidden', !podium);
+  if (podium) $('ceremony-label').textContent = myRank === 1 ? 'CHAMPION' : myRank === 2 ? 'RUNNER-UP' : 'PODIUM FINISH';
   $('screen-results').classList.remove('hidden');
+  A.resultsSting(myRank); // §4: fanfare (1st–3rd) / neutral sting / sad-trombone-lite (7th–8th), 150 ms after the banner
   if (window.BKFX && BKFX.burst) BKFX.burst(); // star burst over the swap (POLISH.md §2.8)
+  if (podium && window.BKFX && BKFX.confetti) BKFX.confetti(); // gold/red/white rain, ~2.5 s (§2.7)
 }
 
 /* ================= MENU ================= */
@@ -1503,23 +1580,43 @@ function buildMenu() {
       <div class="tile-viz">${radarSVG(r)}<div class="tile-pips">S${r.spd} · A${r.acc} · G${r.grip}</div></div>
     </button>`;
   }).join('');
-  document.querySelectorAll('.racer-tile').forEach(tile => tile.addEventListener('click', () => {
-    selectedRacer = parseInt(tile.dataset.racer);
-    document.querySelectorAll('.racer-tile').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.racer) === selectedRacer));
-    updateDetail();
-    buildWorld(selectedTrack);
-  }));
+  let lastTickT = 0; // hover-tick throttle (§4: the cursor tick must never machine-gun)
+  const hoverTick = () => { const n = performance.now(); if (n - lastTickT > 45) { lastTickT = n; A.uiTick(); } };
+  document.querySelectorAll('.racer-tile').forEach(tile => {
+    tile.addEventListener('mouseenter', hoverTick);
+    tile.addEventListener('click', () => {
+      A.uiSelect(); A.cheerPop(); // §4 confirm chirp + tile-cheer twinkle
+      selectedRacer = parseInt(tile.dataset.racer);
+      document.querySelectorAll('.racer-tile').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.racer) === selectedRacer));
+      updateDetail();
+      buildWorld(selectedTrack);
+    });
+  });
   updateDetail();
-  document.querySelectorAll('.track-card').forEach(card => card.addEventListener('click', () => {
-    selectedTrack = parseInt(card.dataset.track);
-    document.querySelectorAll('.track-card').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.track) === selectedTrack));
-    buildWorld(selectedTrack); updateBestInfo();
-  }));
-  document.querySelectorAll('.diff-btn').forEach(btn => btn.addEventListener('click', () => {
-    difficulty = parseInt(btn.dataset.diff);
-    document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.diff) === difficulty));
-  }));
-  $('btn-start').addEventListener('click', e => fxTransition('checker', startRace, { x: e.clientX, y: e.clientY }));
+  document.querySelectorAll('.track-card').forEach(card => {
+    card.addEventListener('mouseenter', hoverTick);
+    card.addEventListener('click', () => {
+      A.uiSelect();
+      selectedTrack = parseInt(card.dataset.track);
+      document.querySelectorAll('.track-card').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.track) === selectedTrack));
+      buildWorld(selectedTrack); updateBestInfo();
+    });
+  });
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', hoverTick);
+    btn.addEventListener('click', () => {
+      A.uiTab();
+      difficulty = parseInt(btn.dataset.diff);
+      document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.diff) === difficulty));
+    });
+  });
+  $('btn-start').addEventListener('click', e => { A.uiSelect(); fxTransition('checker', startRace, { x: e.clientX, y: e.clientY }); });
+  // Title hero (§2.1): tap anywhere on the lockup advances to character select
+  $('title-hero').addEventListener('click', () => {
+    A.init(); A.uiSelect();
+    const target = document.querySelector('#screen-menu .section-title');
+    if (target) target.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  });
   updateBestInfo();
 }
 
@@ -1728,6 +1825,11 @@ initRenderer();
 buildMenu();
 buildWorld(selectedTrack);
 bindInputs();
+// Browsers gate AudioContext behind a user gesture: create/resume it on the
+// first pointer/key interaction so the §4 UI cues sound in the menus too,
+// not just after the first race starts.
+window.addEventListener('pointerdown', () => A.init());
+window.addEventListener('keydown', () => A.init());
 document.body.dataset.scheme = touchScheme;
 document.querySelectorAll('.scheme-btn').forEach(b => b.classList.toggle('selected', b.dataset.scheme === touchScheme));
 setSmartMode(smartMode);

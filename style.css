@@ -117,8 +117,21 @@ button { font-family:inherit; cursor:pointer; }
 .menu-inner { position:relative; z-index:1; max-width:880px; margin:0 auto; padding:28px 18px 96px; }
 .title-block { text-align:center; margin-bottom:10px; }
 .title-kicker { display:inline-block; font-size:13px; font-weight:700; letter-spacing:2px; color:var(--yellow); text-shadow:var(--hud-shadow); }
-h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95; letter-spacing:.01em; color:#fff; -webkit-text-stroke:3px var(--ink-pure); text-shadow:0 4px 0 var(--ink-pure),0 9px 20px rgba(0,40,80,.4); transform:rotate(-2deg); margin-top:6px; animation:logobob 2.4s ease-in-out infinite alternate; }
-h1 .kart-word { color:var(--yellow); }
+h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95; letter-spacing:.01em; color:#fff; -webkit-text-stroke:3px var(--ink-pure); text-shadow:0 4px 0 var(--ink-pure),0 9px 20px rgba(0,40,80,.4); }
+/* Title hero + logo lockup (POLISH.md §2.1): the logo IS the screen — giant
+   lockup, per-letter rainbow KART, AI ARMS RACE ribbon cocked at -6°, one
+   pulsing prompt, tap anywhere on the hero to advance to character select. */
+.title-hero { position:relative; min-height:86vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:26px 8px 40px; cursor:pointer; }
+.logo-lockup { position:relative; display:inline-block; margin-top:8px; transform:rotate(-2deg); animation:logobob 2.4s ease-in-out infinite alternate; }
+.logo-billionaire { display:block; font-size:min(14.5vw,92px); line-height:.95; }
+.logo-kart { display:block; font-size:min(19vw,124px); line-height:.92; letter-spacing:.03em; }
+.logo-kart span { color:var(--lc); }
+.logo-ribbon { position:absolute; right:-12px; bottom:-15px; transform:rotate(-6deg); font-family:var(--font-display); font-size:clamp(14px,3.2vw,23px); letter-spacing:.05em; white-space:nowrap; }
+.tap-start { margin-top:30px; font-size:clamp(19px,4.4vw,27px); color:var(--yellow); animation:tappulse 1.2s ease-in-out infinite; }
+.title-hero .tagline { margin-top:30px; } /* clear the lockup ribbon cocked over its bottom-right */
+@keyframes tappulse { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.06) } }
+.hero-corners { position:absolute; left:16px; right:16px; bottom:12px; display:flex; justify-content:space-between; font-size:11px; font-weight:600; letter-spacing:.06em; color:rgba(255,255,255,.78); text-shadow:0 1px 0 rgba(10,10,20,.5); pointer-events:none; }
+@media (prefers-reduced-motion: reduce) { .tap-start { animation:none; } .logo-lockup { animation:none; } }
 @keyframes logobob { from{ transform:rotate(-2deg) translateY(-4px) } to{ transform:rotate(-2deg) translateY(5px) } }
 .tagline { font-size:19px; font-weight:600; color:#fff; text-shadow:0 2px 0 rgba(10,10,20,.55),0 3px 10px rgba(0,40,80,.45); margin-top:10px; }
 .title-checker { margin:16px auto 4px; max-width:560px; }
@@ -164,7 +177,7 @@ h1 .kart-word { color:var(--yellow); }
   #speed-num { font-size:36px; } #item-slot { width:74px; height:74px; bottom:auto; top:120px; } #item-icon{font-size:31px;} #item-name{font-size:7.5px;}
   #center-msg { font-size:min(22vh,150px); } #toast { font-size:19px; top:13%; } #bark{font-size:14px; bottom:26%;}
   #drift-bar { width:110px; }
-  h1 { -webkit-text-stroke-width:2px; }
+  .logo-billionaire, .logo-kart { -webkit-text-stroke-width:2px; }
 }
 
 /* ================= CONTROL LAB ================= */
@@ -261,3 +274,44 @@ body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; le
 .bk-star { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); }
 .bk-star.outer { background:var(--ink-pure); }
 .bk-star.inner { background:linear-gradient(180deg,var(--yellow-soft),var(--yellow) 60%,#ffb300); }
+
+/* ================= POLISH PHASE 2 ================= */
+/* Confetti rain (POLISH.md §2.7, driven by BKFX.confetti) */
+#bk-confetti { position:fixed; inset:0; z-index:55; pointer-events:none; overflow:hidden; }
+.confetti-piece { position:absolute; top:-4vh; width:8px; height:13px; opacity:0; animation-name:confettifall; animation-timing-function:cubic-bezier(.16,.6,.4,1); animation-fill-mode:forwards; }
+@keyframes confettifall {
+  0% { opacity:0; transform:translate(0,-4vh) rotate(0deg); }
+  7% { opacity:1; }
+  88% { opacity:1; }
+  100% { opacity:0; transform:translate(var(--dx),106vh) rotate(var(--rot)); }
+}
+/* Results ceremony: checker cap, trophy presentation, staggered rows (§2.7) */
+.results-checker { margin:-28px -28px 14px; border-radius:19px 19px 0 0; border-top:0; border-inline:0; }
+#results-ceremony { perspective:520px; margin:2px 0 6px; }
+.trophy-svg { width:172px; height:auto; filter:drop-shadow(0 8px 0 rgba(20,33,61,.28)); animation:trophypop .45s var(--curve-pop) both, trophysway 2.6s ease-in-out .5s infinite alternate; }
+@keyframes trophysway { from{ transform:rotateY(-14deg) } to{ transform:rotateY(14deg) } }
+@keyframes trophypop { 0%{ transform:scale(.4); opacity:0 } 100%{ transform:scale(1); opacity:1 } }
+#ceremony-label { font-family:var(--font-display); font-size:21px; letter-spacing:.14em; color:var(--red-dark); margin-top:2px; }
+#results-table tr.res-row { animation:rowslide .38s var(--curve-out) both; }
+@keyframes rowslide { from{ opacity:0; transform:translateX(-26px) } to{ opacity:1; transform:translateX(0) } }
+@media (prefers-reduced-motion: reduce) {
+  .trophy-svg { animation:none; }
+  #results-table tr.res-row { animation:none; }
+}
+/* POW impact bursts (§3.2, driven by BKFX.pow) */
+.bk-pow { position:fixed; z-index:58; width:150px; height:150px; transform:translate(-50%,-50%); pointer-events:none; animation:powpop .55s var(--curve-pop) both; }
+.bk-pow-star { position:absolute; inset:0; clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); background:radial-gradient(circle at 50% 42%, var(--yellow-soft) 0%, var(--yellow) 55%, #ffb300 100%); filter:drop-shadow(3px 0 0 var(--ink-pure)) drop-shadow(-3px 0 0 var(--ink-pure)) drop-shadow(0 3px 0 var(--ink-pure)) drop-shadow(0 -3px 0 var(--ink-pure)); }
+.bk-pow-word { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-size:34px; letter-spacing:.02em; color:var(--red); -webkit-text-stroke:1.5px var(--ink-pure); text-shadow:0 2px 0 var(--ink-pure); transform:rotate(-8deg); }
+@keyframes powpop { 0%{ transform:translate(-50%,-50%) scale(.35); opacity:0 } 22%{ transform:translate(-50%,-50%) scale(1.18); opacity:1 } 45%{ transform:translate(-50%,-50%) scale(1) } 78%{ opacity:1 } 100%{ transform:translate(-50%,-50%) scale(1.04); opacity:0 } }
+.bk-pow.reduced { animation:powfade .45s linear both; }
+@keyframes powfade { 0%{ opacity:0 } 15%{ opacity:1 } 80%{ opacity:1 } 100%{ opacity:0 } }
+/* Rev meter (§2.4): slim pill under the countdown numeral; fill sweeps with
+   held throttle, green sweet-spot band marks the rocket-start window. */
+#rev-meter { position:absolute; top:49.5%; left:50%; transform:translateX(-50%); width:196px; height:19px; border-radius:999px; background:rgba(10,14,30,.68); border:3px solid var(--ink-pure); box-shadow:0 3px 0 rgba(10,10,20,.5), inset 0 2px 0 rgba(255,255,255,.22); overflow:hidden; }
+#rev-zone { position:absolute; top:0; bottom:0; left:19.6%; width:54.3%; background:rgba(0,200,83,.45); border-inline:2px solid rgba(255,255,255,.65); }
+#rev-fill { position:absolute; top:0; bottom:0; left:0; width:0%; background:linear-gradient(180deg,var(--yellow-soft),#ffb300); transition:width .05s linear; }
+#rev-meter.sweet #rev-fill { background:linear-gradient(180deg,#7dff8a,#00c853); }
+#rev-meter.over { animation:revshake .12s linear infinite alternate; }
+#rev-meter.over #rev-fill { background:linear-gradient(180deg,#ff8a75,var(--red)); }
+@keyframes revshake { from{ transform:translateX(calc(-50% - 3px)) } to{ transform:translateX(calc(-50% + 3px)) } }
+#rev-label { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-ui); font-size:10.5px; font-weight:700; font-style:italic; letter-spacing:3px; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.8); }

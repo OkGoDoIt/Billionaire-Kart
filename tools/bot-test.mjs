@@ -85,6 +85,26 @@ try {
   await page.screenshot({ path: join(ROOT, 'screenshots/race.png') });
   console.log('Saved screenshots/race.png');
 
+  // v1.1 items: horn + bailout get hard assertions; the rest get a smoke pass.
+  // give+use+read happen in ONE evaluate so no frame can consume the state first.
+  await waitRaceTime(8.5);
+  const hornT = await page.evaluate(() => { BK.giveItem('horn'); BK.useItem(); return BK.state().player.hornT; });
+  console.log('Spin Team horn window after use:', hornT);
+  if (!(hornT > 0)) throw new Error('ASSERT FAILED: horn did not open its 0.6s window');
+  await waitRaceTime(9.5);
+  for (const id of ['bomb', 'boo', 'blooper']) {
+    await page.evaluate(i => { BK.giveItem(i); BK.useItem(); }, id);
+    console.log('Smoke-used item:', id);
+    await waitRaceTime(9.5 + (['bomb', 'boo', 'blooper'].indexOf(id) + 1) * 0.8);
+  }
+  const goldenT = await page.evaluate(() => { BK.giveItem('golden'); BK.useItem(); BK.useItem(); return BK.state().player.goldenT; });
+  console.log('Series F window after double-press:', goldenT);
+  if (!(goldenT > 3)) throw new Error('ASSERT FAILED: golden window did not open');
+  await waitRaceTime(14);
+  const bailoutT = await page.evaluate(() => { BK.giveItem('bailout'); BK.useItem(); return BK.state().player.bailoutT; });
+  console.log('Government Bailout timer after use:', bailoutT);
+  if (!(bailoutT > 3)) throw new Error('ASSERT FAILED: bailout did not engage');
+
   // advance to at least 20s of race time
   await waitRaceTime(20);
   const s1 = await page.evaluate(() => BK.state());

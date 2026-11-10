@@ -52,6 +52,12 @@ Also: **R** reset to track · **P / Esc** pause · **M** mute. Start on a gamepa
 | ⚖️ **Antitrust Suit** | Flies up the track and explodes on the race leader (AoE spin) |
 | ⭐ **Viral Moment** | 6 s invincible + faster; spin rivals by touching them |
 | 📉 **Market Crash** | Shrinks and slows *everyone ahead of you* |
+| 📣 **Spin Team** | The leader's counter-play: a shockwave that destroys nearby projectiles/hazards, spins adjacent karts — and, timed within its 0.6 s window, swats an incoming Antitrust Suit out of the air |
+| 💣 **Pink Slip** | A bomb dropped behind you: flashing, beeping, explodes after 1.6 s (or on contact) with an AoE spin |
+| 📰 **Smear Campaign** | Inks *everyone ahead of you* — AI weave blind and slow; a human leader gets their screen splatted |
+| 👻 **Insider Trading** | Steals a random rival's held item (a boost if nobody's holding) and turns you intangible for 3 s — hazards and shells pass through you |
+| 🏆 **Series F** | A 5 s funding window: every ITEM press inside it fires another mini-boost |
+| 🛟 **Government Bailout** | Last place only: the state auto-drives your kart at 130% speed for up to 5.5 s, bulldozing rivals — but the money runs out the moment you reach 3rd. Too big to fail, too slow to win |
 
 Pick up the floating **? boxes** to draw an item. What you draw depends on where
 you're running — the further back you are, the nastier it gets.

@@ -16,13 +16,13 @@ const RACERS = [
   { name: 'Elon',  title: 'Rocket Man',        emoji: '🚀', color: 0xd23b2e, suit: 0x22242a, skin: 0xf2c79b, spd: 5, acc: 3, grip: 3, quote: '“Funding secured. Also, this is a rocket now.”',
     barks: { hit: ['My other car is on Mars!', 'That dent costs $44 billion!'], boost: ['To Mars!', 'Full self-driving (supervised)'], win: 'Mars GP is mine. Obviously.' } },
   { name: 'Sam',   title: 'The Optimist',      emoji: '🤖', color: 0x10a37f, suit: 0xe8e4da, skin: 0xeec39a, spd: 3, acc: 5, grip: 4, quote: '“AGI by Tuesday. Podium by Friday.”',
-    barks: { hit: ['That was not aligned!', 'I feel the AGI… leaving'], boost: ['Scaling laws say I win', 'Exponential!'], win: 'The board has approved this victory.' } },
+    barks: { hit: ['That was not aligned!', 'I feel the AGI… leaving'], boost: ['Scaling laws say I win', 'Exponential!', 'Ram Altman mode'], win: 'The board has approved this victory.' } },
   { name: 'Zuck',  title: 'The Lizard (allegedly)', emoji: '🦎', color: 0x1877f2, suit: 0x2b4c9b, skin: 0xf5cfa8, spd: 4, acc: 3, grip: 5, quote: '“I was human once. The grip proves nothing.”',
-    barks: { hit: ['Reptilian reflexes… failed', 'Metaverse, render my revenge!'], boost: ['Legs update installed', 'Smoking these meats!'], win: 'Sweet Baby Ray’s for everyone.' } },
+    barks: { hit: ['Reptilian reflexes… failed', 'Metaverse, render my revenge!'], boost: ['Legs update installed', 'Smoking these meats!', 'Zuckaissance, baby'], win: 'Sweet Baby Ray’s for everyone.' } },
   { name: 'Bezos', title: 'Prime Mover',       emoji: '📦', color: 0xff9900, suit: 0x232f3e, skin: 0xf0bd8d, spd: 5, acc: 2, grip: 3, quote: '“Your overtake arrives tomorrow. Mine is today.”',
-    barks: { hit: ['That package was fragile!', 'Customer obsession, my foot'], boost: ['Same-day shipping!', 'Day 1! Still Day 1!'], win: 'Delivered. On time. You’re welcome.' } },
+    barks: { hit: ['That package was fragile!', 'Customer obsession, my foot', 'One-third of my pit crew is gone'], boost: ['Same-day shipping!', 'Day 1! Still Day 1!'], win: 'Delivered. On time. You’re welcome.' } },
   { name: 'Jensen', title: 'Leather Jacket',  emoji: '🏎️', color: 0x76b900, suit: 0x17181c, skin: 0xe8b98a, spd: 4, acc: 4, grip: 4, quote: '“The more you race, the more you save.”',
-    barks: { hit: ['Jensen down! Leather scuffed!', 'That was not CUDA-accelerated'], boost: ['GPU GO BRRR', 'Tensor cores engaged'], win: 'It just works. In this jacket.' } },
+    barks: { hit: ['Jensen down! Leather scuffed!', 'That was not CUDA-accelerated'], boost: ['GPU GO BRRR', 'Tensor cores engaged'], win: 'Jacket #34 of 40, if you\'re counting' } },
   { name: 'Satya', title: 'Cloud Boss',        emoji: '☁️', color: 0x00a4ef, suit: 0x35424e, skin: 0xc98d5f, spd: 4, acc: 4, grip: 3, quote: '“Hit refresh. On the whole leaderboard.”',
     barks: { hit: ['Unexpected downtime!', 'Growth mindset… growth mindset…'], boost: ['Azure skies ahead', 'Empower every racer? No. Just me.'], win: 'A cloud-first, mobile-first victory.' } },
   { name: 'Dario', title: 'The Safety Officer', emoji: '🦺', color: 0x9e2a2b, suit: 0xf3ead8, skin: 0xf2c79b, spd: 3, acc: 4, grip: 5, quote: '“I have read the risk assessment. I AM the risk.”',
@@ -31,20 +31,20 @@ const RACERS = [
     barks: { hit: ['Recalculating… recalculating…', 'A blunder. Noted.'], boost: ['AlphaGo mode', 'Monte Carlo says GO'], win: 'Solved. Like protein folding.' } },
   { name: 'Trump', title: 'The Dealmaker',     emoji: '🦅', color: 0xf2b01e, suit: 0x1c2a4a, skin: 0xeeb287, spd: 5, acc: 2, grip: 2, quote: '“Nobody races better than me, everybody says so.”',
     barks: { hit: ['Fake news!', 'That corner was rigged!'], boost: ['Tremendous speed, folks', 'HUGE boost'], win: 'We won, by a lot. Everybody knows it.' } },
-  { name: 'Cook',  title: 'The Operator',      emoji: '🍏', color: 0xc0c6ce, suit: 0x3a3f45, skin: 0xeec39a, spd: 3, acc: 4, grip: 5, quote: '“One more lap.”',
+  { name: 'Cook',  title: 'The Operator (Ret.)', emoji: '🍏', color: 0xc0c6ce, suit: 0x3a3f45, skin: 0xeec39a, spd: 3, acc: 4, grip: 5, quote: '“I handed over the keys. Kept the kart.”',
     barks: { hit: ['That dents the margins!', 'Supply chain disrupted!'], boost: ['Good morning — to the lead', 'Operational excellence'], win: 'Cooked to perfection.' } },
   { name: 'Larry & Sergey', title: 'The Founders', emoji: '🔎', color: 0x4285f4, suit: 0x3c4043, skin: 0xeec39a, spd: 4, acc: 4, grip: 4, duo: true, quote: '“Don\'t be evil. Do be first.”',
-    barks: { hit: ['That result has been deprecated', 'OK Google, revenge'], boost: ['Moonshot mode', 'PageRank: P1'], win: 'Organized the world\'s information. And this race.' } },
+    barks: { hit: ['That result has been deprecated', 'OK Google, revenge', 'We spent $100M to not pay for that!'], boost: ['Moonshot mode', 'PageRank: P1', 'Nevada looks lovely this time of year'], win: 'Organized the world\'s information. And this race.' } },
   { name: 'Bill',  title: 'The Philanthropist', emoji: '🪟', color: 0x00adef, suit: 0x4a4238, skin: 0xf2c79b, spd: 3, acc: 3, grip: 4, aiSkill: 1.05, quote: '“640K of horsepower ought to be enough for anybody.”',
     barks: { hit: ['Clippy warned me about this', 'Ctrl+Alt+Defeat!'], boost: ['Where do you want to go today?', 'Rebooting… faster'], win: 'I will now give away this trophy. Slowly.' } },
   { name: 'Thiel', title: 'The Seeing Stone',  emoji: '👁️', color: 0x30323a, suit: 0x101014, skin: 0xf2c79b, spd: 4, acc: 3, grip: 4, aiSkill: 1.04, quote: '“We see your racing line before you drive it.”',
-    barks: { hit: ['That interaction was logged', 'Deleting that footage…'], boost: ['Total track awareness', 'The stone sees the podium'], win: 'We knew. We always know.' } },
+    barks: { hit: ['That interaction was logged', 'Deleting that footage…'], boost: ['Total track awareness', 'The stone sees the podium', 'Lecturing the Antichrist at 9, racing at 10'], win: 'We knew. We always know.' } },
   { name: 'Holmes', title: 'The Vaporware',    emoji: '🧪', color: 0xf2f2f0, suit: 0x0a0a0a, skin: 0xf5d7b0, spd: 5, acc: 4, grip: 2, sputter: true, quote: '“This kart runs on one drop of fuel. Allegedly.”',
-    barks: { hit: ['The prototype is fine!', 'That was a calibration issue'], boost: ['It works! (This time)', 'Revolutionary! (Unverified)'], win: 'Results pending peer review.' } },
+    barks: { hit: ['The prototype is fine!', 'That was a calibration issue'], boost: ['It works! (This time)', 'Revolutionary! (Unverified)'], win: 'Now a major motion picture' } },
   { name: 'Ellison', title: 'The Media Mogul', emoji: '🏝️', color: 0xb01e24, suit: 0x57261f, skin: 0xd9905f, spd: 4, acc: 3, grip: 3, quote: '“I own the island, the database, and now the news.”',
-    barks: { hit: ['My lawyers will hear about this', 'That segment has been pulled'], boost: ['Hostile takeover (of P1)', 'Synergy!'], win: 'As reported first by my own networks.' } },
+    barks: { hit: ['My lawyers will hear about this', 'That segment has been pulled', 'I was the richest man alive for a WEEK'], boost: ['Hostile takeover (of P1)', 'Synergy!'], win: 'As reported first by my own networks.' } },
   { name: 'Murdoch', title: 'The Succession',  emoji: '🗞️', color: 0x6e1423, suit: 0x2a2d34, skin: 0xf0c8a0, spd: 3, acc: 1, grip: 5, aiSkill: 1.06, consistent: true, quote: '“I\'ve outlived every rival. And every heir\'s lawyer.”',
-    barks: { hit: ['That story will not run', 'My editors will bury this'], boost: ['Extra! Extra! Overtake all about it', 'Tabloid turbo'], win: 'This victory was reported exclusively by me.' } },
+    barks: { hit: ['That story will not run', 'My editors will bury this'], boost: ['Extra! Extra! Overtake all about it', 'Tabloid turbo'], win: 'Lachlan inherits this trophy in 2050' } },
   { name: 'Soros', title: 'The Final Boss',    emoji: '💸', color: 0x1f4d2e, suit: 0x232323, skin: 0xf2d3ac, spd: 4, acc: 4, grip: 4, aiSkill: 1.06, quote: '“I am not the final boss. I merely fund him.”',
     barks: { hit: ['A conspiracy against me, surely', 'Shorting my position? Bold'], boost: ['Reflexivity, baby', 'The market moves with me'], win: 'Blamed for this result in 14 countries.' } },
 ];
@@ -67,18 +67,27 @@ const ITEMS = {
   blue:     { icon: '⚖️', name: 'Antitrust Suit' },
   star:     { icon: '⭐', name: 'Viral Moment' },
   lightning:{ icon: '📉', name: 'Market Crash' },
+  horn:     { icon: '📣', name: 'Spin Team' },
+  bomb:     { icon: '💣', name: 'Pink Slip' },
+  blooper:  { icon: '📰', name: 'Smear Campaign' },
+  boo:      { icon: '👻', name: 'Insider Trading' },
+  golden:   { icon: '🏆', name: 'Series F' },
+  bailout:  { icon: '🛟', name: 'Government Bailout' },
 };
 function rollItem(pos) { // pos 1..8 — position-weighted, the Mario Kart secret sauce
+  // Fairness rules from the MK audit: 1st gets DEFENCE ONLY (leak/green/horn/boost/bomb —
+  // no red/star/blue/lightning/boo/golden/bailout, and no coin-style dud). Bailout is a
+  // last-place lifeline: 7th/8th only, small weight in 6th. No self-harm items, ever.
   const t = [
     null,
-    [['banana', 34], ['green', 26], ['boost', 18], ['red', 14], ['banana', 8]],                    // 1st: defence
-    [['banana', 24], ['green', 26], ['boost', 20], ['red', 22], ['star', 8]],                     // 2nd
-    [['green', 24], ['red', 26], ['boost', 22], ['banana', 14], ['star', 14]],                    // 3rd
-    [['red', 24], ['boost', 24], ['green', 16], ['star', 18], ['lightning', 8], ['blue', 10]],    // 4th
-    [['boost', 26], ['red', 22], ['star', 20], ['blue', 14], ['lightning', 10], ['green', 8]],    // 5th
-    [['boost', 28], ['star', 24], ['blue', 18], ['lightning', 14], ['red', 16]],                  // 6th
-    [['star', 28], ['boost', 26], ['blue', 22], ['lightning', 16], ['red', 8]],                   // 7th
-    [['star', 30], ['lightning', 20], ['blue', 24], ['boost', 26]],                               // 8th: comeback kit
+    [['banana', 30], ['green', 24], ['horn', 22], ['boost', 14], ['bomb', 10]],                                       // 1st: defence + the horn counter
+    [['banana', 22], ['green', 22], ['horn', 20], ['red', 16], ['boost', 14], ['bomb', 6]],                           // 2nd
+    [['green', 20], ['red', 20], ['horn', 14], ['boost', 18], ['banana', 12], ['star', 8], ['blooper', 5], ['bomb', 3]], // 3rd
+    [['red', 18], ['boost', 18], ['green', 12], ['star', 12], ['boo', 10], ['golden', 8], ['blue', 8], ['lightning', 6], ['blooper', 5], ['bomb', 3]], // 4th
+    [['boost', 20], ['red', 16], ['star', 14], ['blue', 12], ['boo', 10], ['golden', 10], ['lightning', 8], ['blooper', 5], ['bomb', 3], ['green', 2]], // 5th
+    [['boost', 20], ['star', 16], ['blue', 14], ['golden', 12], ['boo', 10], ['lightning', 10], ['red', 10], ['bailout', 4], ['blooper', 2], ['bomb', 2]], // 6th
+    [['star', 20], ['blue', 16], ['bailout', 14], ['golden', 14], ['boost', 14], ['lightning', 12], ['boo', 6], ['bomb', 4]],  // 7th
+    [['star', 22], ['blue', 18], ['bailout', 17], ['lightning', 15], ['golden', 14], ['boost', 10], ['boo', 4]],              // 8th: the full comeback kit
   ][clamp(pos, 1, 8)];
   let sum = 0; for (const [, w] of t) sum += w;
   let r = Math.random() * sum;
@@ -153,13 +162,13 @@ const A = {
 const N = 900, HALF_W = 11, LAPS = 3;
 let renderer, scene, camera, sunLight, hemiLight;
 let curve, samples = [], tangents = [], normals = [], segLen = 1.8, trackCenter = new THREE.Vector3();
-let karts = [], bananas = [], projectiles = [], itemBoxes = [], clouds = [];
+let karts = [], bananas = [], projectiles = [], itemBoxes = [], clouds = [], bombs = [];
 let gameState = 'menu'; // menu | countdown | racing | finished
 let paused = false, raceTime = 0, countdownT = 0, lastCount = 99, finishDelay = -1, playerFinishedAt = 0;
 let selectedRacer = 0, selectedTrack = 0, difficulty = 1;
 const DIFF_MUL = [0.90, 0.955, 1.0];
 let camHeading = 0, camFov = 62, shake = 0, menuAngle = 0.6, hudTimer = 0, progRate = 0, prevPlayerCont = 0;
-let centerUntil = 0, toastUntil = 0, barkUntil = 0;
+let centerUntil = 0, toastUntil = 0, barkUntil = 0, inkUntil = 0;
 const keys = {};
 const touchFlags = { left: false, right: false, gas: false, brake: false, drift: false };
 const mouse = { down: false, x: 0.5, lastMove: -99 };
@@ -305,7 +314,7 @@ function buildWorld(trackIdx, field) {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(tr.sky);
   scene.fog = new THREE.Fog(tr.fog, 210, 640);
-  karts = []; bananas = []; projectiles = []; itemBoxes = []; clouds = [];
+  karts = []; bananas = []; projectiles = []; itemBoxes = []; clouds = []; bombs = [];
 
   hemiLight = new THREE.HemisphereLight(0xffffff, tr.ground, 1.05); scene.add(hemiLight);
   sunLight = new THREE.DirectionalLight(0xfff2d8, 1.9);
@@ -514,6 +523,7 @@ function makeKart(racerIdx, isPlayer) {
   // per-racer props
   if (racerIdx === 0) { const cone = add(new THREE.ConeGeometry(0.36, 1.15, 10), new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }), 0, 1.55, -1.7); cone.rotation.x = 0.5; }
   if (racerIdx === 1) { const halo = add(new THREE.TorusGeometry(0.42, 0.07, 8, 20), new THREE.MeshStandardMaterial({ color: 0xffd94a, emissive: 0xaa8800, emissiveIntensity: 0.8 }), 0, 2.95, -0.5); halo.rotation.x = Math.PI / 2; }
+  if (racerIdx === 2) { const chain = add(new THREE.TorusGeometry(0.36, 0.08, 8, 22), new THREE.MeshStandardMaterial({ color: 0xffd94a, emissive: 0x997700, emissiveIntensity: 0.55, metalness: 0.85, roughness: 0.25 }), 0, 1.82, -0.26); chain.rotation.x = 0.55; } // the Zuckaissance gold chain
   if (racerIdx === 3) { add(new THREE.BoxGeometry(1.15, 1.15, 1.15), new THREE.MeshLambertMaterial({ color: 0xb5823c }), 0, 1.6, -1.6); }
   if (racerIdx === 4) { add(new THREE.BoxGeometry(1.5, 0.1, 0.5), new THREE.MeshStandardMaterial({ color: 0x76b900, emissive: 0x76b900, emissiveIntensity: 1.4 }), 0, 0.78, 2.35); }
 
@@ -523,6 +533,7 @@ function makeKart(racerIdx, isPlayer) {
     pos: new THREE.Vector3(), heading: 0, velHeading: 0, speed: 0, steerVis: 0, spinVis: 0,
     continuous: 0, sampleIdx: 0, lateral: 0, finished: false, finishTime: null, projected: false, autopilot: false,
     item: null, spinT: 0, shrinkT: 0, starT: 0, boostT: 0, driftCharge: 0, drifting: false, starTouchCd: 0,
+    bailoutT: 0, ghostT: 0, hornT: 0, goldenT: 0, goldenCd: 0, inkT: 0,
     sputterT: 0, sputterClock: 0, nextSputter: rand(6, 14),
     lapStart: 0, lastLapTime: null, bestLap: null, lapsDone: 0, offroad: false,
     ai: { lane: rand(-5, 5), laneT: rand(1, 3), itemT: rand(2, 6), skill: r.aiSkill ?? rand(0.97, 1.03), driftHeld: false },
@@ -547,6 +558,7 @@ function placeGrid() {
     k.continuous = cont; k.sampleIdx = idx;
     k.heading = k.velHeading = headingOf(tangents[idx]);
     k.speed = 0; k.spinT = 0; k.shrinkT = 0; k.starT = 0; k.boostT = 0; k.driftCharge = 0; k.drifting = false;
+    k.bailoutT = 0; k.ghostT = 0; k.hornT = 0; k.goldenT = 0; k.goldenCd = 0; k.inkT = 0;
     k.item = null; k.finished = false; k.finishTime = null; k.projected = false; k.autopilot = false;
     k.sputterT = 0; k.sputterClock = 0; k.nextSputter = rand(6, 14);
     k.lapsDone = Math.floor(k.continuous / N); k.lapStart = 0; k.lastLapTime = null; k.bestLap = null; k.spinVis = 0;
@@ -555,6 +567,7 @@ function placeGrid() {
   }
   bananas.forEach(b => scene.remove(b.mesh)); bananas = [];
   projectiles.forEach(p => scene.remove(p.mesh)); projectiles = [];
+  bombs.forEach(b => scene.remove(b.mesh)); bombs = [];
   itemBoxes.forEach(b => { b.active = true; b.mesh.visible = true; b.respawnT = 0; });
   raceTime = 0; finishDelay = -1;
   prevPlayerCont = playerKart().continuous;
@@ -614,6 +627,9 @@ function topSpeedOf(k) {
   }
   if (k.shrinkT > 0) base *= 0.55;
   if (k.starT > 0) base *= 1.10;
+  if (k.ghostT > 0) base *= 1.07;
+  if (k.inkT > 0) base *= 0.88;
+  if (k.bailoutT > 0) base *= 1.30;
   if (k.offroad) base *= 0.5;
   return base;
 }
@@ -651,10 +667,27 @@ function finishKart(k) {
     showBark(`${k.racer.name}: “${k.racer.barks.win}”`);
   }
 }
+function bailoutInput(k) { // Government Bailout: the state drives. Fast, centred, relentless — but only to mid-pack
+  const targetIdx = wrapIdx(k.sampleIdx + 26);
+  const tp = samples[targetIdx];
+  const desired = Math.atan2(tp.x - k.pos.x, tp.z - k.pos.z);
+  const diff = angNorm(desired - k.heading);
+  return { steer: clamp(-diff * 1.9, -1, 1), throttle: 1, brake: false, drift: false };
+}
 function updateKart(k, input, dt) {
   k.spinT = Math.max(0, k.spinT - dt); k.shrinkT = Math.max(0, k.shrinkT - dt);
   k.starT = Math.max(0, k.starT - dt); k.boostT = Math.max(0, k.boostT - dt);
   k.starTouchCd = Math.max(0, k.starTouchCd - dt);
+  k.ghostT = Math.max(0, k.ghostT - dt); k.hornT = Math.max(0, k.hornT - dt); k.inkT = Math.max(0, k.inkT - dt);
+  k.goldenCd = Math.max(0, k.goldenCd - dt);
+  if (k.goldenT > 0) { // Series F window expiry releases the item slot
+    k.goldenT -= dt;
+    if (k.goldenT <= 0 && k.item === 'golden') { k.item = null; if (k.isPlayer) updateItemSlot(); }
+  }
+  if (k.bailoutT > 0 && gameState === 'racing' && k.spinT <= 0) {
+    input = bailoutInput(k);
+    if (Math.random() < 0.7) spawnParticles(k.pos.clone().addScaledVector(forwardVec(k.heading), -2), { count: 2, colors: [0xffd94a, 0x2fb9ff], speed: 1.5, life: 0.4, up: 1, gravity: 0 });
+  }
   // Holmes sputter: every 6–14 s a 15% chance check → 1.2 s power loss (high stats, high risk)
   if (k.racer.sputter) {
     if (k.sputterT > 0) k.sputterT -= dt;
@@ -673,6 +706,10 @@ function updateKart(k, input, dt) {
   const targetScale = k.shrinkT > 0 ? 0.62 : 1;
   k.mesh.scale.setScalar(lerp(k.mesh.scale.x, targetScale, clamp(8 * dt, 0, 1)));
   updateProgress(k);
+  if (k.bailoutT > 0) { // bailout clock runs after progress so the rank check is fresh
+    k.bailoutT -= dt;
+    if (rankOf(k) <= 3) k.bailoutT = 0; // delivered to the podium fight — the taxpayer's job is done
+  }
 
   if (k.spinT > 0) {
     k.speed = Math.max(0, k.speed - 42 * dt);
@@ -707,6 +744,7 @@ function updateKart(k, input, dt) {
     }
     const turnRate = (1.75 + (k.racer.grip - 3) * 0.14) * (k.drifting ? 1.5 : 1);
     k.heading -= input.steer * turnRate * clamp(k.speed / 16, -1, 1) * dt;
+    if (k.inkT > 0 && !k.isPlayer) k.heading += Math.sin(elapsed * 11 + k.racerIdx * 2.3) * 0.85 * dt; // Smear Campaign: inked AI weaves blind
     if (k.boostT > 0 && k.speed > 8) {
       if (Math.random() < 0.9) spawnParticles(k.pos.clone().addScaledVector(forwardVec(k.heading), -2.2), { count: 3, colors: [0xffa53a, 0xffd94a, 0x66ccff], speed: 1.5, life: 0.35, up: 0.8, gravity: 0 });
       if (k.isPlayer && Math.random() < 0.06) showBark(`${k.racer.name}: “${pick(k.racer.barks.boost)}”`);
@@ -720,6 +758,8 @@ function updateKart(k, input, dt) {
 
   // mesh sync
   if (k.spinT <= 0) { const tgt = Math.round(k.spinVis / (Math.PI * 2)) * Math.PI * 2; k.spinVis = lerp(k.spinVis, tgt, clamp(10 * dt, 0, 1)); }
+  const ghostOp = k.ghostT > 0 ? 0.42 : 1; // Insider Trading: intangible = translucent
+  if (k.mesh.userData.op !== ghostOp) { k.mesh.userData.op = ghostOp; k.tilt.traverse(o => { if (o.material) { o.material.transparent = ghostOp < 1; o.material.opacity = ghostOp; } }); }
   k.mesh.position.copy(k.pos);
   k.mesh.rotation.y = k.heading + k.spinVis;
   k.steerVis = lerp(k.steerVis, input.steer || 0, clamp(10 * dt, 0, 1));
@@ -737,7 +777,7 @@ function updateKart(k, input, dt) {
   }
 }
 function spinKart(k) {
-  if (k.starT > 0 || k.spinT > 0) return;
+  if (k.starT > 0 || k.spinT > 0 || k.ghostT > 0) return; // Viral Moment & Insider-Trading ghost shrug off spins
   k.spinT = 1.15; k.speed *= 0.3; k.drifting = false; k.driftCharge = 0;
   spawnParticles(k.pos, { count: 14, colors: [0xcccccc, 0xffd94a], speed: 5, life: 0.6, up: 4 });
   if (k.isPlayer) { A.hit(); shake = Math.max(shake, 0.55); showBark(`${k.racer.name}: “${pick(k.racer.barks.hit)}”`); }
@@ -769,11 +809,13 @@ function aiInput(k, dt) {
     const id = k.item; let use = false;
     const someoneAhead = karts.some(o => o !== k && o.continuous > k.continuous && o.continuous - k.continuous < 90);
     if (id === 'boost') use = curveAhead < 0.4;
-    else if (id === 'banana') use = true;
+    else if (id === 'banana' || id === 'bomb' || id === 'bailout' || id === 'boo' || id === 'blooper') use = true;
     else if (id === 'green' || id === 'red') use = someoneAhead;
+    else if (id === 'horn') use = projectiles.some(p => p.target === k || (p.type !== 'blue' && p.mesh.position.distanceToSquared(k.pos) < 1600)) || karts.some(o => o !== k && Math.abs(o.continuous - k.continuous) < 14);
+    else if (id === 'golden') use = k.goldenT > 0 ? true : curveAhead < 0.5;
     else use = true; // star, blue, lightning
     if (use) useItem(k);
-    ai.itemT = rand(2, 6);
+    ai.itemT = (id === 'golden' && k.goldenT > 0) ? 0.8 : rand(2, 6); // Series F: AI milks the window 3–4 times
   }
   return { steer, throttle, brake: false, drift };
 }
@@ -826,9 +868,30 @@ function projectileMesh(type) {
   g.traverse(o => o.castShadow = true);
   return g;
 }
+function bombMesh() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.95, 14, 12), new THREE.MeshStandardMaterial({ color: 0x23242c, roughness: 0.35, metalness: 0.5, emissive: 0xff2222, emissiveIntensity: 0 }));
+  body.castShadow = true; g.add(body);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.4, 8), new THREE.MeshLambertMaterial({ color: 0xb9c0c7 })); cap.position.y = 1.0; g.add(cap);
+  const spark = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa53a })); spark.position.set(0.14, 1.32, 0); g.add(spark);
+  g.userData.body = body;
+  return g;
+}
 function useItem(k) {
   if (!k.item || k.spinT > 0 || gameState !== 'racing') return;
-  const id = k.item; k.item = null;
+  const id = k.item;
+  // Series F (golden): first press opens a 5 s window and boosts; presses inside the
+  // window re-boost for free on a 0.7 s cooldown. The item is only consumed by expiry.
+  if (id === 'golden') {
+    if (k.goldenT > 0 && k.goldenCd > 0) return;
+    const first = k.goldenT <= 0;
+    if (first) k.goldenT = 5;
+    k.goldenCd = 0.7;
+    k.boostT = Math.max(k.boostT, 0.95);
+    if (k.isPlayer) { A.use(); A.boostSnd(); if (first) showToast('🏆 SERIES F — keep hitting ITEM to re-boost!'); }
+    return;
+  }
+  k.item = null;
   if (k.isPlayer) { updateItemSlot(); A.use(); }
   const fwd = forwardVec(k.heading);
   if (id === 'boost') {
@@ -873,6 +936,67 @@ function useItem(k) {
     A.zap();
     if (k.isPlayer) showToast('📉 You crashed the market!');
     else if (victims.includes(playerKart())) { showToast('📉 MARKET CRASH!'); shake = Math.max(shake, 0.4); }
+  } else if (id === 'bailout') {
+    k.bailoutT = 5.5; // auto-drive: see bailoutInput/updateKart — ends early on reaching 3rd
+    spawnParticles(k.pos, { count: 26, colors: [0xffd94a, 0xffffff, 0x2fb9ff], speed: 6, life: 0.8, up: 5, gravity: 0 });
+    if (k.isPlayer) { A.fanfare(); showToast('🛟 GOVERNMENT BAILOUT! Too big to fail.'); }
+    else showToast(`🛟 ${k.racer.name} got a BAILOUT!`);
+  } else if (id === 'horn') {
+    k.hornT = 0.6; // active window — also swats an arriving Antitrust Suit out of the air (updateProjectiles)
+    if (k.isPlayer) A.tone(170, 0.35, 'square', 0.16, -60);
+    spawnParticles(k.pos, { count: 42, colors: [0xffd94a, 0xffffff], speed: 13, life: 0.45, up: 2.5, gravity: 0 });
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      if (projectiles[i].mesh.position.distanceToSquared(k.pos) < 210) { spawnParticles(projectiles[i].mesh.position, { count: 8, colors: [0xffd94a], speed: 4, life: 0.4, up: 2, gravity: 0 }); scene.remove(projectiles[i].mesh); projectiles.splice(i, 1); }
+    }
+    for (let i = bananas.length - 1; i >= 0; i--) if (bananas[i].pos.distanceToSquared(k.pos) < 110) { scene.remove(bananas[i].mesh); bananas.splice(i, 1); }
+    for (let i = bombs.length - 1; i >= 0; i--) if (bombs[i].pos.distanceToSquared(k.pos) < 110) { scene.remove(bombs[i].mesh); bombs.splice(i, 1); }
+    for (const o of karts) if (o !== k && o.pos.distanceToSquared(k.pos) < 34) spinKart(o);
+    if (k.isPlayer) { showToast('📣 SPIN TEAM — DENIED!'); shake = Math.max(shake, 0.25); }
+  } else if (id === 'boo') {
+    k.ghostT = 3; k.boostT = Math.max(k.boostT, 0.7);
+    const holders = karts.filter(o => o !== k && o.item);
+    let stolen = 'boost'; // nobody holding anything? Insider trading still nets you a boost
+    if (holders.length) { const v = pick(holders); stolen = v.item; if (v.item === 'golden') v.goldenT = 0; v.item = null; if (v.isPlayer) updateItemSlot(); }
+    k.item = stolen;
+    spawnParticles(k.pos, { count: 20, colors: [0xcbb2ff, 0xffffff], speed: 4, life: 0.7, up: 4, gravity: 0 });
+    if (k.isPlayer) { updateItemSlot(); showToast(`👻 Insider Trading — stole ${ITEMS[stolen].name}!`); }
+  } else if (id === 'blooper') {
+    const victims = karts.filter(o => o !== k && o.continuous > k.continuous && !o.finished);
+    for (const v of victims) {
+      v.inkT = 2.5;
+      spawnParticles(v.pos, { count: 14, colors: [0x1a1030, 0x3a2060], speed: 5, life: 0.6, up: 4, gravity: -2 });
+      if (v.isPlayer) showInk();
+    }
+    if (k.isPlayer) showToast(victims.length ? '📰 Smear Campaign launched!' : '📰 Smear Campaign — nobody ahead to smear');
+    else if (victims.includes(playerKart())) showToast('📰 You\'ve been SMEARED!');
+  } else if (id === 'bomb') {
+    const mesh = bombMesh();
+    const pos = k.pos.clone().addScaledVector(fwd, -3.4); pos.y = 0.75;
+    mesh.position.copy(pos); scene.add(mesh);
+    bombs.push({ mesh, pos, owner: k, fuse: 1.6, beepT: 0 });
+    if (k.isPlayer) showToast('💣 Pink Slip armed…');
+  }
+}
+function explodeBomb(b) {
+  spawnParticles(b.pos, { count: 44, colors: [0xffa53a, 0xff5252, 0xffd94a, 0x555555], speed: 11, life: 0.9, up: 7 });
+  for (const o of karts) if (o.pos.distanceTo(b.pos) < 8.5) spinKart(o);
+  if (playerKart().pos.distanceTo(b.pos) < 26) { shake = Math.max(shake, 0.6); A.hit(); }
+  if (b.owner.isPlayer || playerKart().pos.distanceTo(b.pos) < 42) showToast('💣 PINK SLIP DELIVERED!');
+}
+function updateBombs(dt) {
+  for (let i = bombs.length - 1; i >= 0; i--) {
+    const b = bombs[i]; b.fuse -= dt;
+    const body = b.mesh.userData.body; // telegraphed: flashing red fuse, faster as it runs out
+    if (body) body.material.emissiveIntensity = Math.sin(elapsed * (b.fuse < 0.5 ? 42 : 13)) > 0 ? (b.fuse < 0.5 ? 1.5 : 0.55) : 0.04;
+    b.beepT -= dt;
+    if (b.beepT <= 0 && b.pos.distanceTo(playerKart().pos) < 60) { A.tone(b.fuse < 0.5 ? 1320 : 880, 0.06, 'square', 0.05); b.beepT = b.fuse < 0.5 ? 0.12 : 0.3; }
+    let boom = b.fuse <= 0;
+    if (!boom) for (const o of karts) { // contact detonation (owner gets a 0.8 s grace window)
+      if (o === b.owner && b.fuse > 0.8) continue;
+      const dx = o.pos.x - b.pos.x, dz = o.pos.z - b.pos.z;
+      if (dx * dx + dz * dz < 5.3) { boom = true; break; }
+    }
+    if (boom) { explodeBomb(b); scene.remove(b.mesh); bombs.splice(i, 1); }
   }
 }
 function explodeBlue(p) {
@@ -887,14 +1011,22 @@ function updateProjectiles(dt) {
     const p = projectiles[i]; p.age += dt; p.life -= dt;
     let dead = p.life <= 0;
     if (p.type === 'blue') {
-      p.u += p.speed * dt;
-      const target = p.target;
-      const distSamples = target.continuous - p.u;
-      const a = sampleAt(p.u), b = sampleAt(p.u + 1), fr = p.u - Math.floor(p.u);
-      p.mesh.position.lerpVectors(a, b, fr);
-      p.mesh.position.y = clamp(distSamples * 0.06, 1.1, 7.5);
-      p.mesh.rotation.y += dt * 3;
-      if (distSamples <= 3 || p.mesh.position.distanceTo(target.pos) < 6) { explodeBlue(p); dead = true; }
+      // Spin Team counterplay: an active horn (0.6 s window) swats the Suit out of the air
+      if (!dead) for (const o of karts) if (o.hornT > 0 && p.mesh.position.distanceToSquared(o.pos) < 190) {
+        spawnParticles(p.mesh.position, { count: 16, colors: [0xffd94a, 0xffffff], speed: 6, life: 0.5, up: 3, gravity: 0 });
+        if (o.isPlayer) showToast('📣 Antitrust Suit DENIED by the Spin Team!');
+        dead = true; break;
+      }
+      if (!dead) {
+        p.u += p.speed * dt;
+        const target = p.target;
+        const distSamples = target.continuous - p.u;
+        const a = sampleAt(p.u), b = sampleAt(p.u + 1), fr = p.u - Math.floor(p.u);
+        p.mesh.position.lerpVectors(a, b, fr);
+        p.mesh.position.y = clamp(distSamples * 0.06, 1.1, 7.5);
+        p.mesh.rotation.y += dt * 3;
+        if (distSamples <= 3 || p.mesh.position.distanceTo(target.pos) < 6) { explodeBlue(p); dead = true; }
+      }
     } else {
       if (p.type === 'red' && p.target) {
         const desired = Math.atan2(p.target.pos.x - p.mesh.position.x, p.target.pos.z - p.mesh.position.z);
@@ -908,6 +1040,7 @@ function updateProjectiles(dt) {
       if (Math.abs(lateralAt(p.mesh.position, idx)) > HALF_W + 2.5) dead = true;
       if (!dead) for (const o of karts) {
         if (o === p.owner && p.age < 0.4) continue;
+        if (o.ghostT > 0) continue; // Insider Trading ghost: projectiles pass straight through
         const dx = o.pos.x - p.mesh.position.x, dz = o.pos.z - p.mesh.position.z;
         if (dx * dx + dz * dz < 6.3) {
           if (o.starT <= 0) spinKart(o);
@@ -924,6 +1057,7 @@ function updateBananasAndCollisions(dt) {
     const b = bananas[i]; b.age += dt;
     for (const k of karts) {
       if (k === b.owner && b.age < 1.6) continue;
+      if (k.ghostT > 0) continue; // ghost floats over the leak — no breach
       const dx = k.pos.x - b.pos.x, dz = k.pos.z - b.pos.z;
       if (dx * dx + dz * dz < 4.6) {
         if (k.starT > 0) { spawnParticles(b.pos, { count: 10, colors: [0x2fb9ff, 0x9be7ff], speed: 4, life: 0.5, up: 3 }); }
@@ -941,6 +1075,8 @@ function updateBananasAndCollisions(dt) {
       B1.pos.x += nx * push; B1.pos.z += nz * push;
       if (A1.starT > 0 && B1.starT <= 0 && B1.starTouchCd <= 0) { spinKart(B1); B1.starTouchCd = 1; }
       if (B1.starT > 0 && A1.starT <= 0 && A1.starTouchCd <= 0) { spinKart(A1); A1.starTouchCd = 1; }
+      if (A1.bailoutT > 0 && B1.bailoutT <= 0 && B1.starTouchCd <= 0) { spinKart(B1); B1.starTouchCd = 1; } // bailed-out karts bulldoze
+      if (B1.bailoutT > 0 && A1.bailoutT <= 0 && A1.starTouchCd <= 0) { spinKart(A1); A1.starTouchCd = 1; }
     }
   }
 }
@@ -971,6 +1107,7 @@ function drawMinimap() {
 function showCenter(text, dur = 1.1) { $('center-msg').textContent = text; centerUntil = elapsed + dur; }
 function showToast(text, dur = 2.1) { const t = $('toast'); t.textContent = text; t.style.opacity = 1; toastUntil = elapsed + dur; }
 function showBark(text, dur = 2.6) { const b = $('bark'); b.textContent = text; b.style.opacity = 1; barkUntil = elapsed + dur; }
+function showInk(dur = 3) { $('ink-overlay').classList.remove('hidden'); inkUntil = elapsed + dur; } // Smear Campaign splat on the player's screen
 function updateItemSlot() {
   const p = playerKart(); if (!p) return;
   const slot = $('item-slot');
@@ -1245,6 +1382,7 @@ function animate() {
       }
       updateProjectiles(dt);
       updateBananasAndCollisions(dt);
+      updateBombs(dt);
       updateItemBoxes(dt);
       if (finishDelay > 0) { finishDelay -= dt; if (finishDelay <= 0) { finishDelay = -1; showResults(); } }
       A.engine(clamp(Math.abs(playerKart().speed) / 55, 0, 1), true);
@@ -1258,6 +1396,7 @@ function animate() {
     if (elapsed > centerUntil && $('center-msg').textContent) $('center-msg').textContent = '';
     if (elapsed > toastUntil) $('toast').style.opacity = 0;
     if (elapsed > barkUntil) $('bark').style.opacity = 0;
+    if (elapsed > inkUntil) $('ink-overlay').classList.add('hidden');
   }
   renderer.render(scene, camera);
   if (firstFrame) { firstFrame = false; $('loading').style.display = 'none'; }
@@ -1275,7 +1414,7 @@ window.BK = {
     const p = playerKart();
     return {
       state: gameState, paused, raceTime,
-      player: p ? { pos: [p.pos.x, p.pos.y, p.pos.z], continuous: p.continuous, speed: p.speed, lap: clamp(Math.floor(Math.max(p.continuous, 0) / N) + 1, 1, LAPS), rank: rankOf(p), finished: p.finished, finishTime: p.finishTime, item: p.item, heading: p.heading } : null,
+      player: p ? { pos: [p.pos.x, p.pos.y, p.pos.z], continuous: p.continuous, speed: p.speed, lap: clamp(Math.floor(Math.max(p.continuous, 0) / N) + 1, 1, LAPS), rank: rankOf(p), finished: p.finished, finishTime: p.finishTime, item: p.item, heading: p.heading, bailoutT: p.bailoutT, ghostT: p.ghostT, hornT: p.hornT, goldenT: p.goldenT, inkT: p.inkT } : null,
       karts: karts.map(k => ({ name: k.racer.name, continuous: k.continuous, speed: k.speed, finished: k.finished, pos: [k.pos.x, k.pos.z] })),
     };
   },

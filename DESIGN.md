@@ -71,6 +71,17 @@ last place gets the comeback kit.
 | Antitrust Suit | Blue Shell | Flies to 1st place, AoE explosion |
 | Viral Moment | Star | 6 s invincible, faster, knocks rivals |
 | Market Crash | Lightning | Slows + shrinks everyone ahead |
+| Spin Team | Super Horn | Shockwave: destroys projectiles/hazards nearby, spins adjacent karts; 0.6 s active window also kills an incoming Antitrust Suit — the hard counter blue-shell design requires. Weighted to positions 1–3 |
+| Pink Slip | Bob-omb | Dropped bomb, 1.6 s flashing/beeping fuse (or contact), AoE spin ~8.5 |
+| Smear Campaign | Blooper | Everyone ahead inked: AI wobble + slow 2.5 s; a human victim gets a 3 s screen splat |
+| Insider Trading | Boo | Steals a random holder's item (boost if none held) + 3 s intangible ghost |
+| Series F | Golden Mushroom | 5 s window; ITEM presses re-boost (0.7 s cd) |
+| Government Bailout | Bullet Bill | 7th/8th only (trace in 6th): auto-drives at 130%, bulldozes contacts, ends early at 3rd — carries you to mid-pack, never to the win |
+
+Balance rules baked into `rollItem`: 1st place draws defence only (Leak/Subpoena/Spin
+Team/Series A/Pink Slip) — no attack power items and no coin-style dud. No self-harm
+(Thundercloud-style) items exist. The Antitrust Suit is strong precisely because the
+Spin Team exists as its counter.
 
 ## Controls
 - **Keyboard:** WASD/arrows drive, Space item, Shift drift, R reset, P/Esc pause, M mute

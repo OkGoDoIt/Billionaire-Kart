@@ -20,6 +20,7 @@
 <!-- ============ HUD ============ -->
 <div id="hud" class="hidden">
   <div id="hud-left">
+    <img id="hud-portrait" alt="">
     <div id="pos-big">8<span id="pos-suffix">th</span></div>
     <div id="lap-label">LAP 1/3</div>
     <div id="time-label">0:00.0</div>
@@ -82,7 +83,7 @@
     </div>
 
     <h2 class="section-title">1 · Pick your mogul</h2>
-    <div id="racer-grid"></div>
+    <div id="select-wrap"><div id="racer-grid"></div><aside id="racer-detail"></aside></div>
 
     <h2 class="section-title">2 · Pick your track</h2>
     <div id="track-row">
@@ -169,6 +170,7 @@
 
 <div id="loading">Loading… if this sticks, check your connection (Three.js loads from CDN once, then it's cached offline).</div>
 
+<script src="portraits.js"></script>
 <script type="module" src="game.js"></script>
 </body>
 </html>

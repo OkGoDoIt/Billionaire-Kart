@@ -57,10 +57,20 @@ try {
   page.on('requestfailed', r => { if (!r.url().includes('sw.js')) errors.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`); });
 
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 90000 });
-  await page.waitForFunction(() => window.BK && document.querySelectorAll('.racer-card').length === 17, { timeout: 30000 });
+  await page.waitForFunction(() => window.BK && document.querySelectorAll('.racer-tile').length === 17, { timeout: 30000 });
   await new Promise(r => setTimeout(r, 2500)); // let the menu orbit render a few frames
   const menuState = await page.evaluate(() => BK.state());
   console.log('Menu state:', menuState.state, '| karts:', menuState.karts.length);
+  // Character Select v2: 17 portrait tiles, every tile has a data-URI portrait + radar, tap updates the detail panel
+  const csCheck = await page.evaluate(() => {
+    const tiles = document.querySelectorAll('.racer-tile');
+    const imgs = document.querySelectorAll('.racer-tile img.tile-portrait');
+    const radars = document.querySelectorAll('.racer-tile svg.radar');
+    tiles[5].click();
+    return { tiles: tiles.length, imgs: imgs.length, dataSrc: [...imgs].every(im => im.src.startsWith('data:image/')), radars: radars.length, detail: document.getElementById('detail-name')?.textContent || '' };
+  });
+  console.log('Character Select v2:', JSON.stringify(csCheck));
+  if (!(csCheck.tiles === 17 && csCheck.imgs === 17 && csCheck.dataSrc && csCheck.radars === 17 && csCheck.detail === 'Satya')) throw new Error('ASSERT FAILED: character select v2 checks ' + JSON.stringify(csCheck));
   await page.screenshot({ path: join(ROOT, 'screenshots/menu.png') });
   console.log('Saved screenshots/menu.png');
 
@@ -129,7 +139,7 @@ try {
   // sandbox and would keep networkidle2 from ever settling — disable SW in the bot.
   await page2.evaluateOnNewDocument(() => { if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.reject(new Error('bot: SW disabled')); });
   await page2.goto(url, { waitUntil: 'load', timeout: 120000 });
-  await page2.waitForFunction(() => window.BK && document.querySelectorAll('.racer-card').length === 17, { timeout: 90000 });
+  await page2.waitForFunction(() => window.BK && document.querySelectorAll('.racer-tile').length === 17, { timeout: 90000 });
   const schemeOk = await page2.evaluate(() => {
     const out = {};
     for (const s of ['buttons', 'stick1', 'sticks2', 'autog']) {

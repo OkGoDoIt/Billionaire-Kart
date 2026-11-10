@@ -1399,6 +1399,8 @@ function startRace() {
   $('screen-results').classList.add('hidden');
   $('screen-pause').classList.add('hidden');
   $('hud').classList.remove('hidden');
+  const hp = portraitOf(selectedRacer), hpEl = $('hud-portrait');
+  if (hp) { hpEl.src = hp; hpEl.style.display = 'block'; } else hpEl.style.display = 'none';
   touchUiSig = ''; refreshTouchUI();
   if (isTouchDevice()) $('btn-gyro').classList.remove('hidden');
   buildWorld(selectedTrack, sampleField()); // fresh random 7 opponents from the pool every race
@@ -1441,25 +1443,64 @@ function showResults() {
   $('results-title').textContent = myRank === 1 ? '🏆 YOU WIN!' : `🏁 You finished ${myRank}${SUFFIX[myRank]}`;
   const winner = rows[0].k;
   $('results-sub').innerHTML = `${winner.racer.name}: “${winner.racer.barks.win}”<br>Your time: <b>${p.finishTime != null ? fmtTime(p.finishTime) : 'DNF'}</b>${p.bestLap ? ` · Best lap: <b>${fmtTime(p.bestLap)}</b>` : ''} · ${TRACKS[selectedTrack].name}`;
-  $('results-table').innerHTML = '<tr><th>#</th><th>Racer</th><th>Time</th></tr>' + rows.map((r, i) =>
-    `<tr class="${r.k.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td>${r.k.racer.emoji} ${r.k.racer.name}</td><td>${fmtTime(r.t)}${r.proj ? ' est.' : ''}</td></tr>`).join('');
+  $('results-table').innerHTML = '<tr><th>#</th><th>Racer</th><th>Time</th></tr>' + rows.map((r, i) => {
+    const rp = portraitOf(r.k.racerIdx);
+    return `<tr class="${r.k.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td>${rp ? `<img class="res-portrait" src="${rp}" alt="">` : r.k.racer.emoji + ' '}${r.k.racer.name}</td><td>${fmtTime(r.t)}${r.proj ? ' est.' : ''}</td></tr>`;
+  }).join('');
   $('screen-results').classList.remove('hidden');
 }
 
 /* ================= MENU ================= */
+/* ---- Character Select v2: portrait tiles + radar stats + detail panel ---- */
+const PKEYS = ['elon', 'sam', 'zuck', 'bezos', 'jensen', 'satya', 'dario', 'demis', 'trump', 'cook', 'larrysergey', 'bill', 'thiel', 'holmes', 'ellison', 'murdoch', 'soros'];
+function portraitOf(i) { const P = window.BK_PORTRAITS || {}; return P[PKEYS[i]] || null; }
+function radarSVG(r) { // precomputed string per tile — triangle radar over faint 1..5 rings, zero runtime cost
+  const col = '#' + r.color.toString(16).padStart(6, '0');
+  const pt = (v, ang, cx = 32, cy = 30, R = 21) => { const rad = (ang - 90) * Math.PI / 180, d = v / 5 * R; return `${(cx + Math.cos(rad) * d).toFixed(1)},${(cy + Math.sin(rad) * d).toFixed(1)}`; };
+  const ring = f => [0, 120, 240].map(a => pt(5 * f, a)).join(' ');
+  const lab = (t, ang) => { const rad = (ang - 90) * Math.PI / 180; return `<text x="${(32 + Math.cos(rad) * 28).toFixed(1)}" y="${(30 + Math.sin(rad) * 27 + 2.5).toFixed(1)}" class="radar-lab">${t}</text>`; };
+  return `<svg class="radar" viewBox="0 0 64 60" aria-hidden="true"><polygon points="${ring(1)}" class="radar-ring"/><polygon points="${ring(0.66)}" class="radar-ring"/><polygon points="${ring(0.33)}" class="radar-ring"/><polygon points="${pt(r.spd, 0)} ${pt(r.acc, 120)} ${pt(r.grip, 240)}" fill="${col}" fill-opacity="0.55" stroke="${col}" stroke-width="1.6"/>${lab('S', 0)}${lab('A', 120)}${lab('G', 240)}</svg>`;
+}
+function traitOf(r) { // the special-trait line — every claim here matches a real mechanic in the physics/AI code
+  if (r.sputter) return '⚠️ SPECIAL: her kart randomly loses power mid-race. Vaporware drivetrain.';
+  if (r.duo) return '👥 SPECIAL: two drivers, one kart — they switch drivers instead of pit stops.';
+  if (r.consistent) return '🐢 SPECIAL: mistake-proof AI. Never spins out, never panics. The tortoise strategy.';
+  if ((r.aiSkill || 0) >= 1.06) return '👹 FINAL-BOSS CLASS: championship-grade AI when computer-controlled.';
+  if ((r.aiSkill || 0) >= 1.04) return '🔥 ELITE AI: a cut above the field when computer-controlled.';
+  if (r.name === 'Jensen') return '🟢 SPECIAL: orange drift boosts last longer — the more you race, the more you save.';
+  if (r.name === 'Dario') return '🦺 SPECIAL: charges drift boosts faster. Safety first, speed second.';
+  return '';
+}
+function updateDetail() {
+  const r = RACERS[selectedRacer], p = portraitOf(selectedRacer);
+  const bar = (label, v) => `<div class="stat-row"><span>${label}</span><div class="stat-track"><div class="stat-fill" style="width:${v / 5 * 100}%;background:#${r.color.toString(16).padStart(6, '0')}"></div></div></div>`;
+  const trait = traitOf(r);
+  $('racer-detail').innerHTML = `
+    ${p ? `<img class="detail-portrait" src="${p}" alt="${r.name} portrait">` : `<div class="detail-portrait detail-emoji" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>`}
+    <div class="detail-body">
+      <div class="detail-name" id="detail-name">${r.name}</div>
+      <div class="racer-title">${r.title}</div>
+      <div class="racer-quote">${r.quote}</div>
+      ${bar('SPEED', r.spd)}${bar('ACCEL', r.acc)}${bar('GRIP', r.grip)}
+      ${trait ? `<div class="detail-trait">${trait}</div>` : ''}
+    </div>`;
+}
 function buildMenu() {
   $('racer-grid').innerHTML = RACERS.map((r, i) => {
-    const bar = (label, v) => `<div class="stat-row"><span>${label}</span><div class="stat-track"><div class="stat-fill" style="width:${v / 5 * 100}%;background:#${r.color.toString(16).padStart(6, '0')}"></div></div></div>`;
-    return `<button class="racer-card ${i === selectedRacer ? 'selected' : ''}" data-racer="${i}">
-      <div class="racer-head"><div class="racer-chip" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>
-      <div><div class="racer-name">${r.name}</div><div class="racer-title">${r.title}</div></div></div>
-      <div class="racer-quote">${r.quote}</div>${bar('SPEED', r.spd)}${bar('ACCEL', r.acc)}${bar('GRIP', r.grip)}</button>`;
+    const p = portraitOf(i);
+    return `<button class="racer-tile ${i === selectedRacer ? 'selected' : ''}" data-racer="${i}">
+      ${p ? `<img class="tile-portrait" src="${p}" alt="" loading="lazy">` : `<div class="tile-portrait tile-emoji" style="background:#${r.color.toString(16).padStart(6, '0')}">${r.emoji}</div>`}
+      <div class="tile-name">${r.name}</div><div class="tile-title">${r.title}</div>
+      <div class="tile-viz">${radarSVG(r)}<div class="tile-pips">S${r.spd} · A${r.acc} · G${r.grip}</div></div>
+    </button>`;
   }).join('');
-  document.querySelectorAll('.racer-card').forEach(card => card.addEventListener('click', () => {
-    selectedRacer = parseInt(card.dataset.racer);
-    document.querySelectorAll('.racer-card').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.racer) === selectedRacer));
+  document.querySelectorAll('.racer-tile').forEach(tile => tile.addEventListener('click', () => {
+    selectedRacer = parseInt(tile.dataset.racer);
+    document.querySelectorAll('.racer-tile').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.racer) === selectedRacer));
+    updateDetail();
     buildWorld(selectedTrack);
   }));
+  updateDetail();
   document.querySelectorAll('.track-card').forEach(card => card.addEventListener('click', () => {
     selectedTrack = parseInt(card.dataset.track);
     document.querySelectorAll('.track-card').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.track) === selectedTrack));

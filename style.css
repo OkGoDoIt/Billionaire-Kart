@@ -128,6 +128,7 @@ h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95;
 .logo-kart span { color:var(--lc); }
 .logo-ribbon { position:absolute; right:-12px; bottom:-15px; transform:rotate(-6deg); font-family:var(--font-display); font-size:clamp(14px,3.2vw,23px); letter-spacing:.05em; white-space:nowrap; }
 .tap-start { margin-top:30px; font-size:clamp(19px,4.4vw,27px); color:var(--yellow); animation:tappulse 1.2s ease-in-out infinite; }
+.title-hero .tagline { margin-top:30px; } /* clear the lockup ribbon cocked over its bottom-right */
 @keyframes tappulse { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.06) } }
 .hero-corners { position:absolute; left:16px; right:16px; bottom:12px; display:flex; justify-content:space-between; font-size:11px; font-weight:600; letter-spacing:.06em; color:rgba(255,255,255,.78); text-shadow:0 1px 0 rgba(10,10,20,.5); pointer-events:none; }
 @media (prefers-reduced-motion: reduce) { .tap-start { animation:none; } .logo-lockup { animation:none; } }
@@ -306,7 +307,7 @@ body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; le
 @keyframes powfade { 0%{ opacity:0 } 15%{ opacity:1 } 80%{ opacity:1 } 100%{ opacity:0 } }
 /* Rev meter (§2.4): slim pill under the countdown numeral; fill sweeps with
    held throttle, green sweet-spot band marks the rocket-start window. */
-#rev-meter { position:absolute; top:51%; left:50%; transform:translateX(-50%); width:196px; height:17px; border-radius:999px; background:rgba(10,14,30,.68); border:3px solid var(--ink-pure); box-shadow:0 3px 0 rgba(10,10,20,.5), inset 0 2px 0 rgba(255,255,255,.22); overflow:hidden; }
+#rev-meter { position:absolute; top:49.5%; left:50%; transform:translateX(-50%); width:196px; height:19px; border-radius:999px; background:rgba(10,14,30,.68); border:3px solid var(--ink-pure); box-shadow:0 3px 0 rgba(10,10,20,.5), inset 0 2px 0 rgba(255,255,255,.22); overflow:hidden; }
 #rev-zone { position:absolute; top:0; bottom:0; left:19.6%; width:54.3%; background:rgba(0,200,83,.45); border-inline:2px solid rgba(255,255,255,.65); }
 #rev-fill { position:absolute; top:0; bottom:0; left:0; width:0%; background:linear-gradient(180deg,var(--yellow-soft),#ffb300); transition:width .05s linear; }
 #rev-meter.sweet #rev-fill { background:linear-gradient(180deg,#7dff8a,#00c853); }

@@ -57,10 +57,20 @@ try {
   page.on('requestfailed', r => { if (!r.url().includes('sw.js')) errors.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`); });
 
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 90000 });
-  await page.waitForFunction(() => window.BK && document.querySelectorAll('.racer-card').length === 17, { timeout: 30000 });
+  await page.waitForFunction(() => window.BK && document.querySelectorAll('.racer-tile').length === 17, { timeout: 30000 });
   await new Promise(r => setTimeout(r, 2500)); // let the menu orbit render a few frames
   const menuState = await page.evaluate(() => BK.state());
   console.log('Menu state:', menuState.state, '| karts:', menuState.karts.length);
+  // Character Select v2: 17 portrait tiles, every tile has a data-URI portrait + radar, tap updates the detail panel
+  const csCheck = await page.evaluate(() => {
+    const tiles = document.querySelectorAll('.racer-tile');
+    const imgs = document.querySelectorAll('.racer-tile img.tile-portrait');
+    const radars = document.querySelectorAll('.racer-tile svg.radar');
+    tiles[5].click();
+    return { tiles: tiles.length, imgs: imgs.length, dataSrc: [...imgs].every(im => im.src.startsWith('data:image/')), radars: radars.length, detail: document.getElementById('detail-name')?.textContent || '' };
+  });
+  console.log('Character Select v2:', JSON.stringify(csCheck));
+  if (!(csCheck.tiles === 17 && csCheck.imgs === 17 && csCheck.dataSrc && csCheck.radars === 17 && csCheck.detail === 'Satya')) throw new Error('ASSERT FAILED: character select v2 checks ' + JSON.stringify(csCheck));
   await page.screenshot({ path: join(ROOT, 'screenshots/menu.png') });
   console.log('Saved screenshots/menu.png');
 
@@ -109,6 +119,97 @@ try {
   await waitRaceTime(20);
   const s1 = await page.evaluate(() => BK.state());
   console.log('Final (t=%ss): player continuous = %s, lap %s, rank %s, finished %s', s1.raceTime.toFixed(1), s1.player.continuous.toFixed(1), s1.player.lap, s1.player.rank, s1.player.finished);
+
+  // ---- Mobile viewport (932x430 iPhone landscape) + Control Lab smoke ----
+  await page.close(); // page 1's race keeps burning SwiftShader CPU and starves page 2's load
+  // Fresh browser context: page 1 registered the PWA service worker, which would
+  // otherwise control this page's navigation too and break the CDN module import.
+  const ctx2 = await browser.createBrowserContext();
+  const page2 = await ctx2.newPage();
+  await page2.setRequestInterception(true);
+  page2.on('request', r => {
+    if (r.url().includes('cdn.jsdelivr.net/npm/three@')) r.respond({ status: 200, contentType: 'text/javascript; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: threeCode });
+    else r.continue();
+  });
+  page2.on('console', m => { if (m.type() === 'error') errors.push(`[mobile console] ${m.text()}`); });
+  page2.on('pageerror', e => errors.push(`[mobile pageerror] ${e.message}`));
+  page2.on('requestfailed', r => { if (!r.url().includes('sw.js')) errors.push(`[mobile requestfailed] ${r.url()}`); });
+  await page2.emulate({ viewport: { width: 932, height: 430, isMobile: true, hasTouch: true, isLandscape: true }, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' });
+  // The SW's stale-while-revalidate spawns background CDN fetches that hang in the
+  // sandbox and would keep networkidle2 from ever settling — disable SW in the bot.
+  await page2.evaluateOnNewDocument(() => { if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.reject(new Error('bot: SW disabled')); });
+  await page2.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page2.waitForFunction(() => window.BK && document.querySelectorAll('.racer-tile').length === 17, { timeout: 90000 });
+  const schemeOk = await page2.evaluate(() => {
+    const out = {};
+    for (const s of ['buttons', 'stick1', 'sticks2', 'autog']) {
+      document.querySelector(`#screen-menu [data-scheme="${s}"]`).click();
+      out[s] = document.body.dataset.scheme === s && localStorage.getItem('bk_touch_scheme') === s;
+    }
+    document.querySelector('.smart-btn').click(); // auto -> on
+    out.smart = localStorage.getItem('bk_smart_steer') === 'on';
+    document.querySelector('.smart-btn').click(); document.querySelector('.smart-btn').click(); // back to auto
+    document.querySelector('.adrift-btn').click(); // auto -> on
+    out.adrift = localStorage.getItem('bk_auto_drift') === 'on';
+    document.querySelector('.adrift-btn').click(); document.querySelector('.adrift-btn').click(); // back to auto
+    return out;
+  });
+  console.log('Control Lab scheme switching + persistence:', JSON.stringify(schemeOk));
+  if (!Object.values(schemeOk).every(Boolean)) throw new Error('ASSERT FAILED: scheme switching/persistence');
+  const stickFire = (type, x, y, id = 42) => page2.evaluate((t, cx, cy, pid) => {
+    document.getElementById('stick-layer').dispatchEvent(new PointerEvent(t, { pointerId: pid, clientX: cx, clientY: cy, bubbles: true, pointerType: 'touch', isPrimary: true }));
+  }, type, x, y, id);
+  // Scheme 2 (One-Thumb Stick): press right side, drag up = throttle
+  await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="stick1"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
+  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+  await stickFire('pointerdown', 700, 215);
+  await stickFire('pointermove', 700, 140);
+  await page2.waitForFunction(() => BK.state().player.speed > 6, { timeout: 30000, polling: 300 });
+  console.log('One-Thumb Stick: drag-up produced speed ✓');
+  await page2.screenshot({ path: join(ROOT, 'screenshots/mobile.png') });
+  console.log('Saved screenshots/mobile.png (932x430 landscape)');
+  await stickFire('pointerup', 700, 140);
+  // One-Thumb: a tap on the LEFT zone fires the item (down+up in one evaluate so the tap window is deterministic)
+  const tapFire = (x, y, id) => page2.evaluate((cx, cy, pid) => {
+    const el = document.getElementById('stick-layer');
+    const o = { pointerId: pid, clientX: cx, clientY: cy, bubbles: true, pointerType: 'touch', isPrimary: true };
+    el.dispatchEvent(new PointerEvent('pointerdown', o)); el.dispatchEvent(new PointerEvent('pointerup', o));
+  }, x, y, id);
+  await page2.evaluate(() => BK.giveItem('boost'));
+  await tapFire(150, 215, 43);
+  if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: stick1 left-zone tap did not fire the item');
+  console.log('One-Thumb Stick: left-zone tap fired item ✓');
+  // Scheme 4 (Auto-Gas): tap gestures fire items; the kart also accelerates by itself
+  await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="autog"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
+  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+  await stickFire('pointerdown', 300, 215, 50);
+  await stickFire('pointermove', 345, 215, 50); // steering finger holds a line
+  await page2.evaluate(() => BK.giveItem('boost'));
+  await tapFire(760, 150, 51); // second finger taps
+  if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: autog second-finger tap did not fire item');
+  await stickFire('pointerup', 345, 215, 50);
+  await page2.evaluate(() => BK.giveItem('boost'));
+  await tapFire(500, 200, 52); // lone tap while not steering
+  if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: autog lone tap did not fire item');
+  console.log('Auto-Gas: second-finger tap + lone tap both fired item ✓');
+  await page2.waitForFunction(() => BK.state().player.speed > 6, { timeout: 30000, polling: 300 });
+  console.log('Auto-Gas: kart accelerated with zero throttle input ✓');
+  // Scheme 3 (Pedal & Stick): right-side hold = instant gas; flick up = item
+  await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="sticks2"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
+  await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+  await stickFire('pointerdown', 700, 215, 77);
+  await page2.waitForFunction(() => BK.state().player.speed > 6, { timeout: 30000, polling: 300 });
+  console.log('Pedal & Stick: right-side hold = gas ✓');
+  await page2.evaluate(() => BK.giveItem('boost'));
+  await page2.evaluate(() => { // two quick moves = a 65px upward flick inside one frame batch
+    const el = document.getElementById('stick-layer');
+    const mk = y => el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 77, clientX: 700, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true }));
+    mk(210); mk(145);
+  });
+  if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: pedal flick-up did not fire item');
+  console.log('Pedal & Stick: flick-up fired item ✓');
+  await stickFire('pointerup', 700, 215, 77);
+  await page2.close();
 
   // ---- assertions ----
   const assert = (cond, msg) => { if (!cond) throw new Error('ASSERT FAILED: ' + msg); };

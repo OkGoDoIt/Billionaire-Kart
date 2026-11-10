@@ -99,4 +99,82 @@ Spin Team exists as its counter.
 - Track = closed Catmull-Rom spline; arcade physics sampled against the spline
   (nearest-sample progress, lateral offset for off-road/walls) — robust, no physics
   engine, 60 fps on phones.
-- Two tracks: **Silicon Valley GP** (day, green) and **Mars GP** (sunset, red dust).
+- Tracks so far: **Silicon Valley GP** (day, green) and **Mars GP** (sunset, red dust).
+
+## Track roadmap & the equal-effort dressing rule
+
+**Rule (user directive):** every track gets EQUAL effort. No bare layouts — each
+track ships with a full themed dressing pack: a signature set piece, a signage
+pack, and at least one animated/living element. Geometry always stays wide, flat
+and playable; the satire is set dressing, never physics. (Version numbers follow
+build order; the v1.2 fun pass inserted itself ahead of the track phases.)
+
+**Shipped:** Silicon Valley GP · Mars GP (dressing pass queued in Batch 1 — not forgotten).
+
+**Batch 1 (next track phase):**
+- **AI Datacenter GP** — desert rounded-rect ring with two chicanes. Colossal
+  datacenter complex, cooling towers with steam, gas-turbine plant ("DEDICATED GAS
+  PLANT — FOR AI") with smoke plumes, protest corner ("WE WANT OUR LAKE BACK"),
+  power lines to the horizon, a LIVE water counter billboard ("WATER GULPED:
+  12,483,910 GAL" counting up, "POWER DRAW: 1.21 GW"), and a lake that visibly
+  DRAINS across the player's 3 laps. Signs: "YOUR PROMPTS, OUR RIVER", "NOW
+  COOLING: 40,000 HOMES' AC", "JOBS CREATED: 4 (SECURITY)".
+  - **Amendment (user):** part of the course drives THROUGH the datacenter — one
+    straight is an indoor server hall: rack rows with blinking LEDs lining both
+    sides of the road, overhead cable trays, a ~14-unit ceiling, cooler interior
+    lighting, signs "COLD AISLE", "HOT AISLE 🔥", "DO NOT UNPLUG", "PLEASE STOP
+    TAKING SELFIES WITH THE RACKS", a small security-robot prop. Road stays
+    standard width/flat; racks keep off-road clearance; LEDs are one shared
+    pulsing emissive material (cheap).
+- **International Waters GP** — boardwalk oval over turquoise water. Superyachts
+  dwarfing the track ("S.S. EXTRADITION DENIED"; Ellison's slightly bigger than
+  Murdoch's, which is covered in satellite dishes — "ALL NEWS, ALL MINE"), start
+  buoy "12 NAUTICAL MILES — BEYOND THIS POINT TAXES ARE A SOCIAL CONSTRUCT",
+  seastead platform "NO LAWS, JUST VIBES", crypto-only ATM.
+- **White House GP** (user-approved, joins Batch 1) — National Mall loop: long
+  straights along the Reflecting Pool (the top-speed/item-duel section), a hairpin
+  at the memorial end, a loop around the White House grounds. Signature set piece:
+  **the Ballroom construction zone** — cranes, scaffolding, fencing, excavators,
+  rubble where the East Wing was, giant sign "COMING SOON: BALLROOM — $300M
+  (PRIVATELY FUNDED, ALLEGEDLY)", gold trim everywhere (gold scaffolding rails,
+  gold porta-cabin), "PARDON OUR GOLD DUST". The Reflecting Pool is algae-green:
+  "NO SWIMMING — ALGAE", "POOL CLOSED (FOREVER?)", ducks looking worse for wear
+  (one in a tiny hazmat suit if cheap). Extras: tour-group crowd blobs, "EAST WING
+  (DEMOLISHED) →" sign, gold-roped VIP stand, press-pool cameras at the fence.
+- **Dressing passes:** Silicon Valley GP (startup graveyard: THERANOS / QUIBI /
+  GOOGLE GLASS / METAVERSE LEGS 2022–2022; billboards "RIP PROP 40 💀", "WE SPENT
+  $100M ON THIS BILLBOARD", "NEVADA: 0% TAX, 100% TUMBLEWEED") · Mars GP
+  (departures board "EARTH: DO NOT RETURN", pickets "WE WERE PROMISED JETPACKS",
+  roadster with "DON'T PANIC" plate, "MARS WATER $18" stand).
+
+**Batch 2:**
+- **Bliss GP** (Windows XP) — user spec, treat as gospel: rolling green hills like
+  the "Bliss" wallpaper, one big sculpted green hill as centerpiece, vivid blue
+  sky, puffy clouds; the track loops around/past the hill on flat ground (hills
+  are sculpted meshes only). SIGNATURE SHOT: the start grid frames hill + sky +
+  clouds like the wallpaper for the countdown camera (and the menu preview);
+  chase cam after GO. XP sprinkles: green "start" gantry, Clippy with "It looks
+  like you're trying to race!", error-dialog billboards ("Your kart has performed
+  an illegal operation"), BSOD-blue grandstand, flower patches in
+  Minesweeper/Solitaire colours, and the gentle 4-note XP chime on race start —
+  this track only. Tone: calm, pretty — the breather track; satire stays gentle.
+- **Boring Tunnel** · **Davos Circuit** (specs TBD at build time, equal-effort rule applies).
+
+**Batch 3 (user-confirmed slate):**
+- **Metaverse Plaza** (confirmed — not forgotten).
+- **WeWork Memorial GP** (user loves it — confirmed).
+- **Burning Man GP** (user loves it — confirmed).
+- **Bahamas Crypto GP** (user-approved) — Nassau beachfront loop. Abandoned
+  FTX/Alameda beachfront offices, "BACK SOON (COURT-ORDERED)" sign + tumbleweed;
+  "EFFECTIVE ALTRUISM CONFERENCE CENTRE" with one folding chair; crypto-exchange
+  HQ row with half the nameplates blank; a penthouse balcony prop; signs "YOUR
+  KEYS, OUR PROBLEM" / "RESERVES: TRUST US"; an extradition-hearing courthouse
+  postcard stand.
+
+**Held (do not build yet):**
+- **Gulfstream 500 / private-jet track** — interesting to the user, needs refinement first.
+
+**Ideas backlog (parked — return only on explicit re-approval):**
+- **HOA GP** · **Salar de Uyuni GP** · **Disclosure GP** — user didn't get them.
+- **Tax Haven GP** (generic Cayman) — MERGED into Bahamas Crypto GP (same joke
+  family; Bahamas has the specific FTX material). Un-merge only if the user asks.

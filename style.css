@@ -1,0 +1,101 @@
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { width:100%; height:100%; overflow:hidden; background:#0b1026; font-family:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif; color:#fff; }
+#game-canvas { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+.hidden { display:none !important; }
+button { font-family:inherit; cursor:pointer; }
+
+/* ---------- HUD ---------- */
+#hud { position:fixed; inset:0; pointer-events:none; z-index:5; }
+#hud-left { position:absolute; top:14px; left:16px; text-shadow:0 2px 8px rgba(0,0,0,.7); }
+#pos-big { font-size:64px; font-weight:900; font-style:italic; line-height:.95; }
+#pos-suffix { font-size:30px; }
+#lap-label { font-size:20px; font-weight:800; letter-spacing:1px; margin-top:2px; }
+#time-label { font-size:16px; font-weight:600; opacity:.92; font-variant-numeric:tabular-nums; }
+#best-lap-label { font-size:13px; opacity:.75; font-variant-numeric:tabular-nums; }
+#hud-right { position:absolute; top:12px; right:12px; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+#minimap { background:rgba(5,10,25,.55); border-radius:14px; border:2px solid rgba(255,255,255,.25); }
+#standings { background:rgba(5,10,25,.55); border-radius:10px; padding:6px 10px; font-size:13px; font-weight:700; line-height:1.5; min-width:158px; font-variant-numeric:tabular-nums; }
+#standings .me { color:#ffd94a; }
+#standings .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+#hud-bottom { position:absolute; right:18px; bottom:16px; text-align:right; text-shadow:0 2px 8px rgba(0,0,0,.7); }
+#speed-num { font-size:52px; font-weight:900; font-style:italic; font-variant-numeric:tabular-nums; }
+#speed-unit { font-size:16px; font-weight:800; margin-left:5px; }
+#drift-wrap { margin-top:4px; }
+#drift-bar { width:170px; height:10px; background:rgba(255,255,255,.22); border-radius:6px; overflow:hidden; margin-left:auto; }
+#drift-fill { height:100%; width:0%; background:#6cf; border-radius:6px; transition:background .15s; }
+#drift-label { font-size:11px; font-weight:800; letter-spacing:2px; opacity:.8; margin-top:2px; }
+#item-slot { position:absolute; left:16px; bottom:16px; width:92px; height:92px; background:rgba(5,10,25,.6); border:3px solid rgba(255,255,255,.4); border-radius:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+#item-slot.has-item { border-color:#ffd94a; box-shadow:0 0 22px rgba(255,217,74,.45); }
+#item-icon { font-size:42px; line-height:1; }
+#item-name { font-size:10px; font-weight:800; text-align:center; padding:2px 4px 0; letter-spacing:.3px; }
+#top-btns { position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; }
+.icon-btn { width:44px; height:44px; border-radius:50%; border:2px solid rgba(255,255,255,.35); background:rgba(5,10,25,.6); font-size:20px; color:#fff; }
+#wrong-way { position:absolute; top:22%; left:50%; transform:translateX(-50%); font-size:34px; font-weight:900; color:#ff5252; text-shadow:0 2px 10px #000; animation:blink .5s infinite alternate; }
+@keyframes blink { from{opacity:1} to{opacity:.35} }
+#center-msg { position:absolute; top:30%; left:50%; transform:translate(-50%,-50%); font-size:84px; font-weight:900; font-style:italic; text-align:center; text-shadow:0 4px 24px rgba(0,0,0,.8); white-space:nowrap; }
+#toast { position:absolute; top:16%; left:50%; transform:translateX(-50%); font-size:26px; font-weight:900; text-align:center; text-shadow:0 2px 12px #000; opacity:0; transition:opacity .25s; white-space:nowrap; }
+#bark { position:absolute; bottom:19%; left:50%; transform:translateX(-50%); max-width:86vw; background:rgba(255,255,255,.94); color:#14213d; font-size:17px; font-weight:700; padding:9px 16px; border-radius:16px; opacity:0; transition:opacity .25s; text-align:center; }
+#bark:after { content:""; position:absolute; left:50%; bottom:-8px; transform:translateX(-50%); border:9px solid transparent; border-top-color:rgba(255,255,255,.94); border-bottom:0; }
+
+/* ---------- Touch controls ---------- */
+#touch-controls { position:fixed; inset:auto 0 0 0; z-index:6; display:flex; justify-content:space-between; padding:0 12px calc(108px + env(safe-area-inset-bottom)) 12px; pointer-events:none; }
+.tc-cluster { display:flex; gap:12px; align-items:flex-end; pointer-events:auto; }
+.tc-btn { width:74px; height:74px; border-radius:50%; border:2px solid rgba(255,255,255,.5); background:rgba(10,16,40,.55); color:#fff; font-size:24px; font-weight:900; touch-action:none; user-select:none; -webkit-user-select:none; }
+.tc-btn.active { background:rgba(255,217,74,.75); color:#14213d; }
+.tc-small { width:62px; height:62px; font-size:13px; }
+.tc-gas { width:88px; height:88px; background:rgba(46,160,67,.55); }
+.tc-brake { background:rgba(200,50,50,.5); font-size:15px; }
+@media (pointer:fine) { #touch-controls { display:none !important; } }
+
+/* ---------- Screens ---------- */
+.screen { position:fixed; inset:0; z-index:10; overflow-y:auto; background:linear-gradient(160deg,#0b1026 0%,#1b2a6b 55%,#5b2a86 130%); }
+#screen-pause, #screen-results { background:rgba(4,8,22,.72); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.menu-inner { max-width:880px; margin:0 auto; padding:28px 18px 60px; }
+.title-block { text-align:center; margin-bottom:8px; }
+.title-kicker { font-size:13px; font-weight:800; letter-spacing:2px; color:#ffd94a; }
+h1 { font-size:min(17vw,96px); font-weight:900; font-style:italic; line-height:.92; background:linear-gradient(180deg,#fff 20%,#ffd94a 55%,#ff7b3a); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 4px 0 rgba(0,0,0,.35)); }
+.tagline { font-size:19px; font-weight:700; opacity:.95; margin-top:8px; }
+.section-title { font-size:17px; font-weight:900; letter-spacing:1px; margin:26px 0 10px; color:#aee2ff; }
+#racer-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(196px,1fr)); gap:10px; }
+.racer-card { text-align:left; border:3px solid rgba(255,255,255,.18); background:rgba(255,255,255,.07); border-radius:16px; padding:12px; color:#fff; transition:transform .1s, border-color .1s; }
+.racer-card:hover { transform:translateY(-2px); }
+.racer-card.selected { border-color:#ffd94a; background:rgba(255,217,74,.14); box-shadow:0 0 18px rgba(255,217,74,.3); }
+.racer-head { display:flex; align-items:center; gap:9px; }
+.racer-chip { width:38px; height:38px; border-radius:50%; font-size:21px; display:flex; align-items:center; justify-content:center; flex:none; border:2px solid rgba(255,255,255,.6); }
+.racer-name { font-size:19px; font-weight:900; }
+.racer-title { font-size:12px; font-weight:700; opacity:.85; }
+.racer-quote { font-size:12.5px; font-style:italic; opacity:.92; margin:7px 0 8px; min-height:30px; }
+.stat-row { display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:800; letter-spacing:.5px; margin-top:3px; }
+.stat-row span { width:44px; opacity:.8; }
+.stat-track { flex:1; height:7px; background:rgba(255,255,255,.18); border-radius:4px; overflow:hidden; }
+.stat-fill { height:100%; border-radius:4px; }
+#track-row { display:flex; gap:10px; flex-wrap:wrap; }
+.track-card { flex:1; min-width:230px; border:3px solid rgba(255,255,255,.18); background:rgba(255,255,255,.07); border-radius:16px; padding:14px; color:#fff; display:flex; flex-direction:column; gap:3px; text-align:left; }
+.track-card.selected { border-color:#ffd94a; background:rgba(255,217,74,.14); }
+.track-emoji { font-size:30px; } .track-name { font-size:19px; font-weight:900; } .track-desc { font-size:13px; opacity:.85; }
+#diff-row { display:flex; gap:10px; flex-wrap:wrap; }
+.diff-btn { flex:1; min-width:120px; padding:12px; font-size:17px; font-weight:800; border-radius:14px; border:3px solid rgba(255,255,255,.18); background:rgba(255,255,255,.07); color:#fff; }
+.diff-btn.selected { border-color:#ffd94a; background:rgba(255,217,74,.14); }
+#btn-start { display:block; width:100%; margin-top:30px; padding:19px; font-size:27px; font-weight:900; font-style:italic; letter-spacing:1px; color:#14213d; background:linear-gradient(180deg,#ffe066,#ffa53a); border:0; border-radius:18px; box-shadow:0 6px 0 #b25f12, 0 12px 28px rgba(0,0,0,.4); }
+#btn-start:active { transform:translateY(3px); box-shadow:0 3px 0 #b25f12; }
+#best-info, #pad-info { text-align:center; margin-top:12px; font-size:14px; font-weight:600; opacity:.85; }
+.help-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; margin-top:26px; }
+.help-box { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:13px 15px; font-size:13.5px; line-height:1.55; }
+.help-box h3 { font-size:14.5px; margin-bottom:6px; color:#ffd94a; }
+.footer-note { text-align:center; font-size:12px; opacity:.6; margin-top:22px; }
+.panel { background:rgba(10,16,40,.92); border:2px solid rgba(255,255,255,.2); border-radius:22px; padding:28px; width:min(92vw,480px); text-align:center; max-height:92vh; overflow-y:auto; }
+.panel h2 { font-size:32px; font-weight:900; font-style:italic; margin-bottom:14px; }
+.big-btn { display:block; width:100%; margin-top:10px; padding:14px; font-size:18px; font-weight:800; border-radius:14px; border:2px solid rgba(255,255,255,.25); background:rgba(255,255,255,.1); color:#fff; }
+.big-btn:hover { background:rgba(255,217,74,.25); }
+#results-sub { font-size:15px; font-weight:700; opacity:.9; margin-bottom:8px; }
+#results-table { width:100%; border-collapse:collapse; font-size:15px; font-variant-numeric:tabular-nums; }
+#results-table td, #results-table th { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,.12); text-align:left; }
+#results-table tr.me td { color:#ffd94a; font-weight:900; }
+#loading { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); z-index:20; background:rgba(0,0,0,.7); padding:8px 14px; border-radius:10px; font-size:13px; }
+@media (max-width:640px) {
+  #pos-big { font-size:44px; } #pos-suffix{font-size:20px;} #lap-label{font-size:15px;}
+  #minimap { width:104px; height:104px; } #standings { display:none; }
+  #speed-num { font-size:36px; } #item-slot { width:72px; height:72px; bottom:auto; top:120px; } #item-icon{font-size:32px;}
+  #center-msg { font-size:52px; } #toast { font-size:19px; top:13%; } #bark{font-size:14px; bottom:26%;}
+  #drift-bar { width:110px; }
+}

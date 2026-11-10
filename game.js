@@ -64,9 +64,16 @@ const RACERS = [
 /* ================= TRACKS ================= */
 const TRACKS = [
   { name: 'Silicon Valley GP', sky: 0x87c9eb, fog: 0xa8d4f0, ground: 0x57a047, roadSeed: 1, skyKey: 'valley', fogKey: 'valleyDay',
-    points: [[0,-260],[150,-215],[235,-110],[205,10],[265,110],[170,205],[40,245],[-95,205],[-215,225],[-265,105],[-215,-15],[-255,-130],[-140,-215]] },
+    points: [[0,-260],[150,-215],[235,-110],[205,10],[265,110],[170,205],[40,245],[-95,205],[-215,225],[-265,105],[-215,-15],[-255,-130],[-140,-215]],
+    // HAND-AUTHORED profiles (docs/track-design-silicon-valley.md) — keyframes [u, value]:
+    // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT turn).
+    elev: [[0, 0], [0.10, 0.5], [0.20, 2.0], [0.30, 3.0], [0.36, 4.5], [0.44, 9.0], [0.50, 13.0], [0.56, 11.0], [0.615, 4.0], [0.66, 5.0], [0.70, 7.5], [0.76, 4.5], [0.83, 3.0], [0.90, 1.0], [0.96, 0]],
+    bank: [[0, 0], [0.08, 3], [0.171, 11], [0.205, 0], [0.240, -11], [0.272, 0], [0.303, 14], [0.40, 0], [0.466, 7], [0.505, 0], [0.544, -8], [0.578, 0], [0.610, 13], [0.65, 0], [0.692, 9], [0.728, 0], [0.764, -10], [0.797, 0], [0.830, 13], [0.915, 0]] },
   { name: 'Mars GP', sky: 0xe8906a, fog: 0xe8a37c, ground: 0xa5502f, roadSeed: 2, skyKey: 'mars', fogKey: 'marsSunset',
-    points: [[0,-240],[190,-190],[250,-40],[150,60],[230,170],[90,250],[-60,205],[-170,255],[-260,140],[-190,20],[-265,-90],[-170,-190],[-70,-160]] },
+    points: [[0,-240],[190,-190],[250,-40],[150,60],[230,170],[90,250],[-60,205],[-170,255],[-260,140],[-190,20],[-265,-90],[-170,-190],[-70,-160]],
+    // HAND-AUTHORED profiles (docs/track-design-mars.md) — same conventions as above.
+    elev: [[0, 0], [0.06, 0], [0.12, 0.8], [0.198, 3.0], [0.24, 4.5], [0.272, 6.0], [0.31, 8.5], [0.343, 11.0], [0.40, 12.0], [0.438, 10.0], [0.48, 6.0], [0.519, 2.0], [0.55, -3.0], [0.59, 1.0], [0.63, 3.5], [0.666, 6.0], [0.70, 8.0], [0.739, 5.0], [0.808, 6.5], [0.85, 5.0], [0.889, 3.5], [0.92, 1.2], [0.95, 0]],
+    bank: [[0, 4], [0.02, 0], [0.106, 5], [0.15, 0], [0.198, 11], [0.235, 0], [0.272, -13], [0.307, 0], [0.343, 14], [0.39, 0], [0.438, 8], [0.478, 0], [0.519, -10], [0.55, 0], [0.580, 12], [0.623, 0], [0.666, 11], [0.702, 0], [0.739, -12], [0.773, 0], [0.808, 12], [0.848, 0], [0.889, 11], [0.915, 0], [0.942, -12], [0.975, 0], [0.985, 0]] },
   datacenterDef, watersDef, whitehouseDef,
   META_TRACK, WEWORK_TRACK, BURNING_TRACK, BAHAMAS_TRACK,
 ];
@@ -204,6 +211,7 @@ const N = 900, HALF_W = 11;
 let LAPS = 3; // mutable so the sim harness can run shorter races (BK.setLaps)
 let renderer, scene, camera, sunLight, hemiLight, post = null;
 let curve, samples = [], tangents = [], normals = [], segLen = 1.8, trackCenter = new THREE.Vector3();
+let elevArr = [], bankArr = [], rollNormals = []; // TRACK 3D: per-sample authored elevation (m), banking (rad), rolled road normals
 let karts = [], bananas = [], projectiles = [], itemBoxes = [], clouds = [], bombs = [];
 let gameState = 'menu'; // menu | countdown | racing | finished
 let paused = false, raceTime = 0, countdownT = 0, lastCount = 99, finishDelay = -1, playerFinishedAt = 0;
@@ -314,6 +322,57 @@ function lateralAt(pos, idx) {
   return (pos.x - s.x) * n.x + (pos.z - s.z) * n.z;
 }
 
+/* ================= TRACK 3D: AUTHORED ELEVATION + BANKING =================
+   The profiles in TRACKS[].elev / TRACKS[].bank are HAND-AUTHORED design data
+   (see docs/track-design-*.md): keyframes [u, value] placed at designed
+   corners and sectors for racing reasons. This machinery only interpolates
+   them — circular monotone cubic (Fritsch–Carlson), so slopes are continuous
+   and heights/banks never overshoot what the designer wrote. A track def
+   without keyframes (the not-yet-wired module tracks) samples as flat 0
+   until its own design pass authors a profile. */
+function profileSampler(keyframes) {
+  if (!keyframes || keyframes.length < 2) return () => 0;
+  const kf = [...keyframes].sort((a, b) => a[0] - b[0]);
+  const xs = [], ys = [];
+  for (const [u, v] of kf) { xs.push(u - 1); ys.push(v); }
+  for (const [u, v] of kf) { xs.push(u); ys.push(v); }
+  for (const [u, v] of kf) { xs.push(u + 1); ys.push(v); }
+  const n = xs.length, d = new Array(n - 1), m = new Array(n).fill(0);
+  for (let i = 0; i < n - 1; i++) d[i] = (ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]);
+  for (let i = 1; i < n - 1; i++) m[i] = (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) { // Fritsch–Carlson limiter: no overshoot past keyframe values
+    if (Math.abs(d[i]) < 1e-9) { m[i] = 0; m[i + 1] = 0; continue; }
+    if (d[i] > 0) { if (m[i] < 0) m[i] = 0; if (m[i + 1] < 0) m[i + 1] = 0; }
+    else { if (m[i] > 0) m[i] = 0; if (m[i + 1] > 0) m[i + 1] = 0; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+    if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+  }
+  return (u) => {
+    const x = ((u % 1) + 1) % 1;
+    let i = 0; while (i < n - 2 && xs[i + 1] <= x) i++;
+    const h = xs[i + 1] - xs[i], t = (x - xs[i]) / h, t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * m[i + 1];
+  };
+}
+function roadYAt(idx, lateral) { return samples[idx].y + rollNormals[idx].y * lateral; } // road surface height at a sample + lateral offset
+function roadYAtPos(pos) { const idx = globalNearest(pos); return roadYAt(idx, lateralAt(pos, idx)); }
+function gradeAt(idx) { return (elevArr[wrapIdx(idx + 4)] - elevArr[wrapIdx(idx - 4)]) / (8 * segLen); } // signed slope along travel (+ = uphill)
+const _tv = new THREE.Vector3();
+function ambientHeight(x, z) { // rolling far terrain: gentle noise that lifts into hills at the horizon
+  const d = Math.hypot(x - trackCenter.x, z - trackCenter.z);
+  const lift = clamp((d - 240) / 26, 0, 16);
+  return Math.sin(x * 0.012 + 1.7) * Math.cos(z * 0.014 - 0.6) * 5 + Math.sin(x * 0.027 - 0.4) * Math.sin(z * 0.021 + 2.1) * 3 + lift;
+}
+function terrainHeightAt(x, z) { // ground height anywhere: banked road plane extended, blended out to ambient terrain
+  _tv.set(x, 0, z);
+  const idx = globalNearest(_tv), s = samples[idx], n = normals[idx];
+  const d = (x - s.x) * n.x + (z - s.z) * n.z, ad = Math.abs(d);
+  const edgeY = s.y + d * rollNormals[idx].y;
+  if (ad <= HALF_W + 2.6) return edgeY - 0.12; // tucked just under the road/shoulder strips
+  const t = clamp((ad - HALF_W - 2.6) / 34, 0, 1), ts = t * t * (3 - 2 * t);
+  return lerp(edgeY - 0.1, ambientHeight(x, z), ts);
+}
+
 /* ================= RENDERER ================= */
 function initRenderer() {
   renderer = new THREE.WebGLRenderer({ canvas: $('game-canvas'), antialias: true, powerPreference: 'high-performance' });
@@ -405,8 +464,8 @@ function nameSprite(racer, isPlayer) {
 function stripGeometry(halfWidth, y) {
   const pos = [], uv = [], idx = [];
   for (let i = 0; i <= N; i++) {
-    const s = samples[i % N], n = normals[i % N];
-    pos.push(s.x + n.x * halfWidth, y, s.z + n.z * halfWidth, s.x - n.x * halfWidth, y, s.z - n.z * halfWidth);
+    const s = samples[i % N], rn = rollNormals[i % N]; // rolled normal: the strip climbs the authored elevation and leans into the authored banking
+    pos.push(s.x + rn.x * halfWidth, s.y + rn.y * halfWidth + y, s.z + rn.z * halfWidth, s.x - rn.x * halfWidth, s.y - rn.y * halfWidth + y, s.z - rn.z * halfWidth);
     uv.push(0, i * 0.55, 1, i * 0.55);
     if (i < N) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   }
@@ -415,6 +474,44 @@ function stripGeometry(halfWidth, y) {
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setIndex(idx); geo.computeVertexNormals();
   return geo;
+}
+
+function buildBackdrop(trackIdx) {
+  // Distant terrain silhouette: a jagged ridge ring so the horizon is never a
+  // flat line, plus ONE signature landmark per live track to orient by
+  // (named in docs/track-design-*.md). Pre-hazed colour + fog:false keeps the
+  // silhouettes readable from every corner of the lap.
+  const tr = TRACKS[trackIdx];
+  const col = new THREE.Color(tr.ground).multiplyScalar(0.7).lerp(new THREE.Color(tr.fog), 0.45);
+  const mat = new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide, fog: false });
+  const SEG = 160, RAD = 655, heights = [], raw = [];
+  let seed = (tr.roadSeed || 1) * 7919 + 13;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < SEG; i++) raw.push(24 + rnd() * 34);
+  for (let i = 0; i < SEG; i++) heights.push((raw[(i - 1 + SEG) % SEG] + raw[i] * 2 + raw[(i + 1) % SEG]) / 4);
+  const pos = [], idx = [];
+  for (let i = 0; i <= SEG; i++) {
+    const a = i / SEG * Math.PI * 2, x = trackCenter.x + Math.sin(a) * RAD, z = trackCenter.z + Math.cos(a) * RAD;
+    pos.push(x, -6, z, x, heights[i % SEG], z);
+    if (i < SEG) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx);
+  scene.add(new THREE.Mesh(geo, mat));
+  if (trackIdx === 0) { // THE MOTHERSHIP — a vast ring-campus HQ on the NW horizon
+    const g = new THREE.Group();
+    const ringGeo = new THREE.TorusGeometry(58, 13, 10, 48); ringGeo.rotateX(Math.PI / 2);
+    const disc = new THREE.Mesh(ringGeo, mat); disc.position.y = 12; g.add(disc);
+    const lidGeo = new THREE.CircleGeometry(58, 40); lidGeo.rotateX(-Math.PI / 2);
+    const lid = new THREE.Mesh(lidGeo, mat); lid.position.y = 16; g.add(lid);
+    g.position.set(trackCenter.x - 400, ambientHeight(trackCenter.x - 400, trackCenter.z - 330) - 6, trackCenter.z - 330);
+    scene.add(g);
+  } else if (trackIdx === 1) { // OLYMPUS MONS — a shield volcano with a caldera, NE horizon
+    const prof = [[0, 15], [26, 22], [38, 26], [70, 21], [130, 12], [190, 4], [215, 0]].map(p => new THREE.Vector2(p[0], p[1]));
+    const m = new THREE.Mesh(new THREE.LatheGeometry(prof, 40), mat);
+    m.position.set(trackCenter.x + 430, -3, trackCenter.z - 360);
+    scene.add(m);
+  }
 }
 
 function buildWorld(trackIdx, field) {
@@ -451,11 +548,31 @@ function buildWorld(trackIdx, field) {
     tangents.push(t); normals.push(new THREE.Vector3(t.z, 0, -t.x));
   }
 
+  // TRACK 3D: bake the authored profiles into per-sample arrays. samples carry
+  // the elevation; rollNormals are the road's cross-slope direction (the flat
+  // normal rolled around the 3D tangent by the authored bank angle).
+  const elevFn = profileSampler(tr.elev), bankFn = profileSampler(tr.bank);
+  elevArr = []; bankArr = [];
+  for (let i = 0; i < N; i++) { const y = elevFn(i / N); elevArr.push(y); samples[i].y = y; bankArr.push(bankFn(i / N) * Math.PI / 180); }
+  for (let p = 0; p < 2; p++) { // gentle circular smoothing: authored peaks stay, transitions breathe
+    const src = [...bankArr];
+    for (let i = 0; i < N; i++) { let s = 0; for (let d = -4; d <= 4; d++) s += src[wrapIdx(i + d)]; bankArr[i] = s / 9; }
+  }
+  rollNormals = [];
+  for (let i = 0; i < N; i++) {
+    const t3 = samples[wrapIdx(i + 1)].clone().sub(samples[wrapIdx(i - 1)]).normalize();
+    rollNormals.push(normals[i].clone().applyAxisAngle(t3, bankArr[i]));
+  }
+
   const mars = trackIdx === 1;
   const gTex = mars ? GTEX.sandTexture({ tint: 'mars' }) : GTEX.grassTexture();
   gTex.repeat.set(40, 40);
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(760, 48), new THREE.MeshStandardMaterial({ map: gTex, roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.08; ground.receiveShadow = true; scene.add(ground);
+  const groundGeo = new THREE.PlaneGeometry(1520, 1520, 136, 136);
+  groundGeo.rotateX(-Math.PI / 2);
+  { const pa = groundGeo.attributes.position; for (let i = 0; i < pa.count; i++) pa.setY(i, terrainHeightAt(pa.getX(i), pa.getZ(i))); groundGeo.computeVertexNormals(); }
+  const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ map: gTex, roughness: 1 }));
+  ground.receiveShadow = true; scene.add(ground);
+  buildBackdrop(trackIdx);
 
   const shTex = mars ? GTEX.sandTexture({}) : GTEX.concreteTexture();
   shTex.repeat.set(1, 60);
@@ -493,7 +610,8 @@ function buildWorld(trackIdx, field) {
 function scatterPos(minLat, maxLat) {
   const i = Math.floor(Math.random() * N), s = samples[i], n = normals[i];
   const lat = (Math.random() < 0.5 ? -1 : 1) * rand(minLat, maxLat);
-  return new THREE.Vector3(s.x + n.x * lat, 0, s.z + n.z * lat);
+  const x = s.x + n.x * lat, z = s.z + n.z * lat;
+  return new THREE.Vector3(x, terrainHeightAt(x, z), z); // props sit on the real terrain, never floating/sunk
 }
 
 function buildScenery(trackIdx) {
@@ -511,8 +629,8 @@ function buildScenery(trackIdx) {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
     for (let i = 0; i < COUNT; i++) {
       const p = scatterPos(HALF_W + 7, HALF_W + 62), s = rand(0.8, 1.7);
-      sc.set(s, s, s); m.compose(new THREE.Vector3(p.x, 1.3 * s, p.z), q, sc); trunkM.setMatrixAt(i, m);
-      m.compose(new THREE.Vector3(p.x, (2.6 + 2.6) * s, p.z), q, sc); leafM.setMatrixAt(i, m);
+      sc.set(s, s, s); m.compose(new THREE.Vector3(p.x, p.y + 1.3 * s, p.z), q, sc); trunkM.setMatrixAt(i, m);
+      m.compose(new THREE.Vector3(p.x, p.y + (2.6 + 2.6) * s, p.z), q, sc); leafM.setMatrixAt(i, m);
     }
     trunkM.castShadow = leafM.castShadow = true; scene.add(trunkM, leafM);
     // office buildings — one shared glass/steel panel material
@@ -520,7 +638,7 @@ function buildScenery(trackIdx) {
     for (let i = 0; i < 24; i++) {
       const p = scatterPos(HALF_W + 42, HALF_W + 95), hgt = rand(14, 46);
       const b = new THREE.Mesh(new THREE.BoxGeometry(rand(9, 18), hgt, rand(9, 18)), towerMat);
-      b.position.set(p.x, hgt / 2, p.z); b.rotation.y = Math.random() * Math.PI; scene.add(b);
+      b.position.set(p.x, p.y + hgt / 2 - 1.5, p.z); b.rotation.y = Math.random() * Math.PI; scene.add(b);
     }
   } else if (mars) {
     const rockM = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.6), GMAT.flatProp(0x7e3b22), COUNT);
@@ -528,16 +646,17 @@ function buildScenery(trackIdx) {
     for (let i = 0; i < COUNT; i++) {
       const p = scatterPos(HALF_W + 6, HALF_W + 70), s = rand(0.5, 2.6);
       q.setFromEuler(e.set(Math.random() * 3, Math.random() * 3, Math.random() * 3)); sc.set(s, s * rand(0.6, 1), s);
-      m.compose(new THREE.Vector3(p.x, 0.6 * s, p.z), q, sc); rockM.setMatrixAt(i, m);
+      m.compose(new THREE.Vector3(p.x, p.y + 0.6 * s - 0.4, p.z), q, sc); rockM.setMatrixAt(i, m);
     }
     rockM.castShadow = true; scene.add(rockM);
     for (let i = 0; i < 7; i++) { // mesas
       const p = scatterPos(HALF_W + 70, HALF_W + 130), hgt = rand(10, 24);
       const mesa = new THREE.Mesh(new THREE.BoxGeometry(rand(30, 60), hgt, rand(24, 44)), GMAT.flatProp(0x93482a));
-      mesa.position.set(p.x, hgt / 2, p.z); scene.add(mesa);
+      mesa.position.set(p.x, p.y + hgt / 2 - 2, p.z); scene.add(mesa);
     }
     // rocket prop near the start
     const rp = samples[0].clone().add(normals[0].clone().multiplyScalar(HALF_W + 22));
+    rp.y = terrainHeightAt(rp.x, rp.z) - 0.3;
     const rocket = new THREE.Group();
     const body = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 11, 14), GMAT.flatProp(0xf2f2f2)); body.position.y = 5.5; rocket.add(body);
     const tip = new THREE.Mesh(new THREE.ConeGeometry(2.2, 4, 14), GMAT.chrome({ color: 0xd23b2e, roughness: 0.3 })); tip.position.y = 13; rocket.add(tip);
@@ -550,8 +669,9 @@ function buildScenery(trackIdx) {
     const idx = Math.floor(i / BB.length * N + N * 0.06) % N;
     const side = i % 2 ? 1 : -1, s = samples[idx], n = normals[idx];
     const g = new THREE.Group();
-    g.position.set(s.x + n.x * side * (HALF_W + 9), 0, s.z + n.z * side * (HALF_W + 9));
-    g.lookAt(s.x, 0, s.z);
+    const bx = s.x + n.x * side * (HALF_W + 9), bz = s.z + n.z * side * (HALF_W + 9);
+    g.position.set(bx, terrainHeightAt(bx, bz) - 0.3, bz);
+    g.lookAt(s.x, s.y + 1.5, s.z);
     const board = new THREE.Mesh(new THREE.PlaneGeometry(18, 6.9), GMAT.emissiveScreen(0xffffff, { intensity: 1.15, map: billboardTexture(text, i * 47 % 360) }));
     board.material.side = THREE.DoubleSide;
     board.position.y = 6.4; g.add(board);
@@ -562,8 +682,9 @@ function buildScenery(trackIdx) {
   // grandstand near start
   const gsIdx = 26, s = samples[gsIdx], n = normals[gsIdx];
   const stand = new THREE.Group();
-  stand.position.set(s.x + n.x * (HALF_W + 17), 0, s.z + n.z * (HALF_W + 17));
-  stand.lookAt(s.x, 0, s.z);
+  const gx = s.x + n.x * (HALF_W + 17), gz = s.z + n.z * (HALF_W + 17);
+  stand.position.set(gx, terrainHeightAt(gx, gz) - 0.3, gz);
+  stand.lookAt(s.x, s.y + 1, s.z);
   const seatCols = tr.standColors || [0xd23b2e, 0xf2f2f2, 0x1877f2, 0xffd94a];
   for (let r = 0; r < 4; r++) {
     const tier = new THREE.Mesh(new THREE.BoxGeometry(34, 1.6, 3.4), GMAT.flatProp(seatCols[r % 4]));
@@ -593,9 +714,10 @@ function buildItemBoxes() {
     for (const lat of [-7.5, -2.5, 2.5, 7.5]) {
       const s = samples[idx], n = normals[idx];
       const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, emissive: 0xcc8800, emissiveIntensity: 1.6, roughness: 0.4, transparent: true })); // hot emissive so bloom picks the boxes up; transparent so the respawn ghost-in can fade the box back
-      mesh.position.set(s.x + n.x * lat, 1.7, s.z + n.z * lat);
+      const baseY = roadYAt(idx, lat) + 1.7; // boxes float over the road surface, banking and all
+      mesh.position.set(s.x + n.x * lat, baseY, s.z + n.z * lat);
       scene.add(mesh);
-      itemBoxes.push({ mesh, idx, active: true, respawnT: 0, phase: Math.random() * 6 });
+      itemBoxes.push({ mesh, idx, baseY, active: true, respawnT: 0, phase: Math.random() * 6 });
     }
   }
 }
@@ -715,7 +837,7 @@ function placeGrid() {
     const cont = -(16 + row * 10) / segLen;
     const idx = wrapIdx(Math.round(cont));
     const s = samples[idx], n = normals[idx], lat = col === 0 ? -4.6 : 4.6;
-    k.pos.set(s.x + n.x * lat, 0, s.z + n.z * lat);
+    k.pos.set(s.x + n.x * lat, roadYAt(idx, lat), s.z + n.z * lat);
     k.continuous = cont; k.sampleIdx = idx;
     k.heading = k.velHeading = headingOf(tangents[idx]);
     k.speed = 0; k.spinT = 0; k.shrinkT = 0; k.starT = 0; k.boostT = 0; k.driftCharge = 0; k.drifting = false;
@@ -737,14 +859,14 @@ function placeGrid() {
 
 /* ================= PARTICLES (pooled) ================= */
 const P_COUNT = 700;
-let pGeo, pPoints, pVel, pLife, pMaxLife, pGrav, pHead = 0;
+let pGeo, pPoints, pVel, pLife, pMaxLife, pGrav, pFloor, pHead = 0;
 function initParticles() {
   pGeo = new THREE.BufferGeometry();
   const posArr = new Float32Array(P_COUNT * 3), colArr = new Float32Array(P_COUNT * 3);
   for (let i = 0; i < P_COUNT; i++) posArr[i * 3 + 1] = -999;
   pGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
   pGeo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
-  pVel = new Float32Array(P_COUNT * 3); pLife = new Float32Array(P_COUNT); pMaxLife = new Float32Array(P_COUNT); pGrav = new Float32Array(P_COUNT);
+  pVel = new Float32Array(P_COUNT * 3); pLife = new Float32Array(P_COUNT); pMaxLife = new Float32Array(P_COUNT); pGrav = new Float32Array(P_COUNT); pFloor = new Float32Array(P_COUNT);
   pPoints = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 1.5, map: GTEX.particleSprite(), vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false }));
   pPoints.frustumCulled = false;
   scene.add(pPoints);
@@ -757,7 +879,7 @@ function spawnParticles(origin, { count = 12, colors = [0xffd94a], speed = 9, li
     const i = pHead; pHead = (pHead + 1) % P_COUNT;
     posA[i * 3] = origin.x; posA[i * 3 + 1] = origin.y + 0.6; posA[i * 3 + 2] = origin.z;
     pVel[i * 3] = rand(-1, 1) * speed * spread; pVel[i * 3 + 1] = rand(0.2, 1) * up; pVel[i * 3 + 2] = rand(-1, 1) * speed * spread;
-    pLife[i] = pMaxLife[i] = life * rand(0.6, 1.15); pGrav[i] = gravity;
+    pLife[i] = pMaxLife[i] = life * rand(0.6, 1.15); pGrav[i] = gravity; pFloor[i] = origin.y - 0.3; // bounce on the local surface, not y=0 (hills!)
     col.set(colors[Math.floor(Math.random() * colors.length)]);
     colA[i * 3] = col.r; colA[i * 3 + 1] = col.g; colA[i * 3 + 2] = col.b;
   }
@@ -772,7 +894,7 @@ function updateParticles(dt) {
     if (pLife[i] <= 0) { posA[i * 3 + 1] = -999; continue; }
     pVel[i * 3 + 1] += pGrav[i] * dt;
     posA[i * 3] += pVel[i * 3] * dt; posA[i * 3 + 1] += pVel[i * 3 + 1] * dt; posA[i * 3 + 2] += pVel[i * 3 + 2] * dt;
-    if (posA[i * 3 + 1] < 0.1) { posA[i * 3 + 1] = 0.1; pVel[i * 3 + 1] *= -0.4; }
+    if (posA[i * 3 + 1] < pFloor[i] + 0.1) { posA[i * 3 + 1] = pFloor[i] + 0.1; pVel[i * 3 + 1] *= -0.4; }
   }
   pGeo.attributes.position.needsUpdate = true;
 }
@@ -807,6 +929,7 @@ function topSpeedOf(k) {
   if (k.ghostT > 0) base *= 1.07;
   if (k.inkT > 0) base *= 0.88;
   if (k.bailoutT > 0) base *= 1.30;
+  if (elevArr.length) base *= 1 - clamp(gradeAt(k.sampleIdx) * 1.6, -0.08, 0.08); // TRACK 3D: authored slopes — climbs cost speed, dives gift it (capped ±8%)
   base *= k.offFactor; // graduated offroad (see offroadFactor) — was: offroad ? (deep ? 0.55 : 0.72), plus a 0.38/s bleed
   return base;
 }
@@ -943,7 +1066,7 @@ function updateKart(k, input, dt) {
   const gripRate = k.drifting ? 2.4 : 9;
   k.velHeading = lerpAngle(k.velHeading, k.heading, clamp(gripRate * dt, 0, 1));
   k.pos.addScaledVector(forwardVec(k.velHeading), k.speed * dt);
-  k.pos.y = 0;
+  k.pos.y = roadYAt(k.sampleIdx, k.lateral); // ride the authored surface: elevation + banked cross-slope
 
   // mesh sync
   if (k.spinT <= 0) { const tgt = Math.round(k.spinVis / (Math.PI * 2)) * Math.PI * 2; k.spinVis = lerp(k.spinVis, tgt, clamp(10 * dt, 0, 1)); }
@@ -952,8 +1075,11 @@ function updateKart(k, input, dt) {
   k.mesh.position.copy(k.pos);
   k.mesh.rotation.y = k.heading + k.spinVis;
   k.steerVis = lerp(k.steerVis, input.steer || 0, clamp(10 * dt, 0, 1));
-  k.tilt.rotation.z = lerp(k.tilt.rotation.z, -k.steerVis * clamp(k.speed / 40, 0, 1) * 0.1, clamp(8 * dt, 0, 1));
-  k.tilt.rotation.x = lerp(k.tilt.rotation.x, clamp(-k.speed * 0.0012, -0.04, 0.02), clamp(6 * dt, 0, 1));
+  // body roll = drift lean PLUS the road's authored bank (kart sits square on the banked surface);
+  // body pitch = accel squat PLUS the slope it is actually climbing/diving, faded when off-line
+  const slopeHere = gradeAt(k.sampleIdx) * Math.cos(angNorm(k.heading - headingOf(tangents[k.sampleIdx])));
+  k.tilt.rotation.z = lerp(k.tilt.rotation.z, -k.steerVis * clamp(k.speed / 40, 0, 1) * 0.1 + bankArr[k.sampleIdx], clamp(8 * dt, 0, 1));
+  k.tilt.rotation.x = lerp(k.tilt.rotation.x, clamp(-k.speed * 0.0012, -0.04, 0.02) - Math.atan(slopeHere), clamp(6 * dt, 0, 1));
   k.pivots.forEach(p => p.rotation.y = -k.steerVis * 0.38);
   k.wheels.forEach(w => w.rotation.x += k.speed * dt / 0.5);
   // AI stuck recovery
@@ -1036,7 +1162,7 @@ const BOX_RESPAWN = 2.5, BOX_GHOST = 0.6; // was a flat 4s dead time, then an un
 function updateItemBoxes(dt) {
   for (const b of itemBoxes) {
     b.mesh.rotation.y += dt * 1.9;
-    b.mesh.position.y = 1.7 + Math.sin(elapsed * 2.2 + b.phase) * 0.25;
+    b.mesh.position.y = b.baseY + Math.sin(elapsed * 2.2 + b.phase) * 0.25;
     if (!b.active) {
       b.respawnT -= dt;
       if (b.respawnT <= 0) { // live again: full opacity, full size, pickable
@@ -1121,7 +1247,7 @@ function useItem(k) {
     spawnParticles(k.pos, { count: 22, colors: [0xffe066, 0xffffff], speed: 6, life: 0.7, up: 5, gravity: 0 });
   } else if (id === 'banana') { // Data Leak
     const mesh = leakMesh();
-    const pos = k.pos.clone().addScaledVector(fwd, -3.4); pos.y = 0.06;
+    const pos = k.pos.clone().addScaledVector(fwd, -3.4); pos.y = roadYAtPos(pos) + 0.06;
     mesh.position.copy(pos); scene.add(mesh);
     bananas.push({ mesh, pos, owner: k, age: 0, continuous: k.continuous - 2, lateral: lateralAt(pos, globalNearest(pos)) });
   } else if (id === 'green' || id === 'red') {
@@ -1132,7 +1258,7 @@ function useItem(k) {
       if (!target) id === 'red' && (target = null);
     }
     const mesh = projectileMesh(id);
-    mesh.position.copy(k.pos).addScaledVector(fwd, 3.2); mesh.position.y = 0.9;
+    mesh.position.copy(k.pos).addScaledVector(fwd, 3.2); mesh.position.y = k.pos.y + 0.9;
     scene.add(mesh);
     projectiles.push({ type: id, mesh, owner: k, target, heading: k.heading, speed: id === 'red' ? 63 : 74, life: id === 'red' ? 6 : 3.2, age: 0 });
     if (id === 'red' && !target) projectiles[projectiles.length - 1].type = 'green', projectiles[projectiles.length - 1].speed = 74;
@@ -1140,7 +1266,7 @@ function useItem(k) {
     const leader = sortedKarts().find(o => o !== k) || null;
     if (!leader) return;
     const mesh = projectileMesh('blue');
-    mesh.position.copy(k.pos); mesh.position.y = 7; scene.add(mesh);
+    mesh.position.copy(k.pos); mesh.position.y = k.pos.y + 7; scene.add(mesh);
     projectiles.push({ type: 'blue', mesh, owner: k, target: leader, u: k.continuous, speed: 118, life: 14, age: 0 });
     showFeed('⚖️ ANTITRUST SUIT INBOUND — it\'s hunting the leader!');
     if (leader.isPlayer) A.zap();
@@ -1190,7 +1316,7 @@ function useItem(k) {
     else if (victims.includes(playerKart())) showFeed('📰 You\'ve been SMEARED!');
   } else if (id === 'bomb') {
     const mesh = bombMesh();
-    const pos = k.pos.clone().addScaledVector(fwd, -3.4); pos.y = 0.75;
+    const pos = k.pos.clone().addScaledVector(fwd, -3.4); pos.y = roadYAtPos(pos) + 0.75;
     mesh.position.copy(pos); scene.add(mesh);
     bombs.push({ mesh, pos, owner: k, fuse: 1.6, beepT: 0 });
     if (k.isPlayer) showFeed('💣 Pink Slip armed…');
@@ -1219,7 +1345,7 @@ function updateBombs(dt) {
   }
 }
 function explodeBlue(p) {
-  const c = p.target.pos.clone(); c.y = 1;
+  const c = p.target.pos.clone(); c.y += 1;
   spawnParticles(c, { count: 46, colors: [0xffa53a, 0xff5252, 0xffd94a], speed: 11, life: 0.9, up: 7 });
   for (const o of karts) if (o.pos.distanceTo(p.target.pos) < 11) spinKart(o);
   if (playerKart().pos.distanceTo(p.target.pos) < 30) { shake = Math.max(shake, 0.65); A.hit(); }
@@ -1241,8 +1367,8 @@ function updateProjectiles(dt) {
         const target = p.target;
         const distSamples = target.continuous - p.u;
         const a = sampleAt(p.u), b = sampleAt(p.u + 1), fr = p.u - Math.floor(p.u);
-        p.mesh.position.lerpVectors(a, b, fr);
-        p.mesh.position.y = clamp(distSamples * 0.06, 1.1, 7.5);
+        p.mesh.position.lerpVectors(a, b, fr); // a/b carry the track elevation — the Suit flies the hills too
+        p.mesh.position.y += clamp(distSamples * 0.06, 1.1, 7.5);
         p.mesh.rotation.y += dt * 3;
         if (distSamples <= 3 || p.mesh.position.distanceTo(target.pos) < 6) { explodeBlue(p); dead = true; }
       }
@@ -1253,9 +1379,9 @@ function updateProjectiles(dt) {
         if (Math.random() < 0.6) spawnParticles(p.mesh.position, { count: 1, colors: [0x1d9bf0, 0xffffff], speed: 0.6, life: 0.3, up: 0.4, gravity: 0 });
       }
       p.mesh.position.addScaledVector(forwardVec(p.heading), p.speed * dt);
-      p.mesh.position.y = 0.9;
-      p.mesh.rotation.y = p.heading; p.mesh.rotation.x += dt * 7;
       const idx = globalNearest(p.mesh.position);
+      p.mesh.position.y = roadYAt(idx, lateralAt(p.mesh.position, idx)) + 0.9;
+      p.mesh.rotation.y = p.heading; p.mesh.rotation.x += dt * 7;
       if (Math.abs(lateralAt(p.mesh.position, idx)) > HALF_W + 2.5) dead = true;
       if (!dead) for (const o of karts) {
         if (o === p.owner && p.age < 0.4) continue;
@@ -1440,7 +1566,7 @@ function togglePause() {
 }
 function resetPlayerToTrack() {
   const p = playerKart(); if (!p) return;
-  p.pos.copy(samples[p.sampleIdx]); p.pos.y = 0;
+  p.pos.copy(samples[p.sampleIdx]); // samples carry the road elevation now
   p.heading = p.velHeading = headingOf(tangents[p.sampleIdx]);
   p.speed = 0; p.spinT = 0; p.drifting = false; p.driftCharge = 0;
 }
@@ -1866,7 +1992,7 @@ function buildMenu() {
 /* ================= CAMERA & LOOP ================= */
 function setFov(f, dt) { camFov = lerp(camFov, f, clamp(5 * dt, 0, 1)); if (Math.abs(camera.fov - camFov) > 0.05) { camera.fov = camFov; camera.updateProjectionMatrix(); } }
 function spinItemBoxesVisual(dt) {
-  for (const b of itemBoxes) { b.mesh.rotation.y += dt * 1.9; b.mesh.position.y = 1.7 + Math.sin(elapsed * 2.2 + b.phase) * 0.25; }
+  for (const b of itemBoxes) { b.mesh.rotation.y += dt * 1.9; b.mesh.position.y = b.baseY + Math.sin(elapsed * 2.2 + b.phase) * 0.25; }
 }
 function updateCamera(dt) {
   const p = playerKart(); if (!p) return;
@@ -1888,14 +2014,18 @@ function updateCamera(dt) {
   }
   camHeading = lerpAngle(camHeading, p.velHeading, clamp((gameState === 'countdown' ? 6 : 3.4) * dt, 0, 1));
   const fwd = forwardVec(camHeading);
-  const desired = p.pos.clone().addScaledVector(fwd, -14.5); desired.y = 6.2;
+  const desired = p.pos.clone().addScaledVector(fwd, -14.5); desired.y = p.pos.y + 6.2; // chase height rides the elevation
   const kf = clamp(1 - Math.exp(-7 * dt), 0, 1);
   camera.position.x = lerp(camera.position.x, desired.x, kf);
   camera.position.y = lerp(camera.position.y, desired.y, kf);
   camera.position.z = lerp(camera.position.z, desired.z, kf);
   if (shake > 0) { camera.position.x += rand(-1, 1) * shake * 0.8; camera.position.y += rand(-0.5, 0.5) * shake * 0.6; shake = Math.max(0, shake - dt * 1.7); }
-  const look = p.pos.clone().addScaledVector(fwd, 11); look.y = 2;
+  const look = p.pos.clone().addScaledVector(fwd, 11); look.y = p.pos.y + 2;
   camera.lookAt(look);
+  // Camera roll: lean WITH the banked road at 0.7x its roll (Mario Kart research
+  // reference) — enough to feel the banking in your stomach, not enough to churn it.
+  const camBank = bankArr[p.sampleIdx] || 0;
+  if (camBank) camera.rotateZ(-camBank * 0.7);
   setFov(62 + clamp(Math.abs(p.speed) / 55, 0, 1) * 13 + (p.boostT > 0 ? 5 : 0), dt); // fun pass: wider speed FOV curve
   sunFollow(sunLight, p.pos);
 }
@@ -2008,6 +2138,14 @@ window.BK = {
   setFairPlayer(b) { simFairPlayer = !!b; return simFairPlayer; },
   setLaps(n) { LAPS = clamp(Math.round(n || 3), 1, 5); return LAPS; },
   trackLen() { return segLen * N; },
+  track3d() { // TRACK 3D proof surface: the authored profiles as baked into the world
+    return {
+      elevAt: u => elevArr[wrapIdx(Math.round(u * N))],
+      bankDegAt: u => bankArr[wrapIdx(Math.round(u * N))] * 180 / Math.PI,
+      roadYAt: (u, lat) => roadYAt(wrapIdx(Math.round(u * N)), lat),
+      segLen,
+    };
+  },
   player() { const p = playerKart(); return p ? { pos: p.pos, continuous: p.continuous, speed: p.speed, heading: p.heading, rank: rankOf(p) } : null; },
 };
 

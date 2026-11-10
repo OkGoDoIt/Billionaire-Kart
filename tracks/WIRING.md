@@ -1,149 +1,221 @@
-# WIRING.md — Batch 3 track modules → game.js
+# Tracks Batch 2 — Wiring Spec (for the lead builder / integrator)
 
-The four Batch 3 tracks ship as self-contained ES modules. They contain **zero**
-game.js edits on this branch. This doc is the complete, minimal integration:
-5 small edits in `game.js`, 4 buttons in `index.html`, 1 edit in `sw.js`.
-Everything is anchored by function/variable name, not line number.
+`tracks/bliss.js`, `tracks/tunnel.js`, `tracks/davos.js` are **self-contained classic
+scripts**. Each one only pushes a track definition onto `window.BK_TRACKS` — the exact
+pattern `portraits.js` already uses (`window.BK_PORTRAITS`). No game.js edits exist on
+this branch; everything below is the complete, minimal integration. Line numbers are
+from merged `main` @ `eb1cb38` (v1.2); anchors are quoted so they survive drift.
 
-Module contract (`tracks/metaverse.js`, `wework.js`, `burningman.js`, `bahamas.js`):
+## The module contract (what the defs provide)
 
-- `TRACK` — plain definition in exactly the shape `TRACKS[]` already consumes
-  (`{ name, sky, fog, ground, shoulder, roadSeed, points }`).
-- `CARD` — `{ emoji, desc }` for the menu track-card.
-- `build(ctx)` — builds all dressing into `ctx.scene`, registers animation via
-  `ctx.animators.push((dt, elapsed) => { … })`.
-- `tracks/shared.js` — the modules' shared toolkit; the modules import it, game.js
-  never touches it directly.
+Built-in `TRACKS` entries use `{ name, sky, fog, ground, roadSeed, points }`.
+Module defs use the same fields plus optional extensions, all consumed below:
 
-Hard rule the modules already obey: everything is created fresh inside `build()`
-(no module-scope meshes/materials/textures), because `buildWorld`'s teardown
-disposes the whole scene on rebuild.
+| Field | Type | Used by |
+|---|---|---|
+| `shoulder` | hex colour | §3 shoulder colour override |
+| `fogNear` / `fogFar` | numbers | §3 fog range (Tunnel: 40 / 330) |
+| `billboards` | string[] | §4 replaces global `BILLBOARDS` for this track |
+| `standColors` | hex[4] | §4 grandstand tier colours (Bliss = BSOD blues) |
+| `noClouds` | bool | §4 skips the shared cloud block (Tunnel is indoors) |
+| `banner` | string | §3 start-gantry banner text |
+| `buildDressing(ctx)` | fn | §4 replaces the valley/mars scatter branch of `buildScenery` |
+| `tick(dt, elapsed)` | fn | §5 per-frame animation (fans, beacons, snow, chase lights…) |
+| `countdownView` | `{pos:[x,y,z], look:[x,y,z]}` | §6 Bliss start-grid hero framing |
+| `chime` | `'xp'` | §7 Bliss-only race-start chime (optional but wanted) |
 
----
+`ctx` passed to `buildDressing` is a plain object of game.js internals:
+`{ THREE, scene, samples, normals, tangents, N, HALF_W, trackCenter, rand, clamp,
+scatterPos, canvasTexture, billboardTexture, stripGeometry, headingOf }`.
+`buildDressing` closes over its animated objects; `tick` animates the most recent
+build (worlds are rebuilt on every race/menu selection, and each rebuild re-runs
+`buildDressing`, so closure state is always fresh).
 
-## Edit 1 — game.js: imports + registry (top of file, after `import * as THREE`)
+## §1 index.html — script tags
 
-```js
-import { TRACK as META_TRACK, build as buildMetaverse } from './tracks/metaverse.js';
-import { TRACK as WEWORK_TRACK, build as buildWeWork } from './tracks/wework.js';
-import { TRACK as BURNING_TRACK, build as buildBurningMan } from './tracks/burningman.js';
-import { TRACK as BAHAMAS_TRACK, build as buildBahamas } from './tracks/bahamas.js';
-/* Batch 3 track modules by registry index (TRACKS order). null = built-in scenery. */
-const TRACK_MODULES = [null, null, buildMetaverse, buildWeWork, buildBurningMan, buildBahamas];
+After line 173 (`<script src="portraits.js"></script>`) and **before** line 174
+(`<script type="module" src="game.js"></script>`), insert:
+
+```html
+<script src="tracks/bliss.js"></script>
+<script src="tracks/tunnel.js"></script>
+<script src="tracks/davos.js"></script>
 ```
 
-## Edit 2 — game.js: extend the `TRACKS` array literal
+## §2 index.html — track picker cards
 
-Append the four imported definitions after the Mars GP entry (order = menu order
-= indices 2–5, matching `TRACK_MODULES` above):
+After the Mars card (line 91, `data-track="1"`), insert three cards. Indices must
+match registration order: Bliss = 2, Tunnel = 3, Davos = 4.
 
-```js
-  META_TRACK, WEWORK_TRACK, BURNING_TRACK, BAHAMAS_TRACK,
+```html
+<button class="track-card" data-track="2"><span class="track-emoji">🟩</span><span class="track-name">Bliss GP</span><span class="track-desc">Rolling green hills. Clippy believes in you.</span></button>
+<button class="track-card" data-track="3"><span class="track-emoji">🚇</span><span class="track-name">Boring Tunnel GP</span><span class="track-desc">Underground. Definitely not a flamethrower.</span></button>
+<button class="track-card" data-track="4"><span class="track-emoji">🏔️</span><span class="track-name">Davos Circuit</span><span class="track-desc">Alpine luxury. Fondue $400. No questions.</span></button>
 ```
 
-## Edit 3 — game.js: animator registry + scenery context
+No JS change needed for the cards: the existing handler at game.js:1504 reads
+`data-track` generically.
 
-Next to the core-state declarations (beside `let karts = [], … clouds = []`):
+## §3 game.js — registration + buildWorld
+
+**(a) Register the modules.** After the `TRACKS` array closes (line 60, `];`) and
+before/after the `BILLBOARDS` const (line 61), add:
 
 ```js
-let trackAnimators = []; // per-frame hooks registered by the current track module
+if (window.BK_TRACKS) for (const t of window.BK_TRACKS) TRACKS.push(t);
 ```
 
-Anywhere before `buildScenery` (right after `scatterPos` reads naturally):
+**(b) Track the active def.** Near line 165 with the other world state, add
+`let currentDef = null;` — and in `buildWorld`, right after `const tr = TRACKS[trackIdx];`
+(line 368), add `currentDef = tr;`.
+
+**(c) Fog range.** Replace (line ~371):
 
 ```js
-function sceneryContext() {
-  return { THREE, scene, samples, normals, tangents, N, HALF_W, trackCenter,
-           rand, scatterPos, canvasTexture, billboardTexture, animators: trackAnimators };
+scene.fog = new THREE.Fog(tr.fog, 210, 640);
+```
+with:
+```js
+scene.fog = new THREE.Fog(tr.fog, tr.fogNear ?? 210, tr.fogFar ?? 640);
+```
+
+**(d) Shoulder colour.** Replace (line 396):
+
+```js
+const shoulder = new THREE.Mesh(stripGeometry(HALF_W + 2.6, 0.0), new THREE.MeshLambertMaterial({ color: trackIdx === 1 ? 0x8a4023 : 0x9aa0a3 }));
+```
+with:
+```js
+const shoulder = new THREE.Mesh(stripGeometry(HALF_W + 2.6, 0.0), new THREE.MeshLambertMaterial({ color: tr.shoulder ?? (trackIdx === 1 ? 0x8a4023 : 0x9aa0a3) }));
+```
+
+**(e) Gantry banner text.** In the `bannerTex` draw callback (line ~409), replace
+`g.fillText('🏁 BILLIONAIRE KART 🏁', w / 2, h / 2);` with
+`g.fillText(tr.banner || '🏁 BILLIONAIRE KART 🏁', w / 2, h / 2);`
+
+## §4 game.js — buildScenery dispatch
+
+In `buildScenery(trackIdx)` (line 427), the function currently opens:
+
+```js
+const mars = trackIdx === 1;
+// trees (valley) or rocks (mars) — instanced
+const COUNT = 140;
+if (!mars) {
+```
+
+Insert the dispatch so it reads:
+
+```js
+const mars = trackIdx === 1;
+const tr = TRACKS[trackIdx];
+if (tr.buildDressing) {
+  tr.buildDressing({ THREE, scene, samples, normals, tangents, N, HALF_W, trackCenter, rand, clamp, scatterPos, canvasTexture, billboardTexture, stripGeometry, headingOf });
+} else if (!mars) {
+  ... existing valley branch unchanged (it begins with `const COUNT = 140;`) ...
+} else {
+  ... existing mars branch unchanged ...
 }
 ```
 
-## Edit 4 — game.js: dispatch at the top of `buildScenery(trackIdx)`
+i.e. move `const COUNT = 140;` inside the valley branch and change the existing
+`if (!mars) {` to `} else if (!mars) {` after the new dispatch block. Nothing inside
+either existing branch changes.
 
-Insert as the function's first statements, before `const mars = …`:
+**Shared blocks below the branch** (billboards, grandstand, clouds) keep running for
+module tracks, with three one-token swaps:
 
-```js
-  const modBuild = TRACK_MODULES[trackIdx];
-  if (modBuild) { trackAnimators = []; modBuild(sceneryContext()); return; }
-```
+- Billboards: `BILLBOARDS.forEach((text, i) => {` → `const BB = tr.billboards || BILLBOARDS; BB.forEach((text, i) => {`
+  and inside, `i / BILLBOARDS.length` → `i / BB.length`.
+- Grandstand: `const seatCols = [0xd23b2e, 0xf2f2f2, 0x1877f2, 0xffd94a];` →
+  `const seatCols = tr.standColors || [0xd23b2e, 0xf2f2f2, 0x1877f2, 0xffd94a];`
+- Clouds: wrap the whole `// clouds` block (from `const cloudMat = ...` through the
+  closing `}` of the `for` loop) in `if (!tr.noClouds) { ... }`.
 
-Note: module tracks intentionally skip the built-in generic billboards /
-grandstand / clouds — each module ships its own equivalents (its own signage
-pack, set piece, and sky dressing), per the equal-effort rule.
+## §5 game.js — animation hook
 
-## Edit 5 — game.js: run the animators in `animate()`
-
-Inside `animate()`, immediately after the `updateParticles(dt);` call:
-
-```js
-    for (const fn of trackAnimators) fn(dt, elapsed);
-```
-
-## Edit 6 — game.js: per-track shoulder colour in `buildWorld`
-
-The shoulder strip colour is hardcoded (`trackIdx === 1 ? mars : grey`). The new
-definitions carry a `shoulder` field; use it with the old behaviour as fallback:
+In `animate()`, immediately before `renderer.render(scene, camera);` add:
 
 ```js
-  const shoulder = new THREE.Mesh(stripGeometry(HALF_W + 2.6, 0.0),
-    new THREE.MeshLambertMaterial({ color: tr.shoulder ?? (trackIdx === 1 ? 0x8a4023 : 0x9aa0a3) }));
+if (currentDef && currentDef.tick) currentDef.tick(dt, elapsed);
 ```
 
-(This is the only place a module-track property reaches into existing rendering;
-without it the new tracks still work, just with the default grey shoulder.)
+This runs in menu, countdown and racing alike (scenery stays alive behind the menu
+orbit cam, same as clouds already do).
 
-## Edit 7 — index.html: four track cards in `#track-row`
+## §6 game.js — Bliss countdown framing (countdownView)
 
-After the Mars GP button, in order (indices must match `TRACKS`):
-
-```html
-      <button class="track-card" data-track="2"><span class="track-emoji">🥽</span><span class="track-name">Metaverse Plaza GP</span><span class="track-desc">A glossy empty plaza. Population: you + bots.</span></button>
-      <button class="track-card" data-track="3"><span class="track-emoji">🏢</span><span class="track-name">WeWork Memorial GP</span><span class="track-desc">A ruined coworking cathedral. The kombucha is gone.</span></button>
-      <button class="track-card" data-track="4"><span class="track-emoji">🔥</span><span class="track-name">Burning Man GP</span><span class="track-desc">Dusk on the playa. Radical self-reliance, valet available.</span></button>
-      <button class="track-card" data-track="5"><span class="track-emoji">🏝️</span><span class="track-name">Bahamas Crypto GP</span><span class="track-desc">Beachfront past the FTX ruins. 0% tax, 100% vibes.</span></button>
-```
-
-No JS change needed for the cards: the existing `.track-card` click handler is
-generic (`data-track` → `selectedTrack` → `buildWorld`). Best-time storage is
-already keyed per track index.
-
-## Edit 8 — sw.js: shell list + cache bump
-
-Add the five module files to `SHELL` and bump the cache so installed PWAs pick
-up the new files:
+In `updateCamera(dt)`, in the non-menu path, immediately **before**
+`camHeading = lerpAngle(...)` insert:
 
 ```js
-const CACHE = 'bk-v3';
-const SHELL = ['./', './index.html', './style.css', './game.js', './portraits.js', './manifest.webmanifest',
-  './tracks/shared.js', './tracks/metaverse.js', './tracks/wework.js', './tracks/burningman.js', './tracks/bahamas.js'];
+if (gameState === 'countdown' && currentDef && currentDef.countdownView) {
+  const cv = currentDef.countdownView;
+  camera.position.set(cv.pos[0], cv.pos[1], cv.pos[2]);
+  camera.lookAt(cv.look[0], cv.look[1], cv.look[2]);
+  setFov(55, dt);
+  sunLight.position.set(trackCenter.x + 80, 130, trackCenter.z + 60);
+  sunLight.target.position.copy(trackCenter);
+  return;
+}
 ```
 
----
+Effect for Bliss: during the 3.6 s countdown the camera holds the wallpaper
+composition — start straight in the foreground, hero hill centred on the sight line
+at (60, −198), sky + cloud sprites above — then the normal chase cam takes over at
+GO. The layout also frames the hill from the default chase cam, so this is a
+tightening, not a rescue. Also note the grid view works in the menu: menu orbit
+radius 275 passes the same sight line.
 
-## Verification (already run on this branch with exactly these edits applied)
+Boring Tunnel uses the same hook for a different reason: the default countdown
+camera starts ~30 units above the player (world-axis offset in `startRace`) and
+lerps down — outdoors that's a fine crane shot, indoors it starts above the roof
+and clips through it. Its `countdownView` holds the camera behind the grid,
+inside the bore, for the whole countdown.
 
-- `node tools/bot-test.mjs` — full pass, zero console/page errors (existing
-  suite: menu, Character Select v2, race on track 0, all Control Lab schemes).
-- `node tracks/proof-tracks.mjs` — loads each module track via `BK.start(0, idx)`,
-  autopilots, asserts the player kart's `continuous` advances > 85 samples over
-  race t=4s→11s (threshold calibrated against track 0's known-good rate of
-  ~17 samples/race-second from a standing start) and that no console/page
-  errors occur, and writes one 1280×800 screenshot per track to `tracks/proof/`.
-- Screenshots: `tracks/proof/metaverse.png`, `wework.png`, `burningman.png`,
-  `bahamas.png`.
+## §7 game.js — Bliss XP chime (optional, wanted)
 
-## Known interface gaps (found while building; none block integration)
+In `startRace()`, after `gameState = 'countdown'; ...` (line ~1409), add:
 
-1. **No per-track animation hook exists** in the engine — Edit 5 adds the
-   smallest possible one (`trackAnimators`). Without it, module tracks still
-   build and race; they just don't move.
-2. **Shoulder colour is a hardcoded ternary** on `trackIdx === 1` — Edit 6
-   generalises it via the (already-plumbed) track definition object.
-3. **`buildScenery` is a valley/Mars binary** — Edit 4's early-return dispatch
-   is the seam Batch 1/2 module conversions should reuse; consider migrating
-   Silicon Valley / Mars into modules behind the same registry later.
-4. **Generic clouds/billboards/grandstand are skipped for module tracks** by
-   design (each module ships its own). If a future module wants the generic
-   pack, expose it via `sceneryContext()` rather than reaching into globals.
-5. `roadSeed` in track definitions is currently unused by the engine (both
-   built-in tracks define it; the modules define it too, for shape parity).
+```js
+if (currentDef && currentDef.chime === 'xp') [660, 523, 784, 880].forEach((f, i) => A.tone(f, 0.5, 'sine', 0.055, 0, i * 0.14));
+```
+
+`buildWorld` runs just above this in `startRace`, so `currentDef` is already the
+race's track. Four-note gentle motif — this track only, per DESIGN.md.
+
+## §8 sw.js — service worker shell
+
+Bump `const CACHE = 'bk-v2';` → `'bk-v3'` and extend `SHELL`:
+
+```js
+const SHELL = ['./', './index.html', './style.css', './game.js', './portraits.js', './tracks/bliss.js', './tracks/tunnel.js', './tracks/davos.js', './manifest.webmanifest'];
+```
+
+## §9 Interface gaps found while building (heads-up, none blocking)
+
+1. **No per-track fog range or shoulder colour existed** — both were hardcoded
+   (fog 210–640; Mars-only shoulder check). §3c/§3d add optional def fields with
+   identical defaults, so built-ins are untouched. Tunnel is the consumer
+   (close dark fog); without §3c it still works but reads as a bright cave.
+2. **No scenery extension point existed** — `buildScenery` branched on
+   `trackIdx === 1`. §4's dispatch is the general fix; future track batches
+   (Batch 3) should use the same `buildDressing(ctx)` contract instead of growing
+   the if-chain.
+3. **No per-frame hook for scenery** — only clouds/item-boxes animated. §5 adds
+   the generic `tick`. (Cloud drift is menu-only in current code; `tick` runs in
+   every state, which is what fans/beacons/snow want.)
+4. **Countdown camera was chase-only.** §6 is Bliss-specific in effect but the
+   `countdownView` field is generic — any future track can frame a hero shot.
+5. **Disposal caveat (pre-existing):** `buildWorld` disposes all geometries and
+   materials found by traversing the old scene. Module dressing lives entirely in
+   the scene and uses per-build materials, so it disposes cleanly; do not cache
+   module textures across builds.
+
+## Proof
+
+This branch's author wired §§1–8 locally (uncommitted), ran
+`node tools/bot-test.mjs` (full pass — see the tracks-2 report) and shot one
+countdown + one race frame per track into `tracks/proof/` with
+`tracks/proof/shoot.mjs`. The game.js/index.html/sw.js edits were then reverted;
+only `tracks/` is committed here.

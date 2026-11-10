@@ -586,7 +586,7 @@ function buildItemBoxes() {
     const idx = Math.floor(f * N);
     for (const lat of [-7.5, -2.5, 2.5, 7.5]) {
       const s = samples[idx], n = normals[idx];
-      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, emissive: 0xcc8800, emissiveIntensity: 1.6, roughness: 0.4 })); // hot emissive so bloom picks the boxes up
+      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, emissive: 0xcc8800, emissiveIntensity: 1.6, roughness: 0.4, transparent: true })); // hot emissive so bloom picks the boxes up; transparent so the respawn ghost-in can fade the box back
       mesh.position.set(s.x + n.x * lat, 1.7, s.z + n.z * lat);
       scene.add(mesh);
       itemBoxes.push({ mesh, idx, active: true, respawnT: 0, phase: Math.random() * 6 });
@@ -690,7 +690,7 @@ function makeKart(racerIdx, isPlayer) {
     item: null, spinT: 0, shrinkT: 0, starT: 0, boostT: 0, driftCharge: 0, drifting: false, starTouchCd: 0,
     bailoutT: 0, ghostT: 0, hornT: 0, goldenT: 0, goldenCd: 0, inkT: 0,
     sputterT: 0, sputterClock: 0, nextSputter: rand(6, 14),
-    lapStart: 0, lastLapTime: null, bestLap: null, lapsDone: 0, offroad: false, offroadDeep: false,
+    lapStart: 0, lastLapTime: null, bestLap: null, lapsDone: 0, offroad: false, offroadDeep: false, offFactor: 1,
     ai: { lane: rand(-5, 5), laneT: rand(1, 3), itemT: rand(2, 6), skill: r.aiSkill ?? rand(0.97, 1.03), driftHeld: false },
   };
   karts.push(kart);
@@ -723,7 +723,7 @@ function placeGrid() {
   bananas.forEach(b => scene.remove(b.mesh)); bananas = [];
   projectiles.forEach(p => scene.remove(p.mesh)); projectiles = [];
   bombs.forEach(b => scene.remove(b.mesh)); bombs = [];
-  itemBoxes.forEach(b => { b.active = true; b.mesh.visible = true; b.respawnT = 0; });
+  itemBoxes.forEach(b => { b.active = true; b.mesh.visible = true; b.respawnT = 0; b.mesh.material.opacity = 1; b.mesh.scale.setScalar(1); });
   raceTime = 0; finishDelay = -1;
   prevPlayerCont = playerKart().continuous;
   updateItemSlot();
@@ -774,6 +774,21 @@ function updateParticles(dt) {
 /* ================= PHYSICS ================= */
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 let simFairPlayer = false; // sim harness only: treat the autopilot "player" exactly like an AI kart
+// Graduated offroad model (drive-feel pass): the old model bit at HALF_W-0.6 with a flat
+// 0.72 cap + 0.38/s bleed, so the painted shoulder already crawled (Roger's 5 MPH screenshot).
+// The factor is now a smooth function of lateral distance: road 1.0 → shoulder ~0.92
+// (the rendered shoulder strip is HALF_W+2.6 wide) → eases to a 0.55 FLOOR by HALF_W+9
+// and holds there — deep rough is slow but always driveable, so recovery is always possible.
+// 0.55 matches the shortcut-gating factor: cutting deep still costs, it just never ends your race.
+function offroadFactor(lat) {
+  const a = Math.abs(lat);
+  if (a <= HALF_W) return 1;
+  if (a <= HALF_W + 1.5) return lerp(1, 0.92, (a - HALF_W) / 1.5);
+  if (a <= HALF_W + 3.0) return 0.92;
+  if (a >= HALF_W + 9.0) return 0.55;
+  const t = (a - HALF_W - 3.0) / 6.0;
+  return lerp(0.92, 0.55, t * t * (3 - 2 * t)); // smoothstep into the deep band — no step changes
+}
 function topSpeedOf(k) {
   let base = 40 + (k.racer.spd - 3) * 1.8;
   if (!k.isPlayer || simFairPlayer) {
@@ -786,7 +801,7 @@ function topSpeedOf(k) {
   if (k.ghostT > 0) base *= 1.07;
   if (k.inkT > 0) base *= 0.88;
   if (k.bailoutT > 0) base *= 1.30;
-  if (k.offroad) base *= k.offroadDeep ? 0.55 : 0.72; // playtest retune: grass hurts, deep rough hurts more — neither kills you
+  base *= k.offFactor; // graduated offroad (see offroadFactor) — was: offroad ? (deep ? 0.55 : 0.72), plus a 0.38/s bleed
   return base;
 }
 function updateProgress(k) {
@@ -795,10 +810,11 @@ function updateProgress(k) {
   if (delta > N / 2) delta -= N; if (delta < -N / 2) delta += N;
   k.continuous += delta; k.sampleIdx = newIdx;
   k.lateral = lateralAt(k.pos, newIdx);
-  k.offroad = Math.abs(k.lateral) > HALF_W - 0.6;
-  k.offroadDeep = Math.abs(k.lateral) > HALF_W + 2.4;
-  if (Math.abs(k.lateral) > HALF_W + 5) { // wall clamp
-    k.pos.addScaledVector(normals[newIdx], -(Math.sign(k.lateral) * (Math.abs(k.lateral) - (HALF_W + 5))));
+  k.offFactor = offroadFactor(k.lateral);
+  k.offroad = k.offFactor < 1;          // any penalty band (dust, cap settle rate)
+  k.offroadDeep = k.offFactor <= 0.75;  // deep band (thick dust)
+  if (Math.abs(k.lateral) > HALF_W + 14) { // distant safety net only (was HALF_W+5) — the graduated factor, not a wall, is what slows you out there
+    k.pos.addScaledVector(normals[newIdx], -(Math.sign(k.lateral) * (Math.abs(k.lateral) - (HALF_W + 14))));
     k.speed *= 0.86;
   }
   const completed = Math.floor(k.continuous / N);
@@ -884,7 +900,7 @@ function updateKart(k, input, dt) {
     const brakeVal = input.brake === true ? 1 : (input.brake || 0); // analog brake (touch sticks) or digital
     if (brakeVal > 0.05) { if (k.speed > 1) k.speed -= 34 * brakeVal * dt; else k.speed = Math.max(-11, k.speed - 14 * brakeVal * dt); }
     k.speed -= k.speed * 0.22 * dt;
-    if (k.offroad) k.speed -= k.speed * 0.38 * dt; // sustained grass bleeds speed — brief clips are cheap, corner-cutting is not (balance guard)
+    if (k.offFactor < 1) k.speed -= k.speed * (0.30 * (1 - k.offFactor) / 0.45) * dt; // sustained bleed scales with depth: ~0.05/s on the shoulder, 0.30/s at the deep floor (was a flat 0.38/s from HALF_W-0.6) — corner-cutting still bleeds, the shoulder doesn't
     if (k.speed > cap) k.speed = Math.max(cap, k.speed - (k.offroad ? 16 : 30) * dt); // gentle settle onto the grass cap instead of a wall of drag
     if (k.speed < -11) k.speed = -11;
 
@@ -909,6 +925,13 @@ function updateKart(k, input, dt) {
       if (k.isPlayer && Math.random() < 0.06) showBark(`${k.racer.name}: “${pick(k.racer.barks.boost)}”`);
     }
     if (k.starT > 0 && Math.random() < 0.5) spawnParticles(k.pos, { count: 2, colors: [0xffe066, 0xffffff], speed: 3, life: 0.5, up: 3, gravity: 0 });
+    if (k.offFactor < 1 && k.speed > 6) { // offroad dust: a light haze on the shoulder, thick plumes in the deep band; tint per track/band
+      const deep = k.offFactor <= 0.75;
+      if (Math.random() < (deep ? 0.85 : 0.4)) {
+        const cols = selectedTrack === 1 ? (deep ? [0xb5563c, 0x8f3b26] : [0xd98a63, 0xc47a52]) : (deep ? [0x8a7a4a, 0x6b8f3e] : [0x9a9a9a, 0x7d7d7d]);
+        spawnParticles(k.pos.clone().addScaledVector(forwardVec(k.heading), -1.6), { count: deep ? 2 : 1, colors: cols, speed: 1.8, life: 0.55, up: 1.6, gravity: 0.8 });
+      }
+    }
   }
   const gripRate = k.drifting ? 2.4 : 9;
   k.velHeading = lerpAngle(k.velHeading, k.heading, clamp(gripRate * dt, 0, 1));
@@ -1002,14 +1025,27 @@ function grantItem(k) {
     updateItemSlot(); A.pickup(); showToast(`${it.icon} ${it.name}!`);
   }
 }
+const BOX_RESPAWN = 2.5, BOX_GHOST = 0.6; // was a flat 4s dead time, then an untelegraphed pop-in — following players couldn't time a box a rival had just taken
 function updateItemBoxes(dt) {
   for (const b of itemBoxes) {
     b.mesh.rotation.y += dt * 1.9;
     b.mesh.position.y = 1.7 + Math.sin(elapsed * 2.2 + b.phase) * 0.25;
-    if (!b.active) { b.respawnT -= dt; if (b.respawnT <= 0) { b.active = true; b.mesh.visible = true; } continue; }
+    if (!b.active) {
+      b.respawnT -= dt;
+      if (b.respawnT <= 0) { // live again: full opacity, full size, pickable
+        b.active = true; b.mesh.visible = true;
+        b.mesh.material.opacity = 1; b.mesh.scale.setScalar(1);
+      } else if (b.respawnT <= BOX_GHOST) { // ghost-in: the final 0.6s fades/scales the box back as a visible-but-not-yet-active telegraph
+        const t = 1 - b.respawnT / BOX_GHOST;
+        b.mesh.visible = true;
+        b.mesh.material.opacity = 0.25 + 0.55 * t;
+        b.mesh.scale.setScalar(0.6 + 0.4 * t);
+      }
+      continue;
+    }
     for (const k of karts) {
       if (k.item || k.finished) continue;
-      if (k.pos.distanceToSquared(b.mesh.position) < 8.5) { b.active = false; b.mesh.visible = false; b.respawnT = 4; grantItem(k); break; }
+      if (k.pos.distanceToSquared(b.mesh.position) < 8.5) { b.active = false; b.mesh.visible = false; b.mesh.material.opacity = 1; b.mesh.scale.setScalar(1); b.respawnT = BOX_RESPAWN; grantItem(k); break; }
     }
   }
 }

@@ -1692,7 +1692,7 @@ function animate() {
       clouds.forEach((c, i) => { c.position.x += dt * (1 + (i % 3)); if (c.position.x > 580) c.position.x = -580; });
     } else if (gameState === 'countdown') {
       countdownT -= dt;
-      const c = Math.ceil(countdownT);
+      const c = Math.min(3, Math.ceil(countdownT)); // countdownT starts at 3.6 (rocket-start sampling window) — never display "4" (#21)
       if (c !== lastCount && c >= 1) { lastCount = c; showCenter(String(c), 0.95); A.beep(false); if (c === 3) showToast('🏁 Hold GAS just before GO = ROCKET START', 1.9); }
       // ROCKET START: sample the player's throttle through the countdown
       const cinp = playerInput();

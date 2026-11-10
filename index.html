@@ -12,7 +12,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
 </script>
 </atem:invoke>
 </atem:function_calls></head>
@@ -52,8 +52,8 @@
 
 <!-- ============ CONTROL LAB: floating sticks / pedal + scheme buttons ============ -->
 <div id="stick-layer">
-  <div class="stick" id="stick-a"><div class="stick-nub"></div></div>
-  <div class="stick" id="stick-b"><div class="stick-nub"></div></div>
+  <div class="stick" id="stick-a"><div class="stick-nub"></div><div class="stick-brake-label">🛑 BRAKE</div></div>
+  <div class="stick" id="stick-b"><div class="stick-nub"></div><div class="stick-brake-label">🛑 BRAKE</div></div>
 </div>
 <div id="scheme-ui" class="hidden">
   <button class="tc-btn" id="btn-drift2">DRIFT</button>
@@ -105,12 +105,20 @@
     <h2 class="section-title">4 · Touch controls — Control Lab</h2>
     <div class="scheme-row">
       <button class="scheme-btn selected" data-scheme="buttons">🕹️ Buttons</button>
-      <button class="scheme-btn" data-scheme="stick1">👍 One-Thumb Stick</button>
+      <button class="scheme-btn" data-scheme="stick1">👍 Thumbstick</button>
       <button class="scheme-btn" data-scheme="sticks2">🕹️ Pedal &amp; Stick</button>
+      <button class="scheme-btn" data-scheme="dualstick">🕹️ Dual Stick</button>
       <button class="scheme-btn" data-scheme="autog">🚗 Auto-Gas</button>
     </div>
     <button class="smart-btn big-btn">🧭 Smart steering: Auto (Auto-Gas only)</button>
     <button class="adrift-btn big-btn">🌀 Auto-drift: Auto (Auto-Gas only)</button>
+
+    <h2 class="section-title">5 · Graphics</h2>
+    <div class="scheme-row" id="qual-row">
+      <button class="scheme-btn qual-btn" data-q="auto">✨ Auto</button>
+      <button class="scheme-btn qual-btn" data-q="high">🔆 High</button>
+      <button class="scheme-btn qual-btn" data-q="low">🔅 Low</button>
+    </div>
 
     <button id="btn-start">🏎️ START RACE</button>
     <div id="best-info"></div>
@@ -121,7 +129,7 @@
         <h3>Controls</h3>
         <p><b>Keyboard</b> — WASD / arrows · Space = item · Shift = drift · R = reset · P = pause</p>
         <p><b>Gamepad</b> — stick steer · RT/A gas · LT brake · X item · LB drift</p>
-        <p><b>Touch</b> — on-screen pedals, or tap 🧭 in-game for tilt steering</p>
+        <p><b>Touch</b> — on-screen pedals, or pick a Control Lab scheme above. <b>Thumbstick</b>: hold the right side = full gas, drag sideways to steer, pull <b>down</b> = full brake (the stick turns red + buzzes so you can't brake by accident), flick <b>up</b> = item, tap the left side = item. <b>Dual Stick</b>: left stick steers (quick tap = item), right stick drives — hold = gas, quick tap = drift hop (then hold the left stick turned to keep drifting), pull down = brake, flick up = item. In Dual Stick a split-second thumb lift won't cut your gas or steering — they latch for a beat (the stick stays lit gold). The item slot is always tappable in every scheme.</p>
         <p><b>Mouse</b> — hold click = gas, move mouse to steer</p>
       </div>
       <div class="help-box">
@@ -149,8 +157,9 @@
     <h2>⏸ Paused</h2>
     <div class="scheme-row">
       <button class="scheme-btn" data-scheme="buttons">🕹️ Buttons</button>
-      <button class="scheme-btn" data-scheme="stick1">👍 One-Thumb</button>
+      <button class="scheme-btn" data-scheme="stick1">👍 Thumbstick</button>
       <button class="scheme-btn" data-scheme="sticks2">🕹️ Pedal &amp; Stick</button>
+      <button class="scheme-btn" data-scheme="dualstick">🕹️ Dual Stick</button>
       <button class="scheme-btn" data-scheme="autog">🚗 Auto-Gas</button>
     </div>
     <button class="smart-btn big-btn">🧭 Smart steering: Auto (Auto-Gas only)</button>

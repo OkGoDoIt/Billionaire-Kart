@@ -37,6 +37,22 @@ if (!existsSync(threePath)) {
   console.log('Downloaded three.module.js to tools/vendor/ for request interception');
 }
 const threeCode = await readFile(threePath, 'utf-8');
+// three/addons modules (post chain, RoundedBoxGeometry) are vendored too — serve
+// each by its path; a missing addon 404s loudly instead of silently serving the
+// wrong file (the bug this replaces: every CDN URL used to get three.module.js).
+const addonCache = new Map();
+const intercept = p => p.on('request', async r => {
+  const u = r.url(), marker = '/examples/jsm/';
+  if (u.includes(marker)) {
+    const rel = u.split(marker)[1].split('?')[0];
+    try {
+      if (!addonCache.has(rel)) addonCache.set(rel, await readFile(join(vendorDir, 'addons', rel), 'utf-8'));
+      r.respond({ status: 200, contentType: 'text/javascript; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: addonCache.get(rel) });
+    } catch { r.respond({ status: 404, body: 'addon not vendored: ' + rel }); }
+  } else if (u.includes('cdn.jsdelivr.net/npm/three@')) {
+    r.respond({ status: 200, contentType: 'text/javascript; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: threeCode });
+  } else r.continue();
+});
 
 const errors = [];
 let browser;
@@ -46,18 +62,16 @@ try {
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--mute-audio', '--window-size=1280,800'],
   });
   const page = await browser.newPage();
+  await page.evaluateOnNewDocument(() => { try { localStorage.setItem('bk-quality', 'low'); } catch (e) { } }); // CI: bloom off — SwiftShader + composer otherwise crawls; visuals are QA-harness territory
   await page.setViewport({ width: 1280, height: 800 });
   await page.setRequestInterception(true);
-  page.on('request', r => {
-    if (r.url().includes('cdn.jsdelivr.net/npm/three@')) r.respond({ status: 200, contentType: 'text/javascript; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: threeCode });
-    else r.continue();
-  });
+  intercept(page);
   page.on('console', m => { if (m.type() === 'error') errors.push(`[console] ${m.text()}`); });
   page.on('pageerror', e => errors.push(`[pageerror] ${e.message}`));
   page.on('requestfailed', r => { if (!r.url().includes('sw.js')) errors.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`); });
 
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 90000 });
-  await page.waitForFunction(() => window.BK && document.querySelectorAll('.racer-tile').length === 17, { timeout: 30000 });
+  await page.goto(url, { waitUntil: 'load', timeout: 180000 }); // 'load', not networkidle2: SW revalidate fetches + shared-CPU contention make idle waits fragile
+  await page.waitForFunction(() => window.BK && document.querySelectorAll('.racer-tile').length === 17, { timeout: 90000 });
   await new Promise(r => setTimeout(r, 2500)); // let the menu orbit render a few frames
   const menuState = await page.evaluate(() => BK.state());
   console.log('Menu state:', menuState.state, '| karts:', menuState.karts.length);
@@ -65,12 +79,12 @@ try {
   const csCheck = await page.evaluate(() => {
     const tiles = document.querySelectorAll('.racer-tile');
     const imgs = document.querySelectorAll('.racer-tile img.tile-portrait');
-    const radars = document.querySelectorAll('.racer-tile svg.radar');
+    const radars = document.querySelectorAll('.racer-tile svg.pie');
     tiles[5].click();
-    return { tiles: tiles.length, imgs: imgs.length, dataSrc: [...imgs].every(im => im.src.startsWith('data:image/')), radars: radars.length, detail: document.getElementById('detail-name')?.textContent || '' };
+    return { tiles: tiles.length, imgs: imgs.length, dataSrc: [...imgs].every(im => im.src.startsWith('data:image/')), pies: radars.length, detail: document.getElementById('detail-name')?.textContent || '' };
   });
   console.log('Character Select v2:', JSON.stringify(csCheck));
-  if (!(csCheck.tiles === 17 && csCheck.imgs === 17 && csCheck.dataSrc && csCheck.radars === 17 && csCheck.detail === 'Satya')) throw new Error('ASSERT FAILED: character select v2 checks ' + JSON.stringify(csCheck));
+  if (!(csCheck.tiles === 17 && csCheck.imgs === 17 && csCheck.dataSrc && csCheck.pies === 17 && csCheck.detail === 'Satya')) throw new Error('ASSERT FAILED: character select v2 checks ' + JSON.stringify(csCheck));
   await page.screenshot({ path: join(ROOT, 'screenshots/menu.png') });
   console.log('Saved screenshots/menu.png');
 
@@ -127,14 +141,12 @@ try {
   const ctx2 = await browser.createBrowserContext();
   const page2 = await ctx2.newPage();
   await page2.setRequestInterception(true);
-  page2.on('request', r => {
-    if (r.url().includes('cdn.jsdelivr.net/npm/three@')) r.respond({ status: 200, contentType: 'text/javascript; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: threeCode });
-    else r.continue();
-  });
+  intercept(page2);
   page2.on('console', m => { if (m.type() === 'error') errors.push(`[mobile console] ${m.text()}`); });
   page2.on('pageerror', e => errors.push(`[mobile pageerror] ${e.message}`));
   page2.on('requestfailed', r => { if (!r.url().includes('sw.js')) errors.push(`[mobile requestfailed] ${r.url()}`); });
   await page2.emulate({ viewport: { width: 932, height: 430, isMobile: true, hasTouch: true, isLandscape: true }, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' });
+  await page2.evaluateOnNewDocument(() => { try { localStorage.setItem('bk-quality', 'low'); } catch (e) { } });
   // The SW's stale-while-revalidate spawns background CDN fetches that hang in the
   // sandbox and would keep networkidle2 from ever settling — disable SW in the bot.
   await page2.evaluateOnNewDocument(() => { if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.reject(new Error('bot: SW disabled')); });
@@ -159,13 +171,13 @@ try {
   const stickFire = (type, x, y, id = 42) => page2.evaluate((t, cx, cy, pid) => {
     document.getElementById('stick-layer').dispatchEvent(new PointerEvent(t, { pointerId: pid, clientX: cx, clientY: cy, bubbles: true, pointerType: 'touch', isPrimary: true }));
   }, type, x, y, id);
-  // Scheme 2 (One-Thumb Stick): press right side, drag up = throttle
+  // Scheme 2 (One-Thumb Stick v2): press-and-HOLD on the right side = full gas (#17)
   await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="stick1"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
   await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
   await stickFire('pointerdown', 700, 215);
   await stickFire('pointermove', 700, 140);
   await page2.waitForFunction(() => BK.state().player.speed > 6, { timeout: 30000, polling: 300 });
-  console.log('One-Thumb Stick: drag-up produced speed ✓');
+  console.log('One-Thumb Stick: hold produced speed ✓');
   await page2.screenshot({ path: join(ROOT, 'screenshots/mobile.png') });
   console.log('Saved screenshots/mobile.png (932x430 landscape)');
   await stickFire('pointerup', 700, 140);
@@ -179,6 +191,13 @@ try {
   await tapFire(150, 215, 43);
   if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: stick1 left-zone tap did not fire the item');
   console.log('One-Thumb Stick: left-zone tap fired item ✓');
+  // #17: flick up + release fires the item
+  await page2.evaluate(() => BK.giveItem('boost'));
+  await stickFire('pointerdown', 700, 215, 44);
+  await page2.evaluate(() => { const el = document.getElementById('stick-layer'); const mk = y => el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 44, clientX: 700, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true })); mk(205); mk(140); });
+  await stickFire('pointerup', 700, 140, 44);
+  if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: stick1 flick-up + release did not fire item');
+  console.log('One-Thumb Stick v2: flick-up + release fired item ✓');
   // Scheme 4 (Auto-Gas): tap gestures fire items; the kart also accelerates by itself
   await page2.evaluate(() => { document.querySelector('#screen-menu [data-scheme="autog"]').click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); });
   await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
@@ -209,6 +228,17 @@ try {
   if (await page2.evaluate(() => BK.state().player.item) !== null) throw new Error('ASSERT FAILED: pedal flick-up did not fire item');
   console.log('Pedal & Stick: flick-up fired item ✓');
   await stickFire('pointerup', 700, 215, 77);
+  // #16 P0: HUD pause button must respond in EVERY scheme — real tap -> pause menu -> Quit -> menu
+  for (const s of ['buttons', 'stick1', 'sticks2', 'autog']) {
+    await page2.evaluate(sc => { document.querySelector(`#screen-menu [data-scheme="${sc}"]`).click(); BK.start(0, 0); BK.setTimescale(3); BK.skipCountdown(); }, s);
+    await page2.waitForFunction(() => BK.state().state === 'racing', { timeout: 30000, polling: 400 });
+    const box = await page2.evaluate(() => { const b = document.getElementById('btn-pause').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; });
+    await page2.touchscreen.tap(box.x, box.y);
+    await page2.waitForFunction(() => !document.getElementById('screen-pause').classList.contains('hidden'), { timeout: 15000 });
+    await page2.evaluate(() => document.getElementById('btn-quit').click());
+    await page2.waitForFunction(() => BK.state().state === 'menu', { timeout: 15000 });
+    console.log(`#16 pause -> menu verified in scheme: ${s} ✓`);
+  }
   await page2.close();
 
   // ---- assertions ----

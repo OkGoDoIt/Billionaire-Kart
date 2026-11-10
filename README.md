@@ -51,9 +51,11 @@ big item slot also fires the item, with a haptic pulse.
 
 1. **🕹️ Buttons** (default) — the classic ◀ ▶ / GAS / BRAKE / ITEM / DRIFT clusters + slot tap.
 2. **👍 One-Thumb Stick** — touch anywhere on the right ~60% of the screen and a floating stick
-   appears under your thumb: drag left/right to steer, up for gas, down to brake — all proportional
-   (10 px deadzone, full at ~60 px). Release to coast. **Item: tap anywhere on the left ~40%** —
-   no aiming, your left thumb just slaps the side of the screen. Drift: big hold-button mid-left.
+   appears under your thumb: **press-and-hold = full gas** (no vertical throttle axis), drag
+   left/right to steer (proportional, 10 px deadzone, full at ~60 px), **pull down + hold = brake**,
+   **flick up + release = fire item**. Plain release = coast. **Item also: tap anywhere on the
+   left ~40%** — no aiming, your left thumb just slaps the side of the screen. Drift: big
+   hold-button mid-left.
 3. **🕹️ Pedal & Stick** — left thumb is a floating steering stick (X only). Right thumb is a *pedal*
    with a four-word vocabulary: **hold** = full gas · **drag down** past ~24 px = brake (proportional) ·
    **quick tap** = **drift hop** (Mario Kart Tour style: drift starts when you push the steer stick,

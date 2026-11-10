@@ -10,7 +10,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
 </script>
 </atem:invoke>
 </atem:function_calls></head>
@@ -107,6 +107,13 @@
     </div>
     <button class="smart-btn big-btn">🧭 Smart steering: Auto (Auto-Gas only)</button>
     <button class="adrift-btn big-btn">🌀 Auto-drift: Auto (Auto-Gas only)</button>
+
+    <h2 class="section-title">5 · Graphics</h2>
+    <div class="scheme-row" id="qual-row">
+      <button class="scheme-btn qual-btn" data-q="auto">✨ Auto</button>
+      <button class="scheme-btn qual-btn" data-q="high">🔆 High</button>
+      <button class="scheme-btn qual-btn" data-q="low">🔅 Low</button>
+    </div>
 
     <button id="btn-start">🏎️ START RACE</button>
     <div id="best-info"></div>

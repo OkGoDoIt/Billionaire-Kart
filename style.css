@@ -31,8 +31,8 @@ button { font-family:inherit; cursor:pointer; }
 @keyframes slotpulse { 0%,100%{ box-shadow:0 0 13px rgba(255,217,74,.35) } 50%{ box-shadow:0 0 32px rgba(255,217,74,.9) } }
 #item-icon { font-size:42px; line-height:1; }
 #item-name { font-size:10px; font-weight:800; text-align:center; padding:2px 4px 0; letter-spacing:.3px; }
-#top-btns { position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; }
-.icon-btn { width:44px; height:44px; border-radius:50%; border:2px solid rgba(255,255,255,.35); background:rgba(5,10,25,.6); font-size:20px; color:#fff; }
+#top-btns { position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; z-index:30; }
+.icon-btn { width:44px; height:44px; border-radius:50%; border:2px solid rgba(255,255,255,.35); background:rgba(5,10,25,.6); font-size:20px; color:#fff; pointer-events:auto; touch-action:manipulation; cursor:pointer; position:relative; z-index:30; }
 #wrong-way { position:absolute; top:22%; left:50%; transform:translateX(-50%); font-size:34px; font-weight:900; color:#ff5252; text-shadow:0 2px 10px #000; animation:blink .5s infinite alternate; }
 @keyframes blink { from{opacity:1} to{opacity:.35} }
 #center-msg { position:absolute; top:30%; left:50%; transform:translate(-50%,-50%); font-size:84px; font-weight:900; font-style:italic; text-align:center; text-shadow:0 4px 24px rgba(0,0,0,.8); white-space:nowrap; }
@@ -49,12 +49,12 @@ button { font-family:inherit; cursor:pointer; }
   radial-gradient(circle 4% at 12% 58%, rgba(12,6,26,.8) 60%, rgba(12,6,26,0) 75%); }
 
 /* ---------- Touch controls ---------- */
-#touch-controls { position:fixed; inset:auto 0 0 0; z-index:6; display:flex; justify-content:space-between; padding:0 12px calc(108px + env(safe-area-inset-bottom)) 12px; pointer-events:none; }
+#touch-controls { position:fixed; inset:auto 0 0 0; z-index:6; display:flex; justify-content:space-between; padding:0 12px calc(10px + env(safe-area-inset-bottom)) 12px; pointer-events:none; }
 .tc-cluster { display:flex; gap:12px; align-items:flex-end; pointer-events:auto; }
-.tc-btn { width:74px; height:74px; border-radius:50%; border:2px solid rgba(255,255,255,.5); background:rgba(10,16,40,.55); color:#fff; font-size:24px; font-weight:900; touch-action:none; user-select:none; -webkit-user-select:none; }
+.tc-btn { width:clamp(54px, 15vmin, 74px); height:clamp(54px, 15vmin, 74px); border-radius:50%; border:2px solid rgba(255,255,255,.5); background:rgba(10,16,40,.55); color:#fff; font-size:clamp(14px, 4.2vmin, 24px); font-weight:900; touch-action:none; user-select:none; -webkit-user-select:none; }
 .tc-btn.active { background:rgba(255,217,74,.75); color:#14213d; }
-.tc-small { width:62px; height:62px; font-size:13px; }
-.tc-gas { width:88px; height:88px; background:rgba(46,160,67,.55); }
+.tc-small { width:clamp(48px, 13vmin, 62px); height:clamp(48px, 13vmin, 62px); font-size:12px; }
+.tc-gas { width:clamp(64px, 18vmin, 88px); height:clamp(64px, 18vmin, 88px); background:rgba(46,160,67,.55); }
 .tc-brake { background:rgba(200,50,50,.5); font-size:15px; }
 @media (pointer:fine) { #touch-controls { display:none !important; } }
 
@@ -70,7 +70,7 @@ h1 { font-size:min(17vw,96px); font-weight:900; font-style:italic; line-height:.
 .racer-title { font-size:12px; font-weight:700; opacity:.85; }
 .racer-quote { font-size:12.5px; font-style:italic; opacity:.92; margin:7px 0 8px; min-height:30px; }
 .stat-row { display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:800; letter-spacing:.5px; margin-top:3px; }
-.stat-row span { width:44px; opacity:.8; }
+.stat-row span { width:98px; opacity:.8; }
 .stat-track { flex:1; height:7px; background:rgba(255,255,255,.18); border-radius:4px; overflow:hidden; }
 .stat-fill { height:100%; border-radius:4px; }
 #track-row { display:flex; gap:10px; flex-wrap:wrap; }
@@ -152,11 +152,13 @@ body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; le
 .tile-emoji { display:flex; align-items:center; justify-content:center; font-size:52px; }
 .tile-name { font-size:16px; font-weight:900; margin-top:7px; line-height:1.1; }
 .tile-title { font-size:11px; font-weight:700; opacity:.85; }
-.tile-viz { display:flex; align-items:center; justify-content:center; gap:7px; margin-top:4px; }
-.radar { width:58px; height:54px; flex:none; }
-.radar-ring { fill:none; stroke:rgba(255,255,255,.3); stroke-width:1; }
-.radar-lab { fill:#fff; opacity:.8; font-size:8px; font-weight:800; text-anchor:middle; }
-.tile-pips { font-size:11.5px; font-weight:800; letter-spacing:.4px; opacity:.95; white-space:nowrap; }
+.tile-viz { display:flex; flex-direction:column; align-items:center; gap:3px; margin-top:4px; }
+.pie { width:58px; height:54px; flex:none; }
+.pie-num { fill:#fff; font-size:10.5px; font-weight:900; text-anchor:middle; paint-order:stroke; stroke:rgba(0,0,0,.5); stroke-width:3px; }
+.tile-legend { width:100%; max-width:132px; font-size:9.5px; font-weight:800; letter-spacing:.3px; }
+.tile-legend div { display:flex; align-items:center; gap:5px; margin-top:1px; }
+.tile-legend i { width:8px; height:8px; border-radius:2px; flex:none; }
+.tile-legend b { margin-left:auto; font-size:10.5px; }
 #racer-detail { margin-top:12px; display:flex; gap:14px; align-items:flex-start; background:rgba(255,255,255,.08); border:3px solid rgba(255,255,255,.2); border-radius:16px; padding:12px; }
 .detail-portrait { width:118px; height:118px; flex:none; border-radius:12px; object-fit:cover; }
 .detail-emoji { display:flex; align-items:center; justify-content:center; font-size:56px; }

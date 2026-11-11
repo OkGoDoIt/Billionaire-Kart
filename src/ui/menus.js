@@ -10,7 +10,7 @@ import { fmtTime, ordinalSuffix } from '../core/util.js';
 const h = (tag, attrs = {}, ...kids) => {
   const e = document.createElement(tag);
   for (const k in attrs) { const v = attrs[k]; if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k === 'html') e.innerHTML = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v === true ? '' : v); }
-  for (const kid of kids.flat()) if (kid != null && kid !== false) e.append(kid.nodeType ? kid : document.createTextNode(kid));
+  for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) e.append(kid.nodeType ? kid : document.createTextNode(kid));
   return e;
 };
 const hex = n => '#' + n.toString(16).padStart(6, '0');
@@ -211,12 +211,17 @@ export class Menus {
   /* ---------- single track ---------- */
   s_tracks() {
     const A = this.app, flow = A.flow, cc = flow.cc || A.save.data.last.cc;
+    // all eight on one screen, a cup per row; the line under the title describes the track in focus
+    const head = this.header('Choose a track', '\u00a0'), sub = head.querySelector('p');
     const cards = TRACKS.map(t => {
       const best = A.save.bestFor(t.id, flow.mode === 'timetrial' ? 'tt' : cc);
-      return h('button', { class: 'card track', 'data-f': true, 'data-default': t.id === A.save.data.last.track, onclick: () => { A.save.data.last.track = t.id; A.save.write(); A.startSingle(t.id); } },
-        h('div', { class: 'track-thumb', style: t.thumb ? `background-image:url(${t.thumb})` : '' }, !t.thumb && h('span', {}, t.name[0])), h('h2', {}, t.name), h('p', {}, t.tagline || ''), best?.race && h('div', { class: 'cup-best' }, `Best: ${fmtTime(best.race)}`));
+      const card = h('button', { class: 'card track', 'data-f': true, 'data-default': t.id === A.save.data.last.track, onclick: () => { A.save.data.last.track = t.id; A.save.write(); A.startSingle(t.id); } },
+        h('div', { class: 'track-thumb', style: t.thumb ? `background-image:url(${t.thumb})` : '' }, !t.thumb && h('span', {}, t.name[0]), best?.race && h('em', { class: 'track-best' }, `Best ${fmtTime(best.race)}`)), h('h2', {}, t.name));
+      const say = () => { sub.textContent = t.tagline || '\u00a0'; };
+      card.addEventListener('menufocus', say); card.addEventListener('pointerenter', say);
+      return card;
     });
-    return { el: h('div', {}, this.header('Choose a track'), h('div', { class: 'cards tracks' }, cards)) };
+    return { el: h('div', {}, head, h('div', { class: 'cards tracks' }, cards)) };
   }
 
   /* ---------- pause ---------- */
@@ -274,14 +279,14 @@ export class Menus {
       const row = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: () => set(1) }, h('span', {}, label), h('div', { class: 'opt-ctl' }, val));
       row.addEventListener('adjust', e => set(e.detail)); return row;
     };
-    const onoff = [[true, 'On'], [false, 'Off']];
+    const onoff = [[true, 'On'], [false, 'Off']], touch = matchMedia('(pointer: coarse)').matches;   // touch settings only where there is a touch screen
     const pct = v => Math.round(v * 100) + '%';
     const el = h('div', {}, this.header('Options'), h('div', { class: 'panel options' },
       stepper('Music', 'music', pct), stepper('Sound effects', 'sfx', pct),
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
-      !matchMedia('(pointer: coarse)').matches && document.fullscreenEnabled && this.btn(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => { A.fullscreen(!document.fullscreenElement); this.back(); }, { cls: 'small' }),
+      !touch && document.fullscreenEnabled && this.btn(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => { A.fullscreen(!document.fullscreenElement); this.back(); }, { cls: 'small' }),
       cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff),
-      cycle('Touch: automatic accelerate', 'autoGas', onoff), cycle('Touch: tilt to steer', 'tilt', onoff)));
+      touch && cycle('Automatic accelerate', 'autoGas', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
     return { el };
   }
 
@@ -289,19 +294,26 @@ export class Menus {
   s_howto() {
     const touch = matchMedia('(pointer: coarse)').matches;
     const key = (...k) => h('span', { class: 'keys' }, k.map(x => h('kbd', {}, x)));
-    const controls = touch
-      ? [['Steer', 'Slide the left pad'], ['Accelerate', 'Automatic'], ['Drift', 'Hold DRIFT'], ['Use item', 'Tap ITEM'], ['Brake', 'Hold BRAKE']]
-      : [['Steer', key('A', 'D'), 'or', key('←', '→'), '· left stick'], ['Accelerate', key('W'), 'or', key('↑'), '· A or right trigger'], ['Drift and hop', key('Space'), '· right bumper or X'], ['Use item', key('E'), 'or', key('Enter'), '· left bumper or Y'], ['Brake and reverse', key('S'), 'or', key('↓'), '· B or left trigger'], ['Look behind', key('Q'), '· click the right stick'], ['Pause', key('Esc'), '· Start']];
+    // each action, and how to do it on each kind of control; the screen shows one kind at a time
+    const HOW = {
+      touch: [['Steer', 'Slide the left pad'], ['Accelerate', 'Automatic'], ['Drift', 'Hold DRIFT'], ['Use item', 'Tap ITEM'], ['Brake', 'Hold BRAKE']],
+      kb: [['Steer', [key('A', 'D'), 'or', key('←', '→')]], ['Accelerate', [key('W'), 'or', key('↑')]], ['Drift and hop', key('Space')], ['Use item', [key('E'), 'or', key('Enter')]], ['Brake and reverse', [key('S'), 'or', key('↓')]], ['Look behind', key('Q')], ['Pause', key('Esc')]],
+      pad: [['Steer', 'Left stick'], ['Accelerate', 'A or right trigger'], ['Drift and hop', 'Right bumper or X'], ['Use item', 'Left bumper or Y'], ['Brake and reverse', 'B or left trigger'], ['Look behind', 'Press the right stick'], ['Pause', 'Start']],
+    };
     const tips = [
-      ['Drift for speed', 'Hold drift while turning. Sparks go blue, then orange, then purple. Let go for a boost that lasts longer at each colour.'],
-      ['Start with a rocket', 'Hold accelerate just after the 2 appears in the countdown.'],
-      ['Trick off ramps', 'Press drift as you leave a ramp for a boost when you land.'],
-      ['Collect coins', 'Each coin makes you a little faster, up to ten. Getting hit costs you a few.'],
-      ['Follow closely', 'Stay right behind another kart for a moment to slingshot past.'],
-      ['Items favour the chasers', 'The further back you are, the better the items. Nobody is out of the race.'],
+      ['Drift for speed', 'Hold drift through a turn. Sparks go blue, orange, then purple. Let go to boost.'],
+      ['Start with a rocket', 'Hold accelerate just after the 2 appears.'],
+      ['Trick off ramps', 'Press drift as you leave a ramp for a boost.'],
+      ['Collect coins', 'Each coin makes you faster, up to ten.'],
+      ['Follow closely', 'Tuck in behind a kart to slingshot past.'],
     ];
+    const body = h('tbody', {});
+    let kind = touch ? 'touch' : this.app.input.lastDevice.startsWith('pad') ? 'pad' : 'kb';
+    const chips = touch ? [] : [['kb', 'Keyboard'], ['pad', 'Controller']].map(([id, label]) => { const b = h('button', { class: 'chip', 'data-f': true, onclick: () => { kind = id; show(); } }, label); b.dataset.kind = id; return b; });
+    const show = () => { body.replaceChildren(...HOW[kind].map(c => h('tr', {}, h('th', {}, c[0]), h('td', {}, h('span', { class: 'ctl-how' }, c[1]))))); for (const b of chips) b.classList.toggle('sel', b.dataset.kind === kind); };
+    show();
     const el = h('div', {}, this.header('How to play'), h('div', { class: 'howto' },
-      h('div', { class: 'panel' }, h('h3', {}, 'Controls'), h('dl', {}, controls.map(c => [h('dt', {}, c[0]), h('dd', {}, c.slice(1).map(x => typeof x === 'string' ? h('span', {}, x) : x))]))),
+      h('div', { class: 'panel' }, h('div', { class: 'howto-head' }, h('h3', {}, 'Controls'), chips.length > 0 && h('div', { class: 'chips' }, chips)), h('table', { class: 'ctl' }, body)),
       h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1])))))),
       h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true })));
     return { el };

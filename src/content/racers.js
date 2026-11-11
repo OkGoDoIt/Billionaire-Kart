@@ -67,7 +67,7 @@ export const RACERS = [
   R('ellison', 'Ellison', 'The Yachtsman', [5, 2, 3, 4], [0xc8222a, 0xf4f1ea],
     { skin: 0xd99668, hair: 'short', hairColor: 0x8a8a8a, outfit: 'racing', top: 0xc8222a, accent: 0xf4f1ea, hat: 'cap', beard: 0x9a9a9a, kart: 'yacht' },
     'I own the island, the database, and now the news.',
-    { hit: ['My lawyers will hear about this.', 'That will cost you a licence fee.'], boost: ['Hostile takeover of first place!', 'Full sail!'], win: 'As reported first by my own networks.', lose: 'I will simply acquire the podium.' }),
+    { hit: ['My lawyers will hear about this.', 'That will cost you a license fee.'], boost: ['Hostile takeover of first place!', 'Full sail!'], win: 'As reported first by my own networks.', lose: 'I will simply acquire the podium.' }),
   R('murdoch', 'Murdoch', 'The Succession', [3, 2, 4, 4], [0x7a1626, 0x24262c],
     { skin: 0xf0cdb0, hair: 'baldsides', hairColor: 0xe6e6e6, outfit: 'suit', top: 0x1a1a1e, accent: 0x7a1626, kart: 'press' },
     'I have outlived every rival. And every heir’s lawyer.',

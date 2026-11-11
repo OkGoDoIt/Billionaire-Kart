@@ -1,23 +1,27 @@
-# Contributing — Billionaire Kart (agent workflow)
+# Contributing
 
-This repo is built by a team of AI agents coordinated from Roger's chat. These rules are standing orders from Roger.
+This repo is built by Roger and a team of AI agents. These are the working rules.
 
-## Branches & pushes
-- Work on your own `wip/<area>` branch in your own clone. Commit early and often.
-- ALL GitHub writes go through the PAT helper: `python3 ~/workspace/custom-connectors/custom.github-pat/bin/gh.py push <repo_dir> <branch> [msg]` (Git Data API; binary files OK). Do NOT use the old GitHub connector push tools (they raise an approval card per call) and do NOT use SSH (the VM egress proxy blocks it).
-- The integration pass (every ~15 min) mirrors WIP branches, merges to `main` in order gameplay → graphics → tracks/polish, and only pushes `main` when `tools/bot-test.mjs` passes on the merged tree.
+## Where things go
 
-## Issues
-- The GitHub Issues list is the backlog. Reference issue numbers in commit messages (`#7`) when a commit addresses one.
-- New work that is not on the list gets an issue first (create via `gh.py api POST /repos/OkGoDoIt/Billionaire-Kart/issues`).
+- The game is a static site with no build step. `README.md` has the folder map.
+- A track is one file in `src/tracks/`, plus optional props in `src/models/props-<id>.js`. Follow [docs/track-authoring.md](docs/track-authoring.md) exactly; it is the contract.
+- Art and audio live under `assets/`. Generated assets must be reproducible: add the prompt to the matching script in `tools/`.
+- Do not hand-edit generated files (`src/content/faces.js`, `src/content/audio-manifest.js`).
 
-## Pull requests — SCREENSHOTS REQUIRED (Roger's rule, Nov 10 2026)
-- Every pull request MUST include screenshots showcasing what changed or what the new feature looks like. No exceptions for visual/gameplay work; for pure-infrastructure PRs, include the most relevant visual evidence available (test output image, before/after, or the affected screen).
-- How: capture screenshots (desktop 1280x800 and, for anything touching HUD/controls/menus, mobile landscape 932x430), save them in the repo under `screenshots/pr-<pr-or-branch-slug>/` on your branch, and embed them in the PR body with raw URLs, e.g. `![Menu](https://raw.githubusercontent.com/OkGoDoIt/Billionaire-Kart/<branch>/screenshots/pr-xyz/menu.png)`.
-- A PR without screenshots is incomplete and will be sent back.
-- Also include in the PR body: what changed, the bot-test result, and `Closes #<issue>` lines for the issues it completes.
+## Branches, issues, pull requests
 
-## Definition of done
-- `tools/bot-test.mjs` passes with zero console/page errors.
-- Screenshots taken and attached per the PR rule.
-- Commit messages say what changed and reference issues.
+- Work on your own branch and land through a pull request. Reference the issue number in commit messages.
+- New work that is not on the issue list gets an issue first.
+- **Every pull request includes screenshots** of what changed (Roger's rule). Save them under `screenshots/` on your branch and embed them with raw URLs. `node tools/shot.mjs` and `node tools/track-shots.mjs` take them without a visible browser.
+- Parody only: no real logos or trademarks in art, and nothing presented as fact about a real person.
+
+## Before you open a pull request
+
+```bash
+node tools/sim.mjs --quick      # every track: no FAIL lines
+node tools/bot.mjs              # menus to results in a real browser: prints "bot: ok"
+node tools/bot.mjs --mobile     # the same at phone size with touch
+```
+
+All three must pass, and the screenshots must have been looked at by whoever made the change.

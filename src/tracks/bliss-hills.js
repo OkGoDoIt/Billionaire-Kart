@@ -95,9 +95,9 @@ export default {
   ],
   obstacles: [
     // error dialogs drifting across the road
-    { kind: 'patrol', model: 'dialog', at: 4.3, lats: [-6, 6], speed: 4, effect: 'spin', radius: 1.7 },
-    { kind: 'patrol', model: 'dialog', at: 22.7, lats: [6, -6], speed: 4.5, effect: 'spin', radius: 1.7 },
-    { kind: 'patrol', model: 'dialog', at: 27.0, lats: [-6, 6], speed: 5, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 4.3, lats: [1.5, 6.5], speed: 4, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 22.7, lats: [-1.5, -6.5], speed: 4.5, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 27.0, lats: [1.5, 6.5], speed: 5, effect: 'spin', radius: 1.7 },
     // hay bales scattered over the meadow shortcut
     { kind: 'static', model: 'bale', at: 22.2, lat: 18, effect: 'bump', radius: 1.6 },
     { kind: 'static', model: 'bale', at: 22.75, lat: 25, effect: 'bump', radius: 1.6 },

@@ -14,7 +14,8 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 
 ## What is in it
 
-- **Grand Prix, Quick Race, and Time Trial**, with three engine classes and three levels of rivals.
+- **Eight tracks in two cups**, each with its own signature moment, soundtrack, and hazards.
+- **Grand Prix, Quick Race, and Time Trial** (with a ghost of your best run), three engine classes, and three levels of rivals.
 - **One to four players** on one screen.
 - **Sixteen racers** with their own stats, karts in their colours, and things to say when they hit you.
 - **Sixteen items**, weighted by position. Leaders get defence; the back of the pack gets the comeback kit.
@@ -25,6 +26,7 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 |---|---|
 | ![Silicon Valley Circuit](screenshots/race-silicon-valley.jpg) | ![Bliss Hills](screenshots/race-bliss-hills.jpg) |
 | ![Burning Circuit](screenshots/race-burning-circuit.jpg) | ![Four-player split-screen](screenshots/split-screen.jpg) |
+| ![Datacenter Dash](screenshots/race-datacenter-dash.jpg) | ![Mars Colony](screenshots/race-mars-colony.jpg) |
 | ![Racer select](screenshots/racers.jpg) | ![On a phone](screenshots/phone.jpg) |
 
 ## Controls
@@ -51,7 +53,14 @@ Two players can share a keyboard: one on W A S D with Space, the other on the ar
 
 ## Tracks
 
-Silicon Valley Circuit, Bliss Hills, Crypto Cove, and Burning Circuit are in. Datacenter Dash, Capitol Hill Climb, Mars Colony, and Singularity Speedway are being built and will complete the two cups.
+| Seed Round Cup | Unicorn Cup |
+|---|---|
+| **Silicon Valley Circuit**: sunny campus loop, a crest jump, a rocket that launches mid-race | **Capitol Hill Climb**: a red-carpet run through the rotunda, then three hairpins down |
+| **Bliss Hills**: rolling crests, a wind farm, error dialogs wandering the road | **Burning Circuit**: fire slalom and a jump through a ring of flame at dusk |
+| **Crypto Cove**: a plank pier over the bay with a gap to clear, then a cave | **Mars Colony**: low gravity and a 43-metre canyon jump |
+| **Datacenter Dash**: a neon server hall, a bridge over the coolant pond, a dam crest | **Singularity Speedway**: a rainbow road spiralling around a newborn superintelligence |
+
+![Singularity Speedway](screenshots/race-singularity-speedway.jpg)
 
 ## Running it yourself
 

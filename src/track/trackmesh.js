@@ -187,7 +187,7 @@ export function buildTrackMesh(track, look = {}) {
     const gB = new Geo(), gW = new Geo(true);
     const hit = { y: 0 };
     const cWall = rgb(L.wall), cStripe = rgb(L.wallStripe);
-    const BH = 1.25, adLen = 40; // one banner texture tile spans this many metres
+    const BH = 1.4, adLen = BH * 2 * 4; // four 2:1 boards per texture tile
     for (const side of [1, -1]) {
       const hw = side > 0 ? hwL : hwR, edge = side > 0 ? track.edgeL : track.edgeR, outA = side > 0 ? track.outerL : track.outerR;
       let prevB = -1, prevW = -1;

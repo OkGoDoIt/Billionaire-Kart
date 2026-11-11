@@ -105,3 +105,38 @@ export class IntroCam {
     return Q;
   }
 }
+
+/** Trackside television cameras for the attract mode: fixed positions that pan and zoom with the leaders. */
+export class TvCam {
+  constructor(kart, track) {
+    this.kart = kart; this.track = track; this.mode = 'tv';
+    this.camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.3, 2600);
+    for (let l = TAG_LAYER; l < TAG_LAYER + 6; l++) this.camera.layers.enable(l);
+    this.focus = new THREE.Vector3(); this.look = new THREE.Vector3(); this.station = -1; this.fov = 40; this.t = 0; this.rear = false;
+    this.spacing = 120;
+  }
+  snap() { this.station = -1; }
+  addShake() {}
+  _place(k) {
+    const tr = this.track, st = Math.floor((k.s + 55) / this.spacing);
+    if (st === this.station) return;
+    this.station = st;
+    const s = st * this.spacing + this.spacing * 0.45, i = Math.floor(((s % tr.length) + tr.length) % tr.length / tr.ds) % tr.N;
+    const side = st % 2 ? 1 : -1, hw = side > 0 ? tr.hwL[i] : tr.hwR[i], wall = (side > 0 ? tr.edgeL[i] : tr.edgeR[i]) !== 0;
+    const lat = side * (hw + (wall ? 2.5 : 7)), hx = Math.hypot(tr.lx[i], tr.lz[i]) || 1;
+    const x = tr.px[i] + (tr.lx[i] / hx) * lat, z = tr.pz[i] + (tr.lz[i] / hx) * lat;
+    const ground = tr.hasTerrain && !tr.bridge[i] ? Math.max(tr.terrainHeight(x, z), tr.py[i] - 2) : tr.py[i];
+    this.camera.position.set(x, Math.max(ground, tr.py[i]) + (st % 3 === 0 ? 2.2 : 6.5), z);
+    this.look.set(k.x, k.y + 1, k.z);
+  }
+  update(dt, view) {
+    const k = this.kart, cam = this.camera, p = view.pos;
+    this.t += dt; this._place(k);
+    this.look.lerp(_look.set(p.x, p.y + 1.1, p.z), 1 - Math.exp(-9 * dt));
+    cam.lookAt(this.look);
+    const d = cam.position.distanceTo(this.look), want = clamp(900 / Math.max(8, d), 16, 58);
+    this.fov = damp(this.fov, want, 3, dt);
+    if (Math.abs(cam.fov - this.fov) > 0.05) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
+    this.focus.copy(this.look);
+  }
+}

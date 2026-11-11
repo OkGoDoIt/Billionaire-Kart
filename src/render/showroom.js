@@ -63,7 +63,8 @@ export class Showroom {
       const rig = buildKart(racer); holder.add(rig.root);
       this.slots.push({ group, holder, racer, rig, spin: false, angle: 0.5 - i * 0.5 + (i === 2 ? 0.3 : 0), pop: 0, podium: i });
     });
-    this.camWant.set(0, 3.2, 14.5); this.lookWant.set(0, 1.9, 0); this.podium = true;
+    // the standings panel sits on the right, so frame the podium in the left part of the screen
+    this.camWant.set(3.9, 3.4, 17.5); this.lookWant.set(3.9, 1.7, 0); this.podium = true;
   }
 
   update(dt) {

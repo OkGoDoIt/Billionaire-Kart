@@ -28,7 +28,7 @@ export class RaceSession {
     const entries = [...pool.map(racer => ({ racer, player: -1, level: config.level || 'normal' })), ...humans.map((racer, i) => ({ racer, player: i, autoTrick: config.players[i].autoTrick }))];
     if (config.order) entries.sort((a, b) => config.order.indexOf(a.racer.id) - config.order.indexOf(b.racer.id));
     this.race = new Race({ track, cc: config.cc || 150, laps: config.laps, seed: (config.seed ?? 1) + 17, entries, mode: config.mode, countdown: config.countdown });
-    this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k) });
+    this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k), tv: !!config.tv });
     app.input.assign = config.players.length === 1 ? ['any'] : config.players.map(p => p.device);
     this.autopilots = config.auto ? this.race.players.map(k => new AIDriver(k, 'hard', makeRng(99))) : null;
     // HUD per player
@@ -42,6 +42,12 @@ export class RaceSession {
       this.huds[0].root.classList.add('hud-touch'); this.race.players[0].autoTrick = true;
     } else app.input.touch.active = false;
     for (const c of this.view.cams) c.shakeScale = app.shake === false ? 0 : 1;
+    // time trial: race your own best run, and record this one
+    this.rec = null;
+    if (config.mode === 'timetrial' && this.race.players.length === 1) {
+      this.view.setGhost(app.save?.ghost(config.trackId));
+      this.rec = { racer: this.race.players[0].racer.id, step: 0.1, d: [], next: 0 };
+    }
     this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;
     if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); this.touch?.setVisible(false); app.audio?.event('introStart', def); }
     else app.audio?.event('countdownStart', def);
@@ -92,6 +98,7 @@ export class RaceSession {
         if (this.autopilots) inp = this.autopilots.map(a => a.think(STEP));
         race.step(STEP, inp);
         this.acc -= STEP;
+        if (this.rec && !race.frozen && race.time >= this.rec.next && this.rec.d.length < 4 * 4000) { const k = race.players[0]; this.rec.next += this.rec.step; this.rec.d.push(+k.x.toFixed(2), +k.y.toFixed(2), +k.z.toFixed(2), +k.yaw.toFixed(3)); }
       }
       for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
       if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';

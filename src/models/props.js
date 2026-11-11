@@ -116,6 +116,7 @@ export function cone3d() {
 
 /** Big billboard on legs. `map` is any texture (2:1). */
 export function billboard(map, { w = 14, h = 7, legs = 7, frame = 0x23252c } = {}) {
+  if (map?.userData?.boardAspect) h = w / map.userData.boardAspect;   // sponsor boards keep their shape
   const grp = new THREE.Group(), b = new ModelBuilder();
   for (const sx of [1, -1]) { b.add('f', cyl(0.28, 0.34, legs + h * 0.5, 8), { p: [sx * w * 0.32, (legs + h * 0.5) / 2, -0.3] }); }
   b.add('f', box(w + 0.6, h + 0.6, 0.4, 0.1, 2), { p: [0, legs + h / 2, -0.22] });

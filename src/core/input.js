@@ -31,6 +31,7 @@ export class Input {
       if (MENU_KEYS[e.code]) this._menu(MENU_KEYS[e.code], this._kbDeviceFor(e.code));
       if (e.code === 'KeyR') this._menu('reset', 'kb');
       if (e.code === 'KeyM') this._menu('mute', 'kb');
+      if (e.code === 'KeyF' && e.altKey || e.code === 'F11') this._menu('fullscreen', 'kb');
     });
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());

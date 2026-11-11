@@ -24,7 +24,11 @@ export class Scenery {
   }
 
   /** Ground height at a point (road, shoulder, or terrain). */
-  y(x, z) { return this.track.ground(x, z, -1, this.hit).y; }
+  y(x, z) {
+    const h = this.track.ground(x, z, -1, this.hit);
+    // with no land under a point (space tracks, beyond a void edge), sit at the height of the nearest road
+    return h.y < -1e3 ? this.track.py[h.i] : h.y;
+  }
 
   /**
    * Evenly spaced placements beside the road.

@@ -49,6 +49,7 @@ export class App {
 
   onMenu(action, device) {
     if (action === 'mute') { this.audio?.toggleMute?.(); return; }
+    if (action === 'fullscreen') { this.fullscreen(!document.fullscreenElement); return; }
     if (this.menus.visible) { this.menus.handle(action, device); return; }
     const s = this.session; if (!s || this.attract) return;
     if (action === 'pause' || (action === 'back' && device.startsWith('kb'))) { if (s.phase !== 'intro' && s.race.state !== 'done') this.pause(); else s.skipIntro(); }
@@ -64,6 +65,18 @@ export class App {
     if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
     this.audio?.setVolumes?.(S.music, S.sfx);
     this.shake = S.shake;
+  }
+
+  /** Enter or leave full screen; on phones also ask for landscape. Must be called from a user gesture. */
+  fullscreen(on) {
+    try {
+      if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.({ navigationUI: 'hide' })?.then(() => screen.orientation?.lock?.('landscape')?.catch(() => {})).catch(() => {});
+      else if (!on && document.fullscreenElement) document.exitFullscreen?.();
+    } catch { /* not supported here */ }
+  }
+  /** Keep the screen awake while racing (phones dim otherwise, especially with tilt steering). */
+  async _wake(on) {
+    try { if (on && !this.wakeLock && navigator.wakeLock) { this.wakeLock = await navigator.wakeLock.request('screen'); this.wakeLock.addEventListener('release', () => { this.wakeLock = null; }); } else if (!on && this.wakeLock) { await this.wakeLock.release(); this.wakeLock = null; } } catch { /* unsupported or denied */ }
   }
 
   /** Fade to dark, swap the scene, fade back. */
@@ -118,7 +131,7 @@ export class App {
   }
   _race(config, cupLine = '') {
     this.lastConfig = config; this.lastCupLine = cupLine;
-    this.menus.close();
+    this.menus.close(); this._wake(true);
     return this.transition(() => {
       this._clearScene();
       config.seed = Math.floor(this.rng() * 1e6);
@@ -147,7 +160,7 @@ export class App {
 
   restartRace() { this.menus.close(); this._race(this.lastConfig, this.lastCupLine); }
   backToTracks() { this.transition(() => { this._attract(); this.menus.reset('main'); this.menus.open('tracks'); }); }
-  quitToMenu() { this.gp = null; this.transition(() => { this._attract(); this.menus.reset('main'); this.audio?.music?.('menu'); }); }
+  quitToMenu() { this.gp = null; this._wake(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.audio?.music?.('menu'); }); }
 
   /* ---------- pause ---------- */
   pause() { if (!this.session || this.attract || this.session.paused) return; this.session.setPaused(true); this.session.touch?.setVisible(false); this.menus.reset('pause'); }

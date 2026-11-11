@@ -91,7 +91,7 @@ export class Menus {
 
   /* ---------- title ---------- */
   s_title() {
-    const go = () => { this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); };
+    const go = () => { if (matchMedia('(pointer: coarse)').matches) this.app.fullscreen(true); this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); };
     const el = h('div', { onclick: go },
       h('div', { class: 'logo' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c))), h('div', { class: 'logo-tag' }, 'Eight egos. One trophy.')),
       h('div', { class: 'press' }, matchMedia('(pointer: coarse)').matches ? 'Tap to start' : 'Press any button'),
@@ -129,7 +129,8 @@ export class Menus {
     const A = this.app, joined = [];
     const list = h('div', { class: 'join-list' });
     const draw = () => {
-      list.replaceChildren(...Array.from({ length: n }, (_, i) => h('div', { class: 'join-slot' + (joined[i] ? ' in' : ''), style: `--pc:${PLAYER_COLORS[i]}` }, h('b', {}, `P${i + 1}`), h('span', {}, joined[i] ? DEVICE_LABEL[joined[i]] || joined[i] : i === joined.length ? 'Press a button to join' : 'Waiting'))));
+      const keys = d => d === 'kb1' ? 'W A S D steer · Space drift · E item' : d === 'kb2' ? 'Arrows steer · Right Shift drift · Enter item' : 'Stick steer · A go · Right bumper drift · Left bumper item';
+      list.replaceChildren(...Array.from({ length: n }, (_, i) => h('div', { class: 'join-slot' + (joined[i] ? ' in' : ''), style: `--pc:${PLAYER_COLORS[i]}` }, h('b', {}, `P${i + 1}`), h('span', {}, joined[i] ? [DEVICE_LABEL[joined[i]] || joined[i], h('small', {}, keys(joined[i]))] : i === joined.length ? 'Press a button to join' : 'Waiting'))));
     };
     draw();
     const el = h('div', {}, this.header('Join the race', 'Each player presses a button on their own controller. Two can share a keyboard: W A S D with Space, and the arrow keys with Enter.'), list);
@@ -275,6 +276,7 @@ export class Menus {
     const el = h('div', {}, this.header('Options'), h('div', { class: 'panel options' },
       stepper('Music', 'music', pct), stepper('Sound effects', 'sfx', pct),
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
+      !matchMedia('(pointer: coarse)').matches && document.fullscreenEnabled && this.btn(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => { A.fullscreen(!document.fullscreenElement); this.back(); }, { cls: 'small' }),
       cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff),
       cycle('Touch: automatic accelerate', 'autoGas', onoff), cycle('Touch: tilt to steer', 'tilt', onoff)));
     return { el };

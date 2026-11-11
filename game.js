@@ -50,7 +50,7 @@ const RACERS = [
     barks: { hit: ['Reptilian reflexes… failed', 'Metaverse, render my revenge!'], boost: ['Legs update installed', 'Smoking these meats!', 'Zuckaissance, baby'], win: 'Sweet Baby Ray’s for everyone.' } },
   { name: 'Bezos', title: 'Prime Mover',       emoji: '📦', color: 0xff9900, suit: 0x232f3e, skin: 0xf0bd8d, spd: 5, acc: 2, grip: 3, quote: '“Your overtake arrives tomorrow. Mine is today.”',
     barks: { hit: ['That package was fragile!', 'Customer obsession, my foot', 'One-third of my pit crew is gone'], boost: ['Same-day shipping!', 'Day 1! Still Day 1!'], win: 'Delivered. On time. You’re welcome.' } },
-  { name: 'Jensen', title: 'Leather Jacket',  emoji: '🏎️', color: 0x76b900, suit: 0x17181c, skin: 0xe8b98a, spd: 4, acc: 4, grip: 4, quote: '“The more you race, the more you save.”',
+  { name: 'Jensen', title: 'Leather Jacket',  emoji: '🏎️', color: 0x76b900, suit: 0x17181c, skin: 0xe8b98a, spd: 4, acc: 4, grip: 4, quote: '“The board is investigating. The FBI is investigating. My wife is investigating.”',
     barks: { hit: ['Jensen down! Leather scuffed!', 'That was not CUDA-accelerated'], boost: ['GPU GO BRRR', 'Tensor cores engaged'], win: 'Jacket #34 of 40, if you\'re counting' } },
   { name: 'Satya', title: 'Cloud Boss',        emoji: '☁️', color: 0x00a4ef, suit: 0x35424e, skin: 0xc98d5f, spd: 4, acc: 4, grip: 3, quote: '“Hit refresh. On the whole leaderboard.”',
     barks: { hit: ['Unexpected downtime!', 'Growth mindset… growth mindset…'], boost: ['Azure skies ahead', 'Empower every racer? No. Just me.'], win: 'A cloud-first, mobile-first victory.' } },
@@ -103,20 +103,27 @@ function sceneryContext() { return { THREE, scene, samples, normals, tangents, N
 const BILLBOARDS = ['AGI COMING SOON™', 'GPU GO BRRR', 'THIS SIGN COST $4.20', 'NOW HIRING: PROMPT WHISPERERS', 'MARS OR BUST', 'YOUR DATA HERE', 'NOT FINANCIAL ADVICE', 'SYNERGY DOWNSHIFT AHEAD', 'PIVOT! PIVOT!', 'DISRUPTING TRAFFIC SINCE 2026'];
 
 /* ================= ITEMS ================= */
+/* Item data — the SINGLE source for iconography + wording (#50): the menu
+   guide, the held-item slot, the roulette and the pickup toast all read the
+   artwork (`img`, generated assets under assets/items/) and `desc` from here,
+   so they can never drift apart. Descriptions are modelled on Nintendo's
+   official Mario Kart 8 Deluxe item text (structure + brevity), re-themed
+   only where the item differs, and every number is reconciled against the
+   mechanics constants in useItem/updateKart — the code wins over old copy. */
 const ITEMS = {
-  boost:    { icon: '💰', name: 'Series A Boost', desc: 'Instant speed boost — about 1.5 s of extra pace' },
-  banana:   { icon: '💧', name: 'Data Leak', desc: 'Drop a slick data puddle behind you — rivals who hit it spin out' }, // internal id stays 'banana'; everything user-visible is Data Leak
-  green:    { icon: '📜', name: 'Subpoena', desc: 'Fires straight ahead — spins out the first kart it hits' },
-  red:      { icon: '🐦', name: 'Viral Tweet', desc: 'Homes in on the kart ahead of you and spins them out' },
-  blue:     { icon: '⚖️', name: 'Antitrust Suit', desc: 'Flies to the race leader and explodes — spins everyone caught in the blast' },
-  star:     { icon: '⭐', name: 'Viral Moment', desc: 'Invincible for 6 s — shrug off hits and spin rivals just by bumping them' },
-  lightning:{ icon: '📉', name: 'Market Crash', desc: 'Shrinks every kart ahead of you for ~3.5 s — shrunk karts crawl' },
-  horn:     { icon: '📣', name: 'Spin Team', desc: 'Shockwave: destroys nearby items, spins adjacent karts — and swats an Antitrust Suit out of the air' },
-  bomb:     { icon: '💣', name: 'Pink Slip', desc: 'Drops a bomb behind you — blows on a 1.6 s fuse or on contact, spinning karts in the blast' },
-  blooper:  { icon: '📰', name: 'Smear Campaign', desc: 'Splats ink over the screen of every kart ahead of you for ~2.5 s' },
-  boo:      { icon: '👻', name: 'Insider Trading', desc: 'Turn intangible for 3 s with a small boost — and steal a random rival’s item' },
-  golden:   { icon: '🏆', name: 'Series F', desc: 'A 5 s funding window — keep tapping ITEM to re-boost until it closes' },
-  bailout:  { icon: '🛟', name: 'Government Bailout', desc: 'Auto-drives you back into the fight for up to 5.5 s — ends early when you reach 3rd' },
+  boost:    { icon: '💰', img: 'assets/items/boost.webp', name: 'Series A Boost', desc: 'Gives your kart a short boost — about 1.6 s of extra pace.' },
+  banana:   { icon: '💧', img: 'assets/items/banana.webp', name: 'Data Leak', desc: 'Drop a slick puddle behind you. Spins any kart that drives over it.' }, // internal id stays 'banana'; everything user-visible is Data Leak
+  green:    { icon: '📜', img: 'assets/items/green.webp', name: 'Subpoena', desc: 'Travels in a straight line and spins out the first kart it hits.' },
+  red:      { icon: '🐦', img: 'assets/items/red.webp', name: 'Viral Tweet', desc: 'Homes in on the kart in front of you and spins it out.' },
+  blue:     { icon: '⚖️', img: 'assets/items/blue.webp', name: 'Antitrust Suit', desc: 'Homes in on the lead kart and explodes. Every kart caught in the blast spins out.' },
+  star:     { icon: '⭐', img: 'assets/items/star.webp', name: 'Viral Moment', desc: 'Makes you invincible for 6 s. Your speed is also increased, and any kart you bump will spin out.' },
+  lightning:{ icon: '📉', img: 'assets/items/lightning.webp', name: 'Market Crash', desc: 'Strikes every kart in front of you. Rivals shrink and slow down for about 5 s, and drop the item they were holding.' },
+  horn:     { icon: '📣', img: 'assets/items/horn.webp', name: 'Spin Team', desc: 'Emits a large sonic blast that destroys nearby items and spins karts beside you. It can also swat an Antitrust Suit out of the air.' },
+  bomb:     { icon: '💣', img: 'assets/items/bomb.webp', name: 'Pink Slip', desc: 'Dropped behind you. Explodes after 1.6 s or when a kart hits it — karts caught in the blast spin out.' },
+  blooper:  { icon: '📰', img: 'assets/items/blooper.webp', name: 'Smear Campaign', desc: 'Shoots ink at all karts in front of you, obscuring their vision for 2.5 s — and slowing them slightly.' },
+  boo:      { icon: '👻', img: 'assets/items/boo.webp', name: 'Insider Trading', desc: 'Your kart turns intangible for 3 s, passing through items and hazards — with a small boost. In addition, you’ll steal an item from a rival.' },
+  golden:   { icon: '🏆', img: 'assets/items/golden.webp', name: 'Series F', desc: 'For 5 s, each press of the item button gives you another boost. Keep pressing until the window closes.' },
+  bailout:  { icon: '🛟', img: 'assets/items/bailout.webp', name: 'Government Bailout', desc: 'You speed along the course automatically for up to 5.5 s, knocking aside any kart you hit. It ends early when you reach 3rd place.' },
 };
 function rollItem(pos) { // pos 1..8 — position-weighted, the Mario Kart secret sauce
   // Fairness rules from the MK audit: 1st gets DEFENCE ONLY (leak/green/horn/boost/bomb —
@@ -280,6 +287,7 @@ function setTouchScheme(s, silent) {
   stickPointers.clear(); touchAnalog.steer = 0; touchAnalog.throttle = 0; touchAnalog.brake = 0;
   for (const id of ['stick-a', 'stick-b']) { const el = $(id); if (el) { el.style.display = 'none'; el.classList.remove('braking'); } }
   refreshTouchUI();
+  updateSchemeHelp(s);
   if (!silent) showToast({ buttons: '🕹️ Touch: Buttons', stick1: '👍 Touch: Thumbstick — hold right side = gas', sticks2: '✌️ Touch: Pedal & Stick', autog: '🚗 Touch: Auto-Gas — just steer!', dualstick: '🕹️ Touch: Dual Stick — left steers, right drives' }[s]);
 }
 let touchUiSig = '';
@@ -298,6 +306,66 @@ function refreshTouchUI() {
   $('scheme-ui').classList.toggle('hidden', !(touch && inRace && touchScheme !== 'buttons'));
   $('stick-layer').style.display = (touch && inRace && touchScheme !== 'buttons') ? 'block' : 'none';
   $('autog-note').classList.toggle('hidden', !(touchScheme === 'autog' && inRace));
+}
+/* ================= MENU EXPLAINERS (#50) =================
+   Difficulty + Control Lab help. Every claim below is read off the code:
+   DIFF_MUL scales AI top speed only; the rubber-band in topSpeedOf and the
+   position-based rollItem tables are identical in all three modes. Control
+   diagrams follow the #49 rule — a stick is drawn with only the axes it
+   actually controls (steering-only = horizontal track, throttle = vertical). */
+const DIFF_DESCS = [
+  'Chill — rival karts run at 90% pace. The item odds and the rubber-banding that keeps the pack close stay exactly the same: same race, gentler field.',
+  'Spicy — rivals run at 95.5% pace: the intended fight. Items favour the losers and the pack rubber-bands to stay close, just like every other mode.',
+  'Unhinged — rivals run at full 100% pace, with no handicap at all. Only the item table still loves the losers: last place draws the comeback kit, first place gets defence only.',
+];
+function updateDiffDesc() { const el = $('diff-desc'); if (el) el.textContent = DIFF_DESCS[difficulty]; }
+const _st = (x, y, s, size = 12, anchor = 'middle', fill = '#ffffff') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-family="Fredoka, sans-serif" font-weight="700" font-size="${size}" fill="${fill}">${s}</text>`;
+const _hTrack = (cx, cy) => `<rect x="${cx - 52}" y="${cy - 13}" width="104" height="26" rx="13" fill="rgba(255,255,255,.10)" stroke="rgba(255,255,255,.65)" stroke-width="2"/><path d="M ${cx - 44} ${cy} l 9 -6 v 12 z" fill="#ffd900"/><path d="M ${cx + 44} ${cy} l -9 -6 v 12 z" fill="#ffd900"/><circle cx="${cx + 16}" cy="${cy}" r="11" fill="rgba(255,255,255,.55)"/>`;
+const _vTrack = (cx, cy) => `<rect x="${cx - 13}" y="${cy - 52}" width="26" height="104" rx="13" fill="rgba(255,255,255,.10)" stroke="rgba(255,255,255,.65)" stroke-width="2"/><path d="M ${cx} ${cy - 44} l 6 9 h -12 z" fill="#ffd900"/><path d="M ${cx} ${cy + 44} l 6 -9 h -12 z" fill="#ffd900"/><circle cx="${cx}" cy="${cy - 16}" r="11" fill="rgba(255,255,255,.55)"/>`;
+const _stick2d = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="37" fill="rgba(255,255,255,.10)" stroke="rgba(255,255,255,.65)" stroke-width="2"/><path d="M ${cx - 26} ${cy} h 52 M ${cx} ${cy - 26} v 52" stroke="rgba(255,217,0,.55)" stroke-width="2" stroke-dasharray="4 4"/><circle cx="${cx + 8}" cy="${cy - 6}" r="13" fill="rgba(255,255,255,.55)"/>`;
+const _cbtn = (cx, cy, r, label, fill, size = 10) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" stroke="rgba(255,255,255,.65)" stroke-width="2"/>${_st(cx, cy + size * 0.36, label, size)}`;
+const _phone = inner => `<svg viewBox="0 0 340 200" class="scheme-svg" role="img" aria-label="Control layout diagram"><rect x="8" y="8" width="324" height="184" rx="20" fill="#10233f" stroke="#0a0a14" stroke-width="3"/>${inner}</svg>`;
+const SCHEME_HELP = {
+  buttons: {
+    text: 'The classic layout — everything is a button, nothing to drag. Hold ◀ ▶ to steer, hold GAS to drive, BRAKE to slow down or reverse. Drift into corners with DRIFT, fire what you’re holding with ITEM.',
+    svg: () => _phone(`${_cbtn(56, 96, 23, '◀', 'rgba(255,255,255,.16)', 15)}${_cbtn(110, 96, 23, '▶', 'rgba(255,255,255,.16)', 15)}${_st(83, 146, 'STEER', 11)}${_cbtn(284, 66, 26, 'GAS', 'rgba(46,160,67,.75)', 12)}${_cbtn(284, 138, 21, 'BRAKE', 'rgba(200,50,50,.65)', 9)}${_cbtn(224, 138, 16, 'DRIFT', 'rgba(255,255,255,.16)', 8)}${_cbtn(224, 66, 16, 'ITEM', 'rgba(255,255,255,.16)', 8)}${_st(170, 186, 'HOLD GAS to drive — everything is a button', 11, 'middle', '#ffd900')}`),
+  },
+  stick1: {
+    text: 'One stick on the right side does it all: hold it for full gas, drag sideways to steer, pull it down to brake (it turns red and buzzes so you can’t brake by accident), and flick up then release to use your item. Tapping the left side of the screen uses the item too.',
+    svg: () => _phone(`<rect x="24" y="28" width="102" height="144" rx="12" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="2" stroke-dasharray="6 5"/>${_st(75, 94, 'TAP', 13)}${_st(75, 112, '= ITEM', 13)}${_st(240, 26, 'FLICK ↑ = ITEM', 11.5, 'middle', '#ffd900')}${_stick2d(240, 98)}${_st(240, 152, 'HOLD = GAS · DRAG ◀ ▶ = STEER', 10.5)}${_st(240, 182, 'PULL ↓ = BRAKE', 11.5, 'middle', '#ff8a75')}`),
+  },
+  sticks2: {
+    text: 'Left stick steers, right side is the pedal. Touch down on the right for full gas and keep holding to drive, pull down to brake, flick up to fire your item the moment it crosses. A quick tap on the pedal starts a drift hop — turn the steering stick while it lasts to drift.',
+    svg: () => _phone(`${_st(84, 56, 'STEER', 11)}${_hTrack(84, 100)}${_st(84, 148, 'DRAG ◀ ▶', 11)}${_vTrack(262, 100)}${_st(246, 56, 'FLICK ↑ = ITEM', 10.5, 'end', '#ffd900')}${_st(246, 104, 'HOLD = GAS', 10.5, 'end')}${_st(246, 152, 'PULL ↓ = BRAKE', 10.5, 'end', '#ff8a75')}${_st(170, 188, 'TAP the pedal = DRIFT HOP — then steer to drift', 10.5, 'middle', '#ffd900')}`),
+  },
+  dualstick: {
+    text: 'Two sticks: the left one steers (a quick tap on it uses your item), the right one drives. Hold the right stick for gas, quick-tap it for a drift hop, flick up and release for your item, pull down to brake. Lift a thumb for a split second and nothing cuts out — gas and steering latch for a beat, lit gold.',
+    svg: () => _phone(`${_st(84, 56, 'STEER', 11)}${_hTrack(84, 100)}${_st(84, 148, 'DRAG ◀ ▶ · TAP = ITEM', 10.5)}${_vTrack(262, 100)}${_st(246, 52, 'FLICK ↑ = ITEM', 10.5, 'end', '#ffd900')}${_st(246, 92, 'HOLD = GAS', 10.5, 'end')}${_st(246, 118, 'TAP = DRIFT HOP', 10.5, 'end')}${_st(246, 156, 'PULL ↓ = BRAKE', 10.5, 'end', '#ff8a75')}${_st(170, 188, 'Brief lift? Gas & steering latch for a beat', 10.5, 'middle', '#ffd900')}`),
+  },
+  autog: {
+    text: 'The kart accelerates on its own — you just steer by dragging anywhere on screen, and tap to use your item (a second finger can tap while the first keeps steering). BRAKE and DRIFT buttons sit in the bottom corners. Smart Steering and Auto-Drift switch on automatically in this mode.',
+    svg: () => _phone(`${_st(170, 40, 'GAS IS AUTOMATIC', 14, 'middle', '#7dff8a')}<path d="M 44 96 h 252" stroke="#ffd900" stroke-width="3"/><path d="M 44 96 l 14 -7 v 14 z" fill="#ffd900"/><path d="M 296 96 l -14 -7 v 14 z" fill="#ffd900"/>${_st(170, 80, 'DRAG ANYWHERE = STEER', 12)}${_st(170, 126, 'TAP = ITEM (a 2nd finger works too)', 11)}${_cbtn(120, 162, 16, 'DRIFT', 'rgba(255,255,255,.16)', 8)}${_cbtn(292, 162, 19, 'BRAKE', 'rgba(200,50,50,.65)', 9)}`),
+  },
+};
+function updateSchemeHelp(s) {
+  const d = $('scheme-diagram'), t = $('scheme-text');
+  if (!d || !t || !SCHEME_HELP[s]) return;
+  d.innerHTML = SCHEME_HELP[s].svg();
+  t.textContent = SCHEME_HELP[s].text;
+}
+/* Sticky start panel (#50): racer + track + START, fixed to the bottom of the
+   menu so a race can be launched from any scroll position. It lives inside
+   #screen-menu, so it hides itself the moment the menu screen hides. */
+function updateStickyBar() {
+  if (!$('sticky-bar')) return;
+  const r = RACERS[selectedRacer], t = TRACKS[selectedTrack];
+  const p = portraitOf(selectedRacer), img = $('sb-portrait');
+  if (p) { img.src = p; img.style.display = ''; } else img.style.display = 'none';
+  $('sb-racer').textContent = r ? r.name : 'No racer picked';
+  $('sb-track').textContent = t ? t.name : 'No track picked';
+  const btn = $('sb-start'), missing = !r ? 'PICK A RACER' : !t ? 'PICK A TRACK' : null;
+  btn.disabled = !!missing;
+  btn.textContent = missing || '🏎️ START RACE';
 }
 const mouse = { down: false, x: 0.5, lastMove: -99 };
 const gyro = { enabled: false, steer: 0, baseGamma: null, baseBeta: null };
@@ -1623,8 +1691,8 @@ function grantItem(k) {
     const it = ITEMS[k.item];
     // Item roulette (POLISH.md §2.5.1): the slot spins for 850 ms and lands on the
     // real item; useItem is blocked while BKFX.spinning. Falls back to instant reveal.
-    if (window.BKFX && BKFX.roulette(it, ITEMS, { tick: i => A.tone(840 + i * 45, 0.03, 'square', 0.016), land: () => { A.pickup(); showFeed(`${it.icon} <b>${it.name}</b> — ${it.desc}`); } })) return;
-    updateItemSlot(); A.pickup(); showFeed(`${it.icon} <b>${it.name}</b> — ${it.desc}`);
+    if (window.BKFX && BKFX.roulette(it, ITEMS, { tick: i => A.tone(840 + i * 45, 0.03, 'square', 0.016), land: () => { A.pickup(); showFeed(`<img class="feed-ic" src="${it.img}" alt=""> <b>${it.name}</b> — ${it.desc}`); } })) return;
+    updateItemSlot(); A.pickup(); showFeed(`<img class="feed-ic" src="${it.img}" alt=""> <b>${it.name}</b> — ${it.desc}`);
   }
 }
 const BOX_RESPAWN = 2.5, BOX_GHOST = 0.6; // was a flat 4s dead time, then an untelegraphed pop-in — following players couldn't time a box a rival had just taken
@@ -2067,7 +2135,7 @@ function updateItemSlot() {
   if (window.BKFX && BKFX.spinning) BKFX.cancel(); // authoritative refresh kills any stale roulette
   const p = playerKart(); if (!p) return;
   const slot = $('item-slot');
-  if (p.item) { $('item-icon').textContent = ITEMS[p.item].icon; $('item-name').textContent = ITEMS[p.item].name; slot.classList.add('has-item'); }
+  if (p.item) { $('item-icon').innerHTML = `<img class="slot-ic" src="${ITEMS[p.item].img}" alt="${ITEMS[p.item].name}">`; $('item-name').textContent = ITEMS[p.item].name; slot.classList.add('has-item'); }
   else { $('item-icon').textContent = '·'; $('item-name').textContent = ''; slot.classList.remove('has-item'); }
 }
 function updateHUD(dt) {
@@ -2460,7 +2528,7 @@ function traitOf(r) { // the special-trait line — every claim here matches a r
   if (r.consistent) return '🐢 SPECIAL: mistake-proof AI. Never spins out, never panics. The tortoise strategy.';
   if ((r.aiSkill || 0) >= 1.06) return '👹 FINAL-BOSS CLASS: championship-grade AI when computer-controlled.';
   if ((r.aiSkill || 0) >= 1.04) return '🔥 ELITE AI: a cut above the field when computer-controlled.';
-  if (r.name === 'Jensen') return '🟢 SPECIAL: orange drift boosts last longer — the more you race, the more you save.';
+  if (r.name === 'Jensen') return '🟢 SPECIAL: orange drift boosts last longer — the leather jacket stays on during questioning.';
   if (r.name === 'Dario') return '🦺 SPECIAL: charges drift boosts faster. Safety first, speed second.';
   return '';
 }
@@ -2481,7 +2549,7 @@ function buildMenu() {
   // Item guide (menu section 6): rendered straight from ITEMS so the plain-
   // language descriptions can never drift from the in-game feed text.
   $('items-legend').innerHTML = Object.values(ITEMS).map(it => `
-    <div class="item-row"><div class="item-ic">${it.icon}</div><div><div class="item-name">${it.name}</div><div class="item-desc">${it.desc}</div></div></div>`).join('');
+    <div class="item-row"><img class="item-ic" src="${it.img}" alt="${it.name}"><div><div class="item-name">${it.name}</div><div class="item-desc">${it.desc}</div></div></div>`).join('');
   $('racer-grid').innerHTML = RACERS.map((r, i) => {
     const p = portraitOf(i), cols = statCols(r);
     return `<button class="racer-tile ${i === selectedRacer ? 'selected' : ''}" data-racer="${i}">
@@ -2503,6 +2571,7 @@ function buildMenu() {
       selectedRacer = parseInt(tile.dataset.racer);
       document.querySelectorAll('.racer-tile').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.racer) === selectedRacer));
       updateDetail();
+      updateStickyBar();
       buildWorld(selectedTrack);
     });
   });
@@ -2513,7 +2582,7 @@ function buildMenu() {
       A.uiSelect();
       selectedTrack = parseInt(card.dataset.track);
       document.querySelectorAll('.track-card').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.track) === selectedTrack));
-      buildWorld(selectedTrack); updateBestInfo();
+      buildWorld(selectedTrack); updateBestInfo(); updateStickyBar();
     });
   });
   document.querySelectorAll('.diff-btn').forEach(btn => {
@@ -2522,9 +2591,13 @@ function buildMenu() {
       A.uiTab();
       difficulty = parseInt(btn.dataset.diff);
       document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.diff) === difficulty));
+      updateDiffDesc();
     });
   });
+  updateDiffDesc();
   $('btn-start').addEventListener('click', e => { A.uiSelect(); fxTransition('checker', startRace, { x: e.clientX, y: e.clientY }); });
+  $('sb-start').addEventListener('click', e => { A.uiSelect(); fxTransition('checker', startRace, { x: e.clientX, y: e.clientY }); });
+  updateStickyBar();
   // Title hero (§2.1): tap anywhere on the lockup advances to character select
   $('title-hero').addEventListener('click', () => {
     A.init(); A.uiSelect();
@@ -2791,6 +2864,7 @@ document.body.dataset.scheme = touchScheme;
 document.querySelectorAll('.scheme-btn').forEach(b => b.classList.toggle('selected', b.dataset.scheme === touchScheme));
 setSmartMode(smartMode);
 setAutoDriftMode(autoDriftMode);
+updateSchemeHelp(touchScheme);
 animate();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => { });

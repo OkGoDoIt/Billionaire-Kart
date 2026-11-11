@@ -1,26 +1,32 @@
-/* Billionaire Kart service worker — cache-first for the app shell so the game
-   works offline after the first load (Three.js CDN included, cached at runtime). */
-const CACHE = 'bk-v15';
-const SHELL = ['./', './index.html', './style.css', './game.js', './portraits.js', './ui-fx.js', './assets/fonts/fredoka-latin.woff2', './assets/fonts/luckiestguy-latin.woff2', './manifest.webmanifest', './gfx/textures.js', './gfx/materials.js', './gfx/environment.js', './gfx/post.js', './gfx/sky-data.js', './tracks/datacenter.js', './tracks/waters.js', './tracks/whitehouse.js', './tracks/shared.js', './tracks/metaverse.js', './tracks/wework.js', './tracks/burningman.js', './tracks/bahamas.js', './tracks/bliss.js', './tracks/tunnel.js', './tracks/davos.js'];
+/* Billionaire Kart service worker.
+   - Code and pages: network first, so a new release shows up as soon as you are online.
+   - Art, audio, fonts: cached on first use, then served from cache.
+   - Offline: everything you have already loaded keeps working.
+   It also evicts the caches of the old v1 build and reloads any page that build was still serving. */
+const VERSION = 'bk2-1';
+const ASSET = /\.(webp|png|jpg|jpeg|mp3|ogg|woff2)$/i;
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
-});
+self.addEventListener('install', e => { e.waitUntil(self.skipWaiting()); });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    const hadOld = keys.some(k => !k.startsWith('bk2-'));
+    await Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)));
+    await self.clients.claim();
+    if (hadOld) for (const c of await self.clients.matchAll({ type: 'window' })) c.navigate(c.url).catch(() => {});
+  })());
 });
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(hit => {
-      const network = fetch(e.request).then(res => {
-        if (res && (res.status === 200 || res.type === 'opaque')) {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
-        }
-        return res;
-      }).catch(() => hit);
-      return hit || network;
-    })
-  );
+  const req = e.request, url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== location.origin) return;
+  e.respondWith((async () => {
+    const cache = await caches.open(VERSION);
+    if (ASSET.test(url.pathname)) {
+      const hit = await cache.match(req);
+      if (hit) return hit;
+      const res = await fetch(req); if (res.ok) cache.put(req, res.clone()); return res;
+    }
+    try { const res = await fetch(req); if (res.ok) cache.put(req, res.clone()); return res; }
+    catch { return (await cache.match(req)) || (await cache.match('./index.html')) || Response.error(); }
+  })());
 });

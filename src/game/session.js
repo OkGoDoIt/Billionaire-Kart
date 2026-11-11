@@ -1,0 +1,100 @@
+/* One race from grid to results: owns the sim, the scene, the HUDs, and the
+   fixed-step loop that keeps physics independent of frame rate. */
+import { Race } from '../race/race.js';
+import { AIDriver } from '../race/ai.js';
+import { RaceView } from '../render/raceview.js';
+import { Hud } from '../ui/hud.js';
+import { ITEMS } from '../race/items.js';
+import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
+import { RACERS, RACER_BY_ID } from '../content/racers.js';
+import { makeRng } from '../core/util.js';
+
+export const STEP = 1 / 60;
+
+export class RaceSession {
+  /**
+   * config: { trackId, cc, laps?, players: [{ racerId, device }], level, seed?, mode?, auto?, intro? , grid?: [racerId...] }
+   */
+  constructor(app, config) {
+    this.app = app; this.config = config;
+    const def = this.def = TRACK_BY_ID[config.trackId], track = getTrack(config.trackId);
+    const rng = makeRng(config.seed ?? (Date.now() & 0xffff));
+    const humans = config.players.map(p => RACER_BY_ID[p.racerId]);
+    const count = config.mode === 'timetrial' ? 0 : (config.fieldSize ?? 8) - humans.length;
+    // rivals: an explicit grid (Grand Prix keeps the same field all cup) or a random draw
+    const pool = config.grid ? config.grid.map(id => RACER_BY_ID[id]) : rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, count);
+    // humans start at the back, like a first Grand Prix race
+    const entries = [...pool.map(racer => ({ racer, player: -1, level: config.level || 'normal' })), ...humans.map((racer, i) => ({ racer, player: i, autoTrick: config.players[i].autoTrick }))];
+    if (config.order) entries.sort((a, b) => config.order.indexOf(a.racer.id) - config.order.indexOf(b.racer.id));
+    this.race = new Race({ track, cc: config.cc || 150, laps: config.laps, seed: (config.seed ?? 1) + 17, entries, mode: config.mode });
+    this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k) });
+    app.input.assign = config.players.length === 1 ? ['any'] : config.players.map(p => p.device);
+    this.autopilots = config.auto ? this.race.players.map(k => new AIDriver(k, 'hard', makeRng(99))) : null;
+    // HUD per player
+    const n = this.race.players.length;
+    this.huds = this.race.players.map((k, i) => new Hud(app.ui, this.race, k, this.view.views[i].rect, { compact: n > 2, showMap: true }));
+    this.hudOf = new Map(this.race.players.map((k, i) => [k, this.huds[i]]));
+    this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;
+    if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); app.audio?.event('introStart', def); }
+    else app.audio?.event('countdownStart', def);
+  }
+
+  skipIntro() { if (this.phase === 'intro') { this.view.intro.done = true; } }
+
+  _onEvent(kind, e, kart) {
+    const app = this.app;
+    if (kind === 'kart') {
+      const hud = this.hudOf.get(kart);
+      if (hud) {
+        hud.onKartEvent(e);
+        const p = kart.playerIndex;
+        if (e.type === 'hit') app.input.rumble(p, 1, 0.8, 380);
+        else if (e.type === 'wall') app.input.rumble(p, Math.min(1, e.data.v / 14), 0.3, 140);
+        else if (e.type === 'land' && e.data > 9) app.input.rumble(p, 0.5, 0.2, 110);
+        else if (e.type === 'boost') app.input.rumble(p, 0.25, 0.6, 180);
+        else if (e.type === 'bump') app.input.rumble(p, 0.4, 0.3, 90);
+        else if (e.type === 'driftTier' && e.data > 0) app.input.rumble(p, 0.1, 0.5, 70);
+      }
+      app.audio?.kartEvent(e, kart, !!hud);
+    } else {
+      if (e.type === 'count') for (const h of this.huds) h.countdown(e.data);
+      else if (e.type === 'go') for (const h of this.huds) h.countdown(0);
+      else if (e.type === 'kartHit') {
+        const { by, victim, with: w } = e.data, name = ITEMS[w]?.name || (w === 'star' ? 'Hype Cycle' : w === 'squash' ? 'a full-size kart' : w);
+        const hv = this.hudOf.get(victim), hb = by && this.hudOf.get(by);
+        if (hv && by && by !== victim) hv.feed(`<b>${by.racer.name}</b> got you with ${name}`);
+        if (hb && by !== victim) hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`);
+      } else if (e.type === 'steal') { const h = this.hudOf.get(e.data.by); if (h) h.feed(`You stole ${ITEMS[e.data.id].name} from <b>${e.data.from.racer.name}</b>`); }
+      app.audio?.raceEvent(e, this.race);
+    }
+  }
+
+  frame(dt) {
+    const { race, view, app } = this;
+    if (this.paused) { app.gfx.render(0); return; }
+    if (this.phase === 'intro') {
+      if (view.intro.done) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) h.setVisible(true); app.audio?.event('countdownStart', this.def); }
+    } else {
+      const inputs = app.input.poll(dt);
+      this.acc = Math.min(this.acc + dt, STEP * 5);
+      while (this.acc >= STEP) {
+        view.snapshot();
+        let inp = inputs;
+        if (this.autopilots) inp = this.autopilots.map(a => a.think(STEP));
+        race.step(STEP, inp);
+        this.acc -= STEP;
+      }
+      for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
+      if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
+      for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
+      if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
+    }
+    view.update(dt, this.acc / STEP);
+    app.audio?.frame(dt, race, view);
+    app.gfx.render(dt);
+  }
+
+  setPaused(p) { this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
+
+  dispose() { for (const h of this.huds) h.dispose(); this.view.dispose(); }
+}

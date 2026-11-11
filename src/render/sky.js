@@ -4,9 +4,9 @@ import * as THREE from 'three';
 
 export const SKY_PRESETS = {
   day: {
-    zenith: 0x2f7fe6, horizon: 0xbfe4ff, ground: 0xdff2ff, sun: 0xfff3d6, sunDir: [0.45, 0.72, 0.35],
-    cloud: 0xffffff, cloudShade: 0xb9cbe6, cloudCover: 0.48, cloudScale: 1.0, stars: 0,
-    fog: 0xc9e8ff, fogNear: 140, fogFar: 900, sunLight: 0xfff1d8, sunIntensity: 3.2, hemiSky: 0xcfe6ff, hemiGround: 0x8a9b6a, hemiIntensity: 1.25, exposure: 1.0,
+    zenith: 0x1668e0, horizon: 0x8fd3ff, ground: 0xb9e4ff, sun: 0xfff3d6, sunDir: [0.5, 0.62, 0.38],
+    cloud: 0xffffff, cloudShade: 0xa9c4ea, cloudCover: 0.44, cloudScale: 1.0, stars: 0,
+    fog: 0xa6dcff, fogNear: 260, fogFar: 1300, sunLight: 0xfff0d2, sunIntensity: 3.3, hemiSky: 0xbfe0ff, hemiGround: 0x7d9a5c, hemiIntensity: 0.95, exposure: 1.0, envIntensity: 0.75,
   },
   golden: {
     zenith: 0x3b6fd6, horizon: 0xffc98f, ground: 0xffe0b8, sun: 0xffd9a0, sunDir: [0.62, 0.36, 0.5],
@@ -47,7 +47,7 @@ const skyFrag = /* glsl */`
   precision highp float;
   varying vec3 vDir;
   uniform vec3 uZenith, uHorizon, uGround, uSun, uSunDir, uCloud, uCloudShade;
-  uniform float uTime, uCover, uScale, uStars, uCloudsOn;
+  uniform float uTime, uCover, uScale, uStars, uCloudsOn, uGain;
   uniform sampler2D uPano; uniform float uPanoOn, uPanoTop, uPanoBottom, uPanoRot;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -65,7 +65,7 @@ const skyFrag = /* glsl */`
     col = mix(col, uGround, smoothstep(0.0, -0.25, h));
     // sun disc and glow
     float sd = max(dot(d, normalize(uSunDir)), 0.0);
-    col += uSun * (pow(sd, 350.0) * 6.0 + pow(sd, 24.0) * 0.35 + pow(sd, 4.0) * 0.12);
+    col += uSun * (pow(sd, 350.0) * 3.0 + pow(sd, 24.0) * 0.22 + pow(sd, 4.0) * 0.08);
     // stars
     if (uStars > 0.0 && h > 0.0) {
       vec2 sp = d.xz / (0.35 + h) * 90.0;
@@ -98,7 +98,7 @@ const skyFrag = /* glsl */`
         col = mix(col, p.rgb, a * p.a);
       }
     }
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(col * uGain, 1.0);
   }`;
 
 export class Sky {
@@ -109,7 +109,7 @@ export class Sky {
       uZenith: { value: new THREE.Color(p.zenith) }, uHorizon: { value: new THREE.Color(p.horizon) }, uGround: { value: new THREE.Color(p.ground) },
       uSun: { value: new THREE.Color(p.sun) }, uSunDir: { value: new THREE.Vector3(...p.sunDir).normalize() },
       uCloud: { value: new THREE.Color(p.cloud) }, uCloudShade: { value: new THREE.Color(p.cloudShade) },
-      uTime: { value: 0 }, uCover: { value: p.cloudCover }, uScale: { value: p.cloudScale }, uStars: { value: p.stars }, uCloudsOn: { value: 1 },
+      uTime: { value: 0 }, uGain: { value: 1 }, uCover: { value: p.cloudCover }, uScale: { value: p.cloudScale }, uStars: { value: p.stars }, uCloudsOn: { value: 1 },
       uPano: { value: null }, uPanoOn: { value: 0 }, uPanoTop: { value: 0.6 }, uPanoBottom: { value: -0.12 }, uPanoRot: { value: 0 },
     };
     const mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: skyVert, fragmentShader: skyFrag, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false, toneMapped: true });

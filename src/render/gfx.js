@@ -54,7 +54,7 @@ class ViewsPass extends Pass {
 
 const GradeShader = {
   uniforms: {
-    tDiffuse: { value: null }, uVignette: { value: 0.32 }, uSat: { value: 1.12 }, uContrast: { value: 1.06 },
+    tDiffuse: { value: null }, uVignette: { value: 0.26 }, uSat: { value: 1.18 }, uContrast: { value: 1.08 },
     uBlur: { value: 0 }, uCenter: { value: new THREE.Vector2(0.5, 0.45) }, uFlash: { value: 0 }, uFlashColor: { value: new THREE.Color(1, 1, 1) },
     uLift: { value: new THREE.Color(0, 0, 0) }, uGain: { value: new THREE.Color(1, 1, 1) }, uSingle: { value: 1 },
   },
@@ -103,7 +103,7 @@ export class Gfx {
     this.qualityName = quality; this.q = QUALITY[quality];
     const renderer = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance', stencil: false });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.toneMappingExposure = 1;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.info.autoReset = false;
@@ -111,7 +111,7 @@ export class Gfx {
     this.scene = new THREE.Scene();
     this.views = [];
     this.time = 0; this.scale = 1; this._ft = 16; this._scaleCooldown = 2;
-    this.post = { blur: 0, flash: 0, flashColor: new THREE.Color(1, 1, 1), vignette: 0.32, sat: 1.12, contrast: 1.06 };
+    this.post = { blur: 0, flash: 0, flashColor: new THREE.Color(1, 1, 1), vignette: 0.26, sat: 1.18, contrast: 1.08 };
 
     // lights (configured by setSky)
     this.sun = new THREE.DirectionalLight(0xffffff, 3); this.sun.name = 'sun';
@@ -125,6 +125,7 @@ export class Gfx {
     this.resize();
     addEventListener('resize', () => this.resize());
     if (window.visualViewport) visualViewport.addEventListener('resize', () => this.resize());
+    if (window.ResizeObserver) new ResizeObserver(() => this.resize()).observe(canvas.parentElement || document.body);
   }
 
   _buildComposer() {
@@ -134,7 +135,7 @@ export class Gfx {
     const rt = new THREE.WebGLRenderTarget(Math.max(2, size.x), Math.max(2, size.y), { type: THREE.HalfFloatType, samples: q.msaa, depthBuffer: true });
     const composer = this.composer = new EffectComposer(r, rt);
     this.viewsPass = new ViewsPass(this); composer.addPass(this.viewsPass);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.42, 0.72, 0.92);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.32, 0.6, 1.25);
     this.bloom.enabled = q.bloom; composer.addPass(this.bloom);
     this.grade = new GradePass(); composer.addPass(this.grade);
     this.output = new OutputPass(); composer.addPass(this.output);
@@ -153,7 +154,7 @@ export class Gfx {
       this.sun.shadow.bias = -0.0005; this.sun.shadow.normalBias = 0.06; this.sun.shadow.radius = 2.2;
     }
     this._buildComposer();
-    this.resize();
+    this.width = 0; this.resize();
     this.scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms) m.needsUpdate = true; } });
   }
 
@@ -161,6 +162,7 @@ export class Gfx {
     const el = this.canvas.parentElement || document.body;
     const w = Math.max(2, el.clientWidth), h = Math.max(2, el.clientHeight);
     const pr = Math.min(window.devicePixelRatio || 1, this.q.maxPixelRatio) * this.scale;
+    if (w === this.width && h === this.height && pr === this.pixelRatio) return;
     this.width = w; this.height = h; this.pixelRatio = pr;
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
@@ -174,11 +176,15 @@ export class Gfx {
     const sky = this.sky = new Sky(preset, overrides), p = sky.p;
     sky.mesh.scale.setScalar(1);
     this.scene.add(sky.mesh);
-    this.sun.color.set(p.sunLight); this.sun.intensity = p.sunIntensity;
+    // Scene-referred light levels are kept low so sunlit white stays under the bloom
+    // threshold (only emissives and sparks glow); exposure brings the image back up.
+    const L = this.lightScale = 0.6;
+    sky.uniforms.uGain.value = L;
+    this.sun.color.set(p.sunLight); this.sun.intensity = p.sunIntensity * L;
     this._sunOffset.copy(sky.sunDir).multiplyScalar(200);
-    this.hemi.color.set(p.hemiSky); this.hemi.groundColor.set(p.hemiGround); this.hemi.intensity = p.hemiIntensity;
-    this.scene.fog = new THREE.Fog(p.fog, p.fogNear, p.fogFar);
-    this.renderer.toneMappingExposure = p.exposure;
+    this.hemi.color.set(p.hemiSky); this.hemi.groundColor.set(p.hemiGround); this.hemi.intensity = p.hemiIntensity * L;
+    this.scene.fog = new THREE.Fog(new THREE.Color(p.fog).multiplyScalar(L), p.fogNear, p.fogFar);
+    this.renderer.toneMappingExposure = p.exposure / L;
     if (this.envTex) this.envTex.dispose();
     this.envTex = sky.bakeEnvironment(this.renderer);
     this.scene.environment = this.envTex;

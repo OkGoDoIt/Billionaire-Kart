@@ -262,7 +262,7 @@ export function buildTrackMesh(track, look = {}) {
         }
       }
     }
-    mats.ramp = makeChevronMaterial({ a: 0x2f7bff, b: 0x9fe8ff, speed: 1.6, glow: 0.55, side: THREE.DoubleSide });
+    mats.ramp = makeChevronMaterial({ a: 0x1f6bff, b: 0x7fe0ff, speed: 1.6, glow: 0.35, side: THREE.DoubleSide });
     add('ramps', g.build(true), mats.ramp, { cast: true });
   }
 
@@ -278,7 +278,7 @@ export function buildTrackMesh(track, look = {}) {
         prev = first;
       }
     }
-    mats.boost = makeChevronMaterial({ a: 0xff7a00, b: 0xfff06a, speed: 3.2, glow: 1.5 });
+    mats.boost = makeChevronMaterial({ a: 0xff6a00, b: 0xffe04a, speed: 3.2, glow: 0.9 });
     mats.boost.polygonOffset = true; mats.boost.polygonOffsetFactor = -2; mats.boost.polygonOffsetUnits = -2;
     add('boosts', g.build(), mats.boost, { order: 2 });
   }

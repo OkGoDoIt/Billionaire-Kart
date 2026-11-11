@@ -104,13 +104,13 @@ export class Particles {
   count(rate, dt) { const f = rate * dt * this.density; const n = Math.floor(f); return n + (Math.random() < f - n ? 1 : 0); }
 
   spark(x, y, z, vx, vy, vz, color, size = 0.22, life = 0.4) {
-    this.add.emit({ x, y, z, vx, vy, vz, color, color2: [color[0] * 0.6, color[1] * 0.4, color[2] * 0.3], size, life, gravity: 14, drag: 1.2, alpha: 1.6 });
+    this.add.emit({ x, y, z, vx, vy, vz, color, color2: [color[0] * 0.6, color[1] * 0.4, color[2] * 0.3], size, life, gravity: 14, drag: 1.2, alpha: 1.0 });
   }
   dust(x, y, z, vx, vy, vz, color, size = 0.9, life = 0.7, alpha = 0.5) {
     this.smoke.emit({ x, y, z, vx, vy, vz, color, size, life, grow: 2.2, drag: 2.5, gravity: -1.2, alpha, spin: (Math.random() - 0.5) * 2 });
   }
   flame(x, y, z, vx, vy, vz, color, size = 0.6, life = 0.22) {
-    this.add.emit({ x, y, z, vx, vy, vz, color, color2: [1, 0.25, 0.05], size, life, grow: -0.6, drag: 3, alpha: 1.4 });
+    this.add.emit({ x, y, z, vx, vy, vz, color, color2: [1, 0.25, 0.05], size, life, grow: -0.6, drag: 3, alpha: 0.75 });
   }
   burst(x, y, z, n, color, speed = 8, size = 0.3, life = 0.6, up = 4) {
     for (let i = 0; i < n * this.density; i++) {

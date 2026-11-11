@@ -126,7 +126,7 @@ export default {
     kerb: [0xff6a2a, 0xfff0d0],
     shoulder: 0xdcc8a2,
     terrain: { low: 0xe6d3b0, high: 0xf0e2c2, dry: 0xd9c29c, rock: 0x8a6f7a, sand: 0xf3e6c8, dirt: 0xd2b98e },
-    deck: 0x8a5a36,
+    deck: 0x8a5a36, wall: 0xe0b37a, wallStripe: 0x8a5a36, rail: 0xff6a2a,
     ads: ['RADICAL SELF-RELIANCE (CATERED)', 'LEAVE NO TRACE OF TAXES', 'DUST TO DUST', 'GIFTING ECONOMY: $40K', 'TURNKEY CAMP', 'ART CAR VALET', 'DEFAULT WORLD', 'PLAYA PROVIDES', 'HUG DEALER', 'CACHE YOUR WATER', 'BURN RATE', 'MOOP PATROL'],
   },
   models: { artcar: B.artcar, dustdevil: B.dustdevil },
@@ -284,10 +284,10 @@ export default {
     sc.instances(partsOf(B.lightTower({ h: 18 })), farTowers, {});
 
     // ---- the dunes and the foothills ----
-    const rocks = sc.scatter({ count: 150, min: 45, max: 260, maxSlope: 1.4, minGap: 9, where: (x, z, h) => h > 7 && Math.hypot(x - CENTRE.x, z - CENTRE.z) > 250 });
-    sc.instances(partsOf(P.rock(2, { r: 4 })), rocks, { scale: [0.8, 2.6], yaw: 'random', sink: 0.8, tints: [0x8a6f7a, 0x7a6070, 0x9a7f86, 0x6e5868] });
+    const rocks = sc.scatter({ count: 110, min: 45, max: 260, maxSlope: 1.4, minGap: 12, where: (x, z, h) => h > 7 && Math.hypot((x - CENTRE.x) * 0.82, (z - CENTRE.z) * 0.92) > 250 });
+    sc.instances(partsOf(P.rock(2, { r: 4 })), rocks, { scale: [1, 3], yaw: 'random', sink: 1.2, tints: [0xb08f9a, 0xa38290, 0xc09aa0, 0x9a7f8c] });
     const pebbles = sc.scatter({ count: 70, min: 34, max: 120, maxSlope: 0.8, minGap: 6, where: (x, z, h) => h > 4 && clear(x, z, 2) && z > -300 });
-    sc.instances(partsOf(P.rock(5, { r: 1.4 })), pebbles, { scale: [0.6, 1.6], yaw: 'random', sink: 0.3, tints: [0x9a7f86, 0xb09080, 0x8a6f7a] });
+    sc.instances(partsOf(P.rock(5, { r: 1.4 })), pebbles, { scale: [0.6, 1.6], yaw: 'random', sink: 0.3, tints: [0xc4a898, 0xb89a8c, 0xd0b4a0] });
 
     // arrow boards on the outside of every real corner
     for (const c of track.corners) {

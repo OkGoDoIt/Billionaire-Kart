@@ -2,9 +2,11 @@
 import { Track } from '../track/track.js';
 import siliconValley from '../tracks/silicon-valley.js';
 import blissHills from '../tracks/bliss-hills.js';
+import cryptoCove from '../tracks/crypto-cove.js';
+import burningCircuit from '../tracks/burning-circuit.js';
 import lab from '../tracks/_lab.js';
 
-export const TRACKS = [siliconValley, blissHills];
+export const TRACKS = [siliconValley, blissHills, cryptoCove, burningCircuit];
 export const TRACK_BY_ID = Object.fromEntries([...TRACKS, lab].map(t => [t.id, t]));   // the lab is reachable by id for testing, but not listed
 
 const built = new Map();

@@ -23,6 +23,7 @@ export class RaceView {
     if (track.water != null) this._water(track, def);
     this.fx = new Particles(this.root, gfx.q.particles);
     this.anim = [];                          // per-frame callbacks from scenery
+    track.clearColliders();
     if (def.decorate) def.decorate({ THREE, track, group: this.root, gfx, anim: this.anim, look: def.look, view: this });
 
     // pickups

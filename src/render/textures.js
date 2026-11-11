@@ -148,3 +148,68 @@ export const DEFAULT_ADS = [
   'YOUR DATA HERE', 'MARS OR BUST', '10X EVERYTHING', 'BURN RATE', 'STEALTH MODE', 'WE ARE HIRING', 'TOKENS!', 'UNICORN FUEL',
   'ZERO TO ONE', 'DAY ONE', 'THOUGHT LEADER', 'HYPERSCALE', 'RUNWAY: 3 LAPS', 'DOWN ROUND', 'TOO BIG TO FAIL', 'INNOVATE',
 ];
+
+/* ---------- road skins ---------- */
+/** Material settings for a named road surface. U spans the width, V runs along the track. */
+export function roadSkin(name, style = {}) {
+  const rngOf = seed => makeRng(seed);
+  const lines = (g, w, h, col = 'rgba(255,255,255,0.9)') => { g.fillStyle = col; g.fillRect(w * 0.035, 0, w * 0.018, h); g.fillRect(w * (1 - 0.053), 0, w * 0.018, h); };
+  switch (name) {
+    case 'wood': return { tile: 6, roughness: 0.85, map: canvasTex(512, 512, (g, w, h) => {
+      const rng = rngOf(31), rows = 8, ph = h / rows;
+      for (let r = 0; r < rows; r++) {
+        const t = 0.55 + rng() * 0.35; g.fillStyle = `rgb(${Math.round(186 * t + 40)},${Math.round(128 * t + 24)},${Math.round(70 * t + 12)})`; g.fillRect(0, r * ph, w, ph);
+        for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(60,30,10,${0.05 + rng() * 0.08})`; g.fillRect(rng() * w, r * ph + rng() * ph, 30 + rng() * 120, 1.5); }
+        g.fillStyle = 'rgba(40,20,8,0.55)'; g.fillRect(0, r * ph, w, 3);
+        for (const x of [0.12, 0.5, 0.88]) { g.fillStyle = 'rgba(30,20,12,0.6)'; g.beginPath(); g.arc(w * x + (r % 2) * 14, r * ph + ph / 2, 3.2, 0, 7); g.fill(); }
+      }
+      g.fillStyle = 'rgba(255,220,150,0.5)'; g.fillRect(0, 0, w * 0.03, h); g.fillRect(w * 0.97, 0, w * 0.03, h);
+    }, { aniso: 16 }) };
+    case 'sand': case 'dirt': return { tile: 14, roughness: 1, map: canvasTex(512, 1024, (g, w, h) => {
+      const rng = rngOf(name === 'sand' ? 41 : 43), base = name === 'sand' ? [226, 200, 150] : [168, 128, 88];
+      g.fillStyle = `rgb(${base})`; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 9000; i++) { const d = rng() < 0.5 ? -1 : 1, a = 0.05 + rng() * 0.1; g.fillStyle = d > 0 ? `rgba(255,255,255,${a})` : `rgba(70,45,20,${a})`; const sz = 1 + rng() * 2.5; g.fillRect(rng() * w, rng() * h, sz, sz); }
+      for (const x of [0.3, 0.42, 0.58, 0.7]) { const gr = g.createLinearGradient(w * (x - 0.03), 0, w * (x + 0.03), 0); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.5, 'rgba(60,35,15,0.22)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(w * (x - 0.03), 0, w * 0.06, h); }
+    }, { aniso: 16 }) };
+    case 'metal': return { tile: 10, roughness: 0.42, metalness: 0.75, map: canvasTex(512, 512, (g, w, h) => {
+      const rng = rngOf(51); g.fillStyle = '#7a8496'; g.fillRect(0, 0, w, h);
+      for (let y = 0; y < 2; y++) for (let x = 0; x < 4; x++) { const X = x * w / 4, Y = y * h / 2; g.fillStyle = `rgba(${rng() < 0.5 ? 255 : 0},${rng() < 0.5 ? 255 : 0},${rng() < 0.5 ? 255 : 0},0.05)`; g.fillRect(X, Y, w / 4, h / 2); g.strokeStyle = 'rgba(20,24,34,0.7)'; g.lineWidth = 3; g.strokeRect(X + 1.5, Y + 1.5, w / 4 - 3, h / 2 - 3); for (const [dx, dy] of [[10, 10], [w / 4 - 10, 10], [10, h / 2 - 10], [w / 4 - 10, h / 2 - 10]]) { g.fillStyle = 'rgba(230,236,246,0.7)'; g.beginPath(); g.arc(X + dx, Y + dy, 3, 0, 7); g.fill(); } }
+      for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? '#ffd23c' : '#1a1d26'; g.fillRect(0, i * h / 16, w * 0.04, h / 16); g.fillRect(w * 0.96, i * h / 16, w * 0.04, h / 16); }
+    }, { aniso: 16 }) };
+    case 'neon': return { tile: 12, roughness: 0.25, metalness: 0.5, emissive: 0xffffff, emissiveIntensity: 1.6, map: canvasTex(512, 512, (g, w, h) => {
+      g.fillStyle = '#141826'; g.fillRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(80,110,170,0.35)'; g.lineWidth = 2; for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(i * w / 8, 0); g.lineTo(i * w / 8, h); g.stroke(); g.beginPath(); g.moveTo(0, i * h / 8); g.lineTo(w, i * h / 8); g.stroke(); }
+    }, { aniso: 16 }), emissiveMap: canvasTex(512, 512, (g, w, h) => {
+      g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+      const c = '#' + (style.glow ?? 0x35e0ff).toString(16).padStart(6, '0');
+      g.fillStyle = c; g.fillRect(w * 0.03, 0, w * 0.022, h); g.fillRect(w * 0.948, 0, w * 0.022, h);
+      g.globalAlpha = 0.8; for (let i = 0; i < 2; i++) { const y = i * h / 2 + h * 0.1; g.beginPath(); g.moveTo(w * 0.44, y + h * 0.12); g.lineTo(w * 0.5, y); g.lineTo(w * 0.56, y + h * 0.12); g.lineTo(w * 0.53, y + h * 0.12); g.lineTo(w * 0.5, y + h * 0.05); g.lineTo(w * 0.47, y + h * 0.12); g.closePath(); g.fill(); }
+    }, { aniso: 16 }) };
+    case 'glass': { // the rainbow road: glowing bands under glass
+      const map = canvasTex(512, 256, (g, w, h) => {
+        const gr = g.createLinearGradient(0, 0, w, 0); const cols = ['#ff3d6e', '#ff9a3c', '#ffe14a', '#4be38a', '#3cc8ff', '#7a6bff', '#e05cff'];
+        cols.forEach((c, i) => gr.addColorStop(i / (cols.length - 1), c)); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+        g.fillStyle = 'rgba(255,255,255,0.28)'; for (let i = 0; i < 4; i++) g.fillRect(0, i * h / 4, w, 3);
+        g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(0, 0, w * 0.03, h); g.fillRect(w * 0.97, 0, w * 0.03, h);
+        for (let i = 0; i < 50; i++) { g.fillStyle = `rgba(255,255,255,${0.2 + Math.random() * 0.5})`; g.fillRect(Math.random() * w, Math.random() * h, 3, 3); }
+      }, { aniso: 16 });
+      return { tile: 10, roughness: 0.1, metalness: 0.2, map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.85, transparent: true, opacity: 0.9 };
+    }
+    case 'snow': case 'ice': return { tile: 16, roughness: name === 'ice' ? 0.06 : 0.9, metalness: name === 'ice' ? 0.3 : 0, envMapIntensity: name === 'ice' ? 1.6 : 0.5, map: canvasTex(512, 512, (g, w, h) => {
+      const rng = rngOf(61); g.fillStyle = name === 'ice' ? '#bfe6f7' : '#f1f5fa'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 60; i++) { g.strokeStyle = `rgba(${name === 'ice' ? '255,255,255' : '150,170,200'},${0.15 + rng() * 0.25})`; g.lineWidth = 1 + rng() * 2; g.beginPath(); const x = rng() * w, y = rng() * h; g.moveTo(x, y); g.lineTo(x + (rng() - 0.5) * 160, y + (rng() - 0.5) * 160); g.stroke(); }
+      lines(g, w, h, name === 'ice' ? 'rgba(40,120,200,0.8)' : 'rgba(230,60,60,0.85)');
+    }, { aniso: 16 }) };
+    case 'stone': case 'cobble': return { tile: 9, roughness: 0.8, map: canvasTex(512, 512, (g, w, h) => {
+      const rng = rngOf(71), nx = name === 'cobble' ? 10 : 5, ny = name === 'cobble' ? 10 : 5; g.fillStyle = '#8f8a84'; g.fillRect(0, 0, w, h);
+      for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) { const t = 0.8 + rng() * 0.3, ox = (y % 2) * (w / nx / 2); g.fillStyle = name === 'cobble' ? `rgb(${Math.round(150 * t)},${Math.round(140 * t)},${Math.round(130 * t)})` : `rgb(${Math.round(226 * t)},${Math.round(220 * t)},${Math.round(208 * t)})`; g.beginPath(); g.roundRect(((x * w / nx + ox) % w) + 2, y * h / ny + 2, w / nx - 4, h / ny - 4, name === 'cobble' ? 9 : 3); g.fill(); }
+    }, { aniso: 16 }) };
+    case 'carpet': return { tile: 12, roughness: 1, map: canvasTex(256, 256, (g, w, h) => {
+      const rng = rngOf(81); g.fillStyle = '#b3122a'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 4000; i++) { g.fillStyle = `rgba(${rng() < 0.5 ? '255,120,140' : '60,0,10'},0.12)`; g.fillRect(rng() * w, rng() * h, 2, 2); }
+      g.fillStyle = '#f2c94c'; g.fillRect(w * 0.04, 0, w * 0.03, h); g.fillRect(w * 0.93, 0, w * 0.03, h);
+    }, { aniso: 16 }) };
+    default: return { tile: style.tile ?? 18, roughness: style.roughness ?? 0.82, map: roadTexture(style) };
+  }
+}
+export const ROAD_SKINS = ['asphalt', 'wood', 'sand', 'dirt', 'metal', 'neon', 'glass', 'snow', 'ice', 'stone', 'cobble', 'carpet'];

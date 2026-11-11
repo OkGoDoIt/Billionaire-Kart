@@ -80,8 +80,9 @@ export class Scenery {
    * Draw one prop many times. parts: from partsOf(). placements: [{x,y,z,yaw}].
    * opts: { scale: [min,max] | number, yaw: 'random' | 'keep', sink, tint: [colors], tilt }
    */
-  instances(parts, placements, { scale = 1, yaw = 'keep', sink = 0, tints = null, tilt = 0, cast = true } = {}) {
+  instances(parts, placements, { scale = 1, yaw = 'keep', sink = 0, tints = null, tilt = 0, cast = true, solid = 0 } = {}) {
     if (!placements.length) return [];
+    if (solid) for (const p of placements) this.track.addCollider(p.x, p.z, solid);   // karts bounce off these
     const n = placements.length, meshes = [];
     const xf = placements.map(p => {
       const s = Array.isArray(scale) ? this.rng.range(scale[0], scale[1]) : scale;
@@ -104,7 +105,8 @@ export class Scenery {
   }
 
   /** Place a unique object on the ground. */
-  place(obj, x, z, { yaw = 0, y = null, lift = 0, scale = 1, cast = true } = {}) {
+  place(obj, x, z, { yaw = 0, y = null, lift = 0, scale = 1, cast = true, solid = 0 } = {}) {
+    if (solid) this.track.addCollider(x, z, solid);
     obj.position.set(x, (y ?? this.y(x, z)) + lift, z); obj.rotation.y = yaw; obj.scale.setScalar(scale);
     obj.traverse(o => { if (o.isMesh) { o.castShadow = cast && this.shadows && !o.material.transparent; } });
     this.group.add(obj);

@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { EDGE, KERB_W, KERB_H } from './track.js';
 import { clamp, lerp, smoothstep, mod, fbm, noise2 } from '../core/util.js';
-import { roadTexture, kerbTexture, detailTexture, checkerTexture, bannerTexture, DEFAULT_ADS } from '../render/textures.js';
+import { roadSkin, kerbTexture, detailTexture, checkerTexture, bannerTexture, DEFAULT_ADS } from '../render/textures.js';
 
 /* ---------- tiny geometry builder ---------- */
 export class Geo {
@@ -56,23 +56,29 @@ export function buildTrackMesh(track, look = {}) {
   };
   const { N, ds, px, py, pz, lx, ly, lz, ux, uy, uz, hwL, hwR } = track;
 
-  /* ----- road ----- */
+  /* ----- road: one mesh per surface skin ----- */
   {
-    const K = 8, g = new Geo(), tile = L.road.tile ?? 18;
-    const rowStart = [];
-    for (let r = 0; r <= N; r++) {
-      const i = r % N; rowStart.push(g.count);
-      for (let j = 0; j <= K; j++) {
-        const lat = lerp(-hwR[i], hwL[i], j / K);
-        g.v(px[i] + lx[i] * lat, py[i] + ly[i] * lat, pz[i] + lz[i] * lat, ux[i], uy[i], uz[i], j / K, (r * ds) / tile);
+    const K = 8, skins = [...new Set(track.skin)];
+    for (const skin of skins) {
+      const g = new Geo(), sk = roadSkin(skin, L.road), tile = sk.tile ?? 18;
+      for (let r = 0; r < N; r++) {
+        if (track.gap[r] || track.skin[r] !== skin) continue;
+        const first = g.count;
+        for (const rr of [r, r + 1]) {
+          const i = rr % N;
+          for (let j = 0; j <= K; j++) {
+            const lat = lerp(-hwR[i], hwL[i], j / K);
+            g.v(px[i] + lx[i] * lat, py[i] + ly[i] * lat, pz[i] + lz[i] * lat, ux[i], uy[i], uz[i], j / K, (rr * ds) / tile);
+          }
+        }
+        for (let j = 0; j < K; j++) g.quad(first + j, first + j + 1, first + K + 1 + j, first + K + 2 + j);
       }
+      const mat = new THREE.MeshStandardMaterial({ map: sk.map, roughness: sk.roughness ?? 0.82, metalness: sk.metalness ?? 0, envMapIntensity: sk.envMapIntensity ?? 0.5 });
+      if (sk.emissiveMap) { mat.emissiveMap = sk.emissiveMap; mat.emissive.set(sk.emissive ?? 0xffffff); mat.emissiveIntensity = sk.emissiveIntensity ?? 1; }
+      if (sk.transparent) { mat.transparent = true; mat.opacity = sk.opacity ?? 0.9; }
+      mats['road_' + skin] = mat; if (skin === 'asphalt') mats.road = mat;
+      add('road_' + skin, g.build(), mat);
     }
-    for (let r = 0; r < N; r++) {
-      if (track.gap[r]) continue;
-      for (let j = 0; j < K; j++) g.quad(rowStart[r] + j, rowStart[r] + j + 1, rowStart[r + 1] + j, rowStart[r + 1] + j + 1);
-    }
-    mats.road = new THREE.MeshStandardMaterial({ map: roadTexture(L.road), roughness: L.road.roughness ?? 0.82, metalness: 0, envMapIntensity: 0.5 });
-    add('road', g.build(), mats.road);
   }
 
   /* ----- kerbs (open edges only) ----- */

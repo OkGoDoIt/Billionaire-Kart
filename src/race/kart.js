@@ -297,6 +297,14 @@ export class Kart {
       }
     }
     this._bounds(hit, dt);
+    if (tr.colliderCount && this.ghostT <= 0) tr.eachCollider(this.x, this.z, c => {
+      const dx = this.x - c.x, dz = this.z - c.z, rr = c.r + this.radius * 0.8, d2 = dx * dx + dz * dz;
+      if (d2 >= rr * rr || d2 < 1e-6) return;
+      const d = Math.sqrt(d2), nx = dx / d, nz = dz / d;
+      this.x = c.x + nx * rr; this.z = c.z + nz * rr;
+      const vn = this.vx * nx + this.vz * nz;
+      if (vn < 0) { this.vx -= nx * vn * 1.35; this.vz -= nz * vn * 1.35; this.vx *= 0.72; this.vz *= 0.72; if (vn < -3 && this.wallT > 0.25) { this.emit('wall', { v: -vn, side: 0, hard: vn < -10 }); this.wallT = 0; this.endDrift(false); } }
+    });
     this.hint = hit.i;
 
     // ----- vertical
@@ -410,6 +418,7 @@ export class Kart {
     if (this.grounded && hit.onRoad && hit.surface !== SURFACES.void && !tr.gap[hit.i]) { this.safeT += dt; if (this.safeT > 0.5) { this.lastSafeI = hit.i; } }
     else this.safeT = 0;
     // fell off the world, or into deep water
+    if (this.bulletT > 0) return;                        // the bailout rocket flies over gaps
     const ref = tr.py[hit.i];
     if (this.y < ref - 9 || (tr.water != null && this.y < tr.water - 0.9 && this.grounded) || (this.grounded && hit.surface === SURFACES.void)) this.startRescue();
   }

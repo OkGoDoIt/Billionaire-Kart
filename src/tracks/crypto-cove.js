@@ -18,7 +18,7 @@ const COAST = [
 ];
 const HEAD = { x: -150, z: 150 };      // rocky headland
 const CAVE = { x: -114, z: 112 };      // the hill the cave runs through
-const CLUB = { x: 218, z: 66 };        // beach club plateau
+const CLUB = { x: 197, z: 67, yaw: -0.78 };        // beach club plateau
 const LIGHT = { x: -186, z: 298 };     // lighthouse knoll at the tip of the headland
 const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
 const SAND = [lin(0xf2), lin(0xdf), lin(0xae)];   // look.terrain.sand in linear light
@@ -96,10 +96,10 @@ export default {
   ],
   obstacles: [
     // crabs scuttle across the beach, each covering only part of the road
-    { kind: 'patrol', model: 'crab', at: 2.2, lats: [-7.5, 1.5], speed: 3.5, effect: 'spin', radius: 1.2 },
-    { kind: 'patrol', model: 'crab', at: 2.85, lats: [-1.5, 7.5], speed: 4.5, effect: 'spin', radius: 1.2 },
-    { kind: 'patrol', model: 'crab', at: 4.55, lats: [-7.5, 0], speed: 3, effect: 'spin', radius: 1.2 },
-    { kind: 'patrol', model: 'crab', at: 5.1, lats: [0, 7.5], speed: 5, effect: 'spin', radius: 1.2 },
+    { kind: 'patrol', model: 'crab', at: 2.2, lats: [-1, 7.5], speed: 3.5, effect: 'spin', radius: 1.2 },
+    { kind: 'patrol', model: 'crab', at: 2.85, lats: [-7.5, 0], speed: 4, effect: 'spin', radius: 1.2 },
+    { kind: 'patrol', model: 'crab', at: 4.55, lats: [-7.5, -3.5], speed: 3, effect: 'spin', radius: 1.2 },
+    { kind: 'patrol', model: 'crab', at: 5.1, lats: [-7.5, -1], speed: 4.5, effect: 'spin', radius: 1.2 },
     // tiki torches flare in turn at the pier gate
     { kind: 'timed', model: 'flame', at: 5.45, lat: 6, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.3 },
     { kind: 'timed', model: 'flame', at: 5.5, lat: -6, period: 3, duty: 0.45, phase: 1.5, effect: 'spin', radius: 1.3 },
@@ -131,7 +131,7 @@ export default {
       const cd = Math.hypot(x - CAVE.x, z - CAVE.z);
       const cave = 1 - smoothstep(24, 62, cd);
       h += Math.max(0, 34 + (fbm(x * 0.05, z * 0.05, 2, 9) - 0.5) * 6 - h) * cave;  // rock over the cave
-      const club = 1 - smoothstep(18, 34, Math.hypot(x - CLUB.x, z - CLUB.z));
+      const club = 1 - smoothstep(16, 30, Math.hypot(x - CLUB.x, z - CLUB.z));
       h = h * (1 - club) + 2.4 * club;                                                  // flat ground for the beach club
       const knoll = 1 - smoothstep(10, 40, Math.hypot(x - LIGHT.x, z - LIGHT.z));
       h += Math.max(0, 12 + (fbm(x * 0.06, z * 0.06, 2, 4) - 0.5) * 3 - h) * knoll;   // rocky knoll under the lighthouse
@@ -157,7 +157,7 @@ function decorate(ctx) {
   const { THREE, track, anim, view } = ctx, sc = new Scenery(ctx), rng = sc.rng;
   const W = track.water;
   const far = (x, z, list, r) => list.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > r * r);
-  const keepOut = [{ x: CLUB.x, z: CLUB.z, r: 26 }, { x: LIGHT.x, z: LIGHT.z, r: 14 }];
+  const keepOut = [{ x: CLUB.x, z: CLUB.z, r: 17 }, { x: LIGHT.x, z: LIGHT.z, r: 14 }];
   const clear = (x, z) => keepOut.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > o.r * o.r);
 
   // start/finish gantry and grandstands on the land side of the promenade
@@ -188,9 +188,8 @@ function decorate(ctx) {
 
   // the beach club, side-on to the beach road
   {
-    const p = sc.beside(3.2, 1, 40);
     const club = C.beachClub('THE EXCHANGE');
-    sc.place(club, CLUB.x, CLUB.z, { yaw: Math.atan2(p.x - CLUB.x, p.z - CLUB.z) * 0 + p.yaw, y: 2.4 });
+    sc.place(club, CLUB.x, CLUB.z, { yaw: CLUB.yaw, y: 2.4 });
   }
 
   // superyachts moored in the bay, bobbing gently

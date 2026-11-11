@@ -15,7 +15,12 @@ export default {
   bridges: [{ from: 4.2, to: 6.8 }],
   gaps: [{ from: 5.42, to: 5.62 }],
   sides: [{ from: 4.2, to: 6.8, edge: 'void' }, { from: 7.2, to: 8.4, side: 'R', edge: 'wall' }],
-  zones: [{ from: 8.6, to: 9.4, surface: 'dirt' }],
+  // one of every road skin, so the screenshot tool shows them all
+  zones: [
+    { from: 8.6, to: 9.4, surface: 'dirt', skin: 'dirt' }, { from: 1.3, to: 2.6, skin: 'neon' }, { from: 2.6, to: 3.3, skin: 'metal' },
+    { from: 3.3, to: 4.2, skin: 'stone' }, { from: 4.2, to: 5.42, skin: 'wood' }, { from: 5.62, to: 6.8, skin: 'glass' },
+    { from: 6.8, to: 7.4, skin: 'cobble' }, { from: 7.4, to: 8.0, skin: 'carpet' }, { from: 8.0, to: 8.6, surface: 'ice', skin: 'ice' }, { from: 9.4, to: 9.9, skin: 'sand' },
+  ],
   ramps: [{ at: 5.3, len: 8, lift: 1.8 }],
   boosts: [{ at: 0.4 }, { at: 4.9, w: 6 }],
   itemRows: [{ at: 0.9 }, { at: 3.4 }, { at: 7.4 }],

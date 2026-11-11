@@ -181,7 +181,8 @@ export class Track {
     for (const r of def.bridges || []) for (const i of this._range(r.from, r.to)) this.bridge[i] = 1;
     for (const r of def.tunnels || []) for (const i of this._range(r.from, r.to)) { this.tunnel[i] = 1; this.edgeL[i] = EDGE.WALL; this.edgeR[i] = EDGE.WALL; if (r.through) this.bridge[i] = 1; }
     for (const r of def.gaps || []) for (const i of this._range(r.from, r.to)) { this.gap[i] = 1; this.bridge[i] = 1; }
-    for (const r of def.zones || []) for (const i of this._range(r.from, r.to)) this.surf[i] = SURFACES[r.surface];
+    this.skin = new Array(N).fill(def.look?.road?.skin || 'asphalt');
+    for (const r of def.zones || []) for (const i of this._range(r.from, r.to)) { if (r.surface) this.surf[i] = SURFACES[r.surface]; if (r.skin) this.skin[i] = r.skin; }
     // walls and void edges have no shoulder; inner-corner shoulders are limited by the corner radius
     for (let i = 0; i < N; i++) {
       if (this.edgeL[i] !== EDGE.OPEN) this.shL[i] = 0;
@@ -386,6 +387,25 @@ export class Track {
     this.pointAt(s, lat, out);
     out.yaw = this.yawAt(s); out.s = s; out.lat = lat;
     return out;
+  }
+
+  /* ---------- solid scenery ---------- */
+  /** Register a solid round obstacle (a tree trunk, a tent, a pillar). Karts bounce off it. */
+  addCollider(x, z, r) {
+    const g = this._cg || (this._cg = new Map()), c = 10, key = (Math.floor(x / c) << 16) ^ (Math.floor(z / c) & 0xffff);
+    for (let ix = -1; ix <= 1; ix++) for (let iz = -1; iz <= 1; iz++) {
+      const k = ((Math.floor(x / c) + ix) << 16) ^ ((Math.floor(z / c) + iz) & 0xffff);
+      if (ix === 0 && iz === 0) { if (!g.has(k)) g.set(k, []); g.get(k).push({ x, z, r }); }
+      void k;
+    }
+    void key; this.colliderCount = (this.colliderCount || 0) + 1;
+  }
+  clearColliders() { this._cg = new Map(); this.colliderCount = 0; }
+  /** Calls fn(collider) for solids near (x,z). */
+  eachCollider(x, z, fn) {
+    const g = this._cg; if (!g || !this.colliderCount) return;
+    const c = 10, cx = Math.floor(x / c), cz = Math.floor(z / c);
+    for (let ix = -1; ix <= 1; ix++) for (let iz = -1; iz <= 1; iz++) { const list = g.get(((cx + ix) << 16) ^ ((cz + iz) & 0xffff)); if (list) for (let i = 0; i < list.length; i++) fn(list[i]); }
   }
 
   /* ---------- terrain ---------- */

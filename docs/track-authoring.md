@@ -44,7 +44,7 @@ export default {
   path: [ { p: [0, 0, 0] }, { p: [95, 0, 0] }, { p: [172, 1.5, 28], w: 19, bank: 0 }, … ],
 
   sides:   [ { from, to, side: 'L'|'R' (omit for both), edge: 'open'|'wall'|'void', shoulder, outer } ],
-  zones:   [ { from, to, surface: 'dirt' } ],          // road surface changes
+  zones:   [ { from, to, surface: 'dirt', skin: 'dirt' } ],   // surface = physics, skin = how the road looks
   tunnels: [ { from, to, through: true } ],            // arched shell; through:true lets a hill sit on top
   bridges: [ { from, to } ],                           // deck, pillars; terrain is not pulled up to it
   gaps:    [ { from, to } ],                           // missing road: must be jumped
@@ -181,3 +181,20 @@ Pass criteria:
 ## Shortcuts across open ground
 
 For a cut between two legs of the track, set `outer` on the facing side of **both** legs to a little more than half the distance between them, so the two drivable areas overlap, and add `hoarding: false` to those `sides` entries so no sponsor wall is drawn across the gap. A kart far off the road re-attaches to whichever stretch of track is nearest, so progress and lap counting keep working. Static obstacles placed off the road stand on the real ground.
+
+## Road skins
+
+`skin` sets how a stretch of road looks; `surface` sets how it drives. They are independent. Set a default for the whole track with `look.road.skin`, and change it over a range with a `zones` entry.
+
+Skins: `asphalt` (default, painted lines), `wood` (pier planks), `sand`, `dirt` (packed, tyre tracks), `metal` (riveted plates, hazard edges), `neon` (dark floor, glowing edge lines; pass `look.road.glow` for the colour), `glass` (rainbow road), `snow`, `ice`, `stone` (pale slabs), `cobble`, `carpet` (red, gold trim). `src/tracks/_lab.js` shows every one. Use at least two skins per track: a change of surface under the wheels is one of the cheapest ways to make a lap feel like a journey.
+
+## Solid scenery
+
+Pass `solid: <radius in metres>` to `sc.place` or `sc.instances` to make karts bounce off a prop (tree trunks, tents, pillars, statues). Use it for anything a kart can reach, especially along shortcuts, so the gap between two tents is a real gap.
+
+## Lessons from the first tracks
+
+- Keep obstacle hits fair. In `tools/sim.mjs` output, "hits per race" on a finished track should stay under about 32 (Silicon Valley Circuit is about 25). If patrolling obstacles push it higher, make them sweep less of the road or move them off the racing line.
+- A lap needs contrast: bright open sections, an enclosed section, a high point with a view, a surface change.
+- The aerial view should not look like a rectangle of land ending in fog: push `terrain.margin` to 200 or more, or surround the land with water.
+- `tools/shot.mjs` and the other tools pick free ports, so several can run at once.

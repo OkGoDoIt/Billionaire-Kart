@@ -13,7 +13,7 @@ import { chromium } from 'playwright';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2), opt = {};
 for (let i = 0; i < args.length; i++) if (args[i].startsWith('--')) { const k = args[i].slice(2); opt[k] = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : true; }
-const port = +(opt.port || 8791);
+let port = +(opt.port || 0);   // 0 = any free port, so several runs can overlap
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.svg': 'image/svg+xml' };
 const server = http.createServer(async (req, res) => {
   try {
@@ -25,6 +25,7 @@ const server = http.createServer(async (req, res) => {
   } catch { res.writeHead(404); res.end('not found'); }
 });
 await new Promise(r => server.listen(port, '127.0.0.1', r));
+port = server.address().port;
 
 const [w, h] = (opt.size || (opt.mobile ? '844x390' : '1280x720')).split('x').map(Number);
 let browser;

@@ -8,6 +8,14 @@
 export const def = {
   name: 'White House GP', sky: 0x9fd3ee, fog: 0xcfe5ef, ground: 0x4e8f3f, roadSeed: 5,
   points: [[269,-60],[134,-95],[-45,-100],[-213,-95],[-282,-40],[-289,10],[-267,58],[-190,80],[-67,88],[45,84],[123,60],[168,95],[241,88],[282,40],[278,-20]],
+  // HAND-AUTHORED profiles (docs/track-design-white-house.md) — keyframes [u, value]:
+  // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT
+  // turn). This is the ceremonial-flat track BY DESIGN: the Mall straights stay
+  // at 0.00 so the White House lawn, fence, Reflecting Pool and Monument plaza
+  // sit exactly as built. The only authored exceptions are the sunken Monument
+  // hairpin bowl (west) and the Ballroom construction ramp (east).
+  elev: [[0, 0], [0.30, 0], [0.36, -1.2], [0.42, -2.4], [0.494, -3.5], [0.54, -2.2], [0.60, 0], [0.84, 0], [0.885, 1.8], [0.93, 4.5], [0.96, 2.0], [0.995, 0]],
+  bank: [[0, 0], [0.30, 0], [0.35, -6], [0.385, -8], [0.42, -9], [0.46, -10], [0.494, -11], [0.53, -6], [0.57, 0], [0.75, 0], [0.784, 13], [0.802, 0], [0.820, -12], [0.845, -4], [0.88, -8], [0.90, -6], [0.929, -10], [0.95, 0], [0.96, 0], [0.998, -5]],
 };
 
 /* ---------- small local helpers (duplicated per module by design) ---------- */
@@ -50,9 +58,10 @@ function nearestIdx(ctx, x, z) {
   for (let i = 0; i < ctx.N; i++) { const s = ctx.samples[i], dx = s.x - x, dz = s.z - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; best = i; } }
   return best;
 }
-function atFrac(ctx, frac, lat, y = 0) {
+function atFrac(ctx, frac, lat, y = null) { // default y = real terrain height (TRACK 3D profiles)
   const i = Math.floor(frac * ctx.N) % ctx.N, s = ctx.samples[i], n = ctx.normals[i];
-  return { pos: new ctx.THREE.Vector3(s.x + n.x * lat, y, s.z + n.z * lat), idx: i, sample: s };
+  const x = s.x + n.x * lat, z = s.z + n.z * lat;
+  return { pos: new ctx.THREE.Vector3(x, y === null ? (ctx.terrainHeightAt ? ctx.terrainHeightAt(x, z) : 0) : y, z), idx: i, sample: s };
 }
 function faceTrack(obj, sample) { obj.lookAt(sample.x, 0, sample.z); }
 function inwardSign(ctx, idx) { // +1/-1: which normal side faces the loop centroid
@@ -150,7 +159,8 @@ export function dress(ctx) {
   }
   const hairSign = sign(THREE, textPanel(THREE, ['HAIRPIN OF DEMOCRACY', 'BRAKE FOR FREEDOM'], { w: 640, h: 220, bg: '#14213d', border: '#ffd94a', font: 48 }), 12, 4.2);
   { const idx = nearestIdx(ctx, -282, -40), s = ctx.samples[idx], n = ctx.normals[idx];
-    hairSign.position.set(s.x - n.x * (HALF_W + 6), 0, s.z - n.z * (HALF_W + 6)); faceTrack(hairSign, s); scene.add(hairSign); }
+    const hx = s.x - n.x * (HALF_W + 6), hz = s.z - n.z * (HALF_W + 6); // the hairpin bowl is sunken — the sign stands on the bowl's slope, not at y=0
+    hairSign.position.set(hx, ctx.terrainHeightAt ? ctx.terrainHeightAt(hx, hz) : 0, hz); faceTrack(hairSign, s); scene.add(hairSign); }
 
   /* ----- THE BALLROOM construction zone, outside the north-east curve ----- */
   const zone = new THREE.Group();

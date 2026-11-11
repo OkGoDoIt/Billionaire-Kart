@@ -123,24 +123,52 @@ export function puffTexture(size = 128, seed = 5) {
   }, { repeat: false, mip: false });
 }
 
-/** Sponsor hoarding strip: a row of satirical ad boards. Returns a texture 8:1. */
+/** Number of illustrated sponsor boards in assets/ads (ad-01.webp ...). */
+export const AD_IMAGES = 24;
+const adImageCache = new Map();
+function adImage(n) {
+  if (!adImageCache.has(n)) adImageCache.set(n, new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = `assets/ads/ad-${String(n).padStart(2, '0')}.webp`; }));
+  return adImageCache.get(n);
+}
+
+/**
+ * Sponsor strip: four 2:1 boards side by side (so set repeat.x = 0.25 to show one).
+ * Boards alternate between the track's own slogans, drawn as text, and the
+ * illustrated sponsor boards in assets/ads, which load in a moment after.
+ * A track with no slogans of its own gets illustrated boards only.
+ */
 export function bannerTexture(ads, seed = 1) {
-  const pal = [['#ffd23c', '#1a1d29'], ['#ff4d6d', '#ffffff'], ['#22c1c3', '#0b2239'], ['#ffffff', '#e23b3b'], ['#7b5cff', '#ffffff'], ['#16a34a', '#ffffff'], ['#1a1d29', '#ffd23c'], ['#ff8a00', '#1a1d29']];
-  return canvasTex(2048, 128, (g, w, h) => {
-    const rng = makeRng(seed), n = 4, bw = w / n;
+  const pal = [['#ffd23c', '#1a1d29'], ['#ff4d6d', '#ffffff'], ['#22c1c3', '#0b2239'], ['#ffffff', '#e23b3b'], ['#7b5cff', '#ffffff'], ['#16a34a', '#ffffff'], ['#1a1d29', '#ffd23c'], ['#ff8a00', '#1a1d29'], ['#0ea5e9', '#ffffff'], ['#db2777', '#ffffff']];
+  const n = 4, own = ads && ads !== DEFAULT_ADS && ads.length > 0;
+  const tex = canvasTex(2048, 256, (g, w, h) => {
+    const rng = makeRng(seed), bw = w / n;
     for (let i = 0; i < n; i++) {
-      const [bg, fg] = pal[Math.floor(rng() * pal.length)];
-      g.fillStyle = bg; g.fillRect(i * bw, 0, bw, h);
-      g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(i * bw, h - 10, bw, 10);
-      g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(i * bw, 0, bw, 6);
-      g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
-      const text = ads[Math.floor(rng() * ads.length)];
-      let size = 74; g.font = `${size}px "Luckiest Guy", "Arial Black", sans-serif`;
-      while (g.measureText(text).width > bw - 40 && size > 20) { size -= 4; g.font = `${size}px "Luckiest Guy", "Arial Black", sans-serif`; }
-      g.fillText(text, i * bw + bw / 2, h / 2 + 4);
-      g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(i * bw + bw - 3, 0, 3, h);
+      const [bg, fg] = pal[Math.floor(rng() * pal.length)], x = i * bw;
+      g.fillStyle = bg; g.fillRect(x, 0, bw, h);
+      // a diagonal sheen and a darker foot, like a printed board
+      const sh = g.createLinearGradient(x, 0, x + bw, h); sh.addColorStop(0, 'rgba(255,255,255,0.16)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.16)');
+      g.fillStyle = sh; g.fillRect(x, 0, bw, h);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      const text = (ads && ads.length ? ads : DEFAULT_ADS)[Math.floor(rng() * (ads && ads.length ? ads : DEFAULT_ADS).length)];
+      // break long slogans over two lines
+      const words = text.split(' '); let lines = [text];
+      if (text.length > 13 && words.length > 1) { let best = 1, bd = 1e9; for (let k = 1; k < words.length; k++) { const d = Math.abs(words.slice(0, k).join(' ').length - words.slice(k).join(' ').length); if (d < bd) { bd = d; best = k; } } lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')]; }
+      let size = lines.length > 1 ? 96 : 120; const font = () => { g.font = `${size}px "Luckiest Guy", "Arial Black", sans-serif`; };
+      font(); while (Math.max(...lines.map(l => g.measureText(l).width)) > bw - 56 && size > 24) { size -= 4; font(); }
+      lines.forEach((l, k) => { const y = h / 2 + 8 + (k - (lines.length - 1) / 2) * size * 1.02; g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillText(l, x + bw / 2 + 5, y + 6); g.fillStyle = fg; g.fillText(l, x + bw / 2, y); });
+      g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 6; g.strokeRect(x + 7, 7, bw - 14, h - 14);
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x + bw - 3, 0, 3, h);
     }
   }, { aniso: 8 });
+  tex.userData.boardAspect = 2;
+  if (typeof Image !== 'undefined') {
+    const rng = makeRng(seed * 31 + 7), slots = own ? [1, 3] : [0, 1, 2, 3], used = new Set();
+    for (const slot of slots) {
+      let pick; do { pick = 1 + Math.floor(rng() * AD_IMAGES); } while (used.has(pick)); used.add(pick);
+      adImage(pick).then(img => { if (!img) return; const c = tex.image, g = c.getContext('2d'), bw = c.width / n; g.drawImage(img, slot * bw, 0, bw, c.height); g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect((slot + 1) * bw - 3, 0, 3, c.height); tex.needsUpdate = true; });
+    }
+  }
+  return tex;
 }
 
 export const DEFAULT_ADS = [

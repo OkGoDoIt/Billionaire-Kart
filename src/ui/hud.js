@@ -128,7 +128,7 @@ export class Hud {
       this.lastItem = key;
       $.item.classList.toggle('has', !!shown); $.item.classList.toggle('rolling', !k.item && !!shown);
       if (shown) {
-        const def = ITEMS[shown], isCoin = def.img === 'coin';
+        const def = ITEMS[shown], isCoin = false;
         $.img.style.display = isCoin ? 'none' : ''; $.coinFallback.style.display = isCoin ? '' : 'none';
         if (!isCoin) $.img.src = itemIcon(shown);
         $.count.textContent = k.item && k.itemUses > 1 ? '×' + k.itemUses : '';

@@ -17,6 +17,7 @@ export class RaceView {
     const scene = gfx.scene, track = race.track;
     this.root = new THREE.Group(); this.root.name = 'race'; scene.add(this.root);
     this.sky = gfx.setSky(def.sky || 'day', def.skyOverrides || {});
+    if (def.backdrop) new THREE.TextureLoader().load(def.backdrop.img, tex => { if (gfx.sky === this.sky) this.sky.setPanorama(tex, def.backdrop); });
     this.trackMesh = buildTrackMesh(track, def.look); this.root.add(this.trackMesh);
     if (track.water != null) this._water(track, def);
     this.fx = new Particles(this.root, gfx.q.particles);

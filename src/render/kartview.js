@@ -224,7 +224,7 @@ export class KartView {
     // slipstream streaks
     if (k.drafting && k.draftT > 0.2) { const n = fx.count(40, dt); for (let i = 0; i < n; i++) { const ox = (Math.random() - 0.5) * 2.2, oy = 0.3 + Math.random() * 1.4; fx.add.emit({ x: this.pos.x + cy * ox + sy * 2.5, y: this.pos.y + oy, z: this.pos.z - sy * ox + cy * 2.5, vx: -sy * sp * 0.7, vy: 0, vz: -cy * sp * 0.7, color: [0.8, 0.95, 1], size: 0.14, life: 0.22, alpha: 0.8 }); } }
     // hype-cycle sparkles
-    if (k.starT > 0) { const n = fx.count(60, dt); for (let i = 0; i < n; i++) { _c.setHSL(Math.random(), 1, 0.6); fx.add.emit({ x: this.pos.x + (Math.random() - 0.5) * 2.4, y: this.pos.y + Math.random() * 2.2, z: this.pos.z + (Math.random() - 0.5) * 2.4, vx: 0, vy: 1.5, vz: 0, color: [_c.r, _c.g, _c.b], size: 0.35, life: 0.45, alpha: 1.6 }); } }
+    if (k.starT > 0) { const n = fx.count(60, dt); for (let i = 0; i < n; i++) { _c.setHSL(Math.random(), 1, 0.6); fx.add.emit({ x: this.pos.x + (Math.random() - 0.5) * 2.4, y: this.pos.y + Math.random() * 2.2, z: this.pos.z + (Math.random() - 0.5) * 2.4, vx: 0, vy: 1.5, vz: 0, color: [_c.r, _c.g, _c.b], size: 0.16, life: 0.4, alpha: 1.1 }); } }
     // revving on the grid
     if (k.revving && fx.count(22, dt)) { rig.exhausts[Math.random() < 0.5 ? 0 : 1].getWorldPosition(_v); fx.dust(_v.x, _v.y, _v.z, -sy * 3 + (Math.random() - 0.5) * 2, 1.2, -cy * 3 + (Math.random() - 0.5) * 2, [0.62, 0.63, 0.66], 0.45, 0.5, 0.3); }
     void TIER_HEX; void KART; void smoothstep;

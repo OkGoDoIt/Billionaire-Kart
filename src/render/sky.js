@@ -85,17 +85,17 @@ const skyFrag = /* glsl */`
       float fade = smoothstep(0.015, 0.16, h);
       col = mix(col, cc, m * fade * 0.96);
     }
-    // optional painted panorama band around the horizon
+    // optional painted panorama around the horizon (transparent above its own skyline)
     if (uPanoOn > 0.5) {
-      float ang = atan(d.x, d.z) / 6.28318530718 + uPanoRot;
       float el = asin(clamp(h, -1.0, 1.0));
       float v = (el - uPanoBottom) / (uPanoTop - uPanoBottom);
       if (v > 0.0 && v < 1.0) {
-        // mirror-tile horizontally so the seam never shows
-        float u = fract(ang * 2.0); u = u > 0.5 ? (1.0 - u) * 2.0 : u * 2.0;
+        // mirror-tile horizontally so the seam never shows: one copy spans half a turn
+        float u = fract(atan(d.x, d.z) / 6.28318530718 + uPanoRot);
+        u = u > 0.5 ? (1.0 - u) * 2.0 : u * 2.0;
         vec4 p = texture2D(uPano, vec2(u, v));
-        float a = smoothstep(1.0, 0.62, v) * smoothstep(0.0, 0.04, v);
-        col = mix(col, p.rgb, a * p.a);
+        vec3 pc = mix(p.rgb, uHorizon, 0.16);
+        col = mix(col, pc, p.a * smoothstep(0.0, 0.03, v));
       }
     }
     gl_FragColor = vec4(col * uGain, 1.0);
@@ -118,9 +118,11 @@ export class Sky {
     this.mesh.onBeforeRender = (r, s, cam) => { this.mesh.position.copy(cam.getWorldPosition(_v)); };
     this.sunDir = this.uniforms.uSunDir.value;
   }
-  setPanorama(tex, { top = 0.55, bottom = -0.1, rot = 0 } = {}) {
-    tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.ClampToEdgeWrapping;
-    this.uniforms.uPano.value = tex; this.uniforms.uPanoOn.value = 1; this.uniforms.uPanoTop.value = top; this.uniforms.uPanoBottom.value = bottom; this.uniforms.uPanoRot.value = rot;
+  /** top/bottom: elevation in degrees covered by the image. rot: turns (0..1) to spin it around. */
+  setPanorama(tex, { top = 28, bottom = -8, rot = 0 } = {}) {
+    tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.ClampToEdgeWrapping; tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.anisotropy = 4;
+    this.uniforms.uPano.value = tex; this.uniforms.uPanoOn.value = 1; this.uniforms.uPanoTop.value = top * Math.PI / 180; this.uniforms.uPanoBottom.value = bottom * Math.PI / 180; this.uniforms.uPanoRot.value = rot;
   }
   update(time) { this.uniforms.uTime.value = time; }
   /** Bake a blurred environment map from this sky for image-based lighting. */

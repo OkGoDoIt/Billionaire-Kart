@@ -36,8 +36,8 @@ async function one(j) {
   return 'made';
 }
 function skinOf(id) {
-  // average of both cheeks
-  const px = execFileSync('magick', [`assets/faces/${id}.webp`, '-alpha', 'off', '(', '+clone', '-crop', '40x40+140+300', '+repage', ')', '(', '-clone', '0', '-crop', '40x40+332+300', '+repage', ')', '-delete', '0', '+append', '-resize', '1x1!', '-format', '%[hex:p{0,0}]', 'info:']).toString().trim();
+  // average of forehead and both cheeks, then eased toward a neutral tone so heads are not orange
+  const px = execFileSync('magick', [`assets/faces/${id}.webp`, '-alpha', 'off', '(', '+clone', '-crop', '40x40+140+300', '+repage', ')', '(', '-clone', '0', '-crop', '40x40+332+300', '+repage', ')', '(', '-clone', '0', '-crop', '120x40+196+120', '+repage', '-resize', '80x40!', ')', '-delete', '0', '+append', '-resize', '1x1!', '-modulate', '104,82,100', '-format', '%[hex:p{0,0}]', 'info:']).toString().trim();
   return '#' + px.slice(0, 6).toLowerCase();
 }
 

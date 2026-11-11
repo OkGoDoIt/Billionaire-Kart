@@ -4,6 +4,7 @@ import { Race } from '../race/race.js';
 import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
 import { Hud } from '../ui/hud.js';
+import { TouchControls, isTouchDevice } from '../ui/touch.js';
 import { ITEMS } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
 import { RACERS, RACER_BY_ID } from '../content/racers.js';
@@ -26,7 +27,7 @@ export class RaceSession {
     // humans start at the back, like a first Grand Prix race
     const entries = [...pool.map(racer => ({ racer, player: -1, level: config.level || 'normal' })), ...humans.map((racer, i) => ({ racer, player: i, autoTrick: config.players[i].autoTrick }))];
     if (config.order) entries.sort((a, b) => config.order.indexOf(a.racer.id) - config.order.indexOf(b.racer.id));
-    this.race = new Race({ track, cc: config.cc || 150, laps: config.laps, seed: (config.seed ?? 1) + 17, entries, mode: config.mode });
+    this.race = new Race({ track, cc: config.cc || 150, laps: config.laps, seed: (config.seed ?? 1) + 17, entries, mode: config.mode, countdown: config.countdown });
     this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k) });
     app.input.assign = config.players.length === 1 ? ['any'] : config.players.map(p => p.device);
     this.autopilots = config.auto ? this.race.players.map(k => new AIDriver(k, 'hard', makeRng(99))) : null;
@@ -34,8 +35,15 @@ export class RaceSession {
     const n = this.race.players.length;
     this.huds = this.race.players.map((k, i) => new Hud(app.ui, this.race, k, this.view.views[i].rect, { compact: n > 2, showMap: true }));
     this.hudOf = new Map(this.race.players.map((k, i) => [k, this.huds[i]]));
+    // touch controls for a solo player on a touch screen
+    this.touch = null;
+    if (n === 1 && isTouchDevice() && !config.auto) {
+      this.touch = new TouchControls(app.ui, app.input, this.race.players[0], { onPause: () => app.pause?.() });
+      this.huds[0].root.classList.add('hud-touch'); this.race.players[0].autoTrick = true;
+    } else app.input.touch.active = false;
+    for (const c of this.view.cams) c.shakeScale = app.shake === false ? 0 : 1;
     this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;
-    if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); app.audio?.event('introStart', def); }
+    if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); this.touch?.setVisible(false); app.audio?.event('introStart', def); }
     else app.audio?.event('countdownStart', def);
   }
 
@@ -73,9 +81,9 @@ export class RaceSession {
     const { race, view, app } = this;
     if (this.paused) { app.gfx.render(0); return; }
     if (this.phase === 'intro') {
-      if (view.intro.done) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) h.setVisible(true); app.audio?.event('countdownStart', this.def); }
+      if (view.intro.done) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) h.setVisible(true); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
     } else {
-      const inputs = app.input.poll(dt);
+      const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
       this.acc = Math.min(this.acc + dt, STEP * 5);
       while (this.acc >= STEP) {
         view.snapshot();
@@ -86,6 +94,7 @@ export class RaceSession {
       }
       for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
       if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
+      this.touch?.sync();
       for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
       if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
     }
@@ -97,5 +106,5 @@ export class RaceSession {
 
   setPaused(p) { this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
 
-  dispose() { for (const h of this.huds) h.dispose(); this.view.dispose(); }
+  dispose() { for (const h of this.huds) h.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

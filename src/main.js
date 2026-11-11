@@ -1,7 +1,10 @@
-/* Boot. For now this drops straight into a race; menus arrive next. */
+/* Boot. Normal visits get the title screen; a few URL parameters skip straight
+   to a race or a model viewer for development and automated screenshots:
+     ?track=<id>&r=<racer,...>&cc=150&level=hard&laps=1&seed=5&auto=1&intro=0&q=high
+     ?fly=1 (with the above) parks the camera on the track; ?fly=top is an aerial view
+     ?view=kart&r=elon,sam is a turntable of kart models */
 import * as THREE from 'three';
-import { Gfx } from './render/gfx.js';
-import { Input } from './core/input.js';
+import { App } from './game/app.js';
 import { RaceSession } from './game/session.js';
 import { preloadFaces } from './models/driver.js';
 import { buildKart } from './models/kart.js';
@@ -9,12 +12,13 @@ import { RACERS, RACER_BY_ID } from './content/racers.js';
 import { TRACKS, TRACK_BY_ID, registerTrack } from './content/tracks.js';
 
 await document.fonts.load('40px "Luckiest Guy"').catch(() => {});
+await document.fonts.load('600 20px "Fredoka"').catch(() => {});
 await preloadFaces();
 const q = new URLSearchParams(location.search);
-const canvas = document.getElementById('game');
-const gfx = new Gfx(canvas, q.get('q') ? { quality: q.get('q') } : {});
-const app = { gfx, input: new Input(), ui: document.getElementById('ui'), audio: null, session: null };
+const app = new App(document.getElementById('game'), document.getElementById('ui'), { quality: q.get('q') });
+const gfx = app.gfx;
 window.BK = { app, gfx, THREE, RACERS };
+Object.defineProperty(BK, 'session', { get: () => app.session }); Object.defineProperty(BK, 'race', { get: () => app.session?.race });
 
 if (q.get('view') === 'kart') {
   gfx.fixedScale = true; gfx.setSky('day');
@@ -32,26 +36,22 @@ if (q.get('view') === 'kart') {
     cam.lookAt(st.x, st.y, 0); focus.set(st.x, 0, 0); gfx.render(dt); requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-} else {
-  // a track file that is not in the registry yet can still be loaded by name while it is being built
+} else if (q.get('track') || q.get('auto') || q.get('r') || q.get('fly')) {
+  // development: straight into a race
   const wanted = q.get('track');
   if (wanted && !TRACK_BY_ID[wanted]) registerTrack((await import(`./tracks/${wanted}.js`)).default);
   const start = () => {
     app.session?.dispose();
     app.session = new RaceSession(app, {
-      trackId: q.get('track') || TRACKS[0].id, cc: +(q.get('cc') || 150), level: q.get('level') || 'normal',
-      players: (q.get('r') || 'elon').split(',').map((racerId, i) => ({ racerId, device: ['kb1', 'kb2', 'pad0', 'pad1'][i] })),
+      trackId: wanted || TRACKS[0].id, cc: +(q.get('cc') || 150), level: q.get('level') || 'normal',
+      players: (q.get('r') || 'elon').split(',').map((racerId, i, a) => ({ racerId, device: a.length === 1 ? 'any' : ['kb1', 'kb2', 'pad0', 'pad1'][i] })),
       seed: q.get('seed') ? +q.get('seed') : undefined, auto: q.get('auto') === '1', intro: q.get('intro') !== '0', laps: q.get('laps') ? +q.get('laps') : undefined,
     });
-    BK.session = app.session; BK.race = app.session.race;
   };
   app.onRaceDone = () => setTimeout(start, 5000);
-  app.input.onMenu = action => {
-    if (action === 'pause' || action === 'back') app.session.setPaused(!app.session.paused);
-    if (action === 'confirm') app.session.skipIntro();
-    if (action === 'reset') app.session.race.players[0]?.startRescue();
-  };
-  // ?fly=1 parks the camera on the track for authoring screenshots: BK.fly = { s, lat, h, back, look } or { top: true }
+  app.pause = () => app.session.setPaused(!app.session.paused);
+  app.onMenu = action => { if (action === 'pause' || action === 'back') app.pause(); if (action === 'confirm') app.session.skipIntro(); if (action === 'reset') app.session.race.players[0]?.startRescue(); };
+  app.input.onMenu = (a, d) => app.onMenu(a, d);
   if (q.get('fly')) {
     const fly = BK.fly = { s: +(q.get('s') || 0), lat: 0, h: 5, back: 12, look: 22, top: q.get('fly') === 'top' };
     const P = new THREE.Vector3(), Q = new THREE.Vector3();
@@ -64,7 +64,8 @@ if (q.get('view') === 'kart') {
     };
   }
   start();
-  let last = performance.now();
-  const frame = now => { const dt = Math.min(0.1, (now - last) / 1000); last = now; app.session.frame(dt); requestAnimationFrame(frame); };
-  requestAnimationFrame(frame);
+  app.run();
+} else {
+  app.toTitle();
+  app.run();
 }

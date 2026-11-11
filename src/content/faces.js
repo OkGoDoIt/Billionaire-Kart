@@ -2,70 +2,70 @@
 export const FACES = {
   "elon": {
     "img": "assets/faces/elon.webp",
-    "skin": "#e68f69"
+    "skin": "#eab39b"
   },
   "sam": {
     "img": "assets/faces/sam.webp",
-    "skin": "#df835b"
+    "skin": "#d09375"
   },
   "zuck": {
     "img": "assets/faces/zuck.webp",
-    "skin": "#fbae8f"
+    "skin": "#f5c6b2"
   },
   "bezos": {
     "img": "assets/faces/bezos.webp",
-    "skin": "#d77b51"
+    "skin": "#dc9c7d"
   },
   "jensen": {
     "img": "assets/faces/jensen.webp",
-    "skin": "#d37b4d"
+    "skin": "#d69a79"
   },
   "satya": {
     "img": "assets/faces/satya.webp",
-    "skin": "#ec996d"
+    "skin": "#ecb394"
   },
   "dario": {
     "img": "assets/faces/dario.webp",
-    "skin": "#db8a61"
+    "skin": "#b78064"
   },
   "demis": {
     "img": "assets/faces/demis.webp",
-    "skin": "#c48c7a"
+    "skin": "#d8ad9a"
   },
   "trump": {
     "img": "assets/faces/trump.webp",
-    "skin": "#d17b52"
+    "skin": "#d49570"
   },
   "cook": {
     "img": "assets/faces/cook.webp",
-    "skin": "#f7a585"
+    "skin": "#f1bea7"
   },
   "larrysergey": {
     "img": "assets/faces/larrysergey.webp",
-    "skin": "#e0906e"
+    "skin": "#d8a68e"
   },
   "larrysergey2": {
     "img": "assets/faces/larrysergey2.webp",
-    "skin": "#c3764f"
+    "skin": "#b27d61"
   },
   "bill": {
     "img": "assets/faces/bill.webp",
-    "skin": "#d67f5a"
+    "skin": "#d89d82"
   },
   "thiel": {
     "img": "assets/faces/thiel.webp",
-    "skin": "#fbb291"
+    "skin": "#f4c5ae"
   },
   "holmes": {
     "img": "assets/faces/holmes.webp",
-    "skin": "#f8ad96"
+    "skin": "#f4c5b4"
   },
   "ellison": {
     "img": "assets/faces/ellison.webp",
-    "skin": "#ba6c3e"
+    "skin": "#c5875e"
   },
   "murdoch": {
     "img": "assets/faces/murdoch.webp",
-    "skin": "#e79970"
+    "skin": "#e9b498"
   }
 };

@@ -28,6 +28,11 @@ export const SKY_PRESETS = {
     cloud: 0xf7d2b0, cloudShade: 0xc98a66, cloudCover: 0.25, cloudScale: 1.6, stars: 0.1,
     fog: 0xeaa87c, fogNear: 110, fogFar: 780, sunLight: 0xffe2c4, sunIntensity: 3.0, hemiSky: 0xffc9a0, hemiGround: 0x9a5236, hemiIntensity: 1.2, exposure: 1.0,
   },
+  studio: {
+    zenith: 0x0a0e2a, horizon: 0x2a3a8f, ground: 0x151a48, sun: 0xffffff, sunDir: [0.35, 0.75, 0.6],
+    cloud: 0x2a3a8f, cloudShade: 0x151a48, cloudCover: 0.0, cloudScale: 1, stars: 0.5,
+    fog: 0x1a2260, fogNear: 40, fogFar: 260, sunLight: 0xfff4e6, sunIntensity: 3.6, hemiSky: 0x9fb4ff, hemiGround: 0x4a3a7a, hemiIntensity: 1.5, exposure: 1.05, envIntensity: 1.1,
+  },
   space: {
     zenith: 0x02030c, horizon: 0x1a0f4a, ground: 0x0a0624, sun: 0xffffff, sunDir: [0.4, 0.55, 0.4],
     cloud: 0x4a2f9a, cloudShade: 0x1a0f4a, cloudCover: 0.22, cloudScale: 2.2, stars: 1,

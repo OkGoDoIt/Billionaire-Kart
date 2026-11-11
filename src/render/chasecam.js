@@ -23,7 +23,7 @@ export class ChaseCam {
     this.pos.set(k.x - Math.sin(k.yaw) * this.dist, k.y + this.height, k.z - Math.cos(k.yaw) * this.dist);
     this.camera.position.copy(this.pos);
   }
-  addShake(a) { this.shake = Math.min(1.2, this.shake + a); }
+  addShake(a) { this.shake = Math.min(1.2, this.shake + a * (this.shakeScale ?? 1)); }
 
   /** view: a KartView (for the interpolated position). aspect: viewport aspect ratio. */
   update(dt, view, aspect = 16 / 9) {

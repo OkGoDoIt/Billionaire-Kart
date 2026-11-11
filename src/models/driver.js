@@ -47,7 +47,8 @@ function buildHead(look, faceId) {
     case 'bald': break;
     case 'baldsides': {
       // a band around the back and sides
-      const g = new THREE.SphereGeometry(R * 1.04, 28, 8, Math.PI * 1.08, Math.PI * 1.84, Math.PI * 0.34, Math.PI * 0.3);
+      // phi = 3π/2 is the back of the head; cover 230° centred there so the face stays clear
+      const g = new THREE.SphereGeometry(R * 1.04, 28, 8, Math.PI * 1.5 - Math.PI * 0.64, Math.PI * 1.28, Math.PI * 0.36, Math.PI * 0.27);
       b.add('hair', g, { p: [0, cy, 0], s: [1.02, 1.07, 1.04] });
       break;
     }
@@ -76,11 +77,12 @@ function buildHead(look, faceId) {
       break;
     }
     case 'swoop': {
-      cap(Math.PI * 0.46, -0.3, 1.05);
-      blob(0.02, R * 0.98, 0.2, 2.6, 0.85, 2.0, 0.17);     // the famous front sweep
-      blob(-0.14, R * 0.9, 0.36, 1.9, 0.6, 1.0, 0.15);
-      blob(0.2, R * 0.86, 0.1, 1.3, 0.9, 2.2, 0.15);
-      blob(0, R * 0.78, -0.3, 2.5, 1.2, 1.2, 0.16);
+      cap(Math.PI * 0.44, -0.34, 1.04);
+      blob(0.0, R * 0.9, 0.22, 2.5, 0.6, 1.5, 0.17);       // the front sweep, combed forward and over
+      blob(-0.16, R * 0.84, 0.34, 1.7, 0.5, 0.9, 0.15);
+      blob(0.26, R * 0.8, 0.06, 1.0, 0.8, 2.0, 0.15);
+      blob(-0.28, R * 0.76, -0.02, 1.0, 0.9, 2.0, 0.15);
+      blob(0, R * 0.62, -0.34, 2.3, 1.1, 1.0, 0.16);
       break;
     }
     case 'long': {

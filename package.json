@@ -1,0 +1,16 @@
+{
+  "name": "billionaire-kart",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Billionaire Kart: a parody party kart racer that runs in the browser. Static site, no build step.",
+  "scripts": {
+    "start": "python3 -m http.server 8765 --bind 127.0.0.1",
+    "sim": "node tools/sim.mjs",
+    "test": "node tools/sim.mjs --quick && node tools/bot.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0",
+    "three": "0.187.0"
+  }
+}

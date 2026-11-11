@@ -171,3 +171,5 @@ kbd { font-family: var(--body); font-weight: 700; background: #fff; color: var(-
 .panel.results .res-rank { font-size: calc(var(--u) * 2.5); }
 .panel.results .foot { flex-wrap: nowrap; margin-top: calc(var(--u) * 1.1); gap: calc(var(--u) * 1.2); }
 .panel.results .foot .btn { font-size: calc(var(--u) * 2.05); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.8) calc(var(--u) * 0.6); white-space: nowrap; }
+
+.res-quote { font-size: calc(var(--u) * 1.75); font-style: italic; opacity: 0.92; margin-top: calc(var(--u) * 0.8) !important; text-align: center; } .res-quote b { font-style: normal; color: var(--gold); }

@@ -7,8 +7,8 @@ import { EDGE, makeGroundHit, SURFACES } from '../track/track.js';
 
 /** Engine classes. top = top speed in m/s on the road with no coins. */
 export const CLASSES = {
-  50:  { id: 50,  label: '50cc',  name: 'Bootstrapped',   top: 21.5, accel: 0.9,  ai: 0.90 },
-  100: { id: 100, label: '100cc', name: 'Venture-Backed', top: 25.5, accel: 1.0,  ai: 0.95 },
+  50:  { id: 50,  label: '50cc',  name: 'Bootstrapped',   top: 23.6, accel: 0.92, ai: 0.92 },   // 80% of 150cc, as in the reference games
+  100: { id: 100, label: '100cc', name: 'Venture-Backed', top: 26.6, accel: 1.0,  ai: 0.96 },   // 90%
   150: { id: 150, label: '150cc', name: 'Blitzscaling',   top: 29.5, accel: 1.08, ai: 1.0 },
   200: { id: 200, label: '200cc', name: 'Hypergrowth',    top: 36,   accel: 1.2,  ai: 1.0 },
 };
@@ -24,12 +24,12 @@ export const TUNE = {
   grip: 9, gripDrift: 5.2, gripAir: 0.4, gripSpin: 1.3,
   // drift
   hopV: 4.4,
-  driftMinSpeed: 0.42,         // fraction of top
-  driftBase: 1.36, driftRange: 0.98,
-  driftChargeBase: 0.72, driftChargeIn: 0.62, driftChargeOut: 0.22,
-  tierAt: [0.85, 1.95, 3.3],   // charge needed for blue / orange / purple
-  tierBoost: [0.6, 1.15, 1.8], // boost seconds
-  tierMul: [1.2, 1.24, 1.28],
+  driftMinSpeed: 0.5,          // fraction of top speed needed to start a drift (it drops out a little below)
+  driftBase: 0.98, driftRange: 1.18,   // rad/s: neutral stick holds a wide arc; steering in tightens it a lot
+  driftChargeBase: 0.5, driftChargeIn: 0.55, driftChargeOut: 0.12,   // steering into the drift charges about twice as fast
+  tierAt: [0.85, 1.8, 2.75],   // seconds of full-rate charge for blue / orange / purple
+  tierBoost: [0.55, 1.3, 2.1], // boost seconds: higher tiers buy duration, not speed
+  tierMul: [1.2, 1.2, 1.22],
   // boosts
   boostAccel: 46, boostFade: 9,
   mushroom: { t: 1.35, mul: 1.36 }, pad: { t: 1.05, mul: 1.33 }, trick: { t: 0.85, mul: 1.24 },
@@ -40,7 +40,7 @@ export const TUNE = {
   offroadDecel: 26,
   wallBounce: 0.3, wallLoss: 0.5,
   invuln: 1.6,
-  spinT: 1.05, tumbleT: 1.65, squashT: 1.3,
+  spinT: 1.15, tumbleT: 1.65, squashT: 1.3,
   trickWindow: 0.4,
   draftTime: 1.15, draftDist: 16, draftWidth: 2.2,
 };
@@ -129,7 +129,7 @@ export class Kart {
     const keep = kind === 'tumble' ? 0.18 : kind === 'squash' ? 0.2 : 0.42;
     this.vx *= keep; this.vz *= keep;
     this.endDrift(false); this.boostT = 0; this.boostMul = 1; this.trick = false; this.draftT = 0;
-    const lost = Math.min(this.coins, kind === 'tumble' ? 3 : 2);
+    const lost = Math.min(this.coins, 3);
     if (lost) { this.coins -= lost; this.emit('dropCoins', lost); }
     this.stats.hitsTaken++; if (from && from !== this) from.stats.hitsGiven++;
     this.emit('hit', { kind, from });
@@ -220,10 +220,10 @@ export class Kart {
       }
     }
     if (this.drifting) {
-      if (spFrac < T.driftMinSpeed * 0.8 || vfPrev <= 0 || (offroad && !boosting)) this.endDrift(false);
+      if (spFrac < T.driftMinSpeed * 0.88 || vfPrev <= 0 || (offroad && !boosting)) this.endDrift(false);
       else if (!airborne) {
         const rel = clamp(this.steer * this.driftDir, -1, 1);
-        this.driftCharge += dt * this.mtRate * (T.driftChargeBase + (rel > 0 ? rel * T.driftChargeIn : rel * T.driftChargeOut));
+        this.driftCharge += dt * this.mtRate * (T.driftChargeBase + (rel > 0 ? Math.min(1, rel / 0.4) * T.driftChargeIn : rel * T.driftChargeOut));
         const tier = this.driftCharge >= T.tierAt[2] ? 3 : this.driftCharge >= T.tierAt[1] ? 2 : this.driftCharge >= T.tierAt[0] ? 1 : 0;
         if (tier !== this.driftTier) { this.driftTier = tier; this.emit('driftTier', tier); }
       }
@@ -233,7 +233,7 @@ export class Kart {
     let yawRate = 0;
     if (this.drifting) {
       const rel = clamp(this.steer * this.driftDir, -1, 1);
-      yawRate = -this.driftDir * (T.driftBase + rel * T.driftRange) * this.handling * (airborne ? 0.35 : 1);
+      yawRate = -this.driftDir * Math.max(0.1, T.driftBase + rel * T.driftRange) * this.handling * (airborne ? 0.35 : 1);
     } else {
       const sf = clamp(sp / 7, 0, 1);
       const hs = lerp(1, T.turnHighSpeed, smoothstep(0.45, 1.1, spFrac));

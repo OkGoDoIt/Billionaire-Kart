@@ -91,7 +91,7 @@ export class Menus {
 
   /* ---------- title ---------- */
   s_title() {
-    const go = () => { this.app.audio?.ui('start'); this.reset('main'); };
+    const go = () => { this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); };
     const el = h('div', { onclick: go },
       h('div', { class: 'logo' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c))), h('div', { class: 'logo-tag' }, 'Eight egos. One trophy.')),
       h('div', { class: 'press' }, matchMedia('(pointer: coarse)').matches ? 'Tap to start' : 'Press any button'),
@@ -238,7 +238,9 @@ export class Menus {
     const el = h('div', {}, h('div', { class: 'panel results' },
       h('h1', {}, track.name), gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
-      h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows), h('div', { class: 'foot' }, buttons)));
+      h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
+      h('p', { class: 'res-quote' }, h('b', {}, results[0].racer.name + ': '), `“${results[0].isPlayer ? results[0].racer.barks.win : results[0].racer.barks.win}”`),
+      h('div', { class: 'foot' }, buttons)));
     return { el, onBack: () => false };
   }
 

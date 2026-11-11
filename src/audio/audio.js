@@ -182,7 +182,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     switch (e.type) {
       case 'count': this.play('count', { gap: 0.3 }); this.say('count_' + e.data, { force: true }); break;
-      case 'go': this.play('go'); this.say('go', { force: true }); break;
+      case 'go': this.play('go'); this.say('go', { force: true }); this.play('crowd', { vol: 0.5 }); break;
       case 'boxBreak': this.play('item_box', { vol: e.data.kart.isPlayer ? 1 : this._nearness(e.data.kart) * 0.7 }); break;
       case 'explosion': this.play('explosion', { vol: this._nearPoint(race, e.data.x, e.data.z, 90) }); break;
       case 'lightning': this.play('lightning'); break;

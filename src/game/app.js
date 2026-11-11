@@ -61,7 +61,7 @@ export class App {
     const want = S.quality === 'auto' ? detectQuality() : S.quality;
     if (!initial && want !== this.gfx.qualityName) this.gfx.applyQuality(want);
     this.input.touch.autoGas = S.autoGas;
-    if (!S.tilt) this.input.disableTilt();
+    if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
     this.audio?.setVolumes?.(S.music, S.sfx);
     this.shake = S.shake;
   }
@@ -129,6 +129,7 @@ export class App {
       this.ui.appendChild(card);
       if (this.session.phase !== 'intro') setTimeout(() => this.onCountdown(), 1400);
       this.audio?.music?.(def.music || def.id);
+      this.audio?.say?.('track_' + def.id, { force: true, delay: 0.7 });
     });
   }
   /** Called by the session when the flyover ends. */
@@ -162,6 +163,7 @@ export class App {
     session.touch?.setVisible(false);
     this.menus.reset('results', { results, gp, track: def, records });
     this.audio?.event?.('results', mine?.rank);
+    this.audio?.music?.('results');
   }
   gpNext() {
     const g = this.gp; if (!g) return;

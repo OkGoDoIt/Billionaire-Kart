@@ -70,8 +70,9 @@ export class RaceSession {
       else if (e.type === 'kartHit') {
         const { by, victim, with: w } = e.data, name = ITEMS[w]?.name || (w === 'star' ? 'Hype Cycle' : w === 'squash' ? 'a full-size kart' : w);
         const hv = this.hudOf.get(victim), hb = by && this.hudOf.get(by);
-        if (hv && by && by !== victim) hv.feed(`<b>${by.racer.name}</b> got you with ${name}`);
-        if (hb && by !== victim) hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`);
+        const pick = list => list[Math.floor(Math.random() * list.length)];
+        if (hv && by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer && Math.random() < 0.6) hv.feed(`<b>${by.racer.name}:</b> “${pick(by.racer.barks.boost)}”`, 3200); }
+        if (hb && by !== victim) { hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer && Math.random() < 0.7) hb.feed(`<b>${victim.racer.name}:</b> “${pick(victim.racer.barks.hit)}”`, 3200); }
       } else if (e.type === 'steal') { const h = this.hudOf.get(e.data.by); if (h) h.feed(`You stole ${ITEMS[e.data.id].name} from <b>${e.data.from.racer.name}</b>`); }
       app.audio?.raceEvent(e, this.race);
     }

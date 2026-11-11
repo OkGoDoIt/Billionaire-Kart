@@ -32,7 +32,12 @@ page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.
 const shot = async name => { await page.screenshot({ path: join(out, name + '.jpg'), type: 'jpeg', quality: 85 }); };
 const key = async (k, wait = 260) => { await page.keyboard.press(k); await page.waitForTimeout(wait); };
 const screen = () => page.evaluate('BK.app.menus.screen?.spec.name || null');
-const expect = async (name, what) => { const s = await screen(); if (s !== name) { fails.push(`${what}: expected screen "${name}", got "${s}"`); if (!opt['keep-going']) throw new Error(fails.at(-1)); } };
+const expect = async (name, what) => {
+  const s = await screen(); if (s !== name) { fails.push(`${what}: expected screen "${name}", got "${s}"`); if (!opt['keep-going']) throw new Error(fails.at(-1)); }
+  // every screen: nothing unrendered in the text, and nothing pushed off the top or bottom
+  const bad = await page.evaluate(() => { const e = document.querySelector('.menu-screen'); if (!e) return null; const over = e.scrollHeight - e.clientHeight; return (/\[object |undefined|NaN/.test(e.textContent) ? 'unrendered value in the text; ' : '') + (over > 6 ? `content is ${over}px taller than the screen` : ''); });
+  if (bad && !(mobile && s === 'options' && !bad.includes('unrendered'))) fails.push(`${what}: screen "${s}": ${bad}`);   // on a phone the options list scrolls by touch, with rows big enough to tap
+};
 /* Average brightness of the game canvas (0 to 1), read in the same frame it was drawn. A NaN anywhere in the
    scene turns the whole picture black after the bloom pass without raising an error, so this is the only way to see it. */
 const luma = () => page.evaluate(() => new Promise(res => requestAnimationFrame(() => {
@@ -48,6 +53,11 @@ try {
   await page.waitForTimeout(1800); await expect('title', 'boot'); await shot('01-title');
   if (mobile) await page.locator('.screen-title').tap(); else await key('Enter');
   await page.waitForTimeout(500); await expect('main', 'after title'); await shot('02-main');
+  // the screens off the main menu that are not on the way to a race
+  for (const name of ['howto', 'options', 'records']) {
+    await page.evaluate(`BK.app.menus.open('${name}')`); await page.waitForTimeout(500); await expect(name, name); await shot('02-' + name);
+    await page.evaluate('BK.app.menus.back()'); await page.waitForTimeout(350); await expect('main', 'back from ' + name);
+  }
   // Quick Race
   if (mobile) await page.locator('.main-nav .btn.c2').tap(); else { await key('ArrowDown'); await key('Enter'); }
   await page.waitForTimeout(400); await expect('players', 'quick race'); await shot('03-players');

@@ -36,7 +36,7 @@ const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-const url = `http://127.0.0.1:${port}/${(opt.url || '').replace(/^\//, '')}`;
+const url = `http://127.0.0.1:${port}/${String(opt.url === true ? '' : opt.url || '').replace(/^\//, '')}`;
 await page.goto(url, { waitUntil: 'load' });
 const out = opt.out || 'shot.png';
 const times = opt.at ? String(opt.at).split(',').map(Number) : [+(opt.wait || 5)];

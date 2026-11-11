@@ -187,7 +187,8 @@ export function buildTrackMesh(track, look = {}) {
     const gB = new Geo(), gW = new Geo(true);
     const hit = { y: 0 };
     const cWall = rgb(L.wall), cStripe = rgb(L.wallStripe);
-    const BH = 1.4, adLen = BH * 2 * 4; // four 2:1 boards per texture tile
+    const bannerTex = bannerTexture(L.ads, 7, { set: track.def.id });   // the track's own boards where it has a set
+    const BH = 1.4, adLen = BH * 2 * bannerTex.userData.boards; // 2:1 boards, side by side in one texture tile
     for (const side of [1, -1]) {
       const hw = side > 0 ? hwL : hwR, edge = side > 0 ? track.edgeL : track.edgeR, outA = side > 0 ? track.outerL : track.outerR;
       let prevB = -1, prevW = -1;
@@ -226,7 +227,7 @@ export function buildTrackMesh(track, look = {}) {
       }
     }
     if (gB.count) {
-      mats.banner = new THREE.MeshStandardMaterial({ map: bannerTexture(L.ads, 7), roughness: 0.7, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.4 });
+      mats.banner = new THREE.MeshStandardMaterial({ map: bannerTex, roughness: 0.7, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.4 });
       add('hoardings', gB.build(), mats.banner, { cast: true });
     }
     if (gW.count) {

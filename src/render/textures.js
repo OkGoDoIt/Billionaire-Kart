@@ -126,9 +126,12 @@ export function puffTexture(size = 128, seed = 5) {
 /** Number of illustrated sponsor boards in assets/ads (ad-01.webp ...). */
 export const AD_IMAGES = 24;
 const adImageCache = new Map();
-function adImage(n) {
-  if (!adImageCache.has(n)) adImageCache.set(n, new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = `assets/ads/ad-${String(n).padStart(2, '0')}.webp`; }));
-  return adImageCache.get(n);
+/** Tracks with their own set of boards in assets/ads/<track id>/ (ad-1.webp ...), and how many each has. */
+export const AD_SETS = { 'silicon-valley': 8, 'bliss-hills': 8, 'crypto-cove': 8, 'datacenter-dash': 8, 'capitol-hill': 8, 'burning-circuit': 8, 'mars-colony': 8, 'singularity-speedway': 8 };
+function adImage(n, set = '') {
+  const src = set ? `assets/ads/${set}/ad-${n}.webp` : `assets/ads/ad-${String(n).padStart(2, '0')}.webp`;
+  if (!adImageCache.has(src)) adImageCache.set(src, new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; }));
+  return adImageCache.get(src);
 }
 
 /**
@@ -136,11 +139,14 @@ function adImage(n) {
  * Boards alternate between the track's own slogans, drawn as text, and the
  * illustrated sponsor boards in assets/ads, which load in a moment after.
  * A track with no slogans of its own gets illustrated boards only.
+ * Pass { set: trackId } for a strip made of that track's own boards instead:
+ * all of them, in a shuffled order (tex.userData.boards says how many).
  */
-export function bannerTexture(ads, seed = 1) {
+export function bannerTexture(ads, seed = 1, { set = '' } = {}) {
+  const setN = AD_SETS[set] || 0;
   const pal = [['#ffd23c', '#1a1d29'], ['#ff4d6d', '#ffffff'], ['#22c1c3', '#0b2239'], ['#ffffff', '#e23b3b'], ['#7b5cff', '#ffffff'], ['#16a34a', '#ffffff'], ['#1a1d29', '#ffd23c'], ['#ff8a00', '#1a1d29'], ['#0ea5e9', '#ffffff'], ['#db2777', '#ffffff']];
-  const n = 4, own = ads && ads !== DEFAULT_ADS && ads.length > 0;
-  const tex = canvasTex(2048, 256, (g, w, h) => {
+  const n = setN || 4, own = ads && ads !== DEFAULT_ADS && ads.length > 0;
+  const tex = canvasTex(512 * n, 256, (g, w, h) => {
     const rng = makeRng(seed), bw = w / n;
     for (let i = 0; i < n; i++) {
       const [bg, fg] = pal[Math.floor(rng() * pal.length)], x = i * bw;
@@ -160,13 +166,15 @@ export function bannerTexture(ads, seed = 1) {
       g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x + bw - 3, 0, 3, h);
     }
   }, { aniso: 8 });
-  tex.userData.boardAspect = 2;
+  tex.userData.boardAspect = 2; tex.userData.boards = n;
   if (typeof Image !== 'undefined') {
-    const rng = makeRng(seed * 31 + 7), slots = own ? [1, 3] : [0, 1, 2, 3], used = new Set();
-    for (const slot of slots) {
-      let pick; do { pick = 1 + Math.floor(rng() * AD_IMAGES); } while (used.has(pick)); used.add(pick);
-      adImage(pick).then(img => { if (!img) return; const c = tex.image, g = c.getContext('2d'), bw = c.width / n; g.drawImage(img, slot * bw, 0, bw, c.height); g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect((slot + 1) * bw - 3, 0, 3, c.height); tex.needsUpdate = true; });
-    }
+    const rng = makeRng(seed * 31 + 7), slots = setN ? [...Array(n).keys()] : own ? [1, 3] : [0, 1, 2, 3], used = new Set();
+    const order = setN ? rng.shuffle([...Array(n).keys()].map(i => i + 1)) : null;
+    // draw every board as it arrives, then upload the strip once
+    Promise.all(slots.map(slot => {
+      let pick; if (order) pick = order[slot]; else { do { pick = 1 + Math.floor(rng() * AD_IMAGES); } while (used.has(pick)); used.add(pick); }
+      return adImage(pick, setN ? set : '').then(img => { if (!img) return; const c = tex.image, g = c.getContext('2d'), bw = c.width / n; g.drawImage(img, slot * bw, 0, bw, c.height); g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect((slot + 1) * bw - 3, 0, 3, c.height); });
+    })).then(() => { tex.needsUpdate = true; });
   }
   return tex;
 }

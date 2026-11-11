@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { ModelBuilder, box, sphere, cyl, capsule, torus, cone, tube, lathe, plastic, MAT } from './build.js';
 import { FACES } from '../content/faces.js';
-import { makeRng, hashString } from '../core/util.js';
+import { addHair } from './hair.js';
 
 const texLoader = new THREE.TextureLoader();
 const faceCache = new Map();
@@ -24,7 +24,7 @@ function buildHead(look, faceId) {
   const face = FACES[faceId];
   const skin = new THREE.Color(face ? face.skin : look.skin);
   const skinMat = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.62, metalness: 0, envMapIntensity: 0.6 });
-  const hairMat = plastic(look.hairColor ?? 0x2a2420, 0.58);
+  const hairMat = new THREE.MeshStandardMaterial({ color: look.hairColor ?? 0x2a2420, roughness: 0.72, metalness: 0, envMapIntensity: 0.55 });
   const R = HEAD_R, cy = R * 1.02;        // head centre above the neck pivot
   const b = new ModelBuilder();
 
@@ -35,63 +35,8 @@ function buildHead(look, faceId) {
   // neck
   b.add('skin', cyl(0.13, 0.15, 0.2, 14), { p: [0, -0.02, 0] });
 
-  const rng = makeRng(hashString(faceId) + 7);
-  const hair = look.hair || 'short';
   const top = cy + R * 1.07;
-  const cap = (thetaLen, tiltX, scale = 1.045, sy = 1.07) => {
-    const g = new THREE.SphereGeometry(R * scale, 28, 14, 0, Math.PI * 2, 0, thetaLen);
-    b.add('hair', g, { p: [0, cy, 0], r: [tiltX, 0, 0], s: [1, sy, 1.03] });
-  };
-  const blob = (x, y, z, sx, sy, sz, r = 0.16) => b.add('hair', sphere(r, 12, 10), { p: [x, cy + y, z], s: [sx, sy, sz] });
-  switch (hair) {
-    case 'bald': break;
-    case 'baldsides': {
-      // a band around the back and sides
-      // phi = 3π/2 is the back of the head; cover 230° centred there so the face stays clear
-      const g = new THREE.SphereGeometry(R * 1.04, 28, 8, Math.PI * 1.5 - Math.PI * 0.64, Math.PI * 1.28, Math.PI * 0.36, Math.PI * 0.27);
-      b.add('hair', g, { p: [0, cy, 0], s: [1.02, 1.07, 1.04] });
-      break;
-    }
-    case 'short': cap(Math.PI * 0.46, -0.42); blob(0, R * 0.92, 0.12, 2.2, 0.7, 1.6); break;
-    case 'sidepart': cap(Math.PI * 0.47, -0.4); blob(-0.1, R * 0.95, 0.14, 2.3, 0.8, 1.7); blob(0.22, R * 0.86, 0.2, 1.2, 0.7, 1.2); break;
-    case 'swept': cap(Math.PI * 0.47, -0.42); blob(0, R * 1.0, 0.1, 2.3, 1.0, 2.0); blob(0, R * 1.02, -0.12, 2.0, 0.9, 1.6); break;
-    case 'tousled': {
-      cap(Math.PI * 0.48, -0.4);
-      for (let i = 0; i < 9; i++) { const a = rng() * Math.PI * 2, d = rng() * 0.26; blob(Math.cos(a) * d, R * (0.9 + rng() * 0.16), Math.sin(a) * d * 0.9 + 0.04, 1.1 + rng() * 0.5, 0.75, 1.1 + rng() * 0.5, 0.15); }
-      blob(0.05, R * 0.82, 0.3, 1.9, 0.7, 0.9);
-      break;
-    }
-    case 'curly': case 'curlybig': {
-      const big = hair === 'curlybig', n = big ? 46 : 34, rr = big ? 0.135 : 0.105;
-      cap(Math.PI * 0.45, -0.42, 1.02);
-      for (let i = 0; i < n; i++) {
-        // points over the top and back of the scalp
-        const u = rng(), v = rng();
-        const th = Math.acos(1 - u * (big ? 0.95 : 0.8)), ph = v * Math.PI * 2;
-        let x = Math.sin(th) * Math.cos(ph), y = Math.cos(th), z = Math.sin(th) * Math.sin(ph);
-        // tilt backward so the forehead stays clear
-        const t = -0.45, y2 = y * Math.cos(t) - z * Math.sin(t), z2 = y * Math.sin(t) + z * Math.cos(t);
-        if (z2 > 0.55 && y2 < 0.62) continue;
-        b.add('hair', sphere(rr * (0.8 + rng() * 0.45), 8, 6), { p: [x * R * 1.03, cy + y2 * R * 1.1, z2 * R * 1.03] });
-      }
-      break;
-    }
-    case 'swoop': {
-      cap(Math.PI * 0.44, -0.34, 1.04);
-      blob(0.0, R * 0.9, 0.22, 2.5, 0.6, 1.5, 0.17);       // the front sweep, combed forward and over
-      blob(-0.16, R * 0.84, 0.34, 1.7, 0.5, 0.9, 0.15);
-      blob(0.26, R * 0.8, 0.06, 1.0, 0.8, 2.0, 0.15);
-      blob(-0.28, R * 0.76, -0.02, 1.0, 0.9, 2.0, 0.15);
-      blob(0, R * 0.62, -0.34, 2.3, 1.1, 1.0, 0.16);
-      break;
-    }
-    case 'long': {
-      cap(Math.PI * 0.5, -0.36, 1.05);
-      b.add('hair', capsule(0.3, 0.5, 6, 16), { p: [0, cy - 0.22, -0.2], s: [1.25, 1, 0.75] });
-      for (const sx of [1, -1]) b.add('hair', capsule(0.13, 0.5, 4, 10), { p: [sx * R * 0.9, cy - 0.22, 0.02], r: [0, 0, sx * 0.08] });
-      break;
-    }
-  }
+  addHair(b, look, faceId, R, cy);
   if (look.hat === 'cowboy') {
     b.add('hat', lathe([[0, 0.34], [0.2, 0.33], [0.26, 0.24], [0.3, 0.06], [0.33, 0.0]], 24), { p: [0, top - 0.14, 0], s: [1.08, 1, 1.08] });
     const brim = torus(0.5, 0.045, 8, 32); b.add('hat', brim, { p: [0, top - 0.13, 0], r: [Math.PI / 2, 0, 0], s: [1.1, 1.1, 1.6] });

@@ -33,6 +33,13 @@ const shot = async name => { await page.screenshot({ path: join(out, name + '.jp
 const key = async (k, wait = 260) => { await page.keyboard.press(k); await page.waitForTimeout(wait); };
 const screen = () => page.evaluate('BK.app.menus.screen?.spec.name || null');
 const expect = async (name, what) => { const s = await screen(); if (s !== name) { fails.push(`${what}: expected screen "${name}", got "${s}"`); if (!opt['keep-going']) throw new Error(fails.at(-1)); } };
+/* Average brightness of the game canvas (0 to 1), read in the same frame it was drawn. A NaN anywhere in the
+   scene turns the whole picture black after the bloom pass without raising an error, so this is the only way to see it. */
+const luma = () => page.evaluate(() => new Promise(res => requestAnimationFrame(() => {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 36; const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(BK.gfx.renderer.domElement, 0, 0, 64, 36); const d = g.getImageData(0, 0, 64, 36).data;
+  let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] + d[i + 1] + d[i + 2]; res(s / (d.length * 0.75 * 255));
+})));
 const tapOrKey = async (selector, k) => { if (mobile) { await page.locator(selector).first().tap(); await page.waitForTimeout(350); } else await key(k); };
 
 try {
@@ -63,6 +70,10 @@ try {
   else { await page.waitForTimeout(3000); await shot('10-driving'); }
   const moved = await page.evaluate('BK.race.players[0].speed');
   if (!(moved > 3)) fails.push(`player kart is not moving (speed ${moved})`);
+  // every kart boosts at once: flames, speed lines, and bloom all on screen, and the picture must still be there
+  await page.evaluate("for (const k of BK.race.karts) k.boost('pad', 1.2, 1.3)"); await page.waitForTimeout(450);
+  const bright = await luma(); await shot('10b-boost');
+  if (!(bright > 0.05)) fails.push(`the picture went dark during a boost (brightness ${bright.toFixed(3)})`);
   // pause and resume
   if (mobile) await page.locator('.tc-pause').tap(); else await key('Escape');
   await page.waitForTimeout(400); await expect('pause', 'pause'); await shot('12-pause');

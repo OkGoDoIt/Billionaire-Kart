@@ -12,6 +12,15 @@ const TIER_HEX = [0xffffff, 0x40a8ff, 0xff8a1a, 0xf04dff];
 const ghostMat = new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.32, depthWrite: false });
 const _v = new THREE.Vector3(), _c = new THREE.Color();
 const BLOB_GEO = new THREE.CircleGeometry(1, 20);
+/* Boost flame: a cone with its mouth at the origin and its tip along +y, so scaling y stretches it away from the exhaust. */
+const FLAME_GEO = (() => {
+  const g = new THREE.ConeGeometry(0.15, 0.8, 12, 4, true).translate(0, 0.4, 0), p = g.attributes.position, c = new Float32Array(p.count * 3);
+  // additive, so fading the colour to black toward the tip fades the flame out. The base is clamped at zero:
+  // a negative one makes NaN, and a single NaN pixel turns the whole frame black in the bloom pass.
+  for (let i = 0; i < p.count; i++) { const f = Math.pow(Math.max(0, 1 - p.getY(i) / 0.8), 1.4); c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = f; }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return g;
+})();
 const BLOB_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
 export const TAG_LAYER = 4;
 
@@ -52,8 +61,8 @@ export class KartView {
     this.blob = new THREE.Mesh(BLOB_GEO, BLOB_MAT); this.blob.rotation.x = -Math.PI / 2; this.blob.renderOrder = 3; this.blob.visible = false; scene.add(this.blob);
     // boost glow at the exhausts
     this.flames = rig.exhausts.map(a => {
-      const m = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.8, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-      m.rotation.x = -Math.PI / 2 - 0.5; m.position.set(0, 0.08, -0.36); m.visible = false; a.add(m); return m;
+      const m = new THREE.Mesh(FLAME_GEO, new THREE.MeshBasicMaterial({ color: 0xffa040, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2 + 0.1; m.visible = false; a.add(m); return m;   // straight back from the exhaust, tipped up a touch
     });
   }
 
@@ -123,6 +132,7 @@ export class KartView {
     // wheels
     this.wheelAngle += (k.fwd / 0.34) * dt;
     for (const w of rig.wheels) w.rotation.x = this.wheelAngle;
+    if (rig.spinners) for (const r of rig.spinners) r.rotation.z += dt * (6 + Math.abs(k.speed) * 1.4);   // cooling fans and propellers
     this.steerVis = damp(this.steerVis, k.drifting ? -k.driftDir * (0.25 - k.steer * k.driftDir * 0.3) : k.steer, 14, dt);
     for (const pv of rig.steerPivots) { pv.rotation.y = -this.steerVis * 0.5; pv.position.y = pv.userData.baseY - clamp(s.y, -0.05, 0.08) * 0.3; }
     rig.steering.rotation.z = -this.steerVis * 1.3;

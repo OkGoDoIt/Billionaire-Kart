@@ -2,8 +2,8 @@
 import { TRACK_BY_ID } from './tracks.js';
 
 export const CUPS = [
-  { id: 'seed', name: 'Seed Round Cup', blurb: 'Four friendly circuits to find your feet.', color: 0x2ee6a6, tracks: ['silicon-valley', 'bliss-hills', 'crypto-cove', 'datacenter-dash'] },
-  { id: 'unicorn', name: 'Unicorn Cup', blurb: 'Faster, stranger, and much less forgiving.', color: 0xff4d6d, tracks: ['capitol-hill', 'burning-circuit', 'mars-colony', 'singularity-speedway'] },
+  { id: 'seed', name: 'Seed Round Cup', blurb: 'Four friendly circuits to find your feet.', color: 0x2ee6a6, emblem: 'assets/ui/cup-seed.webp', tracks: ['silicon-valley', 'bliss-hills', 'crypto-cove', 'datacenter-dash'] },
+  { id: 'unicorn', name: 'Unicorn Cup', blurb: 'Faster, stranger, and much less forgiving.', color: 0xff4d6d, emblem: 'assets/ui/cup-unicorn.webp', tracks: ['capitol-hill', 'burning-circuit', 'mars-colony', 'singularity-speedway'] },
 ];
 export const CUP_BY_ID = Object.fromEntries(CUPS.map(c => [c.id, c]));
 /** The tracks of a cup that exist in this build. */

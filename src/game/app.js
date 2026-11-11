@@ -6,6 +6,7 @@ import { Save } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
 import { Showroom } from '../render/showroom.js';
 import { RaceSession } from './session.js';
+import { AudioEngine } from '../audio/audio.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { CUPS, cupTracks, GP_POINTS, cupStars } from '../content/cups.js';
@@ -20,7 +21,7 @@ export class App {
     this.gfx = new Gfx(canvas, { quality: q });
     this.input = new Input();
     this.menus = new Menus(this);
-    this.audio = null;
+    this.audio = new AudioEngine(this.save);
     this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = [];
     this.curtain = el('div', 'curtain'); document.body.appendChild(this.curtain);
     document.body.appendChild(el('div', 'rotate-hint', 'Turn your phone sideways to race'));

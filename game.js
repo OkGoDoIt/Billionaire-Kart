@@ -234,6 +234,7 @@ const A = {
 const N = 900, HALF_W = 11;
 let LAPS = 3; // mutable so the sim harness can run shorter races (BK.setLaps)
 let renderer, scene, camera, sunLight, hemiLight, post = null;
+let currentSunOffset = [70, 115, 45], currentScript = null; // ART PASS (#47): per-track sun + sky script, set in buildWorld
 let curve, samples = [], tangents = [], normals = [], segLen = 1.8, trackCenter = new THREE.Vector3();
 let elevArr = [], bankArr = [], rollNormals = []; // TRACK 3D: per-sample authored elevation (m), banking (rad), rolled road normals
 let karts = [], bananas = [], projectiles = [], itemBoxes = [], clouds = [], bombs = [];
@@ -563,6 +564,562 @@ function nameSprite(racer, isPlayer) {
   return sp;
 }
 
+/* ================= ART PASS (#47) =================
+   The "$60 Switch game" layer, built from the mk-reference frame grammar
+   (~/workspace/research_notes/mk-reference/ANALYSIS.md): a hero arch you drive
+   under every lap, UNBROKEN edge dressing on both sides, a graded sky + colour
+   script per track (default midday blue is banned outdoors), oversized toy
+   props, paint ON the road, and things in the air. All procedural canvas
+   textures — zero external assets, zero build step. */
+
+function artRand(seed) { let a = (seed >>> 0) || 1; return () => { a = (a * 16807) % 2147483647; return (a - 1) / 2147483646; }; }
+function artTex(w, h, draw) { // canvas texture with repeat wrapping (game.js canvasTexture clamps)
+  const t = canvasTexture(w, h, draw); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+
+/* Per-track colour scripts. sun = [x,y,z] offset for the shadow rig (low y =
+   long golden shadows); fog is matched to the sky horizon so distance melts
+   into the grade; groundTex picks the terrain material story. */
+const SKY_SCRIPTS = [
+  { top: '#2f66b0', mid: '#79a8dd', horizon: '#ffc182', glow: '#ffe3ae', glowU: 0.74, fog: 0xf2c184, exposure: 1.07, sun: [95, 50, 30], sunCol: 0xffd7a4, sunI: 1.9, hemiSky: 0xa8c2e8, hemiI: 0.38, envI: 0.5, clouds: 'warm', cloudTint: 0xffdfba, groundTex: 'grass', groundBase: '#54863a' }, // 0 Silicon Valley — golden hour
+  { top: '#6b4a86', mid: '#c97a4a', horizon: '#ffc37a', glow: '#ffdf9e', glowU: 0.30, fog: 0xe8a06a, exposure: 1.08, sun: [-80, 42, 60], sunCol: 0xffc98f, sunI: 1.8, hemiSky: 0xd9a37c, hemiI: 0.35, envI: 0.55, clouds: 'dust', cloudTint: 0xffc9a0, groundTex: 'sand', sandTint: 'mars' }, // 1 Mars — butterscotch
+  { top: '#3d4468', mid: '#7d7391', horizon: '#e8a37c', glow: '#ffc98f', glowU: 0.68, fog: 0xa08aa0, exposure: 1.03, sun: [70, 38, -60], sunCol: 0xffbe8a, sunI: 1.6, hemiSky: 0x8d84a8, hemiI: 0.40, envI: 0.5, clouds: 'warm', cloudTint: 0xd9b8c8, groundTex: 'sand' }, // 2 Datacenter — dusk
+  { top: '#2e6fb0', mid: '#7fc4dd', horizon: '#ffd9a0', glow: '#ffedb8', glowU: 0.80, fog: 0xf2d2a0, exposure: 1.10, sun: [85, 44, -40], sunCol: 0xffe0ae, sunI: 1.9, hemiSky: 0xa8d4e8, hemiI: 0.42, envI: 0.6, clouds: 'warm', cloudTint: 0xffe8c8, groundTex: 'sand' }, // 3 International Waters — golden
+  { top: '#2e6fd0', mid: '#8fc3ee', horizon: '#ffedb8', glow: '#fff3cf', glowU: 0.22, fog: 0xdceef2, exposure: 1.04, sun: [60, 80, 50], sunCol: 0xfff0d0, sunI: 1.8, hemiSky: 0xbdd9ff, hemiI: 0.45, envI: 0.5, clouds: 'puffy', cloudTint: 0xffffff, groundTex: 'grass', groundBase: '#4c8a3c' }, // 4 White House — fresh morning
+  { top: '#070418', mid: '#1c0f3d', horizon: '#57186e', glow: '#ff4fd8', glowU: 0.50, fog: 0x2a1544, exposure: 1.05, sun: [-40, 70, -30], sunCol: 0x9fb4ff, sunI: 0.9, hemiSky: 0x4a3a8a, hemiI: 0.50, envI: 0.6, clouds: 'night', cloudTint: 0x6a5acd, groundTex: 'concrete', groundTint: 0x8f9bb8 }, // 5 Metaverse — neon night
+  { top: '#5a6d8c', mid: '#a8a49a', horizon: '#ffc98f', glow: '#ffdfae', glowU: 0.30, fog: 0xbdb2a4, exposure: 1.02, sun: [75, 40, 55], sunCol: 0xffd2a0, sunI: 1.6, hemiSky: 0xb8b4a4, hemiI: 0.42, envI: 0.5, clouds: 'warm', cloudTint: 0xf2ddc0, groundTex: 'grass', groundBase: '#77804e' }, // 6 WeWork — grey-gold dawn
+  { top: '#2e1c4e', mid: '#7a3c5e', horizon: '#ff8a4a', glow: '#ffb066', glowU: 0.76, fog: 0x9a6a72, exposure: 1.06, sun: [-90, 30, 40], sunCol: 0xff9a5e, sunI: 1.7, hemiSky: 0x7a5a8a, hemiI: 0.38, envI: 0.5, clouds: 'dust', cloudTint: 0xe8a58a, groundTex: 'sand' }, // 7 Burning Man — dusk
+  { top: '#1f7fd0', mid: '#6ec8e8', horizon: '#ffe9b0', glow: '#fff0c0', glowU: 0.18, fog: 0xcfe8dd, exposure: 1.08, sun: [55, 60, -70], sunCol: 0xffeec4, sunI: 1.9, hemiSky: 0xa8e0e8, hemiI: 0.45, envI: 0.55, clouds: 'puffy', cloudTint: 0xffffff, groundTex: 'sand' }, // 8 Bahamas — tropical afternoon
+  { top: '#1c66d8', mid: '#5aa7ee', horizon: '#eaf7ff', glow: '#ffffff', glowU: 0.82, fog: 0xcfe4f7, exposure: 1.05, sun: [70, 85, 35], sunCol: 0xfff2d8, sunI: 1.8, hemiSky: 0xbdd9ff, hemiI: 0.45, envI: 0.5, clouds: 'puffy', cloudTint: 0xffffff, groundTex: 'grass', groundBase: '#57a83a' }, // 9 Bliss — richer painted wallpaper sky
+  { top: '#05070a', mid: '#0a0d12', horizon: '#141a20', glow: '#000000', glowU: 0.5, fog: 0x0a0d12, fogNear: 40, fogFar: 330, exposure: 1.0, sun: [40, 90, 20], sunCol: 0xbfd0e0, sunI: 1.1, hemiSky: 0x3a4450, hemiI: 0.50, envI: 0.35, clouds: 'none', cloudTint: 0x223044, groundTex: 'concrete', groundTint: 0x2a2e35 }, // 10 Boring Tunnel — dark
+  { top: '#2a5fae', mid: '#8ab6dd', horizon: '#ffe3b0', glow: '#ffedb8', glowU: 0.24, fog: 0xdfe9f2, exposure: 1.06, sun: [80, 55, -45], sunCol: 0xffe4b8, sunI: 1.85, hemiSky: 0xaecbea, hemiI: 0.42, envI: 0.5, clouds: 'warm', cloudTint: 0xfff0dd, groundTex: 'concrete', groundTint: 0xe8eef4 }, // 11 Davos — alpine morning (snow)
+];
+
+/* Painted equirect sky: vertical grade + sun glow + style clouds, PMREM'd for
+   image-based light so the grade IS the lighting mood (replaces the photo
+   panoramas and the flat module sky colours). Cached per track. */
+const artSkyCache = new Map();
+function applyArtSky(trackIdx, sc) {
+  if (artSkyCache.has(trackIdx)) { const h = artSkyCache.get(trackIdx); scene.background = h.tex; scene.environment = h.env; if ('environmentIntensity' in scene) scene.environmentIntensity = sc.envI; return; }
+  const rnd = artRand(9000 + trackIdx * 131);
+  const tex = canvasTexture(1024, 512, (g, w, h) => {
+    const grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, sc.top); grad.addColorStop(0.38, sc.mid); grad.addColorStop(0.5, sc.horizon);
+    grad.addColorStop(0.56, sc.mid); grad.addColorStop(1, sc.top);
+    g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    if (sc.glow !== '#000000') { // low sun / city glow sitting on the horizon
+      const gx = sc.glowU * w, gy = h * 0.5;
+      const rg = g.createRadialGradient(gx, gy, 0, gx, gy, 230);
+      rg.addColorStop(0, sc.glow + 'e6'); rg.addColorStop(0.35, sc.glow + '66'); rg.addColorStop(1, sc.glow + '00');
+      g.fillStyle = rg; g.fillRect(0, 0, w, h);
+    }
+    const blob = (x, y, rx, ry, col, a) => { g.fillStyle = col; g.globalAlpha = a; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 7); g.fill(); g.globalAlpha = 1; };
+    if (sc.clouds === 'warm' || sc.clouds === 'dust') {
+      const n = sc.clouds === 'warm' ? 34 : 22;
+      for (let i = 0; i < n; i++) {
+        const x = rnd() * w, y = h * (0.14 + rnd() * 0.33), rx = 40 + rnd() * 110, ry = (sc.clouds === 'warm' ? 9 : 5) + rnd() * 15;
+        blob(x, y + ry * 0.5, rx, ry * 0.8, sc.glow, 0.20 + rnd() * 0.14); // lit underside
+        blob(x, y, rx, ry, '#ffffff', 0.16 + rnd() * 0.22);
+      }
+    } else if (sc.clouds === 'puffy') { // cartoon clouds: circle clusters with flat shaded bases (Bliss wallpaper / farm sky)
+      for (let i = 0; i < 13; i++) {
+        const cx = rnd() * w, cy = h * (0.10 + rnd() * 0.30), s = 0.7 + rnd() * 0.9;
+        for (let j = 0; j < 6; j++) blob(cx + (rnd() - 0.5) * 90 * s, cy + (rnd() - 0.5) * 16 * s, (20 + rnd() * 26) * s, (13 + rnd() * 10) * s, '#ffffff', 0.92);
+        blob(cx, cy + 13 * s, 52 * s, 9 * s, '#cfe2f5', 0.85);
+      }
+    } else if (sc.clouds === 'night') {
+      for (let i = 0; i < 260; i++) { g.fillStyle = '#ffffff'; g.globalAlpha = 0.25 + rnd() * 0.75; g.fillRect(rnd() * w, rnd() * h * 0.52, rnd() < 0.12 ? 2.4 : 1.3, 1.3); }
+      g.globalAlpha = 1;
+      for (let i = 0; i < 7; i++) blob(rnd() * w, h * (0.2 + rnd() * 0.28), 60 + rnd() * 90, 8 + rnd() * 10, i % 2 ? '#ff4fd8' : '#36f5ff', 0.07);
+    }
+  });
+  tex.mapping = THREE.EquirectangularReflectionMapping; tex.colorSpace = THREE.SRGBColorSpace;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envRT = pmrem.fromEquirectangular(tex); pmrem.dispose();
+  scene.background = tex; scene.environment = envRT.texture;
+  if ('environmentIntensity' in scene) scene.environmentIntensity = sc.envI;
+  scene.backgroundBlurriness = 0;
+  artSkyCache.set(trackIdx, { tex, env: envRT.texture });
+}
+
+/* Grass with mow stripes: tonal patches + blade strokes + alternating mow
+   bands. The bands are what the eye reads at chase-camera distance — flat
+   noise alone melts to a single colour (the "boring" screenshot). */
+function mowGrassTexture(base, seed) {
+  return artTex(512, 512, (g, w, h) => {
+    const rnd = artRand(seed * 977 + 41);
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 30; i++) {
+      const x = rnd() * w, y = rnd() * h, r = 30 + rnd() * 120;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      const tone = rnd() > 0.5 ? '255,255,220' : '8,40,8';
+      gr.addColorStop(0, `rgba(${tone},${0.06 + rnd() * 0.10})`); gr.addColorStop(1, `rgba(${tone},0)`);
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+    for (let x = 0; x < w; x += 128) { // mow bands (4 per tile)
+      g.fillStyle = ((x / 128) % 2) ? 'rgba(255,255,235,0.075)' : 'rgba(0,45,0,0.065)';
+      g.fillRect(x, 0, 128, h);
+    }
+    g.lineWidth = 1.4;
+    for (let i = 0; i < 2100; i++) {
+      const x = rnd() * w, y = rnd() * h, l = 4 + rnd() * 6;
+      g.strokeStyle = rnd() > 0.5 ? 'rgba(255,255,230,0.13)' : 'rgba(0,30,0,0.16)';
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + (rnd() - 0.5) * 3, y - l); g.stroke();
+    }
+  });
+}
+
+/* ---- HERO ARCH (mk8-rainbow): the track name in HUGE letters on a themed
+   gantry you drive under every lap. One parametric builder, per-track theme. */
+const ARCH_THEMES = [
+  { sign: '#14213d', fg: '#ffd94a', pillar: 0x3a4a5a, accent: 0xffd94a, style: 'steel', sub: 'PRESENTED BY GPU GO BRRR, INC.' },
+  { sign: '#3a1f14', fg: '#ffb066', pillar: 0x8a4a2a, accent: 0xffcf7a, style: 'gantry', sub: 'OFFICIAL TRACK OF THE MOON BASE' },
+  { sign: '#101318', fg: '#59f7ff', pillar: 0x23262c, accent: 0x59f7ff, style: 'rack', sub: 'WATER & POWER BY COOLANT CO.' },
+  { sign: '#0d2b45', fg: '#ffe9b0', pillar: 0xe8e2d4, accent: 0xffd94a, style: 'mast', sub: 'NO ANTITRUST IMMUNITY BEYOND THIS POINT' },
+  { sign: '#f4f1e8', fg: '#173a6b', pillar: 0xf4f1e8, accent: 0xc8a028, style: 'column', sub: 'PRIVATELY FUNDED (ALLEGEDLY)' },
+  { sign: '#160b2e', fg: '#ff4fd8', pillar: 0x241448, accent: 0x36f5ff, style: 'neon', sub: '38 USERS ONLINE — A NEW RECORD' },
+  { sign: '#2e2a24', fg: '#ffb03a', pillar: 0x5a5148, accent: 0xffb03a, style: 'timber', sub: 'VALUATION: $47B → $0' },
+  { sign: '#241430', fg: '#ff9a3c', pillar: 0x4a3220, accent: 0xff6a3c, style: 'timber', sub: 'DUST • ART • ZERO SHAREHOLDERS' },
+  { sign: '#07332e', fg: '#8afff2', pillar: 0x0d5a50, accent: 0xffd94a, style: 'mast', sub: '0% TAX • 100% VIBES' },
+  { sign: '#2c5aa0', fg: '#ffffff', pillar: 0x7a4a21, accent: 0xffd94a, style: 'timber', sub: 'NOW WITH 100% MORE HILLS' },
+  { sign: '#14161a', fg: '#ffb03a', pillar: 0x2c2f36, accent: 0xff7b1c, style: 'steel', sub: 'IT IS A TUNNEL. THAT IS THE JOKE.' },
+  { sign: '#40260f', fg: '#ffe9b0', pillar: 0x6e4a2f, accent: 0xd23b2e, style: 'timber', sub: 'GREAT RESET GRAND PRIX' },
+];
+function rackFaceTexture() { // server-rack front: dark slots + a constellation of status LEDs
+  return canvasTexture(128, 512, (g, w, h) => {
+    g.fillStyle = '#14161c'; g.fillRect(0, 0, w, h);
+    const rnd = artRand(517);
+    for (let y = 8; y < h - 8; y += 22) {
+      g.fillStyle = '#1e2129'; g.fillRect(6, y, w - 12, 17);
+      for (let x = 12; x < w - 14; x += 11) { if (rnd() < 0.42) { g.fillStyle = ['#59f7ff', '#7dff8a', '#ffb03a'][Math.floor(rnd() * 3)]; g.fillRect(x, y + 6, 4, 4); } }
+    }
+  });
+}
+function buildHeroArch(group, tr, trackIdx) {
+  const th = ARCH_THEMES[trackIdx] || ARCH_THEMES[0];
+  const span = HALF_W * 2 + 7.4, px = HALF_W + 2.4;
+  const pilMat = GMAT.flatProp(th.pillar);
+  for (const sx of [-1, 1]) {
+    const g = new THREE.Group(); g.position.set(sx * px, 0, 0); group.add(g);
+    const addP = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+    if (th.style === 'column') {
+      addP(new THREE.CylinderGeometry(1.45, 1.7, 11.5, 14), pilMat, 0, 5.75, 0);
+      addP(new THREE.BoxGeometry(3.7, 0.8, 3.7), pilMat, 0, 11.3, 0);
+      addP(new THREE.BoxGeometry(3.9, 0.7, 3.9), pilMat, 0, 0.35, 0);
+    } else if (th.style === 'rack') {
+      addP(new THREE.BoxGeometry(3.0, 11.5, 2.2), GMAT.flatProp(0x1b1e24), 0, 5.75, 0);
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 10.8), GMAT.emissiveScreen(0xffffff, { intensity: 0.9, map: rackFaceTexture() }));
+      face.position.set(0, 5.75, 1.12); g.add(face);
+      const face2 = face.clone(); face2.rotation.y = Math.PI; face2.position.z = -1.12; g.add(face2);
+    } else if (th.style === 'mast') {
+      addP(new THREE.CylinderGeometry(0.34, 0.46, 11.9, 8), pilMat, 0, 5.95, 0);
+      addP(new THREE.BoxGeometry(0.18, 0.18, 3.4), pilMat, 0, 10.6, 0);
+      const flagGeo = new THREE.BufferGeometry();
+      flagGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 2.3, -0.42, 0, 0, -0.85, 0], 3));
+      flagGeo.setIndex([0, 1, 2]); flagGeo.computeVertexNormals();
+      const flag = new THREE.Mesh(flagGeo, new THREE.MeshStandardMaterial({ color: th.accent, side: THREE.DoubleSide, roughness: 0.8 }));
+      flag.position.set(0, 11.9, 0); if (sx < 0) flag.rotation.y = Math.PI; g.add(flag);
+    } else if (th.style === 'timber') {
+      addP(new THREE.BoxGeometry(2.2, 11.5, 2.2), pilMat, 0, 5.75, 0);
+      const brace = addP(new THREE.BoxGeometry(0.5, 6.4, 0.5), pilMat, 0, 3.4, 1.0); brace.rotation.x = 0.5;
+      const brace2 = addP(new THREE.BoxGeometry(0.5, 6.4, 0.5), pilMat, 0, 3.4, -1.0); brace2.rotation.x = -0.5;
+    } else { // steel / gantry: trussed box pillar
+      addP(new THREE.BoxGeometry(2.4, 11.5, 2.4), pilMat, 0, 5.75, 0);
+      for (const fy of [2.6, 5.6, 8.6]) addP(new THREE.BoxGeometry(2.6, 0.42, 2.6), GMAT.flatProp(new THREE.Color(th.pillar).multiplyScalar(0.72).getHex()), 0, fy, 0);
+      if (th.style === 'neon') { const strip = new THREE.Mesh(new THREE.BoxGeometry(0.4, 11.5, 0.4), GMAT.emissiveScreen(th.accent, { intensity: 1.8 })); strip.position.set(-sx * 1.25, 5.75, 0); g.add(strip); }
+    }
+  }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(span, 1.0, 1.5), GMAT.flatProp(new THREE.Color(th.pillar).multiplyScalar(0.8).getHex()));
+  beam.position.y = 11.35; beam.castShadow = true; group.add(beam);
+  // the sign: name in HUGE letters, sponsor line under — emissive so it glows at dusk/night
+  const signTex = canvasTexture(2048, 300, (g, w, h) => {
+    g.fillStyle = th.sign; g.fillRect(0, 0, w, h);
+    g.strokeStyle = th.fg === '#ffffff' ? '#ffd94a' : th.fg; g.lineWidth = 10; g.strokeRect(10, 10, w - 20, h - 20);
+    g.lineWidth = 3; g.strokeRect(30, 30, w - 60, h - 60);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    let fs = 178;
+    const name = tr.name.toUpperCase();
+    do { g.font = `900 ${fs}px "Luckiest Guy", system-ui, sans-serif`; fs -= 8; } while (g.measureText(name).width > w - 190 && fs > 60);
+    g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillText(name, w / 2, h / 2 - 22 + 7);
+    g.fillStyle = th.fg; g.fillText(name, w / 2, h / 2 - 22);
+    g.font = '700 47px system-ui, sans-serif'; g.globalAlpha = 0.88; g.fillText(th.sub, w / 2, h - 58); g.globalAlpha = 1;
+  });
+  const signSide = GMAT.flatProp(new THREE.Color(th.sign).getHex());
+  const signFace = GMAT.emissiveScreen(0xffffff, { intensity: th.style === 'neon' ? 1.5 : 0.85, map: signTex });
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(span - 1.2, 3.3, 0.55), [signSide, signSide, signSide, signSide, signFace, signFace]);
+  sign.position.y = 9.1; group.add(sign);
+  // gold stars on the top corners (mk8-rainbow) — oversized toy accents
+  const starMat = new THREE.MeshStandardMaterial({ color: 0xffd94a, emissive: 0xcc9900, emissiveIntensity: 1.15, roughness: 0.35, metalness: 0.4 });
+  for (const sx of [-1, 1]) { const st = new THREE.Mesh(new THREE.OctahedronGeometry(1.3), starMat); st.scale.set(1, 1.35, 0.45); st.position.set(sx * (span / 2 - 2.2), 12.6, 0); group.add(st); }
+  // pennant string under the beam
+  const triGeo = new THREE.BufferGeometry();
+  triGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.44, 0, 0, 0.44, 0, 0, 0, -0.68, 0], 3));
+  triGeo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 0.5, 0], 2));
+  triGeo.setIndex([0, 1, 2]); triGeo.computeVertexNormals();
+  const flags = new THREE.InstancedMesh(triGeo, new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide }), 13);
+  const m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), v1 = new THREE.Vector3(), s1 = new THREE.Vector3(1, 1, 1), cc = new THREE.Color();
+  for (let i = 0; i < 13; i++) {
+    const t = i / 12, x = -span / 2 + 1.6 + t * (span - 3.2);
+    m4.compose(v1.set(x, 10.78 - Math.sin(t * Math.PI) * 0.5, 0), q0, s1); flags.setMatrixAt(i, m4);
+    flags.setColorAt(i, cc.set(i % 2 ? 0xffffff : th.accent));
+  }
+  group.add(flags);
+}
+
+/* ---- CONTINUOUS EDGE DRESSING (mk8-farm fences / mkw-water embankment /
+   mount-wario red markers): a "riverbank" guiding the eye on BOTH sides, the
+   whole lap, no kerb-to-void. Ribbons follow samples + rollNormals, so they
+   ride elevation and banking exactly like the road. */
+function ribbonGeo(lat, y0, y1) {
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const s = samples[i % N], rn = rollNormals[i % N];
+    const bx = s.x + rn.x * lat, bz = s.z + rn.z * lat, by = s.y + rn.y * lat;
+    pos.push(bx, by + y0, bz, bx, by + y1, bz);
+    uv.push(i * 0.55, 0, i * 0.55, 1);
+    if (i < N) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  return geo;
+}
+const EDGE_THEMES = [
+  { type: 'glass' }, { type: 'pennant', accent: 0xffcf7a }, { type: 'barrier', col: 0x8f9296, accent: 0x59f7ff },
+  { type: 'rail', col: 0xf2ede2 }, { type: 'rail', col: 0xefe9da }, { type: 'neon', accent: 0xff4fd8 },
+  { type: 'barrier', col: 0x9a8a70, accent: 0x3a3f45 }, { type: 'pennant', accent: 0xff9a3c }, { type: 'rail', col: 0xdff5ef },
+  { type: 'wood', col: 0x7a4a21 }, { type: 'none' }, { type: 'guardrail', col: 0xb9c0c8 },
+];
+function buildEdgeDressing(trackIdx) {
+  const th = EDGE_THEMES[trackIdx] || EDGE_THEMES[0];
+  if (th.type === 'none') return;
+  const std = (opts) => new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...opts });
+  const ribbon = (lat, y0, y1, mat, order = 0) => { const m = new THREE.Mesh(ribbonGeo(lat, y0, y1), mat); m.renderOrder = order; scene.add(m); return m; };
+  const postGeoH = { glass: 1.15, wood: 1.15, rail: 1.0, guardrail: 0.95, pennant: 1.3 }[th.type];
+  for (const side of [-1, 1]) {
+    const lat = side * (HALF_W + 1.35);
+    if (th.type === 'glass') {
+      ribbon(lat, 0.06, 1.02, std({ color: 0xa8d8e8, transparent: true, opacity: 0.30, roughness: 0.08, metalness: 0, envMapIntensity: 1.5, depthWrite: false }), 2);
+      ribbon(lat, 1.02, 1.17, std({ color: 0x39434e, roughness: 0.35, metalness: 0.7, envMapIntensity: 1.1 }));
+    } else if (th.type === 'wood') {
+      ribbon(lat, 0.46, 0.62, std({ color: th.col, roughness: 0.95 }));
+      ribbon(lat, 0.90, 1.06, std({ color: th.col, roughness: 0.95 }));
+    } else if (th.type === 'rail') {
+      ribbon(lat, 0.40, 0.53, std({ color: th.col, roughness: 0.4, metalness: 0.35, envMapIntensity: 0.9 }));
+      ribbon(lat, 0.83, 0.97, std({ color: th.col, roughness: 0.4, metalness: 0.35, envMapIntensity: 0.9 }));
+    } else if (th.type === 'guardrail') {
+      ribbon(lat, 0.48, 0.92, std({ color: th.col, roughness: 0.35, metalness: 0.75, envMapIntensity: 1.1 }));
+    } else if (th.type === 'barrier') {
+      ribbon(lat, 0.02, 0.76, std({ color: th.col, roughness: 0.95 }));
+      const cap = GMAT.emissiveScreen(th.accent, { intensity: trackIdx === 2 ? 1.25 : 0.25 }); cap.side = THREE.DoubleSide;
+      ribbon(lat, 0.76, 0.87, cap);
+    } else if (th.type === 'neon') {
+      ribbon(lat, 0.02, 0.40, std({ color: 0x140b28, roughness: 0.6 }));
+      const glow = GMAT.emissiveScreen(side < 0 ? 0xff4fd8 : 0x36f5ff, { intensity: 1.7 }); glow.side = THREE.DoubleSide;
+      ribbon(lat, 0.40, 0.53, glow);
+    } else if (th.type === 'pennant') {
+      ribbon(lat, 0.99, 1.05, std({ color: 0x2e2018, roughness: 0.9 }));
+    }
+    // posts — instanced, one draw for both sides is handled per-side here (2 draws total)
+    if (postGeoH) {
+      const step = th.type === 'guardrail' ? 9 : 6;
+      const cnt = Math.floor(N / step);
+      const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.09, 0.12, postGeoH, 5, 1, true), GMAT.flatProp(th.type === 'glass' ? 0x39434e : (th.col || 0x4a3826)), cnt);
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), pv = new THREE.Vector3();
+      let w = 0;
+      for (let i = 0; i < N; i += step) {
+        const s = samples[i], rn = rollNormals[i];
+        pv.set(s.x + rn.x * lat, s.y + rn.y * lat + postGeoH / 2 - 0.08, s.z + rn.z * lat);
+        m4.compose(pv, q, one); posts.setMatrixAt(w++, m4);
+      }
+      posts.count = w; scene.add(posts);
+      if (th.type === 'pennant') { // flags hanging from the rope line (desert pennants / farm bunting)
+        const triGeo = new THREE.BufferGeometry();
+        triGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.30, 0, 0, 0.30, 0, 0, 0, -0.52, 0], 3));
+        triGeo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 0.5, 0], 2));
+        triGeo.setIndex([0, 1, 2]); triGeo.computeVertexNormals();
+        const fcnt = Math.floor(N / 12);
+        const fl = new THREE.InstancedMesh(triGeo, new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide }), fcnt);
+        const e = new THREE.Euler(), cc = new THREE.Color();
+        w = 0;
+        for (let i = 0; i < N; i += 12) {
+          const s = samples[i], rn = rollNormals[i];
+          pv.set(s.x + rn.x * lat, s.y + rn.y * lat + 0.99, s.z + rn.z * lat);
+          q.setFromEuler(e.set(0, headingOf(tangents[i]), 0));
+          m4.compose(pv, q, one); fl.setMatrixAt(w, m4);
+          fl.setColorAt(w, cc.set(w % 3 === 1 ? 0xffffff : th.accent)); w++;
+        }
+        fl.count = w; scene.add(fl);
+      }
+    }
+  }
+}
+
+/* ---- NEAR-ROAD PROPS: the speed references. Cones / grass tufts / rocks /
+   glow cubes / red markers at 0.5–7 m from the kerb — this density at the
+   road edge is what makes 40 MPH FEEL fast (mk research P0-5). */
+const PROP_KINDS = ['cones', 'rocks', 'cones', 'tufts', 'cones', 'glow', 'cones', 'rocks', 'tufts', 'tufts', null, 'markers'];
+function bladeTexture() {
+  return artTex(128, 128, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    const rnd = artRand(7331);
+    for (let i = 0; i < 13; i++) {
+      const x0 = 14 + rnd() * (w - 28), bend = (rnd() - 0.5) * 34, hh = h * (0.55 + rnd() * 0.45);
+      g.fillStyle = ['#3f7a28', '#548c33', '#6fae4c', '#2f5a21'][Math.floor(rnd() * 4)];
+      g.beginPath();
+      g.moveTo(x0 - 4.5, h); g.quadraticCurveTo(x0 + bend * 0.4, h - hh * 0.6, x0 + bend, h - hh);
+      g.quadraticCurveTo(x0 + bend * 0.4 + 2, h - hh * 0.55, x0 + 4.5, h); g.fill();
+    }
+  });
+}
+function buildNearProps(trackIdx) {
+  const kind = PROP_KINDS[trackIdx];
+  if (!kind) return;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1), pv = new THREE.Vector3();
+  const place = (inst, i, lat, yMode, s = 1) => {
+    const sm = samples[i], rn = rollNormals[i];
+    const x = sm.x + rn.x * lat, z = sm.z + rn.z * lat;
+    const y = yMode === 'road' ? sm.y + rn.y * lat : terrainHeightAt(x, z);
+    q.setFromEuler(e.set(0, Math.random() * Math.PI * 2, 0));
+    pv.set(x, y, z); m4.compose(pv, q, new THREE.Vector3(s, s, s)); inst.setMatrixAt(inst.userData.w++, m4);
+  };
+  const makeInst = (geo, mat, cap) => { const im = new THREE.InstancedMesh(geo, mat, cap); im.userData.w = 0; scene.add(im); return im; };
+  if (kind === 'cones') {
+    const coneGeo = new THREE.ConeGeometry(0.42, 1.02, 10); coneGeo.translate(0, 0.51, 0);
+    const bandGeo = new THREE.CylinderGeometry(0.295, 0.35, 0.26, 10); bandGeo.translate(0, 0.55, 0);
+    const cones = makeInst(coneGeo, GMAT.mattePlastic(0xff6a1c, { roughness: 0.55 }), 130);
+    const bands = makeInst(bandGeo, GMAT.mattePlastic(0xf5f2ea, { roughness: 0.5 }), 130);
+    for (let i = 4; i < N; i += 7) {
+      if (Math.random() < 0.32) continue;
+      const lat = (i % 14 < 7 ? -1 : 1) * (HALF_W + rand(2.1, 3.6));
+      place(cones, i, lat, 'terrain');
+      const src = (cones.userData.w - 1) * 16; // band shares the cone's matrix (both geos carry their own y offset)
+      bands.instanceMatrix.array.set(cones.instanceMatrix.array.subarray(src, src + 16), bands.userData.w * 16);
+      bands.userData.w++;
+    }
+    cones.count = cones.userData.w; bands.count = bands.userData.w;
+    cones.castShadow = true;
+  } else if (kind === 'tufts') {
+    const p1 = new THREE.PlaneGeometry(1.15, 0.85); p1.translate(0, 0.4, 0);
+    const p2 = p1.clone(); p2.rotateY(Math.PI / 2);
+    const tuftGeo = mergeGeos([p1.toNonIndexed(), p2.toNonIndexed()]);
+    const cap = trackIdx === 9 ? 260 : 150;
+    const tufts = makeInst(tuftGeo, new THREE.MeshStandardMaterial({ map: bladeTexture(), alphaTest: 0.38, side: THREE.DoubleSide, roughness: 1 }), cap);
+    for (let i = 2; i < N && tufts.userData.w < cap; i += 4) {
+      if (Math.random() < 0.3) continue;
+      place(tufts, i, (Math.random() < 0.5 ? -1 : 1) * (HALF_W + rand(1.7, 6.5)), 'terrain', rand(0.8, 1.5));
+    }
+    tufts.count = tufts.userData.w;
+  } else if (kind === 'rocks') {
+    const rg = new THREE.IcosahedronGeometry(0.55, 0);
+    { const rp = rg.attributes.position, v = new THREE.Vector3();
+      for (let i = 0; i < rp.count; i++) { v.fromBufferAttribute(rp, i); const hs = Math.sin(v.x * 12.9898 + v.y * 78.233 + v.z * 37.719) * 43758.5453; v.multiplyScalar(1 + (hs - Math.floor(hs) - 0.5) * 0.5); rp.setXYZ(i, v.x, v.y, v.z); }
+      rg.computeVertexNormals(); }
+    const rocks = makeInst(rg, GMAT.flatProp(trackIdx === 1 ? 0x7e3b22 : 0x8a5a34), 110);
+    for (let i = 3; i < N && rocks.userData.w < 110; i += 8) {
+      if (Math.random() < 0.25) continue;
+      place(rocks, i, (Math.random() < 0.5 ? -1 : 1) * (HALF_W + rand(2.0, 7.5)), 'terrain', rand(0.5, 1.7));
+    }
+    rocks.count = rocks.userData.w;
+  } else if (kind === 'glow') { // metaverse light cubes lining the plaza kerb
+    const geo = new THREE.BoxGeometry(0.46, 0.46, 0.46); geo.translate(0, 0.3, 0);
+    const a = makeInst(geo, GMAT.emissiveScreen(0xff4fd8, { intensity: 1.6 }), 48);
+    const b = makeInst(geo, GMAT.emissiveScreen(0x36f5ff, { intensity: 1.6 }), 48);
+    for (let i = 0; i < N; i += 10) { place(i % 20 ? a : b, i, (i % 20 < 10 ? -1 : 1) * (HALF_W + 1.8), 'road'); }
+    a.count = a.userData.w; b.count = b.userData.w;
+  } else if (kind === 'markers') { // mount-wario red edge markers for the alpine descent
+    const geo = new THREE.CylinderGeometry(0.07, 0.07, 1.15, 6); geo.translate(0, 0.55, 0);
+    const mk = makeInst(geo, GMAT.mattePlastic(0xe8402a, { roughness: 0.5 }), 230);
+    for (let i = 0; i < N && mk.userData.w < 230; i += 8) {
+      place(mk, i, (i % 16 < 8 ? -1 : 1) * (HALF_W + 1.5), 'road');
+    }
+    mk.count = mk.userData.w;
+  }
+}
+
+/* ---- ROAD PAINT (mk8-rainbow chevrons / desert ramp paint): the surface
+   tells a story — track name painted on the start straight, chevrons poured
+   into corner entries, sponsor decals on the straights. Built as short quad
+   strips that hug the banked road exactly. */
+function quadStripGeo(i0, count, halfW, yOff) {
+  const pos = [], uv = [], idx = [];
+  for (let j = 0; j <= count; j++) {
+    const i = wrapIdx(i0 + j), s = samples[i], rn = rollNormals[i];
+    pos.push(s.x + rn.x * halfW, s.y + rn.y * halfW + yOff, s.z + rn.z * halfW, s.x - rn.x * halfW, s.y - rn.y * halfW + yOff, s.z - rn.z * halfW);
+    uv.push(1, j / count, 0, j / count); // v grows along travel; canvas top (v=1 under flipY) lands at the far end, so paint reads upright on approach
+    if (j < count) { const a = j * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  return geo;
+}
+function paintTexture(w, h, draw, wear = 900) {
+  const t = canvasTexture(w, h, (g) => {
+    g.clearRect(0, 0, w, h); draw(g, w, h);
+    if (wear) { g.globalCompositeOperation = 'destination-out'; for (let i = 0; i < wear; i++) { g.fillStyle = `rgba(0,0,0,${0.25 + Math.random() * 0.5})`; g.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 7, 1 + Math.random() * 3); } g.globalCompositeOperation = 'source-over'; }
+  });
+  return t;
+}
+const SPONSOR_PAINT = ['GPU GO BRRR', 'AGI SOON™', 'EXIT TO LIQUIDITY', 'CLOUD² KART FUEL', 'DISRUPT EVERYTHING', 'MOAT™ COLA', 'PIVOT! PIVOT!', 'NOT FINANCIAL ADVICE'];
+function buildRoadPaint(trackIdx, tr) {
+  const mat = (map, op) => new THREE.MeshStandardMaterial({ map, transparent: true, opacity: op, roughness: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const add = (geo, material) => { const m = new THREE.Mesh(geo, material); m.renderOrder = 1; scene.add(m); };
+  // painted track name across the start straight
+  const nameTex = paintTexture(1024, 256, (g, w, h) => {
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    let fs = 150; const name = tr.name.toUpperCase();
+    do { g.font = `900 ${fs}px "Luckiest Guy", system-ui, sans-serif`; fs -= 7; } while (g.measureText(name).width > w - 60 && fs > 50);
+    g.fillStyle = 'rgba(255,255,255,0.92)'; g.fillText(name, w / 2, h / 2);
+  });
+  add(quadStripGeo(5, 8, 7.4, 0.055), mat(nameTex, 0.92));
+  // corner chevrons at the strongest curvature apexes (from tangent swing, so
+  // module tracks without authored banking get them too)
+  const apexes = [];
+  for (let i = 0; i < N; i += 2) {
+    const k = Math.abs(angNorm(headingOf(tangents[wrapIdx(i + 6)]) - headingOf(tangents[wrapIdx(i - 6)])));
+    if (k > 0.17 && (apexes.length === 0 || i - apexes[apexes.length - 1].i > 90)) apexes.push({ i, k });
+    else if (k > 0.17 && apexes.length && i - apexes[apexes.length - 1].i <= 90 && k > apexes[apexes.length - 1].k) apexes[apexes.length - 1] = { i, k };
+  }
+  apexes.sort((a, b) => b.k - a.k);
+  const chevTex = paintTexture(512, 256, (g, w, h) => {
+    g.fillStyle = 'rgba(255,244,200,0.95)';
+    for (const cx of [0.22, 0.5, 0.78]) for (const cy of [0.30, 0.74]) { // '^' chevrons pointing up-canvas = toward travel
+      g.beginPath(); g.moveTo(w * cx - 40, h * cy + 26); g.lineTo(w * cx, h * cy - 26); g.lineTo(w * cx + 40, h * cy + 26); g.lineTo(w * cx, h * cy + 4); g.closePath(); g.fill();
+    }
+  }, 500);
+  for (const a of apexes.slice(0, 5)) add(quadStripGeo(a.i - 9, 6, 8.8, 0.055), mat(chevTex, 0.85));
+  // sponsor decals on two straights
+  const brand = SPONSOR_PAINT[trackIdx % SPONSOR_PAINT.length];
+  const sponTex = paintTexture(1024, 192, (g, w, h) => {
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '900 118px system-ui, sans-serif'; g.fillStyle = 'rgba(255,217,74,0.9)';
+    g.fillText(brand, w / 2, h / 2);
+  });
+  for (const f of [0.34, 0.71]) add(quadStripGeo(Math.floor(f * N), 6, 5.4, 0.055), mat(sponTex, 0.8));
+}
+
+/* ---- STUFF IN THE AIR (mkw-water lantern strings / mkw-peach streamers):
+   bunting strung OVER the road at sector gates, a sponsor blimp circling
+   outdoor tracks, drones over the Metaverse, confetti at the start arch. */
+function buildBunting(trackIdx) {
+  if (trackIdx === 10 || trackIdx === 2) return; // tunnel is a tube; datacenter strings would clip the hall
+  const th = ARCH_THEMES[trackIdx] || ARCH_THEMES[0];
+  const sc = SKY_SCRIPTS[trackIdx] || SKY_SCRIPTS[0];
+  const poleGeos = [], flagGeos = [];
+  const palette = [th.accent, 0xffffff, 0xff5252, new THREE.Color(sc.glow).getHex(), 0xffd94a];
+  let ci = 0;
+  for (const f of [0.15, 0.31, 0.47, 0.63, 0.79, 0.93]) {
+    const idx = Math.floor(f * N), s = samples[idx], rn = rollNormals[idx];
+    const tops = [];
+    for (const side of [-1, 1]) {
+      const lat = side * (HALF_W + 1.0);
+      const bx = s.x + rn.x * lat, bz = s.z + rn.z * lat, by = s.y + rn.y * lat;
+      const pg = new THREE.CylinderGeometry(0.09, 0.13, 7.3, 6); pg.translate(bx, by + 3.65, bz); poleGeos.push(pg.toNonIndexed()); // mergeGeos drops indices — feed it non-indexed geometry
+      tops.push(new THREE.Vector3(bx, by + 7.3, bz));
+    }
+    const head = headingOf(tangents[idx]);
+    for (let j = 0; j <= 10; j++) {
+      const t = 0.06 + (j / 10) * 0.88;
+      const p = tops[0].clone().lerp(tops[1], t); p.y -= Math.sin(t * Math.PI) * 1.5 + 0.34;
+      const fg = new THREE.BufferGeometry(); // triangular pennant — rectangles read as blank signs, triangles read as bunting
+      fg.setAttribute('position', new THREE.Float32BufferAttribute([-0.52, 0, 0, 0.52, 0, 0, 0, -0.78, 0], 3));
+      fg.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+      fg.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 0.5, 0], 2));
+      const rot = new THREE.Matrix4().makeRotationY(head);
+      const col = new THREE.Color(palette[ci++ % palette.length]);
+      const carr = new Float32Array(fg.attributes.position.count * 3);
+      for (let v = 0; v < fg.attributes.position.count; v++) { carr[v * 3] = col.r; carr[v * 3 + 1] = col.g; carr[v * 3 + 2] = col.b; }
+      fg.setAttribute('color', new THREE.BufferAttribute(carr, 3));
+      fg.applyMatrix4(rot); fg.translate(p.x, p.y, p.z);
+      flagGeos.push(fg.toNonIndexed());
+    }
+  }
+  if (poleGeos.length) { const poles = new THREE.Mesh(mergeGeos(poleGeos), GMAT.flatProp(th.pillar)); scene.add(poles); }
+  if (flagGeos.length) { const flags = new THREE.Mesh(mergeGeos(flagGeos), new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.85 })); scene.add(flags); }
+}
+function buildAirProps(trackIdx) {
+  const sc = SKY_SCRIPTS[trackIdx] || SKY_SCRIPTS[0];
+  if (trackIdx !== 10) { // confetti fountain at the hero arch (start line celebration, mkw-peach streamers)
+    let confT = 0;
+    const top = samples[0].clone(); top.y += 10.4;
+    const cols = [0xffd94a, 0xff5252, 0x6cf, 0x76b900, 0xffffff, (ARCH_THEMES[trackIdx] || ARCH_THEMES[0]).accent];
+    trackAnimators.push((dt) => {
+      confT += dt; if (confT < 0.45) return; confT = 0;
+      const pk = playerKart();
+      if ((pk && pk.pos.distanceTo(samples[0]) < 175) || gameState === 'menu') spawnParticles(top, { count: 5, colors: cols, speed: 2.4, life: 1.6, up: 0.6, gravity: -2.2, spread: 1 });
+    });
+  }
+  if (trackIdx === 10) return;
+  if (trackIdx === 5) { // metaverse: patrol drones with neon eyes
+    const drones = [];
+    for (let i = 0; i < 3; i++) {
+      const d = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.3, 0.95), GMAT.darkMetal({})); d.add(body);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), GMAT.emissiveScreen(i % 2 ? 0x36f5ff : 0xff4fd8, { intensity: 2 })); eye.position.set(0, -0.05, 0.5); d.add(eye);
+      for (const [rx, rz] of [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]]) { const r = new THREE.Mesh(new THREE.CircleGeometry(0.3, 10), GMAT.flatProp(0x22242a)); r.rotation.x = -Math.PI / 2; r.position.set(rx, 0.22, rz); d.add(r); }
+      scene.add(d); drones.push(d);
+    }
+    trackAnimators.push((dt, t) => {
+      drones.forEach((d, i) => {
+        const a = t * (0.14 + i * 0.045) + i * 2.1, R = 42 + i * 15;
+        d.position.set(trackCenter.x + Math.sin(a) * R, 30 + i * 5 + Math.sin(t * 0.9 + i) * 1.6, trackCenter.z + Math.cos(a) * R);
+        d.rotation.y = a + Math.PI / 2;
+      });
+    });
+    return;
+  }
+  // sponsor blimp, circling slowly — the desert/farm frames always have
+  // something big and slow in the sky to read distance against
+  const blimp = new THREE.Group();
+  const bodyGeo = new THREE.CapsuleGeometry(2.7, 7.5, 4, 12); bodyGeo.rotateX(Math.PI / 2);
+  const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ color: trackIdx === 1 ? 0xd96f32 : 0xf2f0ea, roughness: 0.5, envMapIntensity: 0.7 }));
+  blimp.add(body);
+  const finMat = GMAT.flatProp((ARCH_THEMES[trackIdx] || ARCH_THEMES[0]).accent);
+  const finV = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.6, 1.9), finMat); finV.position.set(0, 0.4, -5.6); blimp.add(finV);
+  const finH = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 1.9), finMat); finH.position.set(0, 0, -5.6); blimp.add(finH);
+  const gond = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.8, 2.6), GMAT.flatProp(0x2c2f36)); gond.position.y = -2.6; blimp.add(gond);
+  const banTex = canvasTexture(1024, 128, (g, w, h) => {
+    g.fillStyle = '#14213d'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#ffd94a'; g.font = '900 84px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('AGI SOON™ AIRSHIPS', w / 2, h / 2);
+  });
+  for (const sx of [-1, 1]) { const bp = new THREE.Mesh(new THREE.PlaneGeometry(9.5, 1.7), GMAT.emissiveScreen(0xffffff, { intensity: 0.7, map: banTex })); bp.position.set(sx * 2.85, -0.4, 0); bp.rotation.y = sx * Math.PI / 2; blimp.add(bp); }
+  scene.add(blimp);
+  const R = 150 + trackIdx * 7, H = 62 + (trackIdx % 3) * 7, ph = trackIdx * 1.7;
+  trackAnimators.push((dt, t) => {
+    const a = t * 0.021 + ph;
+    blimp.position.set(trackCenter.x + Math.sin(a) * R, H + Math.sin(t * 0.3) * 2.5, trackCenter.z + Math.cos(a) * R);
+    const na = a + 0.05;
+    blimp.lookAt(trackCenter.x + Math.sin(na) * R, blimp.position.y, trackCenter.z + Math.cos(na) * R);
+  });
+}
+
+/* Crowd texture for the grandstand tiers: seat colour + a speckle of crowd
+   dots — a stand that reads as PEOPLE from the start straight. */
+function crowdTexture(base) {
+  return canvasTexture(512, 64, (g, w, h) => {
+    g.fillStyle = '#' + new THREE.Color(base).getHexString(); g.fillRect(0, 0, w, h);
+    const rnd = artRand(base + 7);
+    const cols = ['#ffd9a0', '#f2f2f2', '#d23b2e', '#1877f2', '#ffd94a', '#2b2d34', '#76b900', '#ff9ff3'];
+    for (let i = 0; i < 650; i++) { g.fillStyle = cols[Math.floor(rnd() * cols.length)]; g.globalAlpha = 0.75 + rnd() * 0.25; g.beginPath(); g.arc(rnd() * w, 6 + rnd() * (h - 12), 1.8 + rnd() * 1.8, 0, 7); g.fill(); }
+    g.globalAlpha = 1;
+  });
+}
+
+let blobTexShared = null;
+function blobShadowTexture() { // soft elliptical contact shadow (shared: teardown must not dispose it)
+  if (blobTexShared) return blobTexShared;
+  const t = canvasTexture(128, 128, (g, w, h) => {
+    const gr = g.createRadialGradient(w / 2, h / 2, 4, w / 2, h / 2, w / 2);
+    gr.addColorStop(0, 'rgba(0,0,0,0.85)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  });
+  t.userData.shared = true; blobTexShared = t; return t;
+}
+
 /* ================= WORLD BUILDING ================= */
 function stripGeometry(halfWidth, y) {
   const pos = [], uv = [], idx = [];
@@ -632,11 +1189,16 @@ function buildWorld(trackIdx, field) {
   currentDef = tr;
   const preset = applyFog(scene, tr.fogKey || 'valleyDay'); // fog colour matched to the sky horizon
   if (!tr.fogKey && tr.fog !== undefined) { scene.fog.color.set(tr.fog); scene.fog.near = tr.fogNear ?? 210; scene.fog.far = tr.fogFar ?? 640; } // module tracks carry authored fog instead of a preset key
-  renderer.toneMappingExposure = preset.exposure;
-  const { sun, hemi } = setupLights(scene, { shadowMapSize: window.innerWidth < 700 ? 1024 : 2048, hemiGround: tr.ground });
+  // ART PASS (#47): per-track graded sky + colour script drives fog, exposure,
+  // sun angle/colour and IBL — see SKY_SCRIPTS. Default midday blue is banned.
+  const script = SKY_SCRIPTS[trackIdx] || SKY_SCRIPTS[0];
+  currentScript = script; currentSunOffset = script.sun;
+  scene.fog.color.set(script.fog);
+  if (script.fogNear) { scene.fog.near = script.fogNear; scene.fog.far = script.fogFar; }
+  renderer.toneMappingExposure = script.exposure ?? preset.exposure;
+  const { sun, hemi } = setupLights(scene, { shadowMapSize: window.innerWidth < 700 ? 1024 : 2048, hemiGround: tr.ground, sunPosition: script.sun, sunColor: script.sunCol, sunIntensity: script.sunI, hemiSky: script.hemiSky, hemiIntensity: script.hemiI });
   sunLight = sun; hemiLight = hemi;
-  if (tr.skyKey) applySky(renderer, scene, SKY_URLS[tr.skyKey], { envIntensity: preset.envIntensity }).catch(() => { }); // fire-and-forget: panorama + IBL pop in a frame or two, never blocks race start
-  else if (tr.sky !== undefined) { scene.background = new THREE.Color(tr.sky); scene.environment = null; } // module tracks: authored sky colour, no panorama
+  applyArtSky(trackIdx, script);
   if (post) post.applyQuality(localStorage.getItem('bk-quality') || 'auto', { sun: sunLight }); // sun is rebuilt per track — re-apply the shadow hint
   karts = []; bananas = []; projectiles = []; itemBoxes = []; clouds = []; bombs = [];
 
@@ -668,12 +1230,16 @@ function buildWorld(trackIdx, field) {
   }
 
   const mars = trackIdx === 1;
-  const gTex = mars ? GTEX.sandTexture({ tint: 'mars' }) : GTEX.grassTexture();
-  gTex.repeat.set(40, 40);
+  // ART PASS: terrain material story per track script — mow-striped grass,
+  // sand, or tinted concrete (snow/plaza/tunnel floor)
+  let gTex;
+  if (script.groundTex === 'sand') { gTex = GTEX.sandTexture({ tint: script.sandTint || 'sand' }); gTex.repeat.set(52, 52); }
+  else if (script.groundTex === 'concrete') { gTex = GTEX.concreteTexture(); gTex.repeat.set(52, 52); }
+  else { gTex = mowGrassTexture(script.groundBase || '#4f8a38', (tr.roadSeed || 1) * 31 + trackIdx); gTex.repeat.set(56, 56); }
   const groundGeo = new THREE.PlaneGeometry(1520, 1520, 136, 136);
   groundGeo.rotateX(-Math.PI / 2);
   { const pa = groundGeo.attributes.position; for (let i = 0; i < pa.count; i++) pa.setY(i, terrainHeightAt(pa.getX(i), pa.getZ(i))); groundGeo.computeVertexNormals(); }
-  const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ map: gTex, roughness: 1 }));
+  const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ map: gTex, color: script.groundTint ?? 0xffffff, roughness: 1 }));
   ground.receiveShadow = true; scene.add(ground);
   buildBackdrop(trackIdx);
 
@@ -693,16 +1259,20 @@ function buildWorld(trackIdx, field) {
   startGroup.position.copy(samples[0]); startGroup.rotation.y = headingOf(tangents[0]);
   const line = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W * 2, 5), new THREE.MeshStandardMaterial({ map: checkerTexture(), roughness: 0.9 }));
   line.rotation.x = -Math.PI / 2; line.position.y = 0.06; startGroup.add(line);
-  const poleMat = GMAT.flatProp(0x22242a);
-  for (const sx of [-1, 1]) { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 9, 8), poleMat); pole.position.set(sx * (HALF_W + 1.2), 4.5, 0); startGroup.add(pole); }
-  const bannerTex = canvasTexture(1024, 128, (g, w, h) => { g.fillStyle = '#14213d'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd94a'; g.font = '900 74px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(tr.banner || '🏁 BILLIONAIRE KART 🏁', w / 2, h / 2); });
-  const banner = new THREE.Mesh(new THREE.BoxGeometry(HALF_W * 2 + 3, 3.2, 0.4), GMAT.emissiveScreen(0xffffff, { intensity: 1.1, map: bannerTex }));
-  banner.position.y = 8.6; startGroup.add(banner);
+  buildHeroArch(startGroup, tr, trackIdx); // ART PASS: themed hero arch replaces the pole + banner gantry
   scene.add(startGroup);
 
   buildScenery(trackIdx);
   trackFx = null; lastPlayerLap = 1;
   if (TRACK_DRESSING[trackIdx]) trackFx = TRACK_DRESSING[trackIdx](sceneryContext()) || null;
+  // ART PASS (#47): edge dressing, near-road props, road paint, bunting, air
+  // props — run for EVERY track (module tracks included) after their own
+  // dressing, so trackAnimators pushes land after any module reset.
+  buildEdgeDressing(trackIdx);
+  buildNearProps(trackIdx);
+  buildRoadPaint(trackIdx, tr);
+  buildBunting(trackIdx);
+  buildAirProps(trackIdx);
   buildItemBoxes();
   currentField.forEach(ri => scene.add(makeKart(ri, ri === selectedRacer).mesh));
   initParticles();
@@ -742,7 +1312,7 @@ function buildScenery(trackIdx) {
   const mars = trackIdx === 1;
   const tr = TRACKS[trackIdx];
   // trees (valley) or rocks (mars) — instanced; module tracks bring their own dressing, so the valley branch is track-0 only
-  const COUNT = 140;
+  const COUNT = trackIdx === 0 ? 240 : 140; // ART PASS: denser, clustered planting on the valley (below)
   if (tr.buildDressing) {
     tr.buildDressing(sceneryContext()); // Batch 2 dressing; shared billboards/grandstand/clouds below still run
   } else if (trackIdx === 0) {
@@ -753,8 +1323,24 @@ function buildScenery(trackIdx) {
     const b3 = new THREE.IcosahedronGeometry(1.25, 0); b3.translate(-1.05, 4.0, -0.4);
     const leafM = new THREE.InstancedMesh(mergeGeos([b1, b2, b3]), GMAT.flatProp(0xffffff), COUNT);
     const m = new THREE.Matrix4(), e = new THREE.Euler(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), col = new THREE.Color();
+    // ART PASS: groves, not confetti — cluster centres near the road (where the
+    // camera looks), 2–5 sculpted canopy trees per grove, every 5th tree a
+    // 1.45× hero (mk8-farm's oversized round tree). Guard keeps groves off the road.
+    const spots = [];
+    for (let c = 0; c < 46 && spots.length < COUNT; c++) {
+      const ctr = c < 16 ? scatterPos(HALF_W + 3, HALF_W + 16) : scatterPos(HALF_W + 8, HALF_W + 60);
+      const nIn = c < 16 ? 2 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 3);
+      for (let j = 0; j < nIn && spots.length < COUNT; j++) {
+        const v = new THREE.Vector3(ctr.x + rand(-6.5, 6.5), 0, ctr.z + rand(-6.5, 6.5));
+        const ni = globalNearest(v), la = lateralAt(v, ni);
+        if (Math.abs(la) < HALF_W + 3) v.addScaledVector(normals[ni], (HALF_W + 3 - Math.abs(la)) * Math.sign(la || 1));
+        v.y = terrainHeightAt(v.x, v.z);
+        spots.push(v);
+      }
+    }
+    while (spots.length < COUNT) spots.push(scatterPos(HALF_W + 7, HALF_W + 62));
     for (let i = 0; i < COUNT; i++) {
-      const p = scatterPos(HALF_W + 7, HALF_W + 62), s = rand(0.8, 1.7);
+      const p = spots[i], s = rand(0.8, 1.7) * (i % 5 === 0 ? 1.45 : 1);
       q.setFromEuler(e.set(rand(-0.05, 0.05), Math.random() * Math.PI * 2, rand(-0.05, 0.05)));
       sc.set(s, s * rand(0.9, 1.15), s);
       m.compose(new THREE.Vector3(p.x, p.y + 1.45 * s, p.z), q, sc); trunkM.setMatrixAt(i, m);
@@ -800,6 +1386,16 @@ function buildScenery(trackIdx) {
       const mesa = new THREE.Mesh(mg, GMAT.flatProp(0x93482a));
       mesa.position.set(p.x, p.y + hgt / 2 - 2, p.z); scene.add(mesa);
     }
+    // ART PASS: near-road rock spires — the desert frame's layered silhouettes brought close to the racing line
+    for (let i = 0; i < 9; i++) {
+      const p = scatterPos(HALF_W + 6, HALF_W + 26), hgt = rand(6, 12);
+      const sg = new THREE.ConeGeometry(rand(1.8, 3.0), hgt, 6);
+      const sp2 = sg.attributes.position, v2 = new THREE.Vector3();
+      for (let j = 0; j < sp2.count; j++) { v2.fromBufferAttribute(sp2, j); const hs = Math.sin(v2.x * 9.3 + v2.z * 14.7) * 24634.63; const nn = (hs - Math.floor(hs) - 0.5) * 0.8; sp2.setXYZ(j, v2.x + nn, v2.y, v2.z + nn * 0.6); }
+      sg.computeVertexNormals();
+      const spire = new THREE.Mesh(sg, GMAT.flatProp(0x8a4226));
+      spire.position.set(p.x, p.y + hgt / 2 - 0.5, p.z); scene.add(spire);
+    }
     // rocket prop near the start
     const rp = samples[0].clone().add(normals[0].clone().multiplyScalar(HALF_W + 22));
     rp.y = terrainHeightAt(rp.x, rp.z) - 0.3;
@@ -832,18 +1428,18 @@ function buildScenery(trackIdx) {
   stand.position.set(gx, terrainHeightAt(gx, gz) - 0.3, gz);
   stand.lookAt(s.x, s.y + 1, s.z);
   const seatCols = tr.standColors || [0xd23b2e, 0xf2f2f2, 0x1877f2, 0xffd94a];
-  for (let r = 0; r < 4; r++) {
-    const tier = new THREE.Mesh(new THREE.BoxGeometry(34, 1.6, 3.4), GMAT.flatProp(seatCols[r % 4]));
+  for (let r = 0; r < 4; r++) { // ART PASS: crowd-speckled tiers, 1.25× wider — a stand full of people, not coloured benches
+    const tier = new THREE.Mesh(new THREE.BoxGeometry(42, 1.6, 3.4), new THREE.MeshStandardMaterial({ map: crowdTexture(seatCols[r % 4]), roughness: 0.92 }));
     tier.position.set(0, 1 + r * 1.7, -r * 3); stand.add(tier);
   }
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(36, 0.5, 15), GMAT.flatProp(0x22242a));
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(44, 0.5, 15), GMAT.flatProp(0x22242a));
   roof.position.set(0, 9.6, -4.5); stand.add(roof);
   scene.add(stand);
   // clouds — soft billboard sprites (gfx cloud texture), drifting in animate()
   if (!tr.noClouds) {
     const cloudTex = GTEX.cloudSprite();
     for (let i = 0; i < 14; i++) {
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false }));
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false, color: currentScript ? currentScript.cloudTint : 0xffffff })); // ART PASS: clouds take the sky script's grade
       sp.scale.set(rand(26, 40), rand(10, 15), 1);
       sp.position.set(rand(-520, 520), rand(75, 125), rand(-520, 520));
       clouds.push(sp); scene.add(sp);
@@ -937,6 +1533,10 @@ function makeKart(racerIdx, isPlayer) {
   const r = RACERS[racerIdx];
   const root = new THREE.Group();          // position + heading
   const tilt = new THREE.Group(); root.add(tilt); // body lean
+  { // ART PASS (#47): strong contact shadow — a soft blob glued under every kart so it sits IN the world, not on it
+    const blob = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 4.9), new THREE.MeshBasicMaterial({ map: blobShadowTexture(), transparent: true, opacity: 0.42, depthWrite: false }));
+    blob.rotation.x = -Math.PI / 2; blob.position.y = 0.06; blob.renderOrder = 1; root.add(blob);
+  }
   const bodyMat = GMAT.kartPaint(r.color); // clearcoat paint — the single biggest visual jump (gfx/materials.js)
   const darkMat = GMAT.mattePlastic(new THREE.Color(r.color).multiplyScalar(0.55).getHex());
   const blackMat = GMAT.mattePlastic(0x191b20);
@@ -2661,20 +3261,24 @@ function updateCamera(dt) {
   }
   camHeading = lerpAngle(camHeading, p.velHeading, clamp((gameState === 'countdown' ? 6 : 3.4) * dt, 0, 1));
   const fwd = forwardVec(camHeading);
-  const desired = p.pos.clone().addScaledVector(fwd, -14.5); desired.y = p.pos.y + 6.2; // chase height rides the elevation
+  const desired = p.pos.clone().addScaledVector(fwd, -11.9); desired.y = p.pos.y + 4.9; // ART PASS: lower + closer chase (mk frames sit near the kart's shoulder); height rides the elevation
   const kf = clamp(1 - Math.exp(-7 * dt), 0, 1);
   camera.position.x = lerp(camera.position.x, desired.x, kf);
   camera.position.y = lerp(camera.position.y, desired.y, kf);
   camera.position.z = lerp(camera.position.z, desired.z, kf);
   if (shake > 0) { camera.position.x += rand(-1, 1) * shake * 0.8; camera.position.y += rand(-0.5, 0.5) * shake * 0.6; shake = Math.max(0, shake - dt * 1.7); }
-  const look = p.pos.clone().addScaledVector(fwd, 11); look.y = p.pos.y + 2;
+  if (gameState === 'racing') { // ART PASS: micro-shake scaled with speed (tasteful — peaks at ~6 cm), boost buzzes a little harder
+    const spdN = clamp((Math.abs(p.speed) - 34) / 26, 0, 1), sh = spdN * spdN * 0.05 * (p.boostT > 0 ? 1.7 : 1);
+    if (sh > 0.003) { camera.position.x += rand(-1, 1) * sh; camera.position.y += rand(-0.6, 0.6) * sh; }
+  }
+  const look = p.pos.clone().addScaledVector(fwd, 10.5); look.y = p.pos.y + 1.7;
   camera.lookAt(look);
   // Camera roll: lean WITH the banked road at 0.7x its roll (Mario Kart research
   // reference) — enough to feel the banking in your stomach, not enough to churn it.
   const camBank = bankArr[p.sampleIdx] || 0;
   if (camBank) camera.rotateZ(-camBank * 0.7);
-  setFov(62 + clamp(Math.abs(p.speed) / 55, 0, 1) * 13 + (p.boostT > 0 ? 5 : 0), dt); // fun pass: wider speed FOV curve
-  sunFollow(sunLight, p.pos);
+  setFov(62 + clamp(Math.abs(p.speed) / 55, 0, 1) * 8 + (p.boostT > 0 ? 5.5 + Math.sin(elapsed * 9) * 1.1 : 0), dt); // ART PASS: gentler speed curve; the FOV BREATHE lives on boost only
+  sunFollow(sunLight, p.pos, currentSunOffset); // ART PASS: per-track sun angle (golden hour stays golden all lap)
 }
 const clock = new THREE.Clock();
 function animate() {
@@ -2719,6 +3323,15 @@ function animate() {
       updateBananasAndCollisions(dt);
       updateBombs(dt);
       updateItemBoxes(dt);
+      { // ART PASS: wind-rush particles at speed — still air streaming past the player sells velocity better than any HUD number
+        const pk = playerKart();
+        if (pk && Math.abs(pk.speed) > 36 && Math.random() < 0.8) {
+          const h = pk.heading, sd = Math.random() < 0.5 ? -1 : 1, dd = rand(1.6, 3.4);
+          const org = pk.pos.clone();
+          org.x += Math.cos(h) * sd * dd; org.z += -Math.sin(h) * sd * dd; org.y += rand(0.3, 1.9);
+          spawnParticles(org, { count: 1, colors: [0xffffff], speed: 0.3, life: 0.3, up: 0, gravity: 0, spread: 0.3 });
+        }
+      }
       if (finishDelay > 0) { finishDelay -= dt; if (finishDelay <= 0) { finishDelay = -1; showResults(); } }
       A.engine(clamp(Math.abs(playerKart().speed) / 55, 0, 1), true);
       A.music(dt, true);
@@ -2730,13 +3343,35 @@ function animate() {
     updateWFX(dt);
     for (const fn of trackAnimators) fn(dt, elapsed);
     updateCamera(dt);
-    // name labels: shrink + fade as a kart gets close — a label must never wallpaper the screen (playtest fix)
+    // ART PASS nameplates: near-constant screen size with a hard size cap,
+    // distance fade BOTH ways (a rival on top of the camera fades OUT — the
+    // giant dark bar in Roger's screenshot — and plates vanish past ~46 m),
+    // plus screen-space declutter: stacked rivals stair-step upward.
+    const plateList = [];
     for (const k of karts) {
       if (!k.nameSpr) continue;
       const d = camera.position.distanceTo(k.pos);
-      const s = clamp(d / 30, k.isPlayer ? 0.5 : 0.38, 1);
-      k.nameSpr.scale.set(8.4 * s, 2.1 * s, 1);
-      k.nameSpr.material.opacity = d < 7 ? clamp((d - 2.5) / 4.5, 0.12, 1) : 1;
+      const base = k.isPlayer ? 7.4 : 6.9;
+      const s = clamp(d / 34, 0.30, 1);
+      k.nameSpr.scale.set(base * s, base * 0.25 * s, 1);
+      let op = 1;
+      if (k.isPlayer) { op = d < 4 ? clamp((d - 2) / 2, 0.25, 1) : 1; k.nameSpr.position.y = 3.7; }
+      else {
+        if (d > 46) op = 0; else if (d > 36) op = (46 - d) / 10;
+        if (d < 6.5) op = Math.min(op, clamp((d - 3) / 3.5, 0, 1));
+        if (op > 0.01) plateList.push({ k, d });
+      }
+      k.nameSpr.material.opacity = op;
+      k.nameSpr.visible = op > 0.01;
+    }
+    plateList.sort((a, b) => a.d - b.d);
+    const claimed = [];
+    for (const { k } of plateList) {
+      const v = k.pos.clone(); v.y += 3.7; v.project(camera);
+      let lvl = 0;
+      for (const c of claimed) if (Math.abs(c.x - v.x) < 0.17 && Math.abs(c.y - v.y) < 0.12) lvl = Math.max(lvl, c.lvl + 1);
+      claimed.push({ x: v.x, y: v.y, lvl });
+      k.nameSpr.position.y = 3.7 + Math.min(lvl, 3) * 1.05;
     }
     if (trackFx) {
       const pk = playerKart();

@@ -11,7 +11,10 @@
   const L = (THREE, color, opts) => new THREE.MeshLambertMaterial(Object.assign({ color }, opts || {}));
   function at(ctx, idx, lat, y) {
     const i = ((Math.round(idx) % ctx.N) + ctx.N) % ctx.N, s = ctx.samples[i], n = ctx.normals[i];
-    return { pos: new ctx.THREE.Vector3(s.x + n.x * lat, y || 0, s.z + n.z * lat), sample: s, normal: n, tangent: ctx.tangents[i], idx: i };
+    const x = s.x + n.x * lat, z = s.z + n.z * lat;
+    // TRACK 3D (batch-2 design pass): anchor to the real terrain so trackside
+    // dressing rides the authored elevation profile instead of flat y=0.
+    return { pos: new ctx.THREE.Vector3(x, ctx.terrainHeightAt(x, z) + (y || 0), z), sample: s, normal: n, tangent: ctx.tangents[i], idx: i };
   }
   function faceRoad(mesh, a) { mesh.lookAt(a.sample.x, mesh.position.y, a.sample.z); }
   // true when a circle at (x,z) radius r keeps off the road (checks every 4th sample)
@@ -82,7 +85,7 @@
     }
     const podium = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.8, 0.7, 18), L(THREE, 0x2f80ed));
     podium.position.y = 0.35; clippy.add(podium);
-    clippy.position.y = 0.7;
+    anim.clippyBaseY = ca.pos.y + 0.7; clippy.position.y = anim.clippyBaseY;
     scene.add(clippy); anim.clippy = clippy;
     // speech bubble
     const bubble = signPlane(ctx, 15, 7, (g, w, h) => {
@@ -93,7 +96,7 @@
       g.fillText('to win a race.', w / 2, h * 0.52);
       g.font = '600 44px system-ui'; g.fillStyle = '#245edb'; g.fillText('Can I help?  [ Yes ]  [ Just drive ]', w / 2, h * 0.76);
     });
-    const ba = at(ctx, 34, ctx.HALF_W + 19, 0); bubble.position.set(ba.pos.x, 9.6, ba.pos.z); faceRoad(bubble, ba); scene.add(bubble);
+    const ba = at(ctx, 34, ctx.HALF_W + 19, 0); bubble.position.set(ba.pos.x, ba.pos.y + 9.6, ba.pos.z); faceRoad(bubble, ba); scene.add(bubble);
 
     /* ---- BSOD crash screen before the start, left side ---- */
     const bsod = signPlane(ctx, 21, 11.5, (g, w, h) => {
@@ -103,15 +106,15 @@
       const lines = ['A problem has been detected and Windows has been', 'shut down to prevent damage to your kart.', '', 'KART_EXCEPTION_NOT_FUNNY', '', 'If this is the first time you have seen this stop', 'error screen, simply win the race.', '', 'Press any key to continue _'];
       lines.forEach((l, i) => g.fillText(l, 36, 30 + i * 52));
     });
-    const sa = at(ctx, 872, -(ctx.HALF_W + 13.5), 0); bsod.position.set(sa.pos.x, 6.4, sa.pos.z); faceRoad(bsod, sa); scene.add(bsod);
+    const sa = at(ctx, 872, -(ctx.HALF_W + 13.5), 0); bsod.position.set(sa.pos.x, sa.pos.y + 6.4, sa.pos.z); faceRoad(bsod, sa); scene.add(bsod);
     const bsodPost = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 0.6), L(THREE, 0x333a42));
-    bsodPost.position.set(sa.pos.x, 1.2, sa.pos.z); scene.add(bsodPost);
+    bsodPost.position.set(sa.pos.x, sa.pos.y + 1.2, sa.pos.z); scene.add(bsodPost);
 
     /* ---- XP error dialogs trackside ---- */
     const d1 = xpDialog(ctx, 'Kart.exe — Illegal Operation', ['Your kart has performed an', 'illegal operation and will', 'be shut down.'], 13, 8.5);
-    const d1a = at(ctx, 300, -(ctx.HALF_W + 10), 0); d1.position.set(d1a.pos.x, 5.6, d1a.pos.z); faceRoad(d1, d1a); scene.add(d1);
+    const d1a = at(ctx, 300, -(ctx.HALF_W + 10), 0); d1.position.set(d1a.pos.x, d1a.pos.y + 5.6, d1a.pos.z); faceRoad(d1, d1a); scene.add(d1);
     const d2 = xpDialog(ctx, 'Automatic Updates', ['Updates are ready for your kart.', 'Restart now?', '(Recommended)'], 13, 8.5);
-    const d2a = at(ctx, 618, ctx.HALF_W + 10.5, 0); d2.position.set(d2a.pos.x, 5.6, d2a.pos.z); faceRoad(d2, d2a); scene.add(d2);
+    const d2a = at(ctx, 618, ctx.HALF_W + 10.5, 0); d2.position.set(d2a.pos.x, d2a.pos.y + 5.6, d2a.pos.z); faceRoad(d2, d2a); scene.add(d2);
 
     /* ---- Minesweeper flowers: colour-palette patches + the odd mine ---- */
     const palette = [0x2b5cff, 0x1faa3c, 0xff3b30, 0x7d3cff, 0xff9500, 0xffd60a, 0xff6ad5];
@@ -154,12 +157,17 @@
   function tick(dt, t) {
     if (!anim) return;
     anim.clouds.forEach((c, i) => { c.position.x += dt * (1.1 + (i % 3) * 0.55); if (c.position.x > 580) c.position.x = -580; });
-    if (anim.clippy) { anim.clippy.position.y = 0.7 + Math.sin(t * 1.5) * 0.3; anim.clippy.rotation.z = Math.sin(t * 0.9) * 0.045; }
+    if (anim.clippy) { anim.clippy.position.y = (anim.clippyBaseY || 0.7) + Math.sin(t * 1.5) * 0.3; anim.clippy.rotation.z = Math.sin(t * 0.9) * 0.045; }
   }
 
   window.BK_TRACKS.push({
     name: 'Bliss GP', sky: 0x2f80ed, fog: 0xa8d8ff, ground: 0x58b13c, roadSeed: 3, shoulder: 0x8fce62,
     points: [[0, 195], [0, 70], [-15, -45], [-80, -110], [-175, -85], [-215, 25], [-160, 130], [-55, 185], [70, 180], [165, 110], [205, 0], [150, -105]],
+    // HAND-AUTHORED profiles (docs/track-design-bliss.md) — keyframes [u, value]:
+    // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT
+    // turn). The calm track: gentle swells only, start complex + crossing arm at 0.
+    elev: [[0, 0], [0.06, 0], [0.10, 0.8], [0.143, 1.5], [0.206, 2.5], [0.26, 1.7], [0.31, 1.3], [0.36, 1.9], [0.423, 3.0], [0.475, 1.7], [0.525, 0.2], [0.575, 1.3], [0.637, 4.2], [0.68, 5.0], [0.75, 3.4], [0.791, 3.8], [0.85, 2.3], [0.90, 1.2], [0.96, 0]],
+    bank: [[0, 5], [0.04, 0], [0.105, 0], [0.143, -5], [0.175, 0], [0.206, -10], [0.238, 0], [0.269, -9], [0.305, 0], [0.346, -7], [0.385, 0], [0.423, -5], [0.475, 0], [0.60, 0], [0.637, -5], [0.678, 0], [0.713, -7], [0.748, 0], [0.791, -13], [0.84, 0], [0.955, 0]],
     billboards: ['ERROR: FUN DETECTED', 'AN ILLEGAL OPERATION', 'CLIPPY SEES YOU', '100% GENUINE BLISS', 'NO UPDATES FOUND', 'PRESS ANY KEY TO WIN'],
     standColors: [0x0b5bd7, 0x0a4fb0, 0x0b5bd7, 0x084a9e],
     banner: '🏁 BLISS GP 🏁', chime: 'xp',

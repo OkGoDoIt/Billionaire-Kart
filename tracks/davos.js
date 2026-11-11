@@ -10,7 +10,10 @@
   const L = (THREE, color, opts) => new THREE.MeshLambertMaterial(Object.assign({ color }, opts || {}));
   function at(ctx, idx, lat, y) {
     const i = ((Math.round(idx) % ctx.N) + ctx.N) % ctx.N, s = ctx.samples[i], n = ctx.normals[i];
-    return { pos: new ctx.THREE.Vector3(s.x + n.x * lat, y || 0, s.z + n.z * lat), sample: s, tangent: ctx.tangents[i], idx: i };
+    const x = s.x + n.x * lat, z = s.z + n.z * lat;
+    // TRACK 3D (batch-2 design pass): anchor to the real terrain so trackside
+    // dressing rides the authored elevation profile instead of flat y=0.
+    return { pos: new ctx.THREE.Vector3(x, ctx.terrainHeightAt(x, z) + (y || 0), z), sample: s, tangent: ctx.tangents[i], idx: i };
   }
   function clearOfRoad(ctx, x, z, r) {
     for (let i = 0; i < ctx.N; i += 4) { const s = ctx.samples[i], dx = s.x - x, dz = s.z - z; if (dx * dx + dz * dz < (r + 24) * (r + 24)) return false; }
@@ -65,7 +68,7 @@
     bankSpots.forEach(([idx, side], j) => {
       const a = at(ctx, idx, side * (ctx.HALF_W + 2.3 + rand(0, 1.6)), 0);
       q.setFromEuler(e.set(0, rand(0, 3), 0));
-      m4.compose(new THREE.Vector3(a.pos.x, 0.1, a.pos.z), q, new THREE.Vector3(rand(2.4, 3.8), rand(0.85, 1.35), rand(1.7, 2.7)));
+      m4.compose(new THREE.Vector3(a.pos.x, a.pos.y + 0.1, a.pos.z), q, new THREE.Vector3(rand(2.4, 3.8), rand(0.85, 1.35), rand(1.7, 2.7)));
       bankM.setMatrixAt(j, m4);
     });
     bankM.receiveShadow = true; scene.add(bankM);
@@ -81,17 +84,17 @@
     /* ---- private-jet parking by the grid ---- */
     const ta = at(ctx, 4, ctx.HALF_W + 52, 0);
     const tarmac = new THREE.Mesh(new THREE.BoxGeometry(120, 0.14, 52), L(THREE, 0x2c2f34));
-    tarmac.position.copy(ta.pos); tarmac.position.y = 0.02; tarmac.rotation.y = ctx.headingOf(ta.tangent); scene.add(tarmac);
+    tarmac.position.copy(ta.pos); tarmac.position.y = ta.pos.y + 0.02; tarmac.rotation.y = ctx.headingOf(ta.tangent); scene.add(tarmac);
     [[0xf2f2f2, 0xc9a227, -34, 0.5], [0x22242c, 0xc9a227, 0, 0.42], [0xd8dde2, 0xb02020, 34, 0.58]].forEach(([livery, gold, off, rot]) => {
       const { jet, beacon } = makeJet(ctx, livery, gold);
       const p = at(ctx, 4, ctx.HALF_W + 52 + off * 0.3, 0);
-      jet.position.set(p.pos.x + off * 0.72, 0.55, p.pos.z + off * 0.28);
+      jet.position.set(p.pos.x + off * 0.72, p.pos.y + 0.55, p.pos.z + off * 0.28);
       jet.rotation.y = ctx.headingOf(p.tangent) + Math.PI / 2 + rot;
       scene.add(jet); anim.beacons.push(beacon.material);
     });
     const jetSignTex = ctx.billboardTexture('PRIVATE JETS ONLY BEYOND THIS POINT', 45);
     const jetSign = new THREE.Mesh(new THREE.PlaneGeometry(16, 6.1), new THREE.MeshLambertMaterial({ map: jetSignTex, side: THREE.DoubleSide }));
-    const js = at(ctx, 880, ctx.HALF_W + 22, 0); jetSign.position.set(js.pos.x, 5.4, js.pos.z); jetSign.lookAt(js.sample.x, 5.4, js.sample.z); scene.add(jetSign);
+    const js = at(ctx, 880, ctx.HALF_W + 22, 0); jetSign.position.set(js.pos.x, js.pos.y + 5.4, js.pos.z); jetSign.lookAt(js.sample.x, js.pos.y + 5.4, js.sample.z); scene.add(jetSign);
 
     /* ---- the panel stage: GREAT RESET AHEAD ---- */
     const pa = at(ctx, 428, ctx.HALF_W + 30, 0);
@@ -125,7 +128,7 @@
     for (let idx = 556; idx <= 700 && fCount < 48; idx += 3) {
       const a = at(ctx, idx, ctx.HALF_W + 7.5, 0);
       q.setFromEuler(e.set(0, ctx.headingOf(a.tangent), 0));
-      m4.compose(new THREE.Vector3(a.pos.x, 1.2, a.pos.z), q, one); fenceM.setMatrixAt(fCount++, m4);
+      m4.compose(new THREE.Vector3(a.pos.x, a.pos.y + 1.2, a.pos.z), q, one); fenceM.setMatrixAt(fCount++, m4);
     }
     fenceM.count = fCount; scene.add(fenceM);
     const wa = at(ctx, 628, ctx.HALF_W + 15, 0);
@@ -190,6 +193,12 @@
   window.BK_TRACKS.push({
     name: 'Davos Circuit', sky: 0xbfd9ee, fog: 0xdfe9f2, ground: 0xe9eff3, roadSeed: 5, shoulder: 0xb9c4cc,
     points: [[-140, 150], [-160, 30], [-120, -80], [-30, -150], [80, -165], [170, -100], [205, 10], [160, 110], [60, 170], [-50, 185]],
+    // HAND-AUTHORED profiles (docs/track-design-davos.md) — keyframes [u, value]:
+    // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT
+    // turn; every corner here is a right). The alpine profile: two climbing pitches
+    // to the summit above the north-east bend, then the long plunge home.
+    elev: [[0, 0], [0.05, 0], [0.10, 1.0], [0.16, 3.8], [0.213, 6.0], [0.28, 7.6], [0.35, 9.6], [0.411, 11.0], [0.45, 11.5], [0.50, 9.8], [0.57, 6.8], [0.64, 4.6], [0.718, 3.4], [0.78, 2.4], [0.85, 1.3], [0.907, 0.6], [0.955, 0]],
+    bank: [[0, 5], [0.035, 0], [0.17, 0], [0.213, 7], [0.26, 0], [0.36, 0], [0.411, 11], [0.465, 0], [0.67, 0], [0.718, 9], [0.775, 0], [0.907, 4], [0.945, 0], [0.98, 0]],
     billboards: ['GREAT RESET AHEAD', 'YOU WILL OWN NOTHING', 'FONDUE IS A FOOD GROUP', 'CHOCOLATE NEUTRALITY SINCE 1815', 'NO APRÈS-SKI FOR STAFF', 'PANEL STARTS IN 5 MIN'],
     standColors: [0x7a1f2b, 0xf2f2f2, 0x7a1f2b, 0x22242a],
     banner: '🏁 DAVOS CIRCUIT 🏁',

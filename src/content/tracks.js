@@ -1,9 +1,10 @@
 /* Track registry and cups. */
 import { Track } from '../track/track.js';
 import siliconValley from '../tracks/silicon-valley.js';
+import blissHills from '../tracks/bliss-hills.js';
 import lab from '../tracks/_lab.js';
 
-export const TRACKS = [siliconValley];
+export const TRACKS = [siliconValley, blissHills];
 export const TRACK_BY_ID = Object.fromEntries([...TRACKS, lab].map(t => [t.id, t]));   // the lab is reachable by id for testing, but not listed
 
 const built = new Map();

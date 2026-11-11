@@ -284,7 +284,18 @@ export class Kart {
     // ----- move
     const px = this.x, pz = this.z;
     this.x += this.vx * dt; this.z += this.vz * dt;
-    const hit = tr.ground(this.x, this.z, this.hint, this.hit, this.y);
+    let hit = tr.ground(this.x, this.z, this.hint, this.hit, this.y);
+    // Far off the road (a shortcut across open ground): another stretch of track may now be
+    // the nearest one. Re-attach to it so surfaces, limits, and progress follow the kart.
+    if (hit.outside > 7 && (this._reattachT = (this._reattachT || 0) + dt) > 0.12) {
+      this._reattachT = 0;
+      const j = tr.nearest(this.x, this.z, -1, this.y);
+      const far = Math.min(Math.abs(j - hit.i), tr.N - Math.abs(j - hit.i));
+      if (far > 16 && !tr.bridge[j]) {
+        const dx = this.x - tr.px[j], dz = this.z - tr.pz[j], cx = this.x - tr.px[hit.i], cz = this.z - tr.pz[hit.i];
+        if (dx * dx + dz * dz < cx * cx + cz * cz - 9) hit = tr.ground(this.x, this.z, j, this.hit, this.y);
+      }
+    }
     this._bounds(hit, dt);
     this.hint = hit.i;
 

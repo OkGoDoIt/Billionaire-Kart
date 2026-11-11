@@ -177,3 +177,7 @@ Pass criteria:
 - Map: the loop closes cleanly, no section passes within 25 m of another (except an intended bridge crossing), lap length and tightest radius are in range, and the listed corners show several real drift corners.
 - Sim: no `FAIL` line, average rescues per race under 2, lap average under 50 s, field spread under 20 s.
 - Sheet and race frames: no page errors; no scenery on the road or floating above the ground; the road is clearly readable in every frame; each of the eight views contains at least one mid-distance structure; draw calls under 800 and triangles under 1.8 million.
+
+## Shortcuts across open ground
+
+For a cut between two legs of the track, set `outer` on the facing side of **both** legs to a little more than half the distance between them, so the two drivable areas overlap, and add `hoarding: false` to those `sides` entries so no sponsor wall is drawn across the gap. A kart far off the road re-attaches to whichever stretch of track is nearest, so progress and lap counting keep working. Static obstacles placed off the road stand on the real ground.

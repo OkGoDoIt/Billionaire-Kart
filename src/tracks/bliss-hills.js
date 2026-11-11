@@ -67,9 +67,9 @@ export default {
   sides: [
     { from: 34.4, to: 1.5, side: 'L', edge: 'wall' },              // pit wall along the grandstand side
     // the meadow between the two legs: cut it with a boost (the hairpin's inside is capped by its radius)
-    { from: 21.2, to: 21.6, side: 'L', outer: 22, shoulder: 5 },
-    { from: 21.6, to: 27.4, side: 'L', outer: 33, shoulder: 5 },
-    { from: 27.4, to: 27.8, side: 'L', outer: 22, shoulder: 5 },
+    { from: 21.2, to: 21.6, side: 'L', outer: 22, shoulder: 5, hoarding: false },
+    { from: 21.6, to: 27.4, side: 'L', outer: 44, shoulder: 5, hoarding: false },   // the meadow: open ground between the two legs
+    { from: 27.4, to: 27.8, side: 'L', outer: 22, shoulder: 5, hoarding: false },
     { from: 17.6, to: 20.4, side: 'L', outer: 16 },                 // room to run wide in the bowl
   ],
   ramps: [

@@ -4,6 +4,7 @@ import { Kart, CLASSES, TUNE } from './kart.js';
 import { AIDriver, rubberBand } from './ai.js';
 import { ItemSystem } from './items.js';
 import { makeRng, clamp, loopDelta } from '../core/util.js';
+import { makeGroundHit } from '../track/track.js';
 
 export const GP_POINTS = [15, 12, 10, 8, 6, 4, 2, 1];
 const NO_INPUT = { steer: 0, throttle: 0, brake: 0, drift: false, item: false };
@@ -115,6 +116,9 @@ export class Race {
         const a = o.t * o.speed / Math.max(1, o.orbit); s = o.a.s + Math.cos(a) * o.orbit; lat = o.a.lat + Math.sin(a) * o.orbit; o.yaw = tr.yawAt(s) - a;
       } else if (o.kind === 'timed') { o.active = ((o.t / o.period) % 1) < o.duty; o.warn = !o.active && ((o.t / o.period) % 1) > 1 - 0.18; }
       tr.pointAt(s, lat, P, o.lift); o.x = P.x; o.y = P.y; o.z = P.z;
+      // off the road, stand on the real ground rather than the road plane extended sideways
+      const i = Math.floor(((s % tr.length) + tr.length) % tr.length / tr.ds) % tr.N;
+      if (lat > tr.hwL[i] + 1.2 || -lat > tr.hwR[i] + 1.2) o.y = tr.ground(o.x, o.z, i, this._oh || (this._oh = makeGroundHit())).y + o.lift;
       if (!o.active || this.frozen) continue;
       for (const k of this.karts) {
         if (k.rescueT > 0 || k.ghostT > 0) continue;

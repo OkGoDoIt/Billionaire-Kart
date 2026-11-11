@@ -188,7 +188,7 @@ export function buildTrackMesh(track, look = {}) {
       for (let r = 0; r <= N; r++) {
         const i = r % N;
         if (track.gap[i]) { prevB = prevW = -1; continue; }
-        if (edge[i] === EDGE.OPEN && !track.bridge[i] && track.def.hoardings !== false) {
+        if (edge[i] === EDGE.OPEN && !track.bridge[i] && track.def.hoardings !== false && (side > 0 ? track.hoardL[i] : track.hoardR[i])) {
           prevW = -1;
           const lat = (hw[i] + outA[i]) * side;
           const x = px[i] + lx[i] * lat, z = pz[i] + lz[i] * lat;

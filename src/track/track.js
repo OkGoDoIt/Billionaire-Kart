@@ -165,6 +165,7 @@ export class Track {
     this.bridge = new Uint8Array(N); this.gap = new Uint8Array(N); this.tunnel = new Uint8Array(N);
     this.surf = new Array(N).fill(this.roadSurface);
     this.wallStyle = new Array(N).fill(null);
+    this.hoardL = new Uint8Array(N).fill(1); this.hoardR = new Uint8Array(N).fill(1);   // draw the sponsor wall at the outer limit?
     const dEdge = EDGE_BY_NAME[d.edge || 'open'], dSh = d.shoulder ?? 3.5, dOut = d.outer ?? 11;
     this.edgeL.fill(dEdge); this.edgeR.fill(dEdge); this.shL.fill(dSh); this.shR.fill(dSh); this.outerL.fill(dOut); this.outerR.fill(dOut);
     for (const r of def.sides || []) {
@@ -174,6 +175,7 @@ export class Track {
         if (r.shoulder != null) { if (L) this.shL[i] = r.shoulder; if (R) this.shR[i] = r.shoulder; }
         if (r.outer != null) { if (L) this.outerL[i] = r.outer; if (R) this.outerR[i] = r.outer; }
         if (r.style != null) this.wallStyle[i] = r.style;
+        if (r.hoarding != null) { if (L) this.hoardL[i] = r.hoarding ? 1 : 0; if (R) this.hoardR[i] = r.hoarding ? 1 : 0; }
       }
     }
     for (const r of def.bridges || []) for (const i of this._range(r.from, r.to)) this.bridge[i] = 1;

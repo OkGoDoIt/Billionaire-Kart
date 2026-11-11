@@ -122,11 +122,12 @@ export class TvCam {
     if (st === this.station) return;
     this.station = st;
     const s = st * this.spacing + this.spacing * 0.45, i = Math.floor(((s % tr.length) + tr.length) % tr.length / tr.ds) % tr.N;
-    const side = st % 2 ? 1 : -1, hw = side > 0 ? tr.hwL[i] : tr.hwR[i], wall = (side > 0 ? tr.edgeL[i] : tr.edgeR[i]) !== 0;
-    const lat = side * (hw + (wall ? 2.5 : 7)), hx = Math.hypot(tr.lx[i], tr.lz[i]) || 1;
+    const side = st % 2 ? 1 : -1, hw = side > 0 ? tr.hwL[i] : tr.hwR[i], sh = side > 0 ? tr.shL[i] : tr.shR[i], open = (side > 0 ? tr.edgeL[i] : tr.edgeR[i]) === 0;
+    // stand on the shoulder, or just inside a wall or rail: scenery never sits there, so the view is never inside a tree or a building
+    const lat = side * (open ? hw + Math.min(3, sh * 0.8) : hw - 1.2), hx = Math.hypot(tr.lx[i], tr.lz[i]) || 1;
     const x = tr.px[i] + (tr.lx[i] / hx) * lat, z = tr.pz[i] + (tr.lz[i] / hx) * lat;
-    const ground = tr.hasTerrain && !tr.bridge[i] ? Math.max(tr.terrainHeight(x, z), tr.py[i] - 2) : tr.py[i];
-    this.camera.position.set(x, Math.max(ground, tr.py[i]) + (st % 3 === 0 ? 2.2 : 6.5), z);
+    const high = tr.tunnel[i] ? 3.4 : open ? 6.5 : 5;
+    this.camera.position.set(x, tr.py[i] + (st % 3 === 0 && open ? 2.2 : high), z);
     this.look.set(k.x, k.y + 1, k.z);
   }
   update(dt, view) {

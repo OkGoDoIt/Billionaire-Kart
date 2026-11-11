@@ -78,6 +78,46 @@ const RACERS = [
     barks: { hit: ['A conspiracy against me, surely', 'Shorting my position? Bold'], boost: ['Reflexivity, baby', 'The market moves with me'], win: 'Blamed for this result in 14 countries.' } },
 ];
 
+/* ================= SPECIALS (#51) =================
+   Every racer has ONE special ability that matters to the person PLAYING them.
+   Specials are racer traits: active for whoever drives the racer (player or
+   AI), but the select-screen copy is written from the player's perspective.
+   aiSkill stays hidden rival tuning only — it is never advertised here.
+   Index-aligned with RACERS. Baselines: drift charge 1.15/s, tiers 0.7 (blue,
+   0.75 s) / 1.4 (orange, 1.35 s); spin-out 1.15 s; rocket window rev 0.45–1.7
+   → 1.15 s boost, over-rev >2.3 → 1.0 s sputter; shrink 4.8 s; ink 2.5 s;
+   Antitrust blast r=11; Series F 5 s window / 0.7 s cd; Bailout 5.5 s ×1.30. */
+const SPECIALS = [
+  /* 0 Elon    */ { startLo: 0.30, startHi: 2.6, startSputter: 2.6, rocketBoost: 1.35, sputterPunish: 1.4, copy: '🚀 SPECIAL: a launch window you could land a rocket in — rev anywhere from a touch to a long hold for a longer blast-off. Blow way past it and the sputter is worse. High risk, high thrust.' },
+  /* 1 Sam     */ { streakStep: 0.05, streakCap: 0.25, copy: '📈 SPECIAL: scaling laws — every drift boost you land charges the next one 5% faster (up to +25%). Get hit and the curve resets.' },
+  /* 2 Zuck    */ { mass: 1.5, shellTarget: 1.2, copy: '🦎 SPECIAL: platform bulk — you shove rivals aside in collisions, but that harvested data profile makes you a bigger target for shells.' },
+  /* 3 Bezos   */ { orangeAt: 1.15, orangeBoost: 1.2, copy: '📦 SPECIAL: Prime delivery — your orange drift boost arrives early (charges at 1.15, not 1.4), but the package is smaller: 1.2 s instead of 1.35.' },
+  /* 4 Jensen  */ { orangeBoost: 1.7, copy: '🟢 SPECIAL: orange drift boosts last longer — the leather jacket stays on during questioning' },
+  /* 5 Satya   */ { boostMul: 1.2, chargeMul: 0.9, copy: '☁️ SPECIAL: elastic cloud — all your boosts last 20% longer, but your drift charges 10% slower. Burst capacity is billed by the second.' },
+  /* 6 Dario   */ { chargeAbs: 1.45, copy: '🦺 SPECIAL: charges drift boosts faster. Safety first, speed second.' },
+  /* 7 Demis   */ { bailoutT: 6.6, bailoutMul: 1.34, bailoutEndRank: 4, copy: '♟️ SPECIAL: AlphaKart bailout — your Government Bailout runs longer and harder, but the autopilot hands you back the wheel at 4th. The last move is yours.' },
+  /* 8 Trump   */ { boostCap: 1.45, chargeMul: 0.85, copy: '🦅 SPECIAL: HUGE boosts — your boost top speed beats everyone\'s, but your drift charges 15% slower. He doesn\'t do the technical corners, folks.' },
+  /* 9 Cook    */ { goldenT: 6.5, goldenCd: 0.85, copy: '🍏 SPECIAL: operational excellence — your Series F window stays open 6.5 s, with re-boosts at a calm, margin-friendly 0.85 s pace.' },
+  /* 10 L&S    */ { offroadKeep: 0.45, mass: 0.6, copy: '🔎 SPECIAL: two drivers, one index — the pair pre-mapped every shoulder, so offroad barely slows you. Two egos in one frame, though: traffic shoves you around.' },
+  /* 11 Bill   */ { shield: true, copy: '🪟 SPECIAL: the Foundation covers your first spin-out of each race — one hit, fully absorbed. Even philanthropy has a cap.' },
+  /* 12 Thiel  */ { revealItems: true, copy: '👁️ SPECIAL: total awareness — your minimap shows the item every rival is holding. What you do with that information is your business.' },
+  /* 13 Holmes */ { tweetEvasion: 0.3, copy: '🧪 SPECIAL: vaporware drivetrain — random 1.2 s power losses. But homing Tweets aimed at her lose the thread 30% of the time. Unverified, like the product.' },
+  /* 14 Ellison*/ { inkGiven: 1.4, inkSuffer: 1.4, copy: '🏝️ SPECIAL: he owns the media — your Smear Campaigns ink rivals for 3.5 s. Downside: you read your own press, so smears stick to you for 3.5 s too.' },
+  /* 15 Murdoch*/ { spinMul: 0.52, sufferMul: 0.5, copy: '🗞️ SPECIAL: unflappable — spin-outs cost you half the usual recovery (0.6 s), and crashes and smears wear off twice as fast. Slow start, never rattled.' },
+  /* 16 Soros  */ { potency: 1.25, blueRadius: 13.4, sufferMul: 1.25, spinMul: 1.25, copy: '💸 SPECIAL: reflexivity — your Market Crashes shrink rivals for 6 s and your Antitrust blast reaches further. It cuts both ways: effects on you last 25% longer too.' },
+];
+function spec(i) { return SPECIALS[i] || {}; }
+function chargeRateOf(k) { // drift charge per second, incl. Dario's flat rate, Satya/Trump multipliers, Sam's streak
+  const s = spec(k.racerIdx);
+  let r = s.chargeAbs ?? 1.15 * (s.chargeMul ?? 1);
+  if (s.streakStep) r *= 1 + Math.min((k.driftStreak || 0) * s.streakStep, s.streakCap);
+  return r;
+}
+function boostMulOf(k) { return spec(k.racerIdx).boostMul ?? 1; }
+function orangeAtOf(k) { return spec(k.racerIdx).orangeAt ?? 1.4; }
+function driftBoostOf(k, tier) { const s = spec(k.racerIdx); return tier === 'orange' ? (s.orangeBoost ?? 1.35 * (s.boostMul ?? 1)) : 0.75 * (s.boostMul ?? 1); }
+function sufferMulOf(k, kind) { const s = spec(k.racerIdx); return kind === 'ink' ? (s.inkSuffer ?? s.sufferMul ?? 1) : (s.sufferMul ?? 1); }
+
 /* ================= TRACKS ================= */
 const TRACKS = [
   { name: 'Silicon Valley GP', sky: 0x87c9eb, fog: 0xa8d4f0, ground: 0x57a047, roadSeed: 1, skyKey: 'valley', fogKey: 'valleyDay',
@@ -1695,7 +1735,7 @@ function makeKart(racerIdx, isPlayer) {
     racerIdx, racer: r, isPlayer, mesh: root, nameSpr, tilt, paintMat: bodyMat, wheels: [wFL, wFR, wRL, wRR], pivots: [pivotL, pivotR],
     pos: new THREE.Vector3(), heading: 0, velHeading: 0, speed: 0, steerVis: 0, spinVis: 0,
     continuous: 0, sampleIdx: 0, lateral: 0, finished: false, finishTime: null, projected: false, autopilot: false,
-    item: null, spinT: 0, shrinkT: 0, starT: 0, boostT: 0, driftCharge: 0, drifting: false, starTouchCd: 0,
+    item: null, spinT: 0, shrinkT: 0, starT: 0, boostT: 0, driftCharge: 0, drifting: false, starTouchCd: 0, driftStreak: 0, shieldUsed: false, // #51: Sam's scaling streak + Bill's one-shot Foundation shield
     bailoutT: 0, ghostT: 0, hornT: 0, goldenT: 0, goldenCd: 0, inkT: 0,
     sputterT: 0, sputterClock: 0, nextSputter: rand(6, 14),
     lapStart: 0, lastLapTime: null, bestLap: null, lapsDone: 0, offroad: false, offroadDeep: false, offFactor: 1,
@@ -1721,7 +1761,7 @@ function placeGrid() {
     k.pos.set(s.x + n.x * lat, roadYAt(idx, lat), s.z + n.z * lat);
     k.continuous = cont; k.sampleIdx = idx;
     k.heading = k.velHeading = headingOf(tangents[idx]);
-    k.speed = 0; k.spinT = 0; k.shrinkT = 0; k.starT = 0; k.boostT = 0; k.driftCharge = 0; k.drifting = false;
+    k.speed = 0; k.spinT = 0; k.shrinkT = 0; k.starT = 0; k.boostT = 0; k.driftCharge = 0; k.drifting = false; k.driftStreak = 0; k.shieldUsed = false; // #51: specials reset per race
     k.bailoutT = 0; k.ghostT = 0; k.hornT = 0; k.goldenT = 0; k.goldenCd = 0; k.inkT = 0;
     k.item = null; k.finished = false; k.finishTime = null; k.projected = false; k.autopilot = false;
     k.sputterT = 0; k.sputterClock = 0; k.nextSputter = rand(6, 14);
@@ -2082,7 +2122,7 @@ function topSpeedOf(k) {
   if (k.starT > 0) base *= 1.10;
   if (k.ghostT > 0) base *= 1.07;
   if (k.inkT > 0) base *= 0.88;
-  if (k.bailoutT > 0) base *= 1.30;
+  if (k.bailoutT > 0) base *= spec(k.racerIdx).bailoutMul ?? 1.30; // Demis (#51): his autopilot drives harder
   if (elevArr.length) base *= 1 - clamp(gradeAt(k.sampleIdx) * 1.6, -0.08, 0.08); // TRACK 3D: authored slopes — climbs cost speed, dives gift it (capped ±8%)
   base *= k.offFactor; // graduated offroad (see offroadFactor) — was: offroad ? (deep ? 0.55 : 0.72), plus a 0.38/s bleed
   return base;
@@ -2094,6 +2134,7 @@ function updateProgress(k) {
   k.continuous += delta; k.sampleIdx = newIdx;
   k.lateral = lateralAt(k.pos, newIdx);
   k.offFactor = offroadFactor(k.lateral);
+  const offKeep = spec(k.racerIdx).offroadKeep; if (offKeep) k.offFactor = 1 - (1 - k.offFactor) * offKeep; // Larry & Sergey (#51): pre-mapped shoulders — most of the penalty is indexed away
   k.offroad = k.offFactor < 1;          // any penalty band (dust, cap settle rate)
   k.offroadDeep = k.offFactor <= 0.75;  // deep band (thick dust)
   if (Math.abs(k.lateral) > HALF_W + 14) { // distant safety net only (was HALF_W+5) — the graduated factor, not a wall, is what slows you out there
@@ -2165,7 +2206,7 @@ function updateKart(k, input, dt) {
   updateProgress(k);
   if (k.bailoutT > 0) { // bailout clock runs after progress so the rank check is fresh
     k.bailoutT -= dt;
-    if (rankOf(k) <= 3) k.bailoutT = 0; // delivered to the podium fight — the taxpayer's job is done
+    if (rankOf(k) <= (spec(k.racerIdx).bailoutEndRank ?? 3)) k.bailoutT = 0; // delivered to the podium fight — the taxpayer's job is done (Demis #51: handed back at 4th)
   }
 
   if (k.spinT > 0) {
@@ -2173,7 +2214,7 @@ function updateKart(k, input, dt) {
     k.spinVis += dt * 15;
     k.drifting = false; k.driftCharge = 0;
   } else {
-    const top = topSpeedOf(k), cap = top * (k.boostT > 0 ? 1.38 : 1);
+    const top = topSpeedOf(k), cap = top * (k.boostT > 0 ? (spec(k.racerIdx).boostCap ?? 1.38) : 1); // Trump (#51): HUGE boost cap
     const sputtering = k.sputterT > 0;
     if (sputtering) { // engine cut: no drive, speed bleeds, smoke puffs
       k.speed = Math.max(0, k.speed - 17 * dt);
@@ -2191,14 +2232,14 @@ function updateKart(k, input, dt) {
     const wantDrift = input.drift && Math.abs(input.steer) > 0.25 && k.speed > 13;
     if (wantDrift) {
       if (!k.drifting) { k.drifting = true; k.driftCharge = 0; }
-      k.driftCharge += dt * (k.racerIdx === 6 ? 1.45 : 1.15); // fun pass: blue (0.7) in ~0.6 s — earnable on real corners; orange (1.4) rewards the long ones
+      k.driftCharge += dt * chargeRateOf(k); // #51: per-racer charge rates (Dario 1.45 flat; Satya ×0.9; Trump ×0.85; Sam's streak) — blue (0.7) in ~0.6 s, orange (std 1.4; Bezos 1.15) rewards the long ones
       if (Math.random() < 0.75) {
-        const col = k.driftCharge >= 1.4 ? [0xffa53a] : k.driftCharge >= 0.7 ? [0x66ccff] : [0xdddddd];
+        const col = k.driftCharge >= orangeAtOf(k) ? [0xffa53a] : k.driftCharge >= 0.7 ? [0x66ccff] : [0xdddddd];
         spawnParticles(k.pos.clone().addScaledVector(forwardVec(k.heading), -1.4), { count: 2, colors: col, speed: 2.5, life: 0.4, up: 1.5, gravity: -2 });
       }
     } else if (k.drifting) {
-      if (k.driftCharge >= 1.4) { k.boostT = Math.max(k.boostT, k.racerIdx === 4 ? 1.7 : 1.35); if (k.isPlayer) { A.driftBoost(); showFeed('🔥 ORANGE BOOST!'); } }
-      else if (k.driftCharge >= 0.7) { k.boostT = Math.max(k.boostT, 0.75); if (k.isPlayer) { A.driftBoost(); showFeed('💨 Drift boost!'); } }
+      if (k.driftCharge >= orangeAtOf(k)) { k.boostT = Math.max(k.boostT, driftBoostOf(k, 'orange')); if (spec(k.racerIdx).streakStep) k.driftStreak = (k.driftStreak || 0) + 1; if (k.isPlayer) { A.driftBoost(); showFeed('🔥 ORANGE BOOST!'); } }
+      else if (k.driftCharge >= 0.7) { k.boostT = Math.max(k.boostT, driftBoostOf(k, 'blue')); if (spec(k.racerIdx).streakStep) k.driftStreak = (k.driftStreak || 0) + 1; if (k.isPlayer) { A.driftBoost(); showFeed('💨 Drift boost!'); } }
       k.drifting = false; k.driftCharge = 0;
     }
     const turnRate = (1.75 + (k.racer.grip - 3) * 0.14) * (k.drifting ? 1.5 : 1);
@@ -2248,7 +2289,16 @@ function updateKart(k, input, dt) {
 }
 function spinKart(k) {
   if (k.starT > 0 || k.spinT > 0 || k.ghostT > 0) return; // Viral Moment & Insider-Trading ghost shrug off spins
-  k.spinT = 1.15; k.speed *= 0.3; k.drifting = false; k.driftCharge = 0;
+  const s = spec(k.racerIdx);
+  if (s.shield && !k.shieldUsed) { // Bill (#51): the Foundation absorbs the first spin-out hit of the race — no spin, shield spent
+    k.shieldUsed = true;
+    spawnParticles(k.pos, { count: 22, colors: [0xffd94a, 0x00adef, 0xffffff], speed: 5, life: 0.7, up: 5 });
+    if (k.isPlayer) { A.pickup(); showFeed('🪟 THE FOUNDATION COVERED THAT HIT — shield spent'); }
+    else if (k.pos.distanceTo(playerKart().pos) < 55) showFeed(`🪟 ${k.racer.name}'s Foundation absorbed a hit!`);
+    return;
+  }
+  if (s.streakStep) k.driftStreak = 0; // Sam (#51): getting hit resets the scaling curve
+  k.spinT = 1.15 * (s.spinMul ?? 1); k.speed *= 0.3; k.drifting = false; k.driftCharge = 0; // Murdoch 0.6 s / Soros 1.44 s via spinMul
   spawnParticles(k.pos, { count: 14, colors: [0xcccccc, 0xffd94a], speed: 5, life: 0.6, up: 4 });
   if (k.isPlayer) { A.hit(); shake = Math.max(shake, 0.55); hitstopT = Math.max(hitstopT, 0.06); showBark(`${k.racer.name}: “${pick(k.racer.barks.hit)}”`); }
   else if (k.pos.distanceTo(playerKart().pos) < 55 && Math.random() < 0.45) showBark(`${k.racer.name}: “${pick(k.racer.barks.hit)}”`);
@@ -2419,9 +2469,9 @@ function useItem(k) {
   if (id === 'golden') {
     if (k.goldenT > 0 && k.goldenCd > 0) return;
     const first = k.goldenT <= 0;
-    if (first) k.goldenT = 5;
-    k.goldenCd = 0.7;
-    k.boostT = Math.max(k.boostT, 0.95);
+    if (first) k.goldenT = spec(k.racerIdx).goldenT ?? 5; // Cook (#51): his funding window stays open longer
+    k.goldenCd = spec(k.racerIdx).goldenCd ?? 0.7; // Cook (#51): calmer re-boost pace inside it
+    k.boostT = Math.max(k.boostT, 0.95 * boostMulOf(k));
     if (k.isPlayer) { A.use(); A.boostSnd(); if (first) { [660, 880, 1108].forEach((f, i) => A.tone(f, 0.12, 'square', 0.055, 0, i * 0.07)); showFeed('🏆 SERIES F — keep hitting ITEM to re-boost!'); } }
     return;
   }
@@ -2429,7 +2479,7 @@ function useItem(k) {
   if (k.isPlayer) { updateItemSlot(); A.use(); }
   const fwd = forwardVec(k.heading);
   if (id === 'boost') {
-    k.boostT = Math.max(k.boostT, k.racerIdx === 4 ? 1.9 : 1.6);
+    k.boostT = Math.max(k.boostT, k.racerIdx === 4 ? 1.9 : 1.6 * boostMulOf(k)); // Jensen's 1.9 is his own long-standing tune; Satya (#51) stretches the standard boost ×1.2
     if (k.isPlayer) A.boostSnd();
   } else if (id === 'star') {
     k.starT = 6;
@@ -2444,6 +2494,7 @@ function useItem(k) {
     if (id === 'red') {
       let bestD = Infinity;
       for (const o of karts) { if (o === k) continue; const d = o.continuous - k.continuous; if (d > 0 && d < bestD) { bestD = d; target = o; } }
+      if (target && spec(target.racerIdx).tweetEvasion && Math.random() < spec(target.racerIdx).tweetEvasion) target = null; // Holmes (#51): the Tweet loses the thread — flies straight instead
       if (!target) id === 'red' && (target = null);
     }
     const mesh = projectileMesh(id);
@@ -2476,7 +2527,7 @@ function useItem(k) {
     if (!victims.length) victims = karts.filter(o => o !== k && !o.finished);
     for (const v of victims) {
       if (v.starT > 0) continue;
-      v.shrinkT = 4.8; v.speed = Math.min(v.speed, 17); // ~0.6x for ~5 s, per the real games
+      v.shrinkT = 4.8 * (spec(k.racerIdx).potency ?? 1) * sufferMulOf(v, 'shrink'); v.speed = Math.min(v.speed, 17); // ~0.6x for ~5 s, per the real games — Soros (#51) potency stretches it to 6 s; Murdoch/Soros sufferMul adjusts the victim's side
       if (v.item) { wfxScatter(v, v.item); if (v.item === 'golden') v.goldenT = 0; v.item = null; if (v.isPlayer) updateItemSlot(); } // victims DROP their held item, visibly
       spawnParticles(v.pos, { count: 12, colors: [0x9be7ff, 0xffffff], speed: 4, life: 0.5, up: 6, gravity: -4 });
       wfxBolt(v, { follow: false, dur: 0.22 }); // visible bolt strike from the sky
@@ -2487,7 +2538,7 @@ function useItem(k) {
     if (k.isPlayer) showFeed('📉 You crashed the market!');
     else if (victims.includes(playerKart())) { showFeed('📉 MARKET CRASH — you\'ve been shrunk!'); shake = Math.max(shake, 0.4); }
   } else if (id === 'bailout') {
-    k.bailoutT = 5.5; // auto-drive: see bailoutInput/updateKart — ends early on reaching 3rd
+    k.bailoutT = spec(k.racerIdx).bailoutT ?? 5.5; // auto-drive: see bailoutInput/updateKart — ends early on reaching 3rd (Demis #51: 6.6 s, ends at 4th)
     spawnParticles(k.pos, { count: 26, colors: [0xffd94a, 0xffffff, 0x2fb9ff], speed: 6, life: 0.8, up: 5, gravity: 0 });
     if (k.isPlayer) { A.fanfare(); showFeed('🛟 GOVERNMENT BAILOUT! Too big to fail.'); }
     else showFeed(`🛟 ${k.racer.name} got a BAILOUT!`);
@@ -2505,7 +2556,7 @@ function useItem(k) {
     for (const o of karts) if (o !== k && o.pos.distanceToSquared(k.pos) < 34) spinKart(o);
     if (k.isPlayer) { showFeed('📣 SPIN TEAM — DENIED!'); shake = Math.max(shake, 0.25); }
   } else if (id === 'boo') {
-    k.ghostT = 3; k.boostT = Math.max(k.boostT, 0.7);
+    k.ghostT = 3; k.boostT = Math.max(k.boostT, 0.7 * boostMulOf(k));
     const holders = karts.filter(o => o !== k && o.item);
     let stolen = 'boost'; // nobody holding anything? Insider trading still nets you a boost
     let victim = null;
@@ -2517,7 +2568,7 @@ function useItem(k) {
   } else if (id === 'blooper') {
     const victims = karts.filter(o => o !== k && o.continuous > k.continuous && !o.finished);
     for (const v of victims) {
-      v.inkT = 2.5;
+      v.inkT = 2.5 * (spec(k.racerIdx).inkGiven ?? 1) * sufferMulOf(v, 'ink'); // Ellison (#51): his smears run 3.5 s — and stick to him just as long
       spawnParticles(v.pos, { count: 20, colors: [0x1a1030, 0x3a2060], speed: 5, life: 0.6, up: 4, gravity: -2 }); // in-world ink blob burst
       wfxSplat(v.pos, { color: 0x1a1030, r: 2.9, dur: 0.9, op: 0.55 });
       if (v.isPlayer) showInk();
@@ -2566,7 +2617,8 @@ function explodeBlue(p) {
   wfxRing(p.target.pos, { r1: 12.5, dur: 0.55, color: 0xffa53a }); // expanding shockwave ring + fireball flash + debris
   wfxFlashDisc(p.target.pos, { r: 7, dur: 0.3, color: 0xffd9a0 });
   wfxDebris(c);
-  for (const o of karts) if (o.pos.distanceTo(p.target.pos) < 11) spinKart(o);
+  const blastR = spec(p.owner.racerIdx).blueRadius ?? 11; // Soros (#51): his Antitrust blast reaches further
+  for (const o of karts) if (o.pos.distanceTo(p.target.pos) < blastR) spinKart(o);
   const pd = playerKart().pos.distanceTo(p.target.pos);
   if (pd < 34) shake = Math.max(shake, clamp(1.05 - pd / 34, 0.12, 0.9)); // camera shake scaled by distance
   if (pd < 30) A.hit();
@@ -2623,7 +2675,7 @@ function updateProjectiles(dt) {
         if (o === p.owner && p.age < 0.4) continue;
         if (o.ghostT > 0) continue; // Insider Trading ghost: projectiles pass straight through
         const dx = o.pos.x - p.mesh.position.x, dz = o.pos.z - p.mesh.position.z;
-        if (dx * dx + dz * dz < 6.3) {
+        if (dx * dx + dz * dz < 6.3 * (spec(o.racerIdx).shellTarget ?? 1) ** 2) { // Zuck (#51): +20% shell-hit RADIUS — the data profile is huge (radius factor, squared for the d² test)
           if (o.starT <= 0) spinKart(o);
           else spawnParticles(p.mesh.position, { count: 8, colors: [0xffe066], speed: 4, life: 0.4, up: 3, gravity: 0 });
           if (p.owner.isPlayer) hitstopT = Math.max(hitstopT, 0.045); // landing a hit should *thunk*
@@ -2657,9 +2709,10 @@ function updateBananasAndCollisions(dt) {
     const A1 = karts[a], B1 = karts[c];
     const dx = B1.pos.x - A1.pos.x, dz = B1.pos.z - A1.pos.z, d2 = dx * dx + dz * dz;
     if (d2 < 11.6 && d2 > 0.0001) {
-      const d = Math.sqrt(d2), push = (3.4 - d) / 2, nx = dx / d, nz = dz / d;
-      A1.pos.x -= nx * push; A1.pos.z -= nz * push;
-      B1.pos.x += nx * push; B1.pos.z += nz * push;
+      const d = Math.sqrt(d2), sep = 3.4 - d, nx = dx / d, nz = dz / d;
+      const mA = spec(A1.racerIdx).mass ?? 1, mB = spec(B1.racerIdx).mass ?? 1; // #51: collision mass — Zuck (1.5) shoves, Larry & Sergey (0.75) get shoved; equal masses reproduce the old 50/50 split exactly
+      A1.pos.x -= nx * sep * (mB / (mA + mB)); A1.pos.z -= nz * sep * (mB / (mA + mB));
+      B1.pos.x += nx * sep * (mA / (mA + mB)); B1.pos.z += nz * sep * (mA / (mA + mB));
       if (A1.starT > 0 && B1.starT <= 0 && B1.starTouchCd <= 0) { spinKart(B1); B1.starTouchCd = 1; }
       if (B1.starT > 0 && A1.starT <= 0 && A1.starTouchCd <= 0) { spinKart(A1); A1.starTouchCd = 1; }
       if (A1.bailoutT > 0 && B1.bailoutT <= 0 && B1.starTouchCd <= 0) { spinKart(B1); B1.starTouchCd = 1; } // bailed-out karts bulldoze
@@ -2706,6 +2759,7 @@ function drawMinimap() {
   mmCtx.beginPath();
   samples.forEach((s, i) => { if (i % 6 && i !== 0) return; const X = px(s.x), Y = pz(s.z); i === 0 ? mmCtx.moveTo(X, Y) : mmCtx.lineTo(X, Y); });
   mmCtx.closePath(); mmCtx.strokeStyle = 'rgba(255,255,255,.85)'; mmCtx.lineWidth = 3; mmCtx.stroke();
+  const mmPk = playerKart(), revealItems = mmPk && spec(mmPk.racerIdx).revealItems; // Thiel (#51): the Seeing Stone reads every rival's hand
   for (const k of karts) {
     const X = px(k.pos.x), Y = pz(k.pos.z), face = mmFace(k.racerIdx);
     if (face) { // portrait head riding the line (§2.5); player bigger + yellow ring
@@ -2719,6 +2773,7 @@ function drawMinimap() {
       mmCtx.fillStyle = '#' + k.racer.color.toString(16).padStart(6, '0'); mmCtx.fill();
       if (k.isPlayer) { mmCtx.strokeStyle = '#fff'; mmCtx.lineWidth = 2; mmCtx.stroke(); }
     }
+    if (revealItems && !k.isPlayer && k.item) { mmCtx.font = '11px serif'; mmCtx.textAlign = 'center'; mmCtx.fillText(ITEMS[k.item].icon, X + 11, Y - 7); } // rival's held item, pinned beside their face
   }
 }
 function showCenter(text, dur = 1.1) { $('center-msg').textContent = text; centerUntil = elapsed + dur; }
@@ -2765,8 +2820,9 @@ function updateHUD(dt) {
   if (gameState === 'countdown') {
     rm.classList.remove('hidden');
     $('rev-fill').style.width = (clamp(revHeld / 2.3, 0, 1) * 100).toFixed(1) + '%';
-    rm.classList.toggle('sweet', revHeld >= 0.45 && revHeld <= 1.7);
-    rm.classList.toggle('over', revHeld > 2.3);
+    const pSpec = spec(p.racerIdx); // #51: the meter's sweet/over zones mirror the PLAYER's actual start window (Elon's is far wider)
+    rm.classList.toggle('sweet', revHeld >= (pSpec.startLo ?? 0.45) && revHeld <= (pSpec.startHi ?? 1.7));
+    rm.classList.toggle('over', revHeld > (pSpec.startSputter ?? 2.3));
   } else if (!rm.classList.contains('hidden')) rm.classList.add('hidden');
   const rank = rankOf(p);
   $('pos-big').childNodes[0].nodeValue = rank;
@@ -2776,8 +2832,8 @@ function updateHUD(dt) {
   $('best-lap-label').textContent = p.bestLap ? `BEST LAP ${fmtTime(p.bestLap)}` : (p.lastLapTime ? `LAST LAP ${fmtTime(p.lastLapTime)}` : '');
   $('speed-num').textContent = Math.round(Math.abs(p.speed) * 2.2);
   const fill = $('drift-fill');
-  fill.style.width = `${clamp(p.driftCharge / 1.4 * 100, 0, 100)}%`;
-  fill.style.background = p.driftCharge >= 1.4 ? '#ffa53a' : p.driftCharge >= 0.7 ? '#6cf' : 'rgba(255,255,255,.35)';
+  fill.style.width = `${clamp(p.driftCharge / orangeAtOf(p) * 100, 0, 100)}%`; // #51: the bar fills to the PLAYER's orange threshold (Bezos fills early)
+  fill.style.background = p.driftCharge >= orangeAtOf(p) ? '#ffa53a' : p.driftCharge >= 0.7 ? '#6cf' : 'rgba(255,255,255,.35)';
   const rate = dt > 0 ? (p.continuous - prevPlayerCont) / dt : 0;
   progRate = lerp(progRate, rate, 0.07); prevPlayerCont = p.continuous;
   $('wrong-way').classList.toggle('hidden', !(gameState === 'racing' && !p.finished && progRate < -3 && p.speed > 6));
@@ -3141,15 +3197,8 @@ function pieSVG(r) { // Character Select v3 (#18): pie with three slices proport
   });
   return `<svg class="pie" viewBox="0 0 64 60" aria-hidden="true">${slices}</svg>`;
 }
-function traitOf(r) { // the special-trait line — every claim here matches a real mechanic in the physics/AI code
-  if (r.sputter) return '⚠️ SPECIAL: her kart randomly loses power mid-race. Vaporware drivetrain.';
-  if (r.duo) return '👥 SPECIAL: two drivers, one kart — they switch drivers instead of pit stops.';
-  if (r.consistent) return '🐢 SPECIAL: mistake-proof AI. Never spins out, never panics. The tortoise strategy.';
-  if ((r.aiSkill || 0) >= 1.06) return '👹 FINAL-BOSS CLASS: championship-grade AI when computer-controlled.';
-  if ((r.aiSkill || 0) >= 1.04) return '🔥 ELITE AI: a cut above the field when computer-controlled.';
-  if (r.name === 'Jensen') return '🟢 SPECIAL: orange drift boosts last longer — the leather jacket stays on during questioning.';
-  if (r.name === 'Dario') return '🦺 SPECIAL: charges drift boosts faster. Safety first, speed second.';
-  return '';
+function traitOf(r) { // #51: EVERY racer returns player-perspective special copy — every claim matches a real mechanic (see SPECIALS); AI skill is never mentioned on this screen
+  return spec(RACERS.indexOf(r)).copy || '';
 }
 function updateDetail() {
   const r = RACERS[selectedRacer], p = portraitOf(selectedRacer);
@@ -3299,15 +3348,16 @@ function animate() {
       const cinp = playerInput();
       if (cinp.throttle) {
         revHeld += dt;
-        if (revHeld > 2.3 && !revOverWarned) { revOverWarned = true; showToast('🔥 Over-revving! Ease off or you\'ll sputter!', 1.6); }
+        if (revHeld > (spec(playerKart().racerIdx).startSputter ?? 2.3) && !revOverWarned) { revOverWarned = true; showToast('🔥 Over-revving! Ease off or you\'ll sputter!', 1.6); } // #51: Elon's over-rev line sits past his wide window
       }
       if (countdownT <= 0) {
         gameState = 'racing'; raceTime = 0; karts.forEach(k => k.lapStart = 0);
         showCenter('GO!', 0.8); A.beep(true);
         const pk = playerKart();
-        if (revHeld >= 0.45 && revHeld <= 1.7) { pk.boostT = 1.15; showToast('🚀 ROCKET START!'); A.boostSnd(); }
-        else if (revHeld > 2.3) { pk.sputterT = 1.0; showToast('💨 Sputtered start — too much rev!'); A.hit(); }
-        for (const k of karts) { if (k.isPlayer) continue; const r = Math.random(); if (r < 0.14) k.sputterT = 0.9; else if (r < 0.5) k.boostT = rand(0.7, 1.05); } // AI gamble too
+        const pkSpec = spec(pk.racerIdx); // #51: per-racer start window (Elon: 0.30–2.6, rocket 1.35 s, sputter 1.4 s past it)
+        if (revHeld >= (pkSpec.startLo ?? 0.45) && revHeld <= (pkSpec.startHi ?? 1.7)) { pk.boostT = pkSpec.rocketBoost ?? 1.15 * boostMulOf(pk); showToast('🚀 ROCKET START!'); A.boostSnd(); }
+        else if (revHeld > (pkSpec.startSputter ?? 2.3)) { pk.sputterT = pkSpec.sputterPunish ?? 1.0; showToast('💨 Sputtered start — too much rev!'); A.hit(); }
+        for (const k of karts) { if (k.isPlayer) continue; const r = Math.random(); if (spec(k.racerIdx).startHi) { if (r < 0.06) k.sputterT = 0.9; else if (r < 0.6) k.boostT = rand(0.9, 1.3); } else if (r < 0.14) k.sputterT = 0.9; else if (r < 0.5) k.boostT = rand(0.7, 1.05); } // AI gamble too (AI Elon gambles with his wider window)
         const opp = pick(karts.filter(k => !k.isPlayer));
         if (opp) setTimeout(() => { if (gameState === 'racing') showBark(`${opp.racer.name}: “${pick(opp.racer.barks.boost)}”`); }, 900);
       }
@@ -3402,13 +3452,16 @@ window.BK = {
   state() {
     const p = playerKart();
     return {
-      state: gameState, paused, raceTime,
+      state: gameState, paused, raceTime, revHeld, countdownT, // #51: revHeld/countdownT exposed for the rocket-window measurement
       touch: { steer: touchAnalog.steer, throttle: touchAnalog.throttle, brake: touchAnalog.brake },
-      player: p ? { pos: [p.pos.x, p.pos.y, p.pos.z], continuous: p.continuous, speed: p.speed, lap: clamp(Math.floor(Math.max(p.continuous, 0) / N) + 1, 1, LAPS), rank: rankOf(p), finished: p.finished, finishTime: p.finishTime, item: p.item, heading: p.heading, drifting: p.drifting, driftCharge: p.driftCharge, bailoutT: p.bailoutT, ghostT: p.ghostT, hornT: p.hornT, goldenT: p.goldenT, inkT: p.inkT } : null,
-      karts: karts.map(k => ({ name: k.racer.name, continuous: k.continuous, speed: k.speed, finished: k.finished, pos: [k.pos.x, k.pos.z] })),
+      player: p ? { pos: [p.pos.x, p.pos.y, p.pos.z], continuous: p.continuous, speed: p.speed, lap: clamp(Math.floor(Math.max(p.continuous, 0) / N) + 1, 1, LAPS), rank: rankOf(p), finished: p.finished, finishTime: p.finishTime, item: p.item, heading: p.heading, drifting: p.drifting, driftCharge: p.driftCharge, bailoutT: p.bailoutT, ghostT: p.ghostT, hornT: p.hornT, goldenT: p.goldenT, inkT: p.inkT, spinT: p.spinT, shrinkT: p.shrinkT, starT: p.starT, boostT: p.boostT, sputterT: p.sputterT, shieldUsed: p.shieldUsed, driftStreak: p.driftStreak, offFactor: p.offFactor } : null, // #51: special-trait timers/flags for the specials measurement pass
+      karts: karts.map(k => ({ name: k.racer.name, continuous: k.continuous, speed: k.speed, finished: k.finished, pos: [k.pos.x, k.pos.z], item: k.item, spinT: k.spinT, shrinkT: k.shrinkT, inkT: k.inkT })),
     };
   },
   giveItem(id) { const p = playerKart(); if (p && ITEMS[id]) { p.item = id; updateItemSlot(); return true; } return false; },
+  spin() { const p = playerKart(); if (p) { spinKart(p); return p.spinT; } return -1; }, // #51 measurement: force a spin-out hit on the player (shield/recovery checks)
+  traits() { return RACERS.map(r => ({ name: r.name, trait: traitOf(r), quote: r.quote })); }, // #51 measurement: name + exact select-screen trait copy + quote for all 17
+  specs() { return SPECIALS.map(s => ({ ...s })); }, // #51 measurement: the numeric slate as shipped
   grant() { const p = playerKart(); if (p) { grantItem(p); return p.item; } return null; }, // real grant path: roulette -> race-feed entry with desc
   bark() { const o = karts.find(k => !k.isPlayer); if (o) { showBark(`${o.racer.name}: “${pick(o.racer.barks.boost)}”`); return o.racer.name; } return null; }, // demo bark for HUD screenshots
   useItem() { useItem(playerKart()); },

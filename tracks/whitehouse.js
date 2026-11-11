@@ -6,7 +6,7 @@
    zone where the East Wing used to be. Gold. So much gold. */
 
 export const def = {
-  name: 'White House GP', sky: 0x9fd3ee, fog: 0xcfe5ef, ground: 0x4e8f3f, roadSeed: 5,
+  name: 'White House GP', sky: 0x9fd3ee, fog: 0xcfe5ef, ground: 0x4e8f3f, roadSeed: 5, apron: 0xa8a894,
   points: [[269,-60],[134,-95],[-45,-100],[-213,-95],[-282,-40],[-289,10],[-267,58],[-190,80],[-67,88],[45,84],[123,60],[168,95],[241,88],[282,40],[278,-20]],
   // HAND-AUTHORED profiles (docs/track-design-white-house.md) — keyframes [u, value]:
   // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT
@@ -17,6 +17,33 @@ export const def = {
   elev: [[0, 0], [0.30, 0], [0.36, -1.2], [0.42, -2.4], [0.494, -3.5], [0.54, -2.2], [0.60, 0], [0.84, 0], [0.885, 1.8], [0.93, 4.5], [0.96, 2.0], [0.995, 0]],
   bank: [[0, 0], [0.30, 0], [0.35, -6], [0.385, -8], [0.42, -9], [0.46, -10], [0.494, -11], [0.53, -6], [0.57, 0], [0.75, 0], [0.784, 13], [0.802, 0], [0.820, -12], [0.845, -4], [0.88, -8], [0.90, -6], [0.929, -10], [0.95, 0], [0.96, 0], [0.998, -5]],
 };
+
+/* ---------- world-build terrain (issue #59) ----------
+   Sculpted National-Mall grounds for the conforming-terrain contract: lawns
+   swell gently, the Monument sits in an authored bowl, twin terraces flank
+   the Reflecting Pool. game.js blends the road plane out to this field. */
+function gauss(x, z, cx, cz, r, h) { const dx = x - cx, dz = z - cz; return h * Math.exp(-(dx * dx + dz * dz) / (r * r)); }
+function vnoise(x, z, s) { return Math.sin(x * s + Math.sin(z * s * 1.7) * 2.1) * Math.cos(z * s * 0.83 + Math.sin(x * s * 1.3) * 1.7); }
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function inwardPoint(tc, x, z, dist) {
+  const i = nearestIdx(tc, x, z), s = tc.samples[i], n = tc.normals[i];
+  const inw = ((tc.center.x - s.x) * n.x + (tc.center.z - s.z) * n.z) > 0 ? 1 : -1;
+  return { x: s.x + n.x * inw * dist, z: s.z + n.z * inw * dist };
+}
+export function monumentCentre(tc) { return inwardPoint(tc, -215, 8, 52); } // shared by terrainField + dress()
+export function terrainField(x, z, tc) {
+  const c = tc.center;
+  const mon = monumentCentre(tc);
+  const bowl = gauss(x, z, mon.x, mon.z, 36, -3.6); // the Monument Bowl
+  const calm = 1 - Math.min(1, -bowl / 3.0);
+  let h = bowl + (vnoise(x, z, 0.014) * 0.9 + vnoise(x, z, 0.045) * 0.3) * calm; // sculpted lawns
+  h += gauss(x, z, c.x - 102, c.z + 44, 48, 1.5); // lawn terraces flanking the Reflecting Pool
+  h += gauss(x, z, c.x + 102, c.z + 44, 48, 1.5);
+  h += gauss(x, z, c.x + 330, c.z - 60, 110, 2.6); // gentle rise behind the Ballroom zone
+  const d = Math.hypot(x - c.x, z - c.z);
+  h += clamp01((d - 350) / 240) * 6;              // far lift under the silhouette ring
+  return h;
+}
 
 /* ---------- small local helpers (duplicated per module by design) ---------- */
 function textPanel(THREE, lines, { w = 512, h = 256, bg = '#101736', fg = '#ffffff', border = '#ffd94a', font = 52 } = {}) {
@@ -76,6 +103,9 @@ export function dress(ctx) {
   const bobs = [], tickers = [];
   let craneJib = null, excavArm = null;
   const GOLD = 0xd4af37, GOLDMAT = new THREE.MeshLambertMaterial({ color: GOLD });
+  const centroid = new THREE.Vector3();
+  ctx.samples.forEach(s => centroid.add(s)); centroid.divideScalar(ctx.N);
+  const tcLike = { samples: ctx.samples, normals: ctx.normals, N: ctx.N, center: centroid };
 
   /* ----- the White House, inside the north straight ----- */
   const whIdx = nearestIdx(ctx, 60, -95), inw = inwardSign(ctx, whIdx);
@@ -90,6 +120,7 @@ export function dress(ctx) {
   wh.add(box(THREE, 20, 1, 3.4, 0xefece5, 0, 9.1, 9.2)); // portico beam
   wh.add(box(THREE, 2.2, 4.4, 0.3, GOLD, 0, 2.2, 7.7, { mat: GOLDMAT })); // gold door, obviously
   wh.position.set(whS.x + whN.x * inw * 54, 0, whS.z + whN.z * inw * 54);
+  wh.position.y = ctx.terrainHeightAt(wh.position.x, wh.position.z) - 0.2;
   wh.rotation.y = ctx.headingOf(ctx.tangents[whIdx]) + (inw > 0 ? Math.PI : 0);
   scene.add(wh);
   // black iron fence between the lawn and the road
@@ -97,11 +128,12 @@ export function dress(ctx) {
   for (let i = -16; i <= 16; i++) {
     const idx = (whIdx + i * 2 + ctx.N) % ctx.N, s = ctx.samples[idx], n = ctx.normals[idx];
     const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.6, 0.14), fenceM);
-    bar.position.set(s.x + n.x * inw * (HALF_W + 2.5), 1.3, s.z + n.z * inw * (HALF_W + 2.5)); scene.add(bar);
-    if (i % 8 === 0) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 9.5), fenceM); rail.position.copy(bar.position); rail.position.y = 2.4; rail.rotation.y = ctx.headingOf(ctx.tangents[idx]); scene.add(rail); }
+    const bx = s.x + n.x * inw * (HALF_W + 2.5), bz = s.z + n.z * inw * (HALF_W + 2.5);
+    bar.position.set(bx, ctx.terrainHeightAt(bx, bz) + 1.3, bz); scene.add(bar);
+    if (i % 8 === 0) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 9.5), fenceM); rail.position.copy(bar.position); rail.position.y = bar.position.y + 1.1; rail.rotation.y = ctx.headingOf(ctx.tangents[idx]); scene.add(rail); }
   }
   const noTouch = sign(THREE, textPanel(THREE, ['ABSOLUTELY NO TOUCHING', 'THE DEMOCRACY'], { w: 640, h: 220, bg: '#14213d', border: '#ffd94a', font: 48 }), 12, 4.2);
-  { const { pos, sample } = atFrac(ctx, ((whIdx / ctx.N) + 0.035) % 1, inw * (HALF_W + 4.5)); noTouch.position.copy(pos); faceTrack(noTouch, sample); scene.add(noTouch); }
+  { const { pos, sample } = atFrac(ctx, ((whIdx / ctx.N) + 0.035) % 1, inw * (HALF_W + 4.5)); noTouch.position.copy(pos); noTouch.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.1; faceTrack(noTouch, sample); scene.add(noTouch); }
 
   /* ----- press pool: cameras on tripods at the fence ----- */
   const camM = new THREE.MeshLambertMaterial({ color: 0x22242a });
@@ -111,17 +143,18 @@ export function dress(ctx) {
     cam.add(box(THREE, 0.9, 0.6, 1.5, 0x22242a, 0, 1.7, 0, { mat: camM }));
     for (const [lx, lz] of [[-0.4, -0.4], [0.4, -0.4], [0, 0.55]]) cam.add(box(THREE, 0.09, 1.5, 0.09, 0x22242a, lx, 0.75, lz, { mat: camM }));
     cam.position.set(s.x + n.x * inw * (HALF_W + 6.5), 0, s.z + n.z * inw * (HALF_W + 6.5));
+    cam.position.y = ctx.terrainHeightAt(cam.position.x, cam.position.z);
     cam.lookAt(wh.position.x, 1.5, wh.position.z); scene.add(cam);
   }
   const pressSign = sign(THREE, textPanel(THREE, ['PRESS POOL', 'NO QUESTIONS'], { w: 512, h: 220, bg: '#14213d', border: '#f2f2f2', font: 54 }), 9, 3.8);
-  { const { pos, sample } = atFrac(ctx, ((whIdx / ctx.N) - 0.035 + 1) % 1, inw * (HALF_W + 5)); pressSign.position.copy(pos); faceTrack(pressSign, sample); scene.add(pressSign); }
+  { const { pos, sample } = atFrac(ctx, ((whIdx / ctx.N) - 0.035 + 1) % 1, inw * (HALF_W + 5)); pressSign.position.copy(pos); pressSign.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.1; faceTrack(pressSign, sample); scene.add(pressSign); }
 
   /* ----- Reflecting Pool along the south straight: algae-green, ducks coping ----- */
   const poolIdx = nearestIdx(ctx, 0, 86), pin = inwardSign(ctx, poolIdx);
   const pS = ctx.samples[poolIdx], pN = ctx.normals[poolIdx];
   const poolC = new THREE.Vector3(pS.x + pN.x * pin * 47, 0, pS.z + pN.z * pin * 47);
   const poolYaw = ctx.headingOf(ctx.tangents[poolIdx]);
-  const pool = new THREE.Group(); pool.position.copy(poolC); pool.rotation.y = poolYaw; scene.add(pool);
+  const pool = new THREE.Group(); pool.position.copy(poolC); pool.position.y = ctx.terrainHeightAt(poolC.x, poolC.z) - 0.3; pool.rotation.y = poolYaw; scene.add(pool);
   pool.add(box(THREE, 176, 1.1, 21, 0xb9b2a4, 0, 0.55, 0)); // stone rim block
   const algae = new THREE.Mesh(new THREE.PlaneGeometry(168, 15.5), new THREE.MeshLambertMaterial({ color: 0x5f7d33 }));
   algae.rotation.x = -Math.PI / 2; algae.position.y = 1.13; pool.add(algae);
@@ -135,9 +168,9 @@ export function dress(ctx) {
     pool.add(duck); bobs.push({ o: duck, ph: i * 2.1, amp: 0.1 });
   }
   const poolSign = sign(THREE, textPanel(THREE, ['NO SWIMMING — ALGAE'], { w: 640, h: 160, bg: '#274018', border: '#a8e063', font: 54 }), 11, 2.8);
-  { const { pos, sample } = atFrac(ctx, ((poolIdx / ctx.N) + 0.045) % 1, pin * (HALF_W + 5)); poolSign.position.copy(pos); faceTrack(poolSign, sample); scene.add(poolSign); }
+  { const { pos, sample } = atFrac(ctx, ((poolIdx / ctx.N) + 0.045) % 1, pin * (HALF_W + 5)); poolSign.position.copy(pos); poolSign.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.1; faceTrack(poolSign, sample); scene.add(poolSign); }
   const poolSign2 = sign(THREE, textPanel(THREE, ['POOL CLOSED (FOREVER?)'], { w: 640, h: 160, bg: '#274018', border: '#a8e063', font: 54 }), 11, 2.8);
-  { const { pos, sample } = atFrac(ctx, ((poolIdx / ctx.N) - 0.045 + 1) % 1, pin * (HALF_W + 5)); poolSign2.position.copy(pos); faceTrack(poolSign2, sample); scene.add(poolSign2); }
+  { const { pos, sample } = atFrac(ctx, ((poolIdx / ctx.N) - 0.045 + 1) % 1, pin * (HALF_W + 5)); poolSign2.position.copy(pos); poolSign2.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.1; faceTrack(poolSign2, sample); scene.add(poolSign2); }
 
   /* ----- Washington Monument inside the west hairpin + flag ring ----- */
   const mon = new THREE.Group();
@@ -146,27 +179,30 @@ export function dress(ctx) {
   const cap = new THREE.Mesh(new THREE.ConeGeometry(2.2, 3.6, 4), new THREE.MeshLambertMaterial({ color: 0xd9d5cc }));
   cap.position.y = 35.8; cap.rotation.y = Math.PI / 4; mon.add(cap);
   mon.add(box(THREE, 11, 1.4, 11, 0xb9b2a4, 0, 0.7, 0));
-  { const idx = nearestIdx(ctx, -215, 8), s = ctx.samples[idx], n = ctx.normals[idx];
-    const inwM = inwardSign(ctx, idx);
-    mon.position.set(s.x + n.x * inwM * 52, 0, s.z + n.z * inwM * 52); scene.add(mon); }
+  { const mc = monumentCentre(tcLike);
+    mon.position.set(mc.x, ctx.terrainHeightAt(mc.x, mc.z) + 0.1, mc.z); scene.add(mon); }
   const flagCols = [0xb22234, 0xffffff, 0x3c3b6e];
   for (let i = 0; i < 10; i++) {
     const a = i / 10 * Math.PI * 2;
     const fp = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 5.4, 5), new THREE.MeshLambertMaterial({ color: 0x8a8f96 }));
-    fp.position.set(mon.position.x + Math.sin(a) * 10.5, 2.7, mon.position.z + Math.cos(a) * 10.5); scene.add(fp);
+    const fx2 = mon.position.x + Math.sin(a) * 10.5, fz2 = mon.position.z + Math.cos(a) * 10.5;
+    fp.position.set(fx2, ctx.terrainHeightAt(fx2, fz2) + 2.7, fz2); scene.add(fp);
     const fl = box(THREE, 1.8, 1.05, 0.06, flagCols[i % 3], fp.position.x + 0.9, 4.6, fp.position.z);
+    fl.position.y = ctx.terrainHeightAt(fl.position.x, fl.position.z) + 4.6;
     scene.add(fl); tickers.push({ o: fl, ph: i * 0.9, kind: 'flag' });
   }
   const hairSign = sign(THREE, textPanel(THREE, ['HAIRPIN OF DEMOCRACY', 'BRAKE FOR FREEDOM'], { w: 640, h: 220, bg: '#14213d', border: '#ffd94a', font: 48 }), 12, 4.2);
   { const idx = nearestIdx(ctx, -282, -40), s = ctx.samples[idx], n = ctx.normals[idx];
-    const hx = s.x - n.x * (HALF_W + 6), hz = s.z - n.z * (HALF_W + 6); // the hairpin bowl is sunken — the sign stands on the bowl's slope, not at y=0
-    hairSign.position.set(hx, ctx.terrainHeightAt ? ctx.terrainHeightAt(hx, hz) : 0, hz); faceTrack(hairSign, s); scene.add(hairSign); }
+    const hx = s.x - n.x * (HALF_W + 6), hz = s.z - n.z * (HALF_W + 6); // the hairpin bowl is sunken — the sign stands on the bowl's slope (terrainHeightAt is guaranteed by the #59 terrain contract), tucked 0.1 under the surface
+    hairSign.position.set(hx, ctx.terrainHeightAt(hx, hz) - 0.1, hz); faceTrack(hairSign, s); scene.add(hairSign); }
+
 
   /* ----- THE BALLROOM construction zone, outside the north-east curve ----- */
   const zone = new THREE.Group();
   const zIdx = nearestIdx(ctx, 278, -20), zS = ctx.samples[zIdx], zN = ctx.normals[zIdx];
   const zOut = -inwardSign(ctx, zIdx);
   zone.position.set(zS.x + zN.x * zOut * 52, 0, zS.z + zN.z * zOut * 52);
+  zone.position.y = ctx.terrainHeightAt(zone.position.x, zone.position.z) - 0.1;
   zone.rotation.y = ctx.headingOf(ctx.tangents[zIdx]) + (zOut > 0 ? 0 : Math.PI);
   scene.add(zone);
   zone.add(box(THREE, 74, 0.3, 46, 0xa89c86, 0, 0.15, 0)); // gravel pad
@@ -220,7 +256,7 @@ export function dress(ctx) {
     f.position.set(x, 1.55, z); f.rotation.y = ry; zone.add(f);
   }
   const eastSign = sign(THREE, textPanel(THREE, ['EAST WING (DEMOLISHED) →'], { w: 768, h: 160, bg: '#14213d', border: '#ffd94a', font: 52 }), 13, 2.8);
-  { const { pos, sample } = atFrac(ctx, ((zIdx / ctx.N) + 0.03) % 1, zOut * (HALF_W + 5)); eastSign.position.copy(pos); faceTrack(eastSign, sample); scene.add(eastSign); }
+  { const { pos, sample } = atFrac(ctx, ((zIdx / ctx.N) + 0.03) % 1, zOut * (HALF_W + 5)); eastSign.position.copy(pos); eastSign.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.1; faceTrack(eastSign, sample); scene.add(eastSign); }
 
   /* ----- tour-group crowd blobs near the monument + gold-rope VIP stand at start ----- */
   const crowdCols = [0xd23b2e, 0x1877f2, 0xffd94a, 0x2e7d32, 0xf2f2f2, 0xff8c1a, 0x9b59d0];
@@ -229,8 +265,9 @@ export function dress(ctx) {
     person.add(box(THREE, 0.62, 1.05, 0.4, crowdCols[i % crowdCols.length], 0, 0.55, 0));
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), new THREE.MeshLambertMaterial({ color: 0xeec39a })); head.position.y = 1.32; person.add(head);
     const a = rand(0, Math.PI * 2), r = rand(13, 19);
-    person.position.set(mon.position.x + Math.sin(a) * r, 0, mon.position.z + Math.cos(a) * r);
-    scene.add(person); tickers.push({ o: person, ph: Math.random() * 6, kind: 'bob' });
+    const px3 = mon.position.x + Math.sin(a) * r, pz3 = mon.position.z + Math.cos(a) * r;
+    person.position.set(px3, ctx.terrainHeightAt(px3, pz3), pz3);
+    scene.add(person); tickers.push({ o: person, ph: Math.random() * 6, kind: 'bob', base: person.position.y });
   }
   const vip = new THREE.Group();
   for (let i = 0; i < 5; i++) {
@@ -241,14 +278,43 @@ export function dress(ctx) {
   }
   const vipSign = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 1.9), new THREE.MeshLambertMaterial({ map: textPanel(THREE, ['VIP — DONORS ONLY'], { w: 512, h: 128, bg: '#14213d', border: '#d4af37', font: 52 }), side: THREE.DoubleSide }));
   vipSign.position.set(0, 2.6, 0); vip.add(vipSign);
-  { const { pos, sample } = atFrac(ctx, 0.03, HALF_W + 7); vip.position.copy(pos); faceTrack(vip, sample); scene.add(vip); }
+  { const { pos, sample } = atFrac(ctx, 0.03, HALF_W + 7); vip.position.copy(pos); vip.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.05; faceTrack(vip, sample); scene.add(vip); }
+
+  /* ----- sculpted tree rows lining the Mall (the Moo Moo move): instanced
+     round canopies, green with a cherry-blossom minority, seated on the lawns ----- */
+  { const spots = [];
+    const zFrac = (zIdx / ctx.N + 1) % 1;
+    for (let i = 0; i < ctx.N; i += 20) {
+      const f = i / ctx.N;
+      if (f < 0.045 || Math.abs(f - zFrac) < 0.055) continue; // keep the start + Ballroom zone clear
+      for (const side of [-1, 1]) {
+        const s = ctx.samples[i], n = ctx.normals[i];
+        const lat = side * (HALF_W + rand(15, 24));
+        spots.push({ x: s.x + n.x * lat, z: s.z + n.z * lat, s: rand(0.95, 1.65) });
+      }
+    }
+    const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.3, 0.52, 2.9, 7), new THREE.MeshLambertMaterial({ color: 0x7a4a21 }), spots.length);
+    const canopies = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(2.7, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), spots.length);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eu = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+    spots.forEach((sp, i) => {
+      const gy = ctx.terrainHeightAt(sp.x, sp.z) - 0.15;
+      eu.set(rand(-0.04, 0.04), rand(0, 6.28), rand(-0.04, 0.04)); q.setFromEuler(eu);
+      sc.set(sp.s, sp.s, sp.s); m4.compose(v.set(sp.x, gy + 1.45 * sp.s, sp.z), q, sc); trunks.setMatrixAt(i, m4);
+      sc.set(sp.s, sp.s * 0.82, sp.s); m4.compose(v.set(sp.x, gy + (2.9 + 2.0) * sp.s, sp.z), q, sc); canopies.setMatrixAt(i, m4);
+      if (i % 5 === 4) col.set(0xf0aec6); // cherry blossom
+      else col.setHSL(0.29 + rand(-0.02, 0.02), 0.5, rand(0.24, 0.36));
+      canopies.setColorAt(i, col);
+    });
+    trunks.castShadow = canopies.castShadow = true;
+    scene.add(trunks, canopies);
+  }
 
   return {
     update(dt, t) {
       for (const b of bobs) { if (b.base === undefined) b.base = b.o.position.y; b.o.position.y = b.base + Math.sin(t * 1.6 + b.ph) * b.amp; }
       for (const tk of tickers) {
         if (tk.kind === 'flag') tk.o.rotation.y = Math.sin(t * 3 + tk.ph) * 0.4;
-        else tk.o.position.y = Math.abs(Math.sin(t * 2 + tk.ph)) * 0.07;
+        else tk.o.position.y = (tk.base || 0) + Math.abs(Math.sin(t * 2 + tk.ph)) * 0.07;
       }
       if (craneJib) craneJib.rotation.y = Math.sin(t * 0.11) * 0.8;
       if (excavArm) excavArm.rotation.z = Math.sin(t * 0.7) * 0.16 - 0.05;

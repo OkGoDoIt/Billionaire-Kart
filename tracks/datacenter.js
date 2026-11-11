@@ -12,7 +12,7 @@
 
 export const def = {
   name: 'AI Datacenter GP', sky: 0xcfd8dc, fog: 0xd8cfc0, ground: 0xc2a878, roadSeed: 3,
-  shoulder: 0x8f8a80,
+  shoulder: 0x8f8a80, apron: 0xb9c0c4, sandGround: true, groundTint: 0xd8c49a,
   points: [[-170,-170],[-60,-178],[60,-178],[170,-170],[225,-105],[230,-30],[205,45],[232,105],[180,168],[80,160],[30,185],[-30,160],[-90,182],[-150,168],[-222,110],[-205,30],[-232,-40],[-225,-110]],
   // HAND-AUTHORED profiles (docs/track-design-datacenter.md) — keyframes [u, value]:
   // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT turn).
@@ -63,7 +63,36 @@ function nearestIdx(ctx, x, z) {
   for (let i = 0; i < ctx.N; i++) { const s = ctx.samples[i], dx = s.x - x, dz = s.z - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; best = i; } }
   return best;
 }
+
+
+/* ---------- world-build terrain (issue #59) ----------
+   Authored far field for the conforming-terrain contract: game.js blends the
+   banked road plane out to this height, so the road edge always sits ON the
+   terrain. tc = { samples, normals, N, HALF_W, center, rand }. */
+function gauss(x, z, cx, cz, r, h) { const dx = x - cx, dz = z - cz; return h * Math.exp(-(dx * dx + dz * dz) / (r * r)); }
+function vnoise(x, z, s) { return Math.sin(x * s + Math.sin(z * s * 1.7) * 2.1) * Math.cos(z * s * 0.83 + Math.sin(x * s * 1.3) * 1.7); }
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function inwardPoint(tc, x, z, dist) { // point `dist` metres inside the loop from the sample nearest (x, z)
+  const i = nearestIdx(tc, x, z), s = tc.samples[i], n = tc.normals[i];
+  const inw = ((tc.center.x - s.x) * n.x + (tc.center.z - s.z) * n.z) > 0 ? 1 : -1;
+  return { x: s.x + n.x * inw * dist, z: s.z + n.z * inw * dist };
+}
+export function lakeCentre(tc) { return inwardPoint(tc, -60, 105, 52); } // shared by terrainField + dress()
+export function terrainField(x, z, tc) {
+  const c = tc.center;
+  const lake = lakeCentre(tc);
+  const basin = gauss(x, z, lake.x, lake.z, 46, -2.6); // sculpted basin the lake sits (and drains) in
+  const calm = 1 - Math.min(1, -basin / 2.2); // flatten the noise inside the basin so the lake floor is smooth
+  let h = basin + (vnoise(x, z, 0.016) * 1.1 + vnoise(x, z, 0.05) * 0.35) * calm;
+  h += gauss(x, z, c.x + 310, c.z + 30, 120, 4.0);   // east berm ridge the road rides alongside
+  h += gauss(x, z, c.x - 300, c.z - 160, 130, 3.6);  // north-west ridge
+  h += gauss(x, z, c.x, c.z - 330, 150, 5.0);        // north plateau behind the main slab
+  const d = Math.hypot(x - c.x, z - c.z);
+  h += clamp01((d - 340) / 220) * 7;                 // far lift under the silhouette ring
+  return h;
+}
 function atFrac(ctx, frac, lat, y = null) { // position + heading at a track fraction with lateral offset; default y = real terrain height (TRACK 3D profiles)
+
   const i = Math.floor(frac * ctx.N) % ctx.N, s = ctx.samples[i], n = ctx.normals[i];
   const x = s.x + n.x * lat, z = s.z + n.z * lat;
   return { pos: new ctx.THREE.Vector3(x, y === null ? (ctx.terrainHeightAt ? ctx.terrainHeightAt(x, z) : 0) : y, z), idx: i, sample: s };
@@ -73,8 +102,9 @@ function faceTrack(obj, sample) { obj.lookAt(sample.x, 0, sample.z); }
 /* ============================== DRESSING ============================== */
 export function dress(ctx) {
   const { THREE, scene, HALF_W, rand } = ctx;
+  const tcLike = { samples: ctx.samples, normals: ctx.normals, N: ctx.N, center: ctx.trackCenter }; // terrain helpers take tc.center (== samples average == trackCenter)
   const anim = { puffs: [], blinkMats: [], tickers: [] };
-  let lake = null, lakeRim = null, lakeLevel = 0, lakeTarget = 0, counter = null;
+  let lake = null, lakeRim = null, lakeLevel = 0, lakeTarget = 0, counter = null, lakeBaseY = 0.86;
 
   /* ----- the drive-through server hall, straddling the north straight ----- */
   const hallIdx = nearestIdx(ctx, 0, -175);
@@ -153,19 +183,19 @@ export function dress(ctx) {
   cPanel.position.y = 7.6; cSign.add(cPanel);
   const cPostM = new THREE.MeshLambertMaterial({ color: 0x33373d });
   for (const px of [-8, 8]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.6, 5.4, 0.6), cPostM); p.position.set(px, 2.7, 0); cSign.add(p); }
-  { const { pos, sample } = atFrac(ctx, 0.235, -(HALF_W + 13)); cSign.position.copy(pos); faceTrack(cSign, sample); scene.add(cSign); }
+  { const { pos, sample } = atFrac(ctx, 0.235, -(HALF_W + 13)); cSign.position.copy(pos); cSign.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.1; faceTrack(cSign, sample); scene.add(cSign); }
 
-  /* ----- the lake that drains, inside the south-west of the ring ----- */
-  const lakeIdx = nearestIdx(ctx, -60, 105);
-  const ls = ctx.samples[lakeIdx], ln = ctx.normals[lakeIdx];
-  const inward = ((0 - ls.x) * ln.x + (0 - ls.z) * ln.z) > 0 ? 1 : -1;
-  const lakePos = new THREE.Vector3(ls.x + ln.x * inward * 52, 0, ls.z + ln.z * inward * 52);
-  lakeRim = new THREE.Mesh(new THREE.CylinderGeometry(37, 39, 1.1, 26), new THREE.MeshLambertMaterial({ color: 0x9a7d4f }));
-  lakeRim.position.set(lakePos.x, 0.1, lakePos.z); scene.add(lakeRim);
+  /* ----- the lake that drains, seated in the sculpted basin (terrainField) ----- */
+  const lc = lakeCentre(tcLike);
+  const lakePos = new THREE.Vector3(lc.x, 0, lc.z);
+  const lakeBase = ctx.terrainHeightAt(lakePos.x, lakePos.z); // basin floor from the authored field
+  lakeBaseY = lakeBase + 0.86;
+  lakeRim = new THREE.Mesh(new THREE.CylinderGeometry(37, 39.5, 2.4, 26), new THREE.MeshLambertMaterial({ color: 0x9a7d4f }));
+  lakeRim.position.set(lakePos.x, lakeBase + 0.5, lakePos.z); scene.add(lakeRim);
   lake = new THREE.Mesh(new THREE.CircleGeometry(34, 26), new THREE.MeshLambertMaterial({ color: 0x3a7ca5, transparent: true, opacity: 0.92 }));
-  lake.rotation.x = -Math.PI / 2; lake.position.set(lakePos.x, 0.72, lakePos.z); scene.add(lake);
+  lake.rotation.x = -Math.PI / 2; lake.position.set(lakePos.x, lakeBaseY, lakePos.z); scene.add(lake);
   const crack = new THREE.Mesh(new THREE.CircleGeometry(33, 26), new THREE.MeshLambertMaterial({ color: 0xb59a67 }));
-  crack.rotation.x = -Math.PI / 2; crack.position.set(lakePos.x, 0.68, lakePos.z); scene.add(crack); // cracked bed, revealed as water drops
+  crack.rotation.x = -Math.PI / 2; crack.position.set(lakePos.x, lakeBase + 0.8, lakePos.z); scene.add(crack); // cracked bed, revealed as water drops
 
   /* ----- main datacenter slab + cooling towers + gas plant (outside north) ----- */
   const slab = new THREE.Group();
@@ -173,16 +203,17 @@ export function dress(ctx) {
   slab.add(box(THREE, 126, 2, 50, 0x878d94, 0, 17.8, 0));
   slab.add(box(THREE, 30, 7, 20, 0x9aa1a9, -52, 3.5, 30));
   slab.add(box(THREE, 30, 7, 20, 0x9aa1a9, 52, 3.5, 30));
-  { const { pos } = atFrac(ctx, 0.115, -(HALF_W + 62)); slab.position.copy(pos); slab.rotation.y = ctx.headingOf(ctx.tangents[Math.floor(0.115 * ctx.N) % ctx.N]); scene.add(slab); }
+  { const { pos } = atFrac(ctx, 0.115, -(HALF_W + 62)); slab.position.copy(pos); slab.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.15; slab.rotation.y = ctx.headingOf(ctx.tangents[Math.floor(0.115 * ctx.N) % ctx.N]); scene.add(slab); }
   const towerM = new THREE.MeshLambertMaterial({ color: 0xd4d8dc });
   for (const [fx, fz] of [[0.055, -(HALF_W + 40)], [0.175, -(HALF_W + 42)]]) {
     const { pos } = atFrac(ctx, fx, fz);
+    const gy = ctx.terrainHeightAt(pos.x, pos.z);
     const tower = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 8.5, 21, 14), towerM);
-    tower.position.set(pos.x, 10.5, pos.z); tower.castShadow = true; scene.add(tower);
+    tower.position.set(pos.x, gy + 10.5, pos.z); tower.castShadow = true; scene.add(tower);
     for (let p = 0; p < 5; p++) { // steam puffs
       const puff = new THREE.Mesh(new THREE.SphereGeometry(rand(2.6, 4.2), 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
-      puff.position.set(pos.x, 21, pos.z); scene.add(puff);
-      anim.puffs.push({ m: puff, x: pos.x, z: pos.z, y0: 21, ph: Math.random(), rate: rand(0.05, 0.09), smoke: false });
+      puff.position.set(pos.x, gy + 21, pos.z); scene.add(puff);
+      anim.puffs.push({ m: puff, x: pos.x, z: pos.z, y0: gy + 21, ph: Math.random(), rate: rand(0.05, 0.09), smoke: false });
     }
   }
   // dedicated gas plant with smokestacks + spinning turbine fans
@@ -200,15 +231,45 @@ export function dress(ctx) {
     for (let b = 0; b < 3; b++) { const blade = box(THREE, 0.8, 5.6, 0.25, 0xc8ced4); blade.rotation.z = b * Math.PI * 2 / 3; fan.add(blade); }
     fan.position.set(fx, 6, 12.4); plant.add(fan); anim.fans.push(fan);
   }
-  { const { pos } = atFrac(ctx, 0.30, -(HALF_W + 52)); plant.position.copy(pos); plant.rotation.y = ctx.headingOf(ctx.tangents[Math.floor(0.30 * ctx.N) % ctx.N]); scene.add(plant); }
+  { const { pos } = atFrac(ctx, 0.30, -(HALF_W + 52)); plant.position.copy(pos); plant.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.15; plant.rotation.y = ctx.headingOf(ctx.tangents[Math.floor(0.30 * ctx.N) % ctx.N]); scene.add(plant); }
   for (let p = 0; p < 9; p++) { // smoke from the stacks (plant-local approx: dark puffs above plant)
     const puff = new THREE.Mesh(new THREE.SphereGeometry(rand(2.2, 3.6), 8, 6), new THREE.MeshLambertMaterial({ color: 0x4a4a4a, transparent: true, opacity: 0.45 }));
     const { pos } = atFrac(ctx, 0.30, -(HALF_W + 52));
-    puff.position.set(pos.x + rand(-14, 14), 24, pos.z - 6); scene.add(puff);
-    anim.puffs.push({ m: puff, x: puff.position.x, z: puff.position.z, y0: 24, ph: Math.random(), rate: rand(0.04, 0.07), smoke: true });
+    const gy = ctx.terrainHeightAt(pos.x, pos.z);
+    puff.position.set(pos.x + rand(-14, 14), gy + 24, pos.z - 6); scene.add(puff);
+    anim.puffs.push({ m: puff, x: puff.position.x, z: puff.position.z, y0: gy + 24, ph: Math.random(), rate: rand(0.04, 0.07), smoke: true });
   }
   const plantSign = sign(THREE, textPanel(THREE, ['DEDICATED GAS PLANT', '— FOR AI —'], { w: 640, h: 220, bg: '#26221a', border: '#ffb02e', font: 52 }), 15, 5.2);
-  { const { pos, sample } = atFrac(ctx, 0.30, -(HALF_W + 24)); plantSign.position.copy(pos); faceTrack(plantSign, sample); scene.add(plantSign); }
+  { const { pos, sample } = atFrac(ctx, 0.30, -(HALF_W + 24)); plantSign.position.copy(pos); plantSign.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.1; faceTrack(plantSign, sample); scene.add(plantSign); }
+
+  /* ----- HERO: twin hyperboloid cooling towers on the lake shore (visible most of the lap) ----- */
+  const hypProf = [[10.5, 0], [9.0, 6], [7.4, 13], [6.9, 19], [7.4, 25], [8.6, 30]].map(p => new THREE.Vector2(p[0], p[1]));
+  const hypGeo = new THREE.LatheGeometry(hypProf, 16);
+  const hypM = new THREE.MeshLambertMaterial({ color: 0xdfe3e6 });
+  const hypRimM = new THREE.MeshLambertMaterial({ color: 0x3a3f45 });
+  for (const [ox, oz] of [[64, -28], [92, 22]]) { // east shore of the lake basin (lc = lake centre, from the lake block above)
+    const pos = { x: lc.x + ox, z: lc.z + oz };
+    const gy = ctx.terrainHeightAt(pos.x, pos.z);
+    const tw = new THREE.Mesh(hypGeo, hypM); tw.position.set(pos.x, gy - 0.4, pos.z); tw.castShadow = true; scene.add(tw);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(8.7, 8.7, 1.2, 16, 1, true), hypRimM); rim.position.set(pos.x, gy + 29.4, pos.z); scene.add(rim);
+    for (let p = 0; p < 4; p++) { // steam
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(rand(3.4, 5.2), 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
+      puff.position.set(pos.x, gy + 30, pos.z); scene.add(puff);
+      anim.puffs.push({ m: puff, x: pos.x, z: pos.z, y0: gy + 30, ph: Math.random(), rate: rand(0.04, 0.06), smoke: false });
+    }
+  }
+
+  /* ----- solar farm on the south plateau: 132 instanced tilted panels ----- */
+  const panels = new THREE.InstancedMesh(new THREE.BoxGeometry(3.4, 0.14, 2.3), new THREE.MeshStandardMaterial({ color: 0x1d3f74, roughness: 0.32, metalness: 0.55 }), 132);
+  { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eu = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
+    let pi = 0;
+    for (let r = 0; r < 11; r++) for (let cI = 0; cI < 12; cI++) {
+      const px = -88 + cI * 7.4 + (r % 2) * 3.1, pz = 226 + r * 5.4;
+      eu.set(-0.42, 0.06, 0); q.setFromEuler(eu);
+      m4.compose(v.set(px, ctx.terrainHeightAt(px, pz) + 0.85, pz), q, sc); panels.setMatrixAt(pi++, m4);
+    }
+    panels.castShadow = true; scene.add(panels);
+  }
 
   /* ----- protest corner at the south chicane ----- */
   const protestTexts = ['WE WANT OUR LAKE BACK', 'YOUR PROMPTS, OUR RIVER', 'JOBS CREATED: 4 (SECURITY)', "NOW COOLING: 40,000 HOMES' AC", 'NOT IN MY WATERSHED', 'SHUT IT DOWN', '💧 > 🤖', 'MY WELL RAN DRY'];
@@ -217,12 +278,15 @@ export function dress(ctx) {
     const f = 0.545 + i * 0.0085;
     const { pos, sample } = atFrac(ctx, f, HALF_W + rand(4.5, 7));
     const s = sign(THREE, textPanel(THREE, [txt], { w: 640, h: 128, bg: '#f5efe0', fg: '#8c1d18', border: '#8c1d18', font: 44 }), 6.4, 1.3, 0x7a4a21);
-    s.position.copy(pos); faceTrack(s, sample); s.rotation.z = rand(-0.06, 0.06); scene.add(s);
+    s.position.copy(pos); s.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.05; faceTrack(s, sample); s.rotation.z = rand(-0.06, 0.06); scene.add(s);
     const person = new THREE.Group(); // little protester holding it: body + head
     person.add(box(THREE, 0.62, 1.05, 0.4, crowdCols[i % crowdCols.length], 0, 0.55, 0));
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), new THREE.MeshLambertMaterial({ color: 0xeec39a })); head.position.y = 1.32; person.add(head);
-    person.position.set(pos.x + rand(-0.8, 0.8), pos.y, pos.z + rand(-0.8, 0.8)); scene.add(person);
-    anim.tickers.push({ o: person, ph: Math.random() * 6, amp: 0.07, base: pos.y }); // gentle bobbing crowd (base = terrain height at the sign)
+
+    const px2 = pos.x + rand(-0.8, 0.8), pz2 = pos.z + rand(-0.8, 0.8), pgy = ctx.terrainHeightAt(px2, pz2);
+    person.position.set(px2, pgy, pz2); scene.add(person);
+    anim.tickers.push({ o: person, ph: Math.random() * 6, amp: 0.07, base: pgy }); // gentle bobbing crowd
+
   });
 
   /* ----- power lines marching off the east side ----- */
@@ -230,10 +294,11 @@ export function dress(ctx) {
   const wirePts = [];
   for (let i = 0; i < 6; i++) {
     const { pos } = atFrac(ctx, 0.36 + i * 0.035, HALF_W + 17);
+    const gy = ctx.terrainHeightAt(pos.x, pos.z);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 13, 6), poleM);
-    pole.position.set(pos.x, 6.5, pos.z); scene.add(pole);
-    const cross = box(THREE, 5.4, 0.3, 0.3, 0x4a4238, pos.x, 12.2, pos.z); scene.add(cross);
-    wirePts.push(new THREE.Vector3(pos.x, 12.2, pos.z));
+    pole.position.set(pos.x, gy + 6.5, pos.z); scene.add(pole);
+    const cross = box(THREE, 5.4, 0.3, 0.3, 0x4a4238, pos.x, gy + 12.2, pos.z); scene.add(cross);
+    wirePts.push(new THREE.Vector3(pos.x, gy + 12.2, pos.z));
   }
   const wireGeo = new THREE.BufferGeometry().setFromPoints(wirePts);
   scene.add(new THREE.Line(wireGeo, new THREE.LineBasicMaterial({ color: 0x22242a })));
@@ -245,7 +310,7 @@ export function dress(ctx) {
     const f = b[b.length - 2], side = b[b.length - 1];
     const { pos, sample } = atFrac(ctx, f, side * (HALF_W + 10));
     const s = sign(THREE, textPanel(THREE, lines, { w: 640, h: 220, font: 50 }), 15, 5.2);
-    s.position.copy(pos); faceTrack(s, sample); scene.add(s);
+    s.position.copy(pos); s.position.y = ctx.terrainHeightAt(pos.x, pos.z) - 0.1; faceTrack(s, sample); scene.add(s);
   }
 
   /* ----- animation + lap hooks ----- */
@@ -264,7 +329,7 @@ export function dress(ctx) {
       for (const tk of anim.tickers) tk.o.position.y = tk.base + Math.abs(Math.sin(t * 2.2 + tk.ph)) * tk.amp;
       if (lake) { // drain: sink + shrink toward the per-lap target
         lakeLevel += (lakeTarget - lakeLevel) * Math.min(1, dt * 0.7);
-        lake.position.y = 0.72 - lakeLevel * 1.5;
+        lake.position.y = lakeBaseY - lakeLevel * 1.5;
         const sc = 1 - lakeLevel * 0.45; lake.scale.set(sc, sc, 1);
       }
       if (counter) { counter.acc += dt; if (counter.acc > 0.25) { counter.acc = 0; counter.draw(12483910 + t * 137 + lakeTarget * 900000); } }

@@ -6,9 +6,9 @@ import * as GMAT from './gfx/materials.js';
 import { setupRenderer, applySky, setupLights, sunFollow, applyFog, SKY_URLS } from './gfx/environment.js';
 import { createPost } from './gfx/post.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { def as datacenterDef, dress as dressDatacenter } from './tracks/datacenter.js';
-import { def as watersDef, dress as dressWaters } from './tracks/waters.js';
-import { def as whitehouseDef, dress as dressWhitehouse } from './tracks/whitehouse.js';
+import { def as datacenterDef, dress as dressDatacenter, terrainField as datacenterTerrain } from './tracks/datacenter.js';
+import { def as watersDef, dress as dressWaters, terrainField as watersTerrain } from './tracks/waters.js';
+import { def as whitehouseDef, dress as dressWhitehouse, terrainField as whitehouseTerrain } from './tracks/whitehouse.js';
 import { TRACK as META_TRACK, build as buildMetaverse } from './tracks/metaverse.js';
 import { TRACK as WEWORK_TRACK, build as buildWeWork } from './tracks/wework.js';
 import { TRACK as BURNING_TRACK, build as buildBurningMan } from './tracks/burningman.js';
@@ -135,11 +135,15 @@ const TRACKS = [
   META_TRACK, WEWORK_TRACK, BURNING_TRACK, BAHAMAS_TRACK,
 ];
 const TRACK_DRESSING = { 2: dressDatacenter, 3: dressWaters, 4: dressWhitehouse }; // Batch 1 dress(ctx) registry (#10)
+const TRACK_TERRAIN = { 2: datacenterTerrain, 3: watersTerrain, 4: whitehouseTerrain }; // World build B (#59): authored terrain fields — terrainHeightAt blends the road plane out to these
+let currentTrackIdx = -1, terrainCtx = null; // active track + the context its terrain field reads (samples/normals/center)
 const TRACK_MODULES = [null, null, null, null, null, buildMetaverse, buildWeWork, buildBurningMan, buildBahamas]; // Batch 3 build(ctx) registry, indices 5-8 (#12)
 if (window.BK_TRACKS) for (const t of window.BK_TRACKS) TRACKS.push(t); // Batch 2 classic-script tracks (Bliss/Tunnel/Davos) register as indices 9-11 (#11)
 let trackFx = null, lastPlayerLap = 1, trackAnimators = []; // trackFx: Batch 1 {update,onLap}; trackAnimators: Batch 3 per-frame hooks
 let currentDef = null; // Batch 2: active track def (buildWorld sets it; drives tick / countdownView / chime)
+
 function sceneryContext() { return { THREE, scene, samples, normals, tangents, N, HALF_W, trackCenter, rand, clamp, scatterPos, headingOf, clouds, canvasTexture, billboardTexture, stripGeometry, animators: trackAnimators, terrainHeightAt, rollNormals, roadYAtPos }; }
+
 const BILLBOARDS = ['AGI COMING SOON™', 'GPU GO BRRR', 'THIS SIGN COST $4.20', 'NOW HIRING: PROMPT WHISPERERS', 'MARS OR BUST', 'YOUR DATA HERE', 'NOT FINANCIAL ADVICE', 'SYNERGY DOWNSHIFT AHEAD', 'PIVOT! PIVOT!', 'DISRUPTING TRAFFIC SINCE 2026'];
 
 /* ================= ITEMS ================= */
@@ -507,15 +511,18 @@ function ambientHeight(x, z) { // rolling far terrain: gentle noise that lifts i
   const lift = clamp((d - 240) / 26, 0, 16);
   return Math.sin(x * 0.012 + 1.7) * Math.cos(z * 0.014 - 0.6) * 5 + Math.sin(x * 0.027 - 0.4) * Math.sin(z * 0.021 + 2.1) * 3 + lift;
 }
-function terrainHeightAt(x, z) { // ground height anywhere: banked road plane extended, blended out to ambient terrain
+function terrainInfo(x, z) { // World build B (#59): banked road plane near the spline, blended over ~40 m out to the track's AUTHORED far field (TRACK_TERRAIN: lake basins, islands, monument bowls) or the generic ambient hills
   _tv.set(x, 0, z);
   const idx = globalNearest(_tv), s = samples[idx], n = normals[idx];
   const d = (x - s.x) * n.x + (z - s.z) * n.z, ad = Math.abs(d);
   const edgeY = s.y + d * rollNormals[idx].y;
-  if (ad <= HALF_W + 2.6) return edgeY - 0.12; // tucked just under the road/shoulder strips
-  const t = clamp((ad - HALF_W - 2.6) / 34, 0, 1), ts = t * t * (3 - 2 * t);
-  return lerp(edgeY - 0.1, ambientHeight(x, z), ts);
+  if (ad <= HALF_W + 2.6) return { h: edgeY - 0.12, ad }; // tucked just under the road/shoulder strips
+  const t = clamp((ad - HALF_W - 2.6) / 40, 0, 1), ts = t * t * (3 - 2 * t);
+  const field = TRACK_TERRAIN[currentTrackIdx];
+  const far = (field && terrainCtx) ? field(x, z, terrainCtx) : ambientHeight(x, z);
+  return { h: lerp(edgeY - 0.1, far, ts), ad };
 }
+function terrainHeightAt(x, z) { return terrainInfo(x, z).h; }
 
 /* ================= RENDERER ================= */
 function initRenderer() {
@@ -1176,6 +1183,48 @@ function stripGeometry(halfWidth, y) {
   return geo;
 }
 
+/* World build B (#59): the APRON — a terrain-hugging ribbon skirt flanking the
+   road on both sides. The road edge used to float beside a coarse ground mesh
+   whose facets poked through the kerb line ("polygon bleeding" in Roger's
+   circled screenshots); the skirt sits ON terrainHeightAt, so the road reads
+   as built INTO sculpted ground, with a painted edge line, a scuffed inner
+   band and a dirt fade outward where it dives under the terrain. */
+function apronTexture() {
+  return canvasTexture(256, 256, (g, w, h) => {
+    g.fillStyle = '#8f8f8a'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#a9a9a3'; g.fillRect(0, 0, w * 0.30, h); // inner band, lighter
+    g.fillStyle = '#f4f4f0'; g.fillRect(0, 0, w * 0.075, h); // painted edge line at the kerb
+    for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(40,38,34,${0.05 + Math.random() * 0.13})`; g.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 7, 1 + Math.random() * 3); } // scuffs
+    for (let i = 0; i < 500; i++) { g.fillStyle = `rgba(96,84,62,${0.10 + Math.random() * 0.2})`; g.fillRect(w * 0.62 + Math.random() * w * 0.38, Math.random() * h, 2 + Math.random() * 5, 1 + Math.random() * 3); } // dirt toward the outside
+  });
+}
+let _apronTex = null;
+function buildApron(trackIdx) {
+  const tr = TRACKS[trackIdx];
+  if (tr.noApron || /tunnel/i.test(tr.name || '')) return; // the Boring Tunnel shell owns its own floor line
+  if (!_apronTex) { _apronTex = apronTexture(); _apronTex.wrapS = _apronTex.wrapT = THREE.RepeatWrapping; _apronTex.userData.shared = true; } // shared: survives world teardown like the gfx textures
+  const ST = [HALF_W + 0.3, HALF_W + 3.4, HALF_W + 8.5, HALF_W + 15, HALF_W + 23]; // lateral stations per side
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const s = samples[i % N], n = normals[i % N];
+    for (let q = 0; q < 2; q++) { const side = q === 0 ? 1 : -1;
+      for (let k = 0; k < ST.length; k++) {
+        const lat = side * ST[k], x = s.x + n.x * lat, z = s.z + n.z * lat;
+        let y = terrainHeightAt(x, z) + 0.05;
+        if (k === ST.length - 1) y -= 0.6; // outer tail dives under the coarse ground mesh
+        pos.push(x, y, z); uv.push((ST[k] - HALF_W - 0.3) / 22.7, i * 0.55); // u: 0 at the kerb line → 1 at the outer tail, both sides
+      }
+    }
+    if (i < N) { const a = i * 10; for (let q = 0; q < 2; q++) { const b = a + q * 5; for (let k = 0; k < 4; k++) { const r0 = b + k, r1 = b + k + 10; if (q === 0) idx.push(r0, r1, r0 + 1, r1, r1 + 1, r0 + 1); else idx.push(r0, r0 + 1, r1, r1, r0 + 1, r1 + 1); } } }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: _apronTex, color: tr.apron !== undefined ? tr.apron : 0xffffff, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, units: -2, side: THREE.DoubleSide }));
+  mesh.receiveShadow = true; scene.add(mesh);
+}
+
 function buildBackdrop(trackIdx) {
   // Distant terrain silhouette: a jagged ridge ring so the horizon is never a
   // flat line, plus ONE signature landmark per live track to orient by
@@ -1211,6 +1260,35 @@ function buildBackdrop(trackIdx) {
     const m = new THREE.Mesh(new THREE.LatheGeometry(prof, 40), mat);
     m.position.set(trackCenter.x + 430, -3, trackCenter.z - 360);
     scene.add(m);
+  } else if (trackIdx === 2) { // World build B: a distant sister plant — twin cooling-tower silhouettes + slab, NW horizon
+    const g = new THREE.Group();
+    const prof = [[10.5, 0], [9.0, 6], [7.4, 13], [6.9, 19], [7.4, 25], [8.6, 30]].map(p => new THREE.Vector2(p[0], p[1]));
+    for (const dx of [-26, 26]) { const t = new THREE.Mesh(new THREE.LatheGeometry(prof, 14), mat); t.position.set(dx, 0, 0); g.add(t); }
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(120, 20, 30), mat); slab.position.set(10, 10, 70); g.add(slab);
+    g.position.set(trackCenter.x - 380, -4, trackCenter.z - 330); g.rotation.y = 0.4;
+    scene.add(g);
+  } else if (trackIdx === 3) { // World build B: a far lighthouse rock + a cruise ship that never docks (International Waters)
+    const g = new THREE.Group();
+    const rock = new THREE.Mesh(new THREE.ConeGeometry(16, 10, 7), mat); rock.position.y = 2; g.add(rock);
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.2, 30, 8), mat); tower.position.y = 20; g.add(tower);
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 4, 8), mat); lamp.position.y = 37; g.add(lamp);
+    g.position.set(trackCenter.x + 470, -3, trackCenter.z + 300);
+    scene.add(g);
+    const ship = new THREE.Group();
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(120, 12, 20), mat); hull.position.y = 2; ship.add(hull);
+    const decks = new THREE.Mesh(new THREE.BoxGeometry(92, 14, 16), mat); decks.position.y = 14; ship.add(decks);
+    const funnel = new THREE.Mesh(new THREE.BoxGeometry(14, 10, 10), mat); funnel.position.set(-30, 24, 0); ship.add(funnel);
+    ship.position.set(trackCenter.x - 500, -2, trackCenter.z - 260); ship.rotation.y = 0.5;
+    scene.add(ship);
+  } else if (trackIdx === 4) { // World build B: the DC skyline — slab, dome and needle on the south horizon
+    const g = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(210, 16, 24), mat); slab.position.y = 8; g.add(slab);
+    const domeBase = new THREE.Mesh(new THREE.CylinderGeometry(11, 13, 12, 12), mat); domeBase.position.set(-40, 6, 0); g.add(domeBase);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(10, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat); dome.position.set(-40, 12, 0); g.add(dome);
+    const needleGeo = new THREE.CylinderGeometry(0.5, 6, 52, 4); const needle = new THREE.Mesh(needleGeo, mat); needle.rotation.y = Math.PI / 4; needle.position.set(55, 26, 0); g.add(needle);
+    for (const dx of [-120, -104]) { const spire = new THREE.Mesh(new THREE.ConeGeometry(4, 22, 6), mat); spire.position.set(dx, 11, 0); g.add(spire); }
+    g.position.set(trackCenter.x + 40, -4, trackCenter.z + 470); g.rotation.y = -0.15;
+    scene.add(g);
   }
 }
 
@@ -1269,6 +1347,9 @@ function buildWorld(trackIdx, field) {
     rollNormals.push(normals[i].clone().applyAxisAngle(t3, bankArr[i]));
   }
 
+  currentTrackIdx = trackIdx; // World build B: terrain-field dispatch + the context the fields read
+  terrainCtx = { samples, normals, tangents, N, HALF_W, center: trackCenter, rand };
+
   const mars = trackIdx === 1;
   // ART PASS: terrain material story per track script — mow-striped grass,
   // sand, or tinted concrete (snow/plaza/tunnel floor)
@@ -1278,8 +1359,9 @@ function buildWorld(trackIdx, field) {
   else { gTex = mowGrassTexture(script.groundBase || '#4f8a38', (tr.roadSeed || 1) * 31 + trackIdx); gTex.repeat.set(56, 56); }
   const groundGeo = new THREE.PlaneGeometry(1520, 1520, 136, 136);
   groundGeo.rotateX(-Math.PI / 2);
-  { const pa = groundGeo.attributes.position; for (let i = 0; i < pa.count; i++) pa.setY(i, terrainHeightAt(pa.getX(i), pa.getZ(i))); groundGeo.computeVertexNormals(); }
+  { const pa = groundGeo.attributes.position; for (let i = 0; i < pa.count; i++) { const gx = pa.getX(i), gz = pa.getZ(i); const ti = terrainInfo(gx, gz); pa.setY(i, ti.h - 0.22 * (1 - clamp((ti.ad - HALF_W - 2.6) / 26, 0, 1))); } groundGeo.computeVertexNormals(); } // tuck bias (#59): near the road the coarse ground dips just under the apron skirt so its facets can never poke through the kerb line
   const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ map: gTex, color: script.groundTint ?? 0xffffff, roughness: 1 }));
+
   ground.receiveShadow = true; scene.add(ground);
   buildBackdrop(trackIdx);
 
@@ -1293,6 +1375,7 @@ function buildWorld(trackIdx, field) {
   road.receiveShadow = true; scene.add(road);
   const curbs = new THREE.Mesh(stripGeometry(HALF_W + 0.9, 0.045), new THREE.MeshStandardMaterial({ map: curbTexture(), transparent: true, roughness: 0.9, depthWrite: false }));
   curbs.receiveShadow = true; scene.add(curbs);
+  buildApron(trackIdx); // World build B (#59): terrain-hugging skirt under the kerb line — kills the polygon bleeding
 
   // start line + gantry
   const startGroup = new THREE.Group();

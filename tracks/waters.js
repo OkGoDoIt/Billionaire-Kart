@@ -7,7 +7,7 @@
 
 export const def = {
   name: 'International Waters GP', sky: 0xffc37e, fog: 0xffd2a0, ground: 0x1fa8a0, roadSeed: 4,
-  shoulder: 0xc9a06c,
+  shoulder: 0xc9a06c, apron: 0xbfae8e, sandGround: true, groundTint: 0x7d9b84,
   points: [[0,-190],[150,-160],[245,-70],[255,40],[190,130],[90,180],[-30,190],[-150,160],[-240,80],[-255,-30],[-200,-120],[-110,-175]],
   // HAND-AUTHORED profiles (docs/track-design-waters.md) — keyframes [u, value]:
   // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT
@@ -64,6 +64,32 @@ function atFrac(ctx, frac, lat, y = null) { // default y = real terrain/sea-surf
 }
 function faceTrack(obj, sample) { obj.lookAt(sample.x, 0, sample.z); }
 
+/* ---------- world-build terrain (issue #59) ----------
+   The far field here is a SEABED: game.js blends the banked causeway plane
+   down to it, and the animated water plane (in dress) sits at WATER_Y between
+   the two. Islands are authored gaussian bumps that rise out of the sea. */
+export const WATER_Y = -0.55;
+function gauss(x, z, cx, cz, r, h) { const dx = x - cx, dz = z - cz; return h * Math.exp(-(dx * dx + dz * dz) / (r * r)); }
+function vnoise(x, z, s) { return Math.sin(x * s + Math.sin(z * s * 1.7) * 2.1) * Math.cos(z * s * 0.83 + Math.sin(x * s * 1.3) * 1.7); }
+function inwardPoint(tc, x, z, dist) {
+  const i = nearestIdx(tc, x, z), s = tc.samples[i], n = tc.normals[i];
+  const inw = ((tc.center.x - s.x) * n.x + (tc.center.z - s.z) * n.z) > 0 ? 1 : -1;
+  return { x: s.x + n.x * inw * dist, z: s.z + n.z * inw * dist };
+}
+export function seasteadCentre(tc) { return inwardPoint(tc, -120, 60, 58); } // shared by terrainField + dress()
+export function lighthouseIsle(tc) { return { x: tc.center.x + 350, z: tc.center.z - 210 }; }
+export function terrainField(x, z, tc) {
+  const c = tc.center;
+  let h = -3.4 + vnoise(x, z, 0.02) * 0.5;                       // seabed swell
+  const st = seasteadCentre(tc);
+  h += gauss(x, z, st.x, st.z, 34, 4.6);                          // seastead island (shore ≈ +1.2 at centre)
+  const li = lighthouseIsle(tc);
+  h += gauss(x, z, li.x, li.z, 95, 6.8);                          // lighthouse island, peak ≈ +3.4
+  h += gauss(x, z, c.x - 370, c.z + 250, 80, 5.6);                // south-west islet, peak ≈ +2.2
+  h += gauss(x, z, c.x + 60, c.z + 330, 120, 5.2);                // southern sandbank, peak ≈ +1.8
+  return h;
+}
+
 /* A procedural superyacht. length L along local +z, name board on both flanks. */
 function yacht(THREE, L, nameLines, accent) {
   const g = new THREE.Group();
@@ -100,16 +126,18 @@ export function dress(ctx) {
 
   /* ----- centrepiece: the biggest yacht, anchored mid-oval ----- */
   const mega = yacht(THREE, 98, ['S.S. EXTRADITION DENIED'], 0xd4af37);
-  mega.position.set(centroid.x + 6, ctx.terrainHeightAt ? ctx.terrainHeightAt(centroid.x + 6, centroid.z + 4) : 0, centroid.z + 4); mega.rotation.y = 0.5;
+
+  mega.position.set(centroid.x + 6, WATER_Y, centroid.z + 4); mega.rotation.y = 0.5;
+
   scene.add(mega); bobs.push({ o: mega, ph: 0.4, amp: 0.5, roll: 0.012 });
 
   /* ----- Ellison's yacht (bigger) vs Murdoch's (dishes) ----- */
   const ell = yacht(THREE, 64, ['S.S. HOSTILE TAKEOVER'], 0xb01e24);
-  { const f = 0.30, { pos } = atFrac(ctx, f, HALF_W + 58); ell.position.copy(pos); ell.rotation.y = ctx.headingOf(ctx.tangents[Math.floor(f * ctx.N) % ctx.N]); scene.add(ell); }
+  { const f = 0.30, { pos } = atFrac(ctx, f, HALF_W + 58); ell.position.copy(pos); ell.position.y = WATER_Y; ell.rotation.y = ctx.headingOf(ctx.tangents[Math.floor(f * ctx.N) % ctx.N]); scene.add(ell); }
   bobs.push({ o: ell, ph: 1.7, amp: 0.45, roll: 0.016 });
   radar = ell.userData.radar;
   const mur = yacht(THREE, 59, ['S.S. ALL NEWS, ALL MINE'], 0x6e1423); // 8% shorter. He has people for that.
-  { const f = 0.68, { pos } = atFrac(ctx, f, HALF_W + 56); mur.position.copy(pos); mur.rotation.y = ctx.headingOf(ctx.tangents[Math.floor(f * ctx.N) % ctx.N]) + Math.PI; scene.add(mur); }
+  { const f = 0.68, { pos } = atFrac(ctx, f, HALF_W + 56); mur.position.copy(pos); mur.position.y = WATER_Y; mur.rotation.y = ctx.headingOf(ctx.tangents[Math.floor(f * ctx.N) % ctx.N]) + Math.PI; scene.add(mur); }
   bobs.push({ o: mur, ph: 3.1, amp: 0.45, roll: 0.016 });
   const dishM = new THREE.MeshLambertMaterial({ color: 0xe8ecf0 });
   for (let i = 0; i < 5; i++) { // satellite dishes — all news, all his
@@ -122,7 +150,9 @@ export function dress(ctx) {
 
   /* ----- start-line buoy sign: the whole premise, on two floats ----- */
   const buoySign = sign(THREE, textPanel(THREE, ['12 NAUTICAL MILES OUT', 'BEYOND THIS POINT, TAXES ARE', 'A SOCIAL CONSTRUCT'], { w: 768, h: 300, font: 46 }), 17, 6.6);
-  { const { pos, sample } = atFrac(ctx, 0.015, HALF_W + 9); buoySign.position.copy(pos); buoySign.position.y = pos.y - 0.4; faceTrack(buoySign, sample); scene.add(buoySign); }
+
+  { const { pos, sample } = atFrac(ctx, 0.015, HALF_W + 9); buoySign.position.copy(pos); buoySign.position.y = WATER_Y - 0.35; faceTrack(buoySign, sample); scene.add(buoySign); }
+
   bobs.push({ o: buoySign, ph: 2.2, amp: 0.22, roll: 0.02 });
 
   /* ----- seastead platform inside the west of the oval ----- */
@@ -151,10 +181,10 @@ export function dress(ctx) {
     const flag = box(THREE, 1.9, 1.1, 0.06, [0xffd94a, 0x37c8ff, 0xff6b9d, 0x7dff6a][i], fp.position.x + 0.95, 6.4, fp.position.z);
     plat.add(flag); flags.push({ o: flag, ph: i * 1.3 });
   }
-  { const idx = nearestIdx(ctx, -120, 60), s = ctx.samples[idx], n = ctx.normals[idx];
-    const inward = ((centroid.x - s.x) * n.x + (centroid.z - s.z) * n.z) > 0 ? 1 : -1;
-    const px = s.x + n.x * inward * 58, pz = s.z + n.z * inward * 58;
-    plat.position.set(px, ctx.terrainHeightAt ? ctx.terrainHeightAt(px, pz) : 0, pz); scene.add(plat); }
+
+  { const stc = seasteadCentre({ samples: ctx.samples, normals: ctx.normals, N: ctx.N, center: centroid });
+    plat.position.set(stc.x, 0, stc.z); scene.add(plat); }
+
   bobs.push({ o: plat, ph: 0.9, amp: 0.18, roll: 0.006 });
 
   /* ----- channel buoys ringing the course ----- */
@@ -167,16 +197,18 @@ export function dress(ctx) {
     cone.position.y = 0.6; buoy.add(cone);
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), new THREE.MeshBasicMaterial({ color: buoyCols[i % 2] }));
     lamp.position.y = 1.95; buoy.add(lamp);
-    buoy.position.copy(pos); scene.add(buoy);
+    buoy.position.copy(pos); buoy.position.y = WATER_Y; scene.add(buoy);
     bobs.push({ o: buoy, ph: i * 1.13, amp: 0.3, roll: 0.05 });
   }
 
   /* ----- extra floating signage ----- */
   const exitSign = sign(THREE, textPanel(THREE, ['NEXT EXIT:', 'JURISDICTION SHOPPING →'], { w: 640, h: 220, bg: '#0b3d4a', border: '#7fdcff', font: 48 }), 13, 4.5);
-  { const { pos, sample } = atFrac(ctx, 0.82, -(HALF_W + 9)); exitSign.position.copy(pos); exitSign.position.y = pos.y - 0.4; faceTrack(exitSign, sample); scene.add(exitSign); }
+
+  { const { pos, sample } = atFrac(ctx, 0.82, -(HALF_W + 9)); exitSign.position.copy(pos); exitSign.position.y = WATER_Y - 0.35; faceTrack(exitSign, sample); scene.add(exitSign); }
   bobs.push({ o: exitSign, ph: 4.0, amp: 0.2, roll: 0.018 });
   const flagSign = sign(THREE, textPanel(THREE, ['REGISTERED IN: 🚩', 'A DRAWING OF A FLAG'], { w: 640, h: 220, bg: '#101736', border: '#ffd94a', font: 48 }), 13, 4.5);
-  { const { pos, sample } = atFrac(ctx, 0.52, HALF_W + 9); flagSign.position.copy(pos); flagSign.position.y = pos.y - 0.4; faceTrack(flagSign, sample); scene.add(flagSign); }
+  { const { pos, sample } = atFrac(ctx, 0.52, HALF_W + 9); flagSign.position.copy(pos); flagSign.position.y = WATER_Y - 0.35; faceTrack(flagSign, sample); scene.add(flagSign); }
+
   bobs.push({ o: flagSign, ph: 5.2, amp: 0.2, roll: 0.018 });
 
   /* ----- sun glitter on the water ----- */
@@ -186,7 +218,57 @@ export function dress(ctx) {
     const p = ctx.scatterPos(HALF_W + 6, HALF_W + 150);
     const gl = new THREE.Mesh(glitGeo, glitM);
     gl.rotation.x = -Math.PI / 2; gl.rotation.z = rand(0, Math.PI);
-    gl.position.set(p.x, 0.06, p.z); scene.add(gl);
+    gl.position.set(p.x, WATER_Y + 0.05, p.z); scene.add(gl);
+  }
+
+  /* ----- THE SEA ITSELF: an animated water plane over the sculpted seabed.
+     (The old build textured the ground disc turquoise-green and called it
+     water — this replaces that read entirely.) ----- */
+  const wCan = document.createElement('canvas'); wCan.width = 256; wCan.height = 256;
+  { const g = wCan.getContext('2d');
+    g.fillStyle = '#1d7f96'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 340; i++) { // wave streaks: light crests + deep troughs
+      const y = Math.random() * 256, x = Math.random() * 256, len = 14 + Math.random() * 42;
+      g.strokeStyle = Math.random() < 0.55 ? 'rgba(190,240,250,0.20)' : 'rgba(6,60,86,0.25)';
+      g.lineWidth = 1 + Math.random() * 2.2;
+      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + len / 2, y + (Math.random() * 4 - 2), x + len, y); g.stroke();
+    }
+  }
+  const wTex = new THREE.CanvasTexture(wCan); wTex.wrapS = wTex.wrapT = THREE.RepeatWrapping; wTex.repeat.set(26, 26); wTex.colorSpace = THREE.SRGBColorSpace;
+  const water = new THREE.Mesh(new THREE.CircleGeometry(760, 48), new THREE.MeshStandardMaterial({ map: wTex, color: 0xa8dcea, transparent: true, opacity: 0.9, roughness: 0.32, metalness: 0.08 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(centroid.x, WATER_Y, centroid.z); scene.add(water);
+
+  /* ----- riprap rocks at the causeway waterline (both edges, whole lap) ----- */
+  const rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.15, 0), new THREE.MeshLambertMaterial({ color: 0x6e6257 }), 96);
+  { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eu = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+    for (let i = 0; i < 96; i++) {
+      const f = i / 96 + rand(-0.004, 0.004), side = i % 2 ? 1 : -1, lat = side * (HALF_W + rand(12.5, 16.5));
+      const { pos } = atFrac(ctx, f, lat);
+      const s = rand(0.7, 1.5);
+      eu.set(rand(0, 3), rand(0, 3), rand(0, 3)); q.setFromEuler(eu); sc.set(s, s * 0.72, s);
+      m4.compose(v.set(pos.x, ctx.terrainHeightAt(pos.x, pos.z) - 0.25, pos.z), q, sc); rocks.setMatrixAt(i, m4);
+    }
+    scene.add(rocks);
+  }
+
+  /* ----- HERO: lighthouse on the north-east island, sweeping beam ----- */
+  let beamPivot = null;
+  { const isle = lighthouseIsle({ center: centroid });
+    const gy = ctx.terrainHeightAt(isle.x, isle.z);
+    const lh = new THREE.Group(); lh.position.set(isle.x, gy - 0.3, isle.z); scene.add(lh);
+    const rockM = new THREE.MeshLambertMaterial({ color: 0x77685a });
+    for (let i = 0; i < 6; i++) { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(rand(2.4, 4.4), 0), rockM); const a = i / 6 * Math.PI * 2; r.position.set(Math.sin(a) * rand(6, 10), rand(-0.5, 0.6), Math.cos(a) * rand(6, 10)); r.rotation.set(rand(0, 3), rand(0, 3), 0); lh.add(r); }
+    const whiteM = new THREE.MeshLambertMaterial({ color: 0xf4f1ea }), redM = new THREE.MeshLambertMaterial({ color: 0xc23b2e });
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 3.4, 23, 12), whiteM); tower.position.y = 11.5; tower.castShadow = true; lh.add(tower);
+    for (const by of [6.5, 15.5]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(2.95 - by * 0.045, 3.2 - by * 0.045, 3.4, 12), redM); band.position.y = by; lh.add(band); }
+    const lampRoom = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 3.2, 10), new THREE.MeshLambertMaterial({ color: 0x22242a })); lampRoom.position.y = 24.4; lh.add(lampRoom);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(1.15, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe9a8 })); lamp.position.y = 24.4; lh.add(lamp);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.1, 2.8, 10), redM); roof.position.y = 27.4; lh.add(roof);
+    beamPivot = new THREE.Group(); beamPivot.position.y = 24.4; lh.add(beamPivot);
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(3.4, 30, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beam.rotation.z = Math.PI / 2; beam.position.x = 15; beamPivot.add(beam);
+    const lhSign = sign(THREE, textPanel(THREE, ['LIGHTHOUSE OF', 'NO JURISDICTION'], { w: 640, h: 220, bg: '#0b3d4a', border: '#7fdcff', font: 50 }), 11, 3.8);
+    lhSign.position.set(isle.x + 9, gy + 0.4, isle.z + 7); lhSign.rotation.y = -0.7; scene.add(lhSign);
   }
 
   return {
@@ -195,6 +277,8 @@ export function dress(ctx) {
       if (radar) radar.rotation.y += dt * 1.4;
       for (const f of flags) f.o.rotation.y = Math.sin(t * 3.1 + f.ph) * 0.38;
       glitM.opacity = 0.16 + 0.13 * Math.sin(t * 1.7);
+      wTex.offset.set(t * 0.006, Math.sin(t * 0.11) * 0.01 + t * 0.0016); // the sea drifts
+      if (beamPivot) beamPivot.rotation.y += dt * 0.55;
     },
   };
 }

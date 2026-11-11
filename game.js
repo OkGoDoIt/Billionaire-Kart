@@ -620,6 +620,7 @@ function buildWorld(trackIdx, field) {
   buildItemBoxes();
   currentField.forEach(ri => scene.add(makeKart(ri, ri === selectedRacer).mesh));
   initParticles();
+  resetWFX();
   computeMinimapBounds();
   placeGrid();
 }
@@ -1005,7 +1006,7 @@ function makeKart(racerIdx, isPlayer) {
   const nameSpr = nameSprite(r, isPlayer);
   root.add(nameSpr);
   const kart = {
-    racerIdx, racer: r, isPlayer, mesh: root, nameSpr, tilt, wheels: [wFL, wFR, wRL, wRR], pivots: [pivotL, pivotR],
+    racerIdx, racer: r, isPlayer, mesh: root, nameSpr, tilt, paintMat: bodyMat, wheels: [wFL, wFR, wRL, wRR], pivots: [pivotL, pivotR],
     pos: new THREE.Vector3(), heading: 0, velHeading: 0, speed: 0, steerVis: 0, spinVis: 0,
     continuous: 0, sampleIdx: 0, lateral: 0, finished: false, finishTime: null, projected: false, autopilot: false,
     item: null, spinT: 0, shrinkT: 0, starT: 0, boostT: 0, driftCharge: 0, drifting: false, starTouchCd: 0,
@@ -1014,6 +1015,7 @@ function makeKart(racerIdx, isPlayer) {
     lapStart: 0, lastLapTime: null, bestLap: null, lapsDone: 0, offroad: false, offroadDeep: false, offFactor: 1,
     ai: { lane: rand(-5, 5), laneT: rand(1, 3), itemT: rand(2, 6), skill: r.aiSkill ?? rand(0.97, 1.03), driftHeld: false },
   };
+  attachKartFX(kart);
   karts.push(kart);
   return kart;
 }
@@ -1042,7 +1044,7 @@ function placeGrid() {
     k.mesh.scale.setScalar(1);
   }
   bananas.forEach(b => scene.remove(b.mesh)); bananas = [];
-  projectiles.forEach(p => scene.remove(p.mesh)); projectiles = [];
+  projectiles.forEach(p => killProjectile(p)); projectiles = [];
   bombs.forEach(b => scene.remove(b.mesh)); bombs = [];
   itemBoxes.forEach(b => { b.active = true; b.mesh.visible = true; b.respawnT = 0; b.setFade(1); b.mesh.scale.setScalar(1); });
   raceTime = 0; finishDelay = -1;
@@ -1090,6 +1092,279 @@ function updateParticles(dt) {
     if (posA[i * 3 + 1] < pFloor[i] + 0.1) { posA[i * 3 + 1] = pFloor[i] + 0.1; pVel[i * 3 + 1] *= -0.4; }
   }
   pGeo.attributes.position.needsUpdate = true;
+}
+
+/* ================= ITEM WORLD FX =================
+   Physical, readable in-world effects for every item — visible from the chase
+   camera at racing distance, not just particles + a caption. Discipline:
+   shared singleton geometries/materials where possible, per-effect materials
+   flagged userData.fxOwn and disposed when the effect ends, NO per-frame
+   allocations in hot loops (preallocated buffers + module temp vectors).
+   Anything added to `scene` is also swept by buildWorld's teardown traverse;
+   wfx/kart-trail state arrays are reset in buildWorld via resetWFX(). */
+const _fxV1 = new THREE.Vector3();
+const FXGEO = {
+  ring: new THREE.RingGeometry(0.78, 1, 48),
+  disc: new THREE.CircleGeometry(1, 28),
+  flame: new THREE.ConeGeometry(0.36, 1.5, 10, 1, true),
+  streak: new THREE.PlaneGeometry(3.4, 0.09),
+  orb: new THREE.SphereGeometry(0.42, 12, 10),
+  debris: new THREE.BoxGeometry(0.34, 0.34, 0.34),
+  beam: new THREE.CylinderGeometry(0.45, 0.95, 7, 12, 1, true),
+};
+FXGEO.ring.rotateX(-Math.PI / 2); FXGEO.disc.rotateX(-Math.PI / 2);
+FXGEO.flame.rotateX(-Math.PI / 2); // apex -> -Z (kart forward is +Z; flames trail backward)
+FXGEO.streak.rotateY(Math.PI / 2); // length -> Z axis
+const FXMAT = {
+  flame: new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  flameCore: new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  flameGold: new THREE.MeshBasicMaterial({ color: 0xffc93c, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  streak: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  ink: new THREE.MeshBasicMaterial({ color: 0x14092b, transparent: true, opacity: 0.88, depthWrite: false }),
+  beam: new THREE.MeshBasicMaterial({ color: 0xffd94a, transparent: true, opacity: 0.30, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+};
+const FX_RAINBOW = [0xffe066, 0xff8ac2, 0x7be495, 0x6ec3ff, 0xffffff];
+function fxBasic(params) { const m = new THREE.MeshBasicMaterial(Object.assign({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }, params)); m.userData.fxOwn = true; return m; }
+
+/* ---- ribbon trails (projectiles + star/bailout karts) ---- */
+function makeTrail(n, width, color) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(n * 6), col = new Float32Array(n * 6), idx = [];
+  for (let i = 0; i < n; i++) {
+    const b = Math.pow(1 - i / (n - 1), 1.4);
+    for (let s = 0; s < 2; s++) { const o = (i * 2 + s) * 3; col[o] = b; col[o + 1] = b; col[o + 2] = b; }
+    if (i < n - 1) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  const mat = new THREE.MeshBasicMaterial({ color, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.visible = false;
+  return { mesh, geo, mat, n, width, hist: new Float32Array(n * 3), live: false };
+}
+function trailSeed(tr, p) { for (let i = 0; i < tr.n; i++) { tr.hist[i * 3] = p.x; tr.hist[i * 3 + 1] = p.y; tr.hist[i * 3 + 2] = p.z; } tr.live = true; tr.mesh.visible = true; }
+function trailPush(tr, p, wScale = 1) {
+  const h = tr.hist, n = tr.n, posA = tr.geo.attributes.position.array;
+  h.copyWithin(3, 0, (n - 1) * 3);
+  h[0] = p.x; h[1] = p.y; h[2] = p.z;
+  for (let i = 0; i < n; i++) {
+    const i0 = Math.max(i - 1, 0) * 3, i1 = Math.min(i + 1, n - 1) * 3;
+    let dx = h[i0] - h[i1], dz = h[i0 + 2] - h[i1 + 2];
+    const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
+    const w = tr.width * wScale * (1 - i / n) * 0.5, cx = h[i * 3], cy = h[i * 3 + 1], cz = h[i * 3 + 2], o = i * 6;
+    posA[o] = cx - dz * w; posA[o + 1] = cy; posA[o + 2] = cz + dx * w;
+    posA[o + 3] = cx + dz * w; posA[o + 4] = cy; posA[o + 5] = cz - dx * w;
+  }
+  tr.geo.attributes.position.needsUpdate = true;
+}
+function trailOff(tr) { tr.live = false; tr.mesh.visible = false; }
+function trailDispose(tr) { if (!tr) return; scene.remove(tr.mesh); tr.geo.dispose(); tr.mat.dispose(); }
+
+/* ---- one-shot world effects ---- */
+let wfx = [], flashA = 0;
+function resetWFX() { wfx = []; flashA = 0; const el = $('flash-overlay'); if (el) el.style.opacity = 0; }
+function wfxKill(f) {
+  if (!f.mesh) return;
+  scene.remove(f.mesh);
+  f.mesh.traverse(o => {
+    if (o.geometry && o.geometry.userData.fxOwn) o.geometry.dispose();
+    if (o.material && o.material.userData && o.material.userData.fxOwn) o.material.dispose();
+    if (o.material && o.material.isSpriteMaterial) o.material.dispose(); // effect sprites own their material (shared map texture is NOT disposed)
+  });
+}
+function updateWFX(dt) {
+  for (let i = wfx.length - 1; i >= 0; i--) {
+    const f = wfx[i]; f.t += dt;
+    if (f.step(f, dt) || f.t >= f.dur) { wfxKill(f); wfx.splice(i, 1); }
+  }
+  if (flashA > 0) { flashA = Math.max(0, flashA - dt * 2.4); const el = $('flash-overlay'); if (el) el.style.opacity = flashA.toFixed(2); }
+}
+function wfxRing(pos, { r1 = 12, dur = 0.5, color = 0xffd94a, y = 0.12, r0 = 0.6, op = 0.95 } = {}) {
+  const mesh = new THREE.Mesh(FXGEO.ring, fxBasic({ color, opacity: op, side: THREE.DoubleSide }));
+  mesh.position.set(pos.x, pos.y + y, pos.z); scene.add(mesh);
+  wfx.push({ t: 0, dur, mesh, step(f) { const p = f.t / dur, e = 1 - (1 - p) * (1 - p); mesh.scale.setScalar(r0 + (r1 - r0) * e); mesh.material.opacity = op * (1 - p); return p >= 1; } });
+}
+function wfxFlashDisc(pos, { r = 6, dur = 0.28, color = 0xffe9a8 } = {}) {
+  const mesh = new THREE.Mesh(FXGEO.disc, fxBasic({ color, opacity: 0.9 }));
+  mesh.position.set(pos.x, pos.y + 0.16, pos.z); scene.add(mesh);
+  wfx.push({ t: 0, dur, mesh, step(f) { const p = f.t / dur; mesh.scale.setScalar(0.5 + r * p); mesh.material.opacity = 0.9 * (1 - p); return p >= 1; } });
+}
+function wfxSplat(pos, { r = 2.6, dur = 1.1, color = 0x0a1420, op = 0.6 } = {}) {
+  const mesh = new THREE.Mesh(FXGEO.disc, fxBasic({ color, opacity: op, blending: THREE.NormalBlending }));
+  mesh.position.set(pos.x, pos.y + 0.14, pos.z); scene.add(mesh);
+  wfx.push({ t: 0, dur, mesh, step(f) { const p = f.t / dur; mesh.scale.setScalar(r * Math.min(1, p * 3)); mesh.material.opacity = op * (1 - p * p); return p >= 1; } });
+}
+function wfxDebris(pos) {
+  const grp = new THREE.Group(); grp.position.copy(pos);
+  const mat = fxBasic({ color: 0x3a3a42, blending: THREE.NormalBlending, opacity: 1 });
+  const parts = [];
+  for (let i = 0; i < 8; i++) {
+    const m = new THREE.Mesh(FXGEO.debris, mat); grp.add(m);
+    parts.push({ m, vx: rand(-7, 7), vy: rand(6, 13), vz: rand(-7, 7), rx: rand(-9, 9), rz: rand(-9, 9) });
+  }
+  scene.add(grp);
+  wfx.push({ t: 0, dur: 0.85, mesh: grp, step(f, dt) {
+    for (const d of parts) { d.vy -= 24 * dt; d.m.position.x += d.vx * dt; d.m.position.y += d.vy * dt; d.m.position.z += d.vz * dt; if (d.m.position.y < 0.2) { d.m.position.y = 0.2; d.vy *= -0.35; } d.m.rotation.x += d.rx * dt; d.m.rotation.z += d.rz * dt; }
+    mat.opacity = 1 - Math.max(0, (f.t - 0.5) / 0.35);
+    return f.t >= f.dur;
+  } });
+}
+/* Lightning: a jagged crossed-ribbon bolt. follow=false strikes a fixed point
+   from the sky; follow=true wraps a kart in re-jittered electric arcs. */
+function wfxBolt(target, { follow = false, dur = 0.22, h = 26, width = 0.38, color = 0xbfe9ff } = {}) {
+  const SEG = 7, geo = new THREE.BufferGeometry(); geo.userData.fxOwn = true;
+  const pos = new Float32Array((SEG + 1) * 4 * 3), idx = [];
+  for (let i = 0; i < SEG; i++) { const a = i * 4; idx.push(a, a + 4, a + 1, a + 1, a + 4, a + 5, a + 2, a + 6, a + 3, a + 3, a + 6, a + 7); }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, fxBasic({ color, opacity: 0.95, side: THREE.DoubleSide }));
+  mesh.frustumCulled = false; scene.add(mesh);
+  const f = { t: 0, dur, mesh, kart: follow ? target : null, base: follow ? null : target.pos.clone(), jit: 0,
+    step(fx, dt) {
+      const b = fx.kart ? fx.kart.pos : fx.base;
+      mesh.position.set(b.x, b.y, b.z);
+      fx.jit -= dt;
+      if (!follow || fx.jit <= 0) {
+        fx.jit = 0.06;
+        for (let i = 0; i <= SEG; i++) {
+          const t = i / SEG, y = h * (1 - t) + 0.3 * t, sway = Math.sin(t * Math.PI) * (follow ? 0.9 : 2.6);
+          const cx = rand(-1, 1) * sway, cz = rand(-1, 1) * sway, o = i * 12, w = width * (0.5 + t * 0.7);
+          pos[o] = cx - w; pos[o + 1] = y; pos[o + 2] = cz; pos[o + 3] = cx + w; pos[o + 4] = y; pos[o + 5] = cz;
+          pos[o + 6] = cx; pos[o + 7] = y; pos[o + 8] = cz - w; pos[o + 9] = cx; pos[o + 10] = y; pos[o + 11] = cz + w;
+        }
+        geo.attributes.position.needsUpdate = true;
+      }
+      mesh.material.opacity = 0.95 * (1 - Math.max(0, (fx.t - dur * 0.55) / (dur * 0.45)));
+      return fx.t >= dur;
+    } };
+  wfx.push(f);
+}
+/* Insider Trading: the stolen item visibly flies from victim to thief. */
+function wfxSteal(fromKart, toKart) {
+  const grp = new THREE.Group();
+  const orb = new THREE.Mesh(FXGEO.orb, fxBasic({ color: 0xcbb2ff, opacity: 0.95 })); grp.add(orb);
+  const sm = new THREE.SpriteMaterial({ map: GTEX.particleSprite(), color: 0xcbb2ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const glow = new THREE.Sprite(sm); glow.scale.setScalar(3.2); grp.add(glow);
+  grp.position.copy(fromKart.pos); grp.position.y = fromKart.pos.y + 1.4; scene.add(grp);
+  wfx.push({ t: 0, dur: 0.55, mesh: grp, step(f) {
+    const p = Math.min(1, f.t / f.dur), e = p * p * (3 - 2 * p);
+    grp.position.lerpVectors(fromKart.pos, toKart.pos, e);
+    grp.position.y += 1.4 + Math.sin(p * Math.PI) * 3.4; // lerp already put us at the interpolated road height
+    if (p >= 1) spawnParticles(toKart.pos, { count: 12, colors: [0xcbb2ff, 0xffffff], speed: 3.5, life: 0.45, up: 3, gravity: 0 });
+    return p >= 1;
+  } });
+}
+
+/* Held items are visible IN THE WORLD (Mario Kart readability rule): a mini
+   version of whatever a kart holds orbits it, so rivals' threats can be read
+   at racing distance. Also used for the Market Crash item-drop scatter. */
+function miniItemMesh(id) {
+  const g = new THREE.Group();
+  const std = (color, extra = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.4 }, extra));
+  const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  if (id === 'green' || id === 'red' || id === 'blue') { const p = projectileMesh(id); p.scale.setScalar(0.6); g.add(p); }
+  else if (id === 'bomb') { const b = bombMesh(); b.scale.setScalar(0.55); g.add(b); }
+  else if (id === 'banana') { const s = add(new THREE.SphereGeometry(0.34, 10, 8), std(0x2fb9ff, { emissive: 0x1177bb, emissiveIntensity: 1.1, roughness: 0.15 })); s.scale.y = 1.35; }
+  else if (id === 'boost') { const bag = add(new THREE.SphereGeometry(0.42, 10, 8), std(0xd9a441, { metalness: 0.5, roughness: 0.3 })); bag.scale.y = 1.15; add(new THREE.CylinderGeometry(0.15, 0.2, 0.22, 8), std(0x8a6a24), 0, 0.5, 0); }
+  else if (id === 'star') add(new THREE.OctahedronGeometry(0.52), std(0xffd94a, { emissive: 0xcc9900, emissiveIntensity: 1.2 }));
+  else if (id === 'golden') { const gm = std(0xffc93c, { emissive: 0x997700, emissiveIntensity: 0.9, metalness: 0.6, roughness: 0.25 }); add(new THREE.CylinderGeometry(0.36, 0.2, 0.55, 10), gm); add(new THREE.CylinderGeometry(0.1, 0.17, 0.3, 8), gm, 0, -0.42, 0); }
+  else if (id === 'lightning') { const b = add(new THREE.OctahedronGeometry(0.42), std(0xffe14d, { emissive: 0xccaa00, emissiveIntensity: 1.2 })); b.scale.set(0.7, 1.6, 0.7); }
+  else if (id === 'horn') { const c = add(new THREE.ConeGeometry(0.42, 0.85, 10), std(0xf2f2f2)); c.rotation.x = Math.PI / 2; add(new THREE.CylinderGeometry(0.13, 0.13, 0.3, 8), std(0xd23b2e), 0, 0, -0.55); }
+  else if (id === 'blooper') { add(new THREE.SphereGeometry(0.44, 10, 8), std(0x2a1650)); add(new THREE.SphereGeometry(0.2, 8, 6), std(0xf2f2f2), 0, 0.28, 0.16); }
+  else if (id === 'boo') add(new THREE.SphereGeometry(0.46, 12, 10), std(0xffffff, { transparent: true, opacity: 0.85 }));
+  else if (id === 'bailout') { add(new THREE.BoxGeometry(0.62, 0.62, 0.3), std(0xf5f5f5)); add(new THREE.BoxGeometry(0.46, 0.16, 0.32), std(0xd23b2e)); add(new THREE.BoxGeometry(0.16, 0.46, 0.32), std(0xd23b2e)); }
+  return g;
+}
+/* Market Crash: the victim's held item is knocked loose and scatters. */
+function wfxScatter(kart, id) {
+  const m = miniItemMesh(id);
+  m.position.copy(kart.pos); m.position.y = kart.pos.y + 1.4;
+  m.traverse(o => { if (o.geometry && o.geometry !== FXGEO.ring) o.geometry.userData.fxOwn = true; });
+  scene.add(m);
+  const a = rand(0, Math.PI * 2);
+  wfx.push({ t: 0, dur: 1.15, mesh: m, gy: kart.pos.y, vx: Math.cos(a) * rand(3, 6), vy: rand(6, 9), vz: Math.sin(a) * rand(3, 6), step(f, dt) {
+    f.vy -= 22 * dt; m.position.x += f.vx * dt; m.position.y += f.vy * dt; m.position.z += f.vz * dt;
+    if (m.position.y < f.gy + 0.45) { m.position.y = f.gy + 0.45; f.vy *= -0.4; f.vx *= 0.7; f.vz *= 0.7; }
+    m.rotation.y += dt * 7; m.rotation.x += dt * 3;
+    if (f.t > f.dur - 0.25) m.scale.setScalar(Math.max(0.01, (f.dur - f.t) / 0.25));
+    return f.t >= f.dur;
+  } });
+}
+
+/* ---- per-kart attachments: boost flames, streaks, auras, trails, beacons ---- */
+function attachKartFX(k) {
+  const g = new THREE.Group(); k.mesh.add(g);
+  const mk = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.visible = false; g.add(m); return m; };
+  const fx = {};
+  fx.flames = [mk(FXGEO.flame, FXMAT.flame, -0.45, 0.55, -2.05), mk(FXGEO.flame, FXMAT.flame, 0.45, 0.55, -2.05)];
+  fx.cores = [mk(FXGEO.flame, FXMAT.flameCore, -0.45, 0.55, -1.95), mk(FXGEO.flame, FXMAT.flameCore, 0.45, 0.55, -1.95)];
+  fx.glowDisc = mk(FXGEO.disc, new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }), 0, 0.07, 0);
+  fx.glowDisc.scale.setScalar(2.1);
+  fx.glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: GTEX.particleSprite(), color: 0xffd94a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  fx.glow.position.set(0, 1.3, 0); fx.glow.scale.setScalar(6); g.add(fx.glow);
+  fx.streaks = [];
+  for (let i = 0; i < 8; i++) { const s = mk(FXGEO.streak, FXMAT.streak, 0, 1, 0); s.userData.age = Math.random() * 0.3; s.userData.life = 0.3; s.userData.vz = 30; fx.streaks.push(s); }
+  fx.splat = mk(FXGEO.disc, FXMAT.ink, 0, 2.05, 0.42); fx.splat.rotation.x = Math.PI / 2; fx.splat.scale.setScalar(0.85);
+  fx.beaconDisc = mk(FXGEO.disc, FXMAT.beam, 0, 0.09, 13); fx.beaconDisc.scale.setScalar(2.6);
+  fx.beaconBeam = mk(FXGEO.beam, FXMAT.beam, 0, 3.5, 13);
+  fx.heldOrbit = new THREE.Group(); g.add(fx.heldOrbit); // held item, orbiting the kart (built lazily per item id)
+  fx.held = {}; fx.heldCur = null;
+  fx.bodyMat = k.paintMat || k.tilt.children[0].material; // kart paint (explicit handle from makeKart; child-order fallback) — flashed by Viral Moment
+  fx.starLit = false;
+  fx.trail = makeTrail(20, 1.1, 0xffd94a); scene.add(fx.trail.mesh);
+  k.fx = fx;
+}
+function updateKartFX(k, dt) {
+  const fx = k.fx; if (!fx) return;
+  const gold = k.goldenT > 0, boosting = k.boostT > 0 && k.spinT <= 0;
+  const flick = 0.85 + Math.sin(elapsed * 47 + k.racerIdx * 3.1) * 0.25 + Math.sin(elapsed * 31 + k.racerIdx) * 0.15;
+  for (let i = 0; i < 2; i++) {
+    fx.flames[i].visible = boosting; fx.cores[i].visible = boosting;
+    if (boosting) { fx.flames[i].material = gold ? FXMAT.flameGold : FXMAT.flame; fx.flames[i].scale.set(1, 1, flick * (gold ? 1.3 : 1)); fx.cores[i].scale.set(0.55, 0.55, 0.6 * flick); }
+  }
+  fx.glowDisc.visible = boosting;
+  if (boosting) { fx.glowDisc.material.color.setHex(gold ? 0xffc93c : 0xff8a2a); fx.glowDisc.scale.setScalar(2.1 + Math.sin(elapsed * 23 + k.racerIdx) * 0.15); }
+  const streaking = boosting && k.speed > 16;
+  for (const s of fx.streaks) {
+    s.userData.age += dt;
+    if (s.userData.age >= s.userData.life) {
+      s.userData.age = 0; s.userData.life = rand(0.22, 0.4);
+      const a = rand(0, Math.PI * 2), r = rand(1.3, 2.4);
+      s.position.set(Math.cos(a) * r, rand(0.35, 1.7), rand(0.5, 2)); s.userData.vz = rand(26, 40);
+    }
+    s.visible = streaking;
+    if (streaking) { s.position.z -= s.userData.vz * dt; if (s.position.z < -6) s.userData.age = s.userData.life; }
+  }
+  let glowO = 0;
+  if (k.starT > 0) { glowO = 0.55 + Math.sin(elapsed * 9) * 0.15; fx.glow.material.color.setHex(0xffe066); fx.glow.scale.setScalar(6.4); }
+  else if (k.bailoutT > 0) { glowO = 0.5; fx.glow.material.color.setHex(0xffd94a); fx.glow.scale.setScalar(7); }
+  else if (gold) { glowO = 0.3; fx.glow.material.color.setHex(0xffc93c); fx.glow.scale.setScalar(5.4); }
+  fx.glow.material.opacity = glowO;
+  if ((k.starT > 0 || gold) && k.speed > 6 && Math.random() < 0.55) { // sparkle trail (rainbow for Viral Moment, gold for Series F)
+    _fxV1.copy(k.pos); _fxV1.y += 0.9;
+    spawnParticles(_fxV1, { count: 1, colors: [k.starT > 0 ? FX_RAINBOW[(Math.floor(elapsed * 7) + k.racerIdx) % FX_RAINBOW.length] : 0xffd94a], speed: 1.2, life: 0.5, up: 1.5, gravity: 0 });
+  }
+  if (k.ghostT > 0 && Math.random() < 0.5) { _fxV1.copy(k.pos); _fxV1.y += 1; spawnParticles(_fxV1, { count: 1, colors: [0xcbb2ff, 0xffffff], speed: 0.4, life: 0.9, up: 0.8, gravity: 0 }); } // ghost wisps
+  fx.splat.visible = k.inkT > 0; // Smear Campaign ink rides the victim's visor
+  // Viral Moment: the kart ITSELF flashes emissive gold, not just a trail
+  if (k.starT > 0) { fx.bodyMat.emissive.setHex(0xffcf3f); fx.bodyMat.emissiveIntensity = 0.5 + Math.sin(elapsed * 10) * 0.3; fx.starLit = true; }
+  else if (fx.starLit) { fx.bodyMat.emissiveIntensity = 0; fx.starLit = false; }
+  // held item visible in the world, orbiting the kart so threats read at distance
+  if (k.item !== fx.heldCur) {
+    if (fx.heldCur && fx.held[fx.heldCur]) fx.held[fx.heldCur].visible = false;
+    fx.heldCur = k.item;
+    if (k.item) {
+      if (!fx.held[k.item]) { const m = miniItemMesh(k.item); m.position.set(0, 1.35, -2.7); fx.heldOrbit.add(m); fx.held[k.item] = m; }
+      fx.held[k.item].visible = true;
+    }
+  }
+  if (fx.heldCur) fx.heldOrbit.rotation.y += dt * 2.4;
+  fx.beaconDisc.visible = fx.beaconBeam.visible = k.bailoutT > 0; // Bailout guiding light, ahead of the kart
+  const trailOn = k.starT > 0 || k.bailoutT > 0;
+  if (trailOn) {
+    _fxV1.copy(k.pos); _fxV1.y = k.pos.y + 0.55;
+    if (!fx.trail.live) { trailSeed(fx.trail, _fxV1); fx.trail.mat.color.setHex(0xffd94a); }
+    trailPush(fx.trail, _fxV1, k.bailoutT > 0 ? 1.35 : 1);
+  } else if (fx.trail.live) trailOff(fx.trail);
 }
 
 /* ================= PHYSICS ================= */
@@ -1275,6 +1550,7 @@ function updateKart(k, input, dt) {
   k.tilt.rotation.x = lerp(k.tilt.rotation.x, clamp(-k.speed * 0.0012, -0.04, 0.02) - Math.atan(slopeHere), clamp(6 * dt, 0, 1));
   k.pivots.forEach(p => p.rotation.y = -k.steerVis * 0.38);
   k.wheels.forEach(w => w.rotation.x += k.speed * dt / 0.5);
+  updateKartFX(k, dt);
   // AI stuck recovery
   if (!k.isPlayer) {
     if (Math.abs(k.speed) < 2 && gameState === 'racing' && raceTime > 3) { k.ai.stuckT = (k.ai.stuckT || 0) + dt; } else k.ai.stuckT = 0;
@@ -1375,13 +1651,15 @@ function updateItemBoxes(dt) {
     }
   }
 }
-function leakMesh() { // Data Leak: flat glowing puddle + droplets (internal item id: 'banana')
+function leakMesh() { // Data Leak: glossy dark puddle ON the road + glowing data-blue rim + droplets (internal item id: 'banana')
   const g = new THREE.Group();
-  const puddle = new THREE.Mesh(new THREE.CircleGeometry(1.55, 22), new THREE.MeshBasicMaterial({ color: 0x2fb9ff, transparent: true, opacity: 0.82 }));
-  puddle.rotation.x = -Math.PI / 2; puddle.position.y = 0.1; g.add(puddle);
-  const inner = new THREE.Mesh(new THREE.CircleGeometry(0.95, 18), new THREE.MeshBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.9 }));
-  inner.rotation.x = -Math.PI / 2; inner.position.y = 0.12; g.add(inner);
-  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.72, 16), new THREE.MeshBasicMaterial({ color: 0x2fb9ff, transparent: true, opacity: 0.7 })); // organic satellite blob
+  const gloss = new THREE.Mesh(new THREE.CircleGeometry(1.6, 24), new THREE.MeshStandardMaterial({ color: 0x0b1626, roughness: 0.06, metalness: 0.25, transparent: true, opacity: 0.96 }));
+  gloss.rotation.x = -Math.PI / 2; gloss.position.y = 0.1; g.add(gloss);
+  const sheen = new THREE.Mesh(new THREE.CircleGeometry(1.05, 20), new THREE.MeshBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.28 }));
+  sheen.rotation.x = -Math.PI / 2; sheen.position.y = 0.12; g.add(sheen);
+  const rim = new THREE.Mesh(FXGEO.ring, new THREE.MeshBasicMaterial({ color: 0x2fb9ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+  rim.position.y = 0.12; rim.scale.setScalar(1.6); g.add(rim); g.userData.rim = rim;
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.72, 16), new THREE.MeshBasicMaterial({ color: 0x2fb9ff, transparent: true, opacity: 0.7 })); // organic satellite blob (model pass)
   blob.rotation.x = -Math.PI / 2; blob.position.set(1.15, 0.1, 0.55); g.add(blob);
   const dropMat = new THREE.MeshStandardMaterial({ color: 0x2fb9ff, emissive: 0x1177bb, emissiveIntensity: 0.9, roughness: 0.2 });
   for (const [dx, dz, s] of [[-0.7, 0.4, 0.3], [0.55, -0.5, 0.24], [0.15, 0.75, 0.19]]) {
@@ -1433,6 +1711,8 @@ function bombMesh() { // Pink Slip: bomb + the dreaded paper slip + a real fuse 
   const fuseCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 1.14, 0), new THREE.Vector3(0.16, 1.36, 0.05), new THREE.Vector3(0.34, 1.44, -0.08)]);
   const fuse = new THREE.Mesh(new THREE.TubeGeometry(fuseCurve, 8, 0.032, 6), GMAT.mattePlastic(0x8a6f4d)); g.add(fuse);
   const spark = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa53a })); spark.position.set(0.34, 1.44, -0.08); g.add(spark);
+  const glowSm = new THREE.SpriteMaterial({ map: GTEX.particleSprite(), color: 0xffa53a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+  const glow = new THREE.Sprite(glowSm); glow.position.set(0.34, 1.44, -0.08); glow.scale.setScalar(0.9); g.add(glow); // blinking fuse light at the fuse tip, pulsed in updateBombs
   const slipTex = canvasTexture(128, 160, (g2) => {
     g2.fillStyle = '#ffd7e0'; g2.fillRect(0, 0, 128, 160);
     g2.fillStyle = '#b01e24'; g2.font = '900 25px system-ui'; g2.textAlign = 'center';
@@ -1441,7 +1721,7 @@ function bombMesh() { // Pink Slip: bomb + the dreaded paper slip + a real fuse 
   });
   const slip = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.65), new THREE.MeshStandardMaterial({ map: slipTex, side: THREE.DoubleSide, roughness: 0.9 }));
   slip.position.set(0.3, 0.72, 0.78); slip.rotation.set(-0.25, 0.35, 0.1); g.add(slip);
-  g.userData.body = body;
+  g.userData.body = body; g.userData.glow = glow;
   return g;
 }
 function useItem(k) {
@@ -1483,14 +1763,26 @@ function useItem(k) {
     const mesh = projectileMesh(id);
     mesh.position.copy(k.pos).addScaledVector(fwd, 3.2); mesh.position.y = k.pos.y + 0.9;
     scene.add(mesh);
-    projectiles.push({ type: id, mesh, owner: k, target, heading: k.heading, speed: id === 'red' ? 63 : 74, life: id === 'red' ? 6 : 3.2, age: 0 });
-    if (id === 'red' && !target) projectiles[projectiles.length - 1].type = 'green', projectiles[projectiles.length - 1].speed = 74;
+    const pr = { type: id, mesh, owner: k, target, heading: k.heading, speed: id === 'red' ? 63 : 74, life: id === 'red' ? 6 : 3.2, age: 0 };
+    if (id === 'red' && !target) { pr.type = 'green'; pr.speed = 74; }
+    pr.trail = makeTrail(pr.type === 'red' ? 16 : 14, pr.type === 'red' ? 0.62 : 0.5, pr.type === 'red' ? 0xff5040 : 0x39ff6a);
+    trailSeed(pr.trail, mesh.position); scene.add(pr.trail.mesh);
+    if (pr.type === 'red' && target) { // lock-on ring tightening over the victim
+      pr.lockRing = new THREE.Mesh(FXGEO.ring, fxBasic({ color: 0xff4040, opacity: 0.95, side: THREE.DoubleSide }));
+      pr.lockRing.position.copy(target.pos); pr.lockRing.position.y = target.pos.y + 1.1; scene.add(pr.lockRing);
+    }
+    projectiles.push(pr);
   } else if (id === 'blue') {
     const leader = sortedKarts().find(o => o !== k) || null;
     if (!leader) return;
     const mesh = projectileMesh('blue');
     mesh.position.copy(k.pos); mesh.position.y = k.pos.y + 7; scene.add(mesh);
-    projectiles.push({ type: 'blue', mesh, owner: k, target: leader, u: k.continuous, speed: 118, life: 14, age: 0 });
+    const bp = { type: 'blue', mesh, owner: k, target: leader, u: k.continuous, speed: 118, life: 14, age: 0 };
+    bp.trail = makeTrail(18, 0.85, 0x7fb2ff);
+    trailSeed(bp.trail, mesh.position); scene.add(bp.trail.mesh);
+    bp.warnRing = new THREE.Mesh(FXGEO.ring, fxBasic({ color: 0xff5252, opacity: 0.9, side: THREE.DoubleSide })); // target painted on the leader, tightening as the Suit closes in
+    bp.warnRing.position.copy(leader.pos); bp.warnRing.position.y = leader.pos.y + 0.15; scene.add(bp.warnRing);
+    projectiles.push(bp);
     showFeed('⚖️ ANTITRUST SUIT INBOUND — it\'s hunting the leader!');
     if (leader.isPlayer) A.zap();
   } else if (id === 'lightning') {
@@ -1498,9 +1790,13 @@ function useItem(k) {
     if (!victims.length) victims = karts.filter(o => o !== k && !o.finished);
     for (const v of victims) {
       if (v.starT > 0) continue;
-      v.shrinkT = 3.5; v.speed = Math.min(v.speed, 17);
+      v.shrinkT = 4.8; v.speed = Math.min(v.speed, 17); // ~0.6x for ~5 s, per the real games
+      if (v.item) { wfxScatter(v, v.item); if (v.item === 'golden') v.goldenT = 0; v.item = null; if (v.isPlayer) updateItemSlot(); } // victims DROP their held item, visibly
       spawnParticles(v.pos, { count: 12, colors: [0x9be7ff, 0xffffff], speed: 4, life: 0.5, up: 6, gravity: -4 });
+      wfxBolt(v, { follow: false, dur: 0.22 }); // visible bolt strike from the sky
+      wfxBolt(v, { follow: true, dur: 0.6, h: 3.2, width: 0.22, color: 0x9be7ff }); // electric arcs crackle over the victim
     }
+    flashA = 0.55; // full-sky flash (decays in updateWFX)
     A.zap();
     if (k.isPlayer) showFeed('📉 You crashed the market!');
     else if (victims.includes(playerKart())) { showFeed('📉 MARKET CRASH — you\'ve been shrunk!'); shake = Math.max(shake, 0.4); }
@@ -1513,8 +1809,10 @@ function useItem(k) {
     k.hornT = 0.6; // active window — also swats an arriving Antitrust Suit out of the air (updateProjectiles)
     if (k.isPlayer) A.tone(170, 0.35, 'square', 0.16, -60);
     spawnParticles(k.pos, { count: 42, colors: [0xffd94a, 0xffffff], speed: 13, life: 0.45, up: 2.5, gravity: 0 });
+    wfxRing(k.pos, { r1: 13, dur: 0.5, color: 0xffd94a }); // the Spin Team shockwave, readable in-world
+    wfxRing(k.pos, { r1: 9, dur: 0.38, color: 0xffffff, r0: 2 });
     for (let i = projectiles.length - 1; i >= 0; i--) {
-      if (projectiles[i].mesh.position.distanceToSquared(k.pos) < 210) { spawnParticles(projectiles[i].mesh.position, { count: 8, colors: [0xffd94a], speed: 4, life: 0.4, up: 2, gravity: 0 }); scene.remove(projectiles[i].mesh); projectiles.splice(i, 1); }
+      if (projectiles[i].mesh.position.distanceToSquared(k.pos) < 210) { spawnParticles(projectiles[i].mesh.position, { count: 8, colors: [0xffd94a], speed: 4, life: 0.4, up: 2, gravity: 0 }); killProjectile(projectiles[i]); projectiles.splice(i, 1); }
     }
     for (let i = bananas.length - 1; i >= 0; i--) if (bananas[i].pos.distanceToSquared(k.pos) < 110) { scene.remove(bananas[i].mesh); bananas.splice(i, 1); }
     for (let i = bombs.length - 1; i >= 0; i--) if (bombs[i].pos.distanceToSquared(k.pos) < 110) { scene.remove(bombs[i].mesh); bombs.splice(i, 1); }
@@ -1524,15 +1822,18 @@ function useItem(k) {
     k.ghostT = 3; k.boostT = Math.max(k.boostT, 0.7);
     const holders = karts.filter(o => o !== k && o.item);
     let stolen = 'boost'; // nobody holding anything? Insider trading still nets you a boost
-    if (holders.length) { const v = pick(holders); stolen = v.item; if (v.item === 'golden') v.goldenT = 0; v.item = null; if (v.isPlayer) updateItemSlot(); }
+    let victim = null;
+    if (holders.length) { victim = pick(holders); stolen = victim.item; if (victim.item === 'golden') victim.goldenT = 0; victim.item = null; if (victim.isPlayer) updateItemSlot(); }
     k.item = stolen;
+    if (victim) wfxSteal(victim, k); // the stolen item visibly flies across to the thief
     spawnParticles(k.pos, { count: 20, colors: [0xcbb2ff, 0xffffff], speed: 4, life: 0.7, up: 4, gravity: 0 });
     if (k.isPlayer) { A.tone(880, 0.35, 'sine', 0.09, -520); updateItemSlot(); showFeed(`👻 Insider Trading — stole ${ITEMS[stolen].name}!`); }
   } else if (id === 'blooper') {
     const victims = karts.filter(o => o !== k && o.continuous > k.continuous && !o.finished);
     for (const v of victims) {
       v.inkT = 2.5;
-      spawnParticles(v.pos, { count: 14, colors: [0x1a1030, 0x3a2060], speed: 5, life: 0.6, up: 4, gravity: -2 });
+      spawnParticles(v.pos, { count: 20, colors: [0x1a1030, 0x3a2060], speed: 5, life: 0.6, up: 4, gravity: -2 }); // in-world ink blob burst
+      wfxSplat(v.pos, { color: 0x1a1030, r: 2.9, dur: 0.9, op: 0.55 });
       if (v.isPlayer) showInk();
     }
     if (k.isPlayer) { A.noise(0.3, 0.11, 480); showFeed(victims.length ? '📰 Smear Campaign launched!' : '📰 Smear Campaign — nobody ahead to smear'); }
@@ -1547,15 +1848,21 @@ function useItem(k) {
 }
 function explodeBomb(b) {
   spawnParticles(b.pos, { count: 44, colors: [0xffa53a, 0xff5252, 0xffd94a, 0x555555], speed: 11, life: 0.9, up: 7 });
+  wfxRing(b.pos, { r1: 9.5, dur: 0.5, color: 0xffa53a }); // shockwave ring + flash + debris: a real explosion, not a caption
+  wfxFlashDisc(b.pos, { r: 5.5, dur: 0.3, color: 0xffd9a0 });
+  _fxV1.copy(b.pos); _fxV1.y = b.pos.y + 0.1; wfxDebris(_fxV1);
   for (const o of karts) if (o.pos.distanceTo(b.pos) < 8.5) spinKart(o);
-  if (playerKart().pos.distanceTo(b.pos) < 26) { shake = Math.max(shake, 0.6); A.hit(); }
-  if (b.owner.isPlayer || playerKart().pos.distanceTo(b.pos) < 42) showFeed('💣 PINK SLIP DELIVERED!');
+  const pd = playerKart().pos.distanceTo(b.pos);
+  if (pd < 30) { shake = Math.max(shake, clamp(0.95 - pd / 30, 0.1, 0.85)); A.hit(); } // shake scaled by distance
+  if (b.owner.isPlayer || pd < 42) showFeed('💣 PINK SLIP DELIVERED!');
 }
 function updateBombs(dt) {
   for (let i = bombs.length - 1; i >= 0; i--) {
     const b = bombs[i]; b.fuse -= dt;
     const body = b.mesh.userData.body; // telegraphed: flashing red fuse, faster as it runs out
     if (body) body.material.emissiveIntensity = Math.sin(elapsed * (b.fuse < 0.5 ? 42 : 13)) > 0 ? (b.fuse < 0.5 ? 1.5 : 0.55) : 0.04;
+    const glow = b.mesh.userData.glow; // the fuse light itself blinks in sync, swelling as the fuse runs out
+    if (glow) glow.scale.setScalar(Math.sin(elapsed * (b.fuse < 0.5 ? 42 : 13)) > 0 ? (b.fuse < 0.5 ? 1.5 : 1.05) : 0.5);
     b.beepT -= dt;
     if (b.beepT <= 0 && b.pos.distanceTo(playerKart().pos) < 60) { A.tone(b.fuse < 0.5 ? 1320 : 880, 0.06, 'square', 0.05); b.beepT = b.fuse < 0.5 ? 0.12 : 0.3; }
     let boom = b.fuse <= 0;
@@ -1570,9 +1877,20 @@ function updateBombs(dt) {
 function explodeBlue(p) {
   const c = p.target.pos.clone(); c.y += 1;
   spawnParticles(c, { count: 46, colors: [0xffa53a, 0xff5252, 0xffd94a], speed: 11, life: 0.9, up: 7 });
+  wfxRing(p.target.pos, { r1: 12.5, dur: 0.55, color: 0xffa53a }); // expanding shockwave ring + fireball flash + debris
+  wfxFlashDisc(p.target.pos, { r: 7, dur: 0.3, color: 0xffd9a0 });
+  wfxDebris(c);
   for (const o of karts) if (o.pos.distanceTo(p.target.pos) < 11) spinKart(o);
-  if (playerKart().pos.distanceTo(p.target.pos) < 30) { shake = Math.max(shake, 0.65); A.hit(); }
+  const pd = playerKart().pos.distanceTo(p.target.pos);
+  if (pd < 34) shake = Math.max(shake, clamp(1.05 - pd / 34, 0.12, 0.9)); // camera shake scaled by distance
+  if (pd < 30) A.hit();
   showFeed('⚖️ ANTITRUST HITS!');
+}
+function killProjectile(p) { // removes a projectile AND its world-fx attachments (trail ribbon, lock/warn rings)
+  scene.remove(p.mesh);
+  trailDispose(p.trail); p.trail = null;
+  if (p.lockRing) { scene.remove(p.lockRing); p.lockRing.material.dispose(); p.lockRing = null; }
+  if (p.warnRing) { scene.remove(p.warnRing); p.warnRing.material.dispose(); p.warnRing = null; }
 }
 function updateProjectiles(dt) {
   for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -1593,6 +1911,9 @@ function updateProjectiles(dt) {
         p.mesh.position.lerpVectors(a, b, fr); // a/b carry the track elevation — the Suit flies the hills too
         p.mesh.position.y += clamp(distSamples * 0.06, 1.1, 7.5);
         p.mesh.rotation.y += dt * 3;
+        trailPush(p.trail, p.mesh.position); // smoke-ribbon wake
+        spawnParticles(p.mesh.position, { count: 2, colors: [0x9fb6d8, 0xffffff], speed: 0.5, life: 0.45, up: 0.5, gravity: 1 });
+        if (p.warnRing) { p.warnRing.position.set(target.pos.x, target.pos.y + 0.15, target.pos.z); p.warnRing.scale.setScalar(clamp(2 + distSamples * 0.05, 2.4, 10) * (1 + Math.sin(elapsed * 10) * 0.05)); }
         if (distSamples <= 3 || p.mesh.position.distanceTo(target.pos) < 6) { explodeBlue(p); dead = true; }
       }
     } else {
@@ -1600,10 +1921,16 @@ function updateProjectiles(dt) {
         const desired = Math.atan2(p.target.pos.x - p.mesh.position.x, p.target.pos.z - p.mesh.position.z);
         p.heading = lerpAngle(p.heading, desired, clamp(3.4 * dt, 0, 1));
         if (Math.random() < 0.6) spawnParticles(p.mesh.position, { count: 1, colors: [0x1d9bf0, 0xffffff], speed: 0.6, life: 0.3, up: 0.4, gravity: 0 });
+        if (p.lockRing) { // ring rides the victim and tightens as the Tweet closes in
+          p.lockRing.position.set(p.target.pos.x, p.target.pos.y + 1.1, p.target.pos.z);
+          p.lockRing.scale.setScalar(clamp(p.mesh.position.distanceTo(p.target.pos) * 0.09, 1.6, 3.6));
+          p.lockRing.material.opacity = 0.7 + Math.sin(elapsed * 14) * 0.3;
+        }
       }
       p.mesh.position.addScaledVector(forwardVec(p.heading), p.speed * dt);
       const idx = globalNearest(p.mesh.position);
       p.mesh.position.y = roadYAt(idx, lateralAt(p.mesh.position, idx)) + 0.9;
+      trailPush(p.trail, p.mesh.position, p.type === 'red' ? 1 + Math.sin(elapsed * 18) * 0.25 : 1); // red pulses, green is hard-edged
       p.mesh.rotation.y = p.heading; p.mesh.rotation.x += dt * 7;
       if (Math.abs(lateralAt(p.mesh.position, idx)) > HALF_W + 2.5) dead = true;
       if (!dead) for (const o of karts) {
@@ -1618,19 +1945,24 @@ function updateProjectiles(dt) {
         }
       }
     }
-    if (dead) { scene.remove(p.mesh); projectiles.splice(i, 1); }
+    if (dead) { killProjectile(p); projectiles.splice(i, 1); }
   }
 }
 function updateBananasAndCollisions(dt) {
   for (let i = bananas.length - 1; i >= 0; i--) {
     const b = bananas[i]; b.age += dt;
+    const rim = b.mesh.userData.rim; // armed leak: rim slowly pulses + drips fall while it waits
+    if (rim) rim.scale.setScalar(1.6 + Math.sin(elapsed * 3 + i * 1.7) * 0.07);
+    if (Math.random() < dt * 1.4) spawnParticles(b.pos, { count: 1, colors: [0x2fb9ff, 0x9be7ff], speed: 0.2, life: 0.4, up: 0.2, gravity: -6 });
     for (const k of karts) {
       if (k === b.owner && b.age < 1.6) continue;
       if (k.ghostT > 0) continue; // ghost floats over the leak — no breach
       const dx = k.pos.x - b.pos.x, dz = k.pos.z - b.pos.z;
       if (dx * dx + dz * dz < 4.6) {
         if (k.starT > 0) { spawnParticles(b.pos, { count: 10, colors: [0x2fb9ff, 0x9be7ff], speed: 4, life: 0.5, up: 3 }); }
-        else { if (k.isPlayer) showFeed('💧 DATA BREACH — you hit a leak!'); spawnParticles(b.pos, { count: 12, colors: [0x2fb9ff, 0x9be7ff], speed: 4, life: 0.5, up: 3 }); spinKart(k); }
+        else { if (k.isPlayer) showFeed('💧 DATA BREACH — you hit a leak!'); spawnParticles(b.pos, { count: 24, colors: [0x0e2233, 0x2fb9ff, 0x9be7ff], speed: 6, life: 0.6, up: 6 }); spinKart(k); }
+        wfxSplat(b.pos, { color: 0x0a1a2c, r: 3.1, dur: 1.2, op: 0.6 }); // oil-slick splash: burst + a splat that lingers on the road
+        wfxRing(b.pos, { r1: 3.4, dur: 0.35, color: 0x2fb9ff, op: 0.8 });
         scene.remove(b.mesh); bananas.splice(i, 1); break;
       }
     }
@@ -2303,6 +2635,7 @@ function animate() {
     }
     if (gameState === 'racing' || gameState === 'countdown') updateHUD(dt);
     updateParticles(dt);
+    updateWFX(dt);
     for (const fn of trackAnimators) fn(dt, elapsed);
     updateCamera(dt);
     // name labels: shrink + fade as a kart gets close — a label must never wallpaper the screen (playtest fix)

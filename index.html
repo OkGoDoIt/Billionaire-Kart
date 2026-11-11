@@ -120,10 +120,11 @@
 
     <h2 class="section-title">3 · How spicy?</h2>
     <div id="diff-row">
-      <button class="diff-btn" data-diff="0">😌 Chill</button>
-      <button class="diff-btn selected" data-diff="1">🌶️ Spicy</button>
-      <button class="diff-btn" data-diff="2">🤬 Unhinged</button>
+      <button class="diff-btn" data-diff="0">😌 Chill<span class="diff-cap">Rivals at 90% pace</span></button>
+      <button class="diff-btn selected" data-diff="1">🌶️ Spicy<span class="diff-cap">Rivals at 95.5% pace</span></button>
+      <button class="diff-btn" data-diff="2">🤬 Unhinged<span class="diff-cap">Rivals at full pace</span></button>
     </div>
+    <p id="diff-desc" class="explain-card"></p>
 
     <h2 class="section-title">4 · Touch controls — Control Lab</h2>
     <div class="scheme-row">
@@ -133,8 +134,14 @@
       <button class="scheme-btn" data-scheme="dualstick">🕹️ Dual Stick</button>
       <button class="scheme-btn" data-scheme="autog">🚗 Auto-Gas</button>
     </div>
+    <div id="scheme-help" class="explain-card">
+      <div id="scheme-diagram"></div>
+      <p id="scheme-text"></p>
+    </div>
     <button class="smart-btn big-btn">🧭 Smart steering: Auto (Auto-Gas only)</button>
+    <p class="assist-note">Smart Steering blends a gentle nudge toward the racing line into your steering — capped at 25% strength, and it backs off while you drift. “Auto” means it only switches on for the Auto-Gas scheme.</p>
     <button class="adrift-btn big-btn">🌀 Auto-drift: Auto (Auto-Gas only)</button>
+    <p class="assist-note">Auto-Drift starts a drift for you when you hold a full-lock steer for a quarter of a second; keep holding to sustain it. “Auto” means it only switches on for the Auto-Gas scheme.</p>
 
     <h2 class="section-title">5 · Graphics</h2>
     <div class="scheme-row" id="qual-row">
@@ -172,6 +179,12 @@
       </div>
     </div>
     <div class="footer-note">A parody. Any resemblance to actual billionaires is entirely the point, but the karts are fictional. No build step, no tracking, works offline after first load.</div>
+  </div>
+  <!-- Sticky start panel (#50): racer + track + START, reachable from any scroll position -->
+  <div id="sticky-bar">
+    <img id="sb-portrait" alt="">
+    <div id="sb-text"><div id="sb-racer">—</div><div id="sb-track">—</div></div>
+    <button id="sb-start">🏎️ START RACE</button>
   </div>
 </div>
 

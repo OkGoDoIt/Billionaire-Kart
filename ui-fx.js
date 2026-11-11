@@ -114,7 +114,7 @@
       t += g;
       spin.timers.push(setTimeout(function () {
         var it = pool[(Math.random() * pool.length) | 0];
-        icon.textContent = it.icon;
+        icon.innerHTML = '<img class="slot-ic" src="' + it.img + '" alt="' + it.name + '">';
         if (name) name.textContent = it.name;
         icon.style.transform = 'scale(.7)';
         setTimeout(function () { icon.style.transform = ''; }, 42);
@@ -134,7 +134,7 @@
       slot.classList.remove('landed'); void slot.offsetWidth; slot.classList.add('landed');
       setTimeout(function () { slot.classList.remove('landed'); }, 380);
     }
-    if (icon) icon.textContent = item.icon;
+    if (icon) icon.innerHTML = '<img class="slot-ic" src="' + item.img + '" alt="' + item.name + '">';
     if (name) name.textContent = item.name;
     if (hooks && hooks.land) { try { hooks.land(); } catch (e) { } }
   }

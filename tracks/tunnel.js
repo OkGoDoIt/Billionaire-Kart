@@ -11,7 +11,11 @@
   const L = (THREE, color, opts) => new THREE.MeshLambertMaterial(Object.assign({ color }, opts || {}));
   function at(ctx, idx, lat, y) {
     const i = ((Math.round(idx) % ctx.N) + ctx.N) % ctx.N, s = ctx.samples[i], n = ctx.normals[i];
-    return { pos: new ctx.THREE.Vector3(s.x + n.x * lat, y || 0, s.z + n.z * lat), sample: s, tangent: ctx.tangents[i], idx: i };
+    // TRACK 3D (batch-2 design pass): anchor to the banked road plane at this
+    // lateral offset (s.y + lat * rollNormal.y) so the whole bore assembly —
+    // arch, light panels, TBM, signs — rides the authored profile as one piece.
+    const planeY = s.y + lat * (ctx.rollNormals ? ctx.rollNormals[i].y : 0);
+    return { pos: new ctx.THREE.Vector3(s.x + n.x * lat, planeY + (y || 0), s.z + n.z * lat), sample: s, tangent: ctx.tangents[i], idx: i };
   }
   // arched shell strip following the spline between two angles (radians, 0..PI over the road)
   function archStrip(ctx, a0, a1, kSegs, mat, iStep, rOff) {
@@ -21,9 +25,11 @@
     for (let i = 0; i <= N; i += iStep) rings.push(i % N);
     rings.forEach((ri, r) => {
       const s = samples[ri], n = normals[ri];
+      const rollY = ctx.rollNormals ? ctx.rollNormals[ri].y : 0;
       for (let k = 0; k <= kSegs; k++) {
-        const a = a0 + (a1 - a0) * (k / kSegs);
-        pos.push(s.x + n.x * Math.cos(a) * R, Math.sin(a) * R * 0.82, s.z + n.z * Math.cos(a) * R);
+        const a = a0 + (a1 - a0) * (k / kSegs), lat = Math.cos(a) * R;
+        // shell follows the authored elevation + banking plane, not flat y=0
+        pos.push(s.x + n.x * lat, s.y + lat * rollY + Math.sin(a) * R * 0.82, s.z + n.z * lat);
       }
       if (r > 0) { const b = r * (kSegs + 1), p = (r - 1) * (kSegs + 1); for (let k = 0; k < kSegs; k++) idx.push(p + k, b + k, p + k + 1, b + k, b + k + 1, p + k + 1); }
     });
@@ -66,7 +72,7 @@
     const fanMat = L(THREE, 0x3a4048), bladeMat = L(THREE, 0x596270);
     for (const idx of [110, 405, 700]) {
       const a = at(ctx, idx, 0, 0);
-      const fan = new THREE.Group(); fan.position.set(a.pos.x, 11.4, a.pos.z);
+      const fan = new THREE.Group(); fan.position.set(a.pos.x, a.pos.y + 11.4, a.pos.z);
       const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.8, 10), fanMat); fan.add(hub);
       for (let b = 0; b < 4; b++) {
         const blade = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.12, 0.9), bladeMat);
@@ -97,17 +103,17 @@
       g.fillStyle = '#e8641b'; g.font = '700 54px system-ui'; g.fillText('TUNNEL DIVISION — EST. TRAFFIC JAM', w / 2, h * 0.74);
     });
     const tbmSign = new THREE.Mesh(new THREE.PlaneGeometry(17, 4.2), new THREE.MeshLambertMaterial({ map: tbmSignTex, side: THREE.DoubleSide }));
-    const ts = at(ctx, 148, -(ctx.HALF_W + 15.5), 0); tbmSign.position.set(ts.pos.x, 8.6, ts.pos.z); tbmSign.lookAt(ts.sample.x, 8.6, ts.sample.z); scene.add(tbmSign);
+    const ts = at(ctx, 148, -(ctx.HALF_W + 15.5), 0); tbmSign.position.set(ts.pos.x, ts.pos.y + 8.6, ts.pos.z); tbmSign.lookAt(ts.sample.x, ts.pos.y + 8.6, ts.sample.z); scene.add(tbmSign);
 
     /* ---- loop-the-loop ring over the east straight (visual only) ---- */
     const ra = at(ctx, 470, 0, 0);
     const ringMat = new THREE.MeshStandardMaterial({ color: 0x394048, emissive: 0xff7b1c, emissiveIntensity: 1.1, roughness: 0.5 });
     const ring = new THREE.Mesh(new THREE.TorusGeometry(12.6, 0.85, 10, 44), ringMat);
-    ring.position.set(ra.pos.x, 13.2, ra.pos.z); ring.rotation.y = ctx.headingOf(ra.tangent);
+    ring.position.set(ra.pos.x, ra.pos.y + 13.2, ra.pos.z); ring.rotation.y = ctx.headingOf(ra.tangent);
     scene.add(ring); anim.ringMat = ringMat;
     const loopSignTex = ctx.billboardTexture('LOOP-DE-LOOP (VISUAL ONLY)', 24);
     const loopSign = new THREE.Mesh(new THREE.PlaneGeometry(15, 5.7), new THREE.MeshLambertMaterial({ map: loopSignTex, side: THREE.DoubleSide }));
-    const ls = at(ctx, 452, ctx.HALF_W + 8.5, 0); loopSign.position.set(ls.pos.x, 5, ls.pos.z); loopSign.lookAt(ls.sample.x, 5, ls.sample.z); scene.add(loopSign);
+    const ls = at(ctx, 452, ctx.HALF_W + 8.5, 0); loopSign.position.set(ls.pos.x, ls.pos.y + 5, ls.pos.z); loopSign.lookAt(ls.sample.x, ls.pos.y + 5, ls.sample.z); scene.add(loopSign);
 
     /* ---- NOT A FLAMETHROWER ---- */
     const nftTex = ctx.canvasTexture(1024, 300, (g, w, h) => {
@@ -118,7 +124,7 @@
       g.fillStyle = '#333'; g.font = '600 46px system-ui'; g.fillText('(IT IS TOTALLY A FLAMETHROWER)', w / 2, h * 0.76);
     });
     const nft = new THREE.Mesh(new THREE.PlaneGeometry(16, 4.7), new THREE.MeshLambertMaterial({ map: nftTex, side: THREE.DoubleSide }));
-    const na = at(ctx, 250, ctx.HALF_W + 4.6, 0); nft.position.set(na.pos.x, 6.8, na.pos.z); nft.lookAt(na.sample.x, 6.8, na.sample.z); scene.add(nft);
+    const na = at(ctx, 250, ctx.HALF_W + 4.6, 0); nft.position.set(na.pos.x, na.pos.y + 6.8, na.pos.z); nft.lookAt(na.sample.x, na.pos.y + 6.8, na.sample.z); scene.add(nft);
 
     /* ---- emergency exit signs ---- */
     const exitTex = ctx.canvasTexture(512, 192, (g, w, h) => {
@@ -129,7 +135,7 @@
     for (let k = 0; k < 8; k++) {
       const a = at(ctx, 60 + k * 112, (k % 2 ? 1 : -1) * (ctx.HALF_W + 4.4), 0);
       const s = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 2), new THREE.MeshBasicMaterial({ map: exitTex, side: THREE.DoubleSide }));
-      s.position.set(a.pos.x, 5.2, a.pos.z); s.lookAt(a.sample.x, 5.2, a.sample.z); scene.add(s);
+      s.position.set(a.pos.x, a.pos.y + 5.2, a.pos.z); s.lookAt(a.sample.x, a.pos.y + 5.2, a.sample.z); scene.add(s);
     }
     void rand;
   }
@@ -147,6 +153,12 @@
     name: 'Boring Tunnel GP', sky: 0x0a0d12, fog: 0x0a0d12, fogNear: 40, fogFar: 330,
     ground: 0x111419, roadSeed: 4, shoulder: 0x23272e, noClouds: true,
     points: [[-60, 170], [-150, 120], [-190, 20], [-185, -100], [-110, -165], [10, -185], [120, -160], [185, -80], [195, 40], [140, 135], [30, 180]],
+    // HAND-AUTHORED profiles (docs/track-design-tunnel.md) — keyframes [u, value]:
+    // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT
+    // turn; every corner here is a right). Dive to running depth, level deep run,
+    // climb out through the loop ring to the crown, settle back to the portal.
+    elev: [[0, 0], [0.06, 0], [0.12, -3.5], [0.164, -6], [0.24, -6], [0.30, -5.6], [0.40, -5.2], [0.45, -4.5], [0.50, -2.8], [0.546, -1.2], [0.60, 0.6], [0.66, 1.8], [0.72, 2.2], [0.79, 1.9], [0.86, 0.9], [0.93, 0.2], [0.97, 0]],
+    bank: [[0, 0], [0.045, 0], [0.083, 8], [0.125, 0], [0.23, 0], [0.273, 11], [0.318, 0], [0.50, 0], [0.546, 9], [0.60, 0], [0.785, 0], [0.830, 9], [0.885, 0], [0.932, 5], [0.972, 0]],
     billboards: ['NOT A FLAMETHROWER', 'MIND THE GAP IN FUNDING', 'THIS TUNNEL COST $1B', 'NO SIGNAL NO PROBLEM', 'VENTILATION BY SUBSCRIPTION', 'DIGGING OUR WAY OUT'],
     standColors: [0x2b2f36, 0x23262c, 0x2b2f36, 0x1d2025],
     banner: '🏁 BORING TUNNEL GP 🏁',

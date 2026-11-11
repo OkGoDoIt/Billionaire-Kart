@@ -123,6 +123,7 @@ body.touch-ui .feed-item { text-align:center; border-left:none; border-bottom:3p
 body.touch-ui .feed-item.bark { border-bottom-color:#fff; }
 .feed-item.out { opacity:0; }
 @keyframes feedin { from{ opacity:0; transform:translateY(-6px) } to{ opacity:1; transform:none } }
+#flash-overlay { position:fixed; inset:0; z-index:8; pointer-events:none; background:#eaf7ff; opacity:0; }
 #ink-overlay { position:fixed; inset:0; z-index:7; pointer-events:none; background:
   radial-gradient(ellipse 34% 26% at 22% 30%, rgba(12,6,26,.88) 55%, rgba(12,6,26,0) 72%),
   radial-gradient(ellipse 28% 34% at 74% 22%, rgba(12,6,26,.85) 55%, rgba(12,6,26,0) 72%),

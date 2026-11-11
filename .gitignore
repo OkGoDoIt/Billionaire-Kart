@@ -2,8 +2,3 @@ node_modules/
 tools/node_modules/
 tools/vendor/
 .DS_Store
-
-# local secrets and editor state (never commit)
-.env
-.env.*
-.claude/

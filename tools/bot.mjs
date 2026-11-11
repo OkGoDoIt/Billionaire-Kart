@@ -74,6 +74,27 @@ try {
   await page.waitForTimeout(1200); await shot('13-results');
   const res = await page.evaluate('BK.race.results().map(r => r.racer.id + ":" + r.time.toFixed(1)).join(" ")');
   console.log('results:', res);
+
+  if (opt.gp) {
+    // a whole Grand Prix on autopilot with one-lap races, through to the podium
+    const autopilot = `(async () => { const { AIDriver } = await import('./src/race/ai.js'); const { makeRng } = await import('./src/core/util.js'); const s = BK.session; s.skipIntro(); s.race.laps = 1; s.autopilots = s.race.players.map(k => new AIDriver(k, 'hard', makeRng(5))); })()`;
+    await page.evaluate(`BK.app.quitToMenu()`); await page.waitForFunction('BK.app.menus.screen?.spec.name === "main"', null, { timeout: 15000 }); await page.waitForTimeout(600);
+    await page.evaluate(`(() => { const a = BK.app; a.flow = { mode: 'gp', players: 1, devices: ['any'], racers: ['jensen'], cc: 150, level: 'easy' }; a.menus.open('cups'); })()`);
+    await page.waitForTimeout(700); await expect('cups', 'grand prix cups'); await shot('20-cups');
+    await page.evaluate(`document.querySelector('.card.cup:not([disabled])').click()`);
+    const races = await page.evaluate('BK.app.gp ? BK.app.gp.tracks.length : 0');
+    for (let r = 0; r < races; r++) {
+      await page.waitForFunction(`BK.race && !BK.app.attract && BK.app.gp && BK.app.gp.index === ${r} && BK.session.phase`, null, { timeout: 30000 });
+      await page.waitForTimeout(500); await page.evaluate(autopilot);
+      await page.waitForFunction('BK.app.menus.screen?.spec.name === "results"', null, { timeout: 150000 });
+      await page.waitForTimeout(900); await shot(`21-gp-results-${r + 1}`);
+      await key('Enter', 600);
+    }
+    await page.waitForFunction('BK.app.menus.screen?.spec.name === "cupResults"', null, { timeout: 30000 }).catch(() => fails.push('no cup results screen after the last race'));
+    await page.waitForTimeout(2500); await shot('22-podium');
+    console.log('cup totals:', await page.evaluate('JSON.stringify(BK.app.gp.totals)'));
+    await key('Enter', 1200); await expect('main', 'after the podium');
+  }
 } catch (e) { fails.push('aborted: ' + e.message); await shot('99-failure').catch(() => {}); }
 await browser.close(); server.close();
 const realErrors = [...new Set(errors)].filter(e => !/favicon/.test(e));

@@ -176,3 +176,11 @@ kbd { font-family: var(--body); font-weight: 700; background: #fff; color: var(-
 
 .hint-card { position: absolute; left: 50%; bottom: calc(min(1vw, 1.78vh) * 4 + var(--safe-b)); transform: translateX(-50%); --u: min(1vw, 1.78vh); font-family: var(--body); font-weight: 600; font-size: calc(var(--u) * 2.1); color: #fff; background: rgba(18,20,43,0.86); border: calc(var(--u) * 0.3) solid rgba(255,255,255,0.8); border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.6); pointer-events: none; white-space: nowrap; animation: menu-in 0.4s ease-out 1.5s both; z-index: 6; }
 .hint-card b { color: var(--gold); } .hint-card.out { transition: opacity 0.5s; opacity: 0; }
+
+/* cup standings: a slim panel on the right so the podium shows on the left */
+.screen-cupResults { align-items: flex-end; }
+.panel.cupres { width: min(46%, calc(var(--u) * 46)); padding: calc(var(--u) * 1.4) calc(var(--u) * 2); margin: auto 0; }
+.panel.cupres h1 { font-size: calc(var(--u) * 3.6); } .panel.cupres .stars { font-size: calc(var(--u) * 3.4); line-height: 1.1; }
+.panel.cupres .res-table { gap: calc(var(--u) * 0.4); margin-top: calc(var(--u) * 0.8); }
+.panel.cupres .res-row { font-size: calc(var(--u) * 1.8); padding-top: calc(var(--u) * 0.12); padding-bottom: calc(var(--u) * 0.12); grid-template-columns: calc(var(--u) * 3.2) calc(var(--u) * 3.3) 1fr calc(var(--u) * 5); }
+.panel.cupres .res-row img { width: calc(var(--u) * 3.2); height: calc(var(--u) * 3.2); } .panel.cupres .res-rank { font-size: calc(var(--u) * 2.4); } .panel.cupres .res-total { font-size: calc(var(--u) * 2.2); }

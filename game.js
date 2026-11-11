@@ -278,6 +278,22 @@ function setSmartMode(m) {
   try { localStorage.setItem('bk_smart_steer', m); } catch (e) { }
   document.querySelectorAll('.smart-btn').forEach(b => b.textContent = `🧭 Smart steering: ${m === 'auto' ? 'Auto (Auto-Gas only)' : m.toUpperCase()}`);
 }
+/* Axis-constrained stick rendering (#49): a stick's drawn shape matches the
+   axes it actually controls in the current scheme — a 1D stick renders as a
+   track (horizontal pill for steering, vertical pill for throttle/brake) with
+   its nub projected onto that axis; only a genuinely 2D stick (Thumbstick
+   main: steer X + brake/flick Y) keeps the circle. Input semantics are
+   untouched — taps/flicks still read the raw touch; only the drawing is
+   constrained. Shapes apply at scheme switch and again at every touch. */
+const STICK_AXES = { // [stick-a, stick-b] shape per scheme ('x' | 'y' | '2d' | null = unused)
+  buttons: [null, null], stick1: ['2d', null], sticks2: ['x', 'y'], autog: ['x', null], dualstick: ['x', 'y'],
+};
+const ZONE_AXIS = { steer: 'x', dsteer: 'x', pedal: 'y', dpedal: 'y', main: '2d' };
+function shapeStick(el, axis) {
+  if (!el) return;
+  el.classList.toggle('axis-x', axis === 'x');
+  el.classList.toggle('axis-y', axis === 'y');
+}
 function setTouchScheme(s, silent) {
   if (!TOUCH_SCHEMES.includes(s)) return;
   touchScheme = s;
@@ -286,6 +302,8 @@ function setTouchScheme(s, silent) {
   document.querySelectorAll('.scheme-btn').forEach(b => b.classList.toggle('selected', b.dataset.scheme === s));
   stickPointers.clear(); touchAnalog.steer = 0; touchAnalog.throttle = 0; touchAnalog.brake = 0;
   for (const id of ['stick-a', 'stick-b']) { const el = $(id); if (el) { el.style.display = 'none'; el.classList.remove('braking'); } }
+  const axes = STICK_AXES[s] || [null, null]; // #49: re-shape the sticks for the new scheme immediately
+  shapeStick($('stick-a'), axes[0]); shapeStick($('stick-b'), axes[1]);
   refreshTouchUI();
   updateSchemeHelp(s);
   if (!silent) showToast({ buttons: '🕹️ Touch: Buttons', stick1: '👍 Touch: Thumbstick — hold right side = gas', sticks2: '✌️ Touch: Pedal & Stick', autog: '🚗 Touch: Auto-Gas — just steer!', dualstick: '🕹️ Touch: Dual Stick — left steers, right drives' }[s]);
@@ -297,10 +315,10 @@ function refreshTouchUI() {
   const sig = `${touchScheme}|${inRace}|${touch}|${gameState}`;
   if (sig === touchUiSig) return; touchUiSig = sig;
   // Input-aware HUD layout (Addendum 3): body.touch-ui is present exactly when
-  // on-screen controls are rendered. CSS then moves the item slot + race feed
-  // to the top-centre stack (thumbs own the bottom); without it they use the
-  // classic lower-left corner. Scheme switches re-run this, so the layout
-  // follows mid-race changes immediately.
+  // on-screen controls are rendered. It only gates which control surfaces show
+  // now — the HUD layout itself (#48: item slot top-left corner, feed at the
+  // top edge) is identical for touch and classic. Scheme switches re-run this,
+  // so the controls follow mid-race changes immediately.
   document.body.classList.toggle('touch-ui', touch && inRace);
   $('touch-controls').classList.toggle('hidden', !(touch && inRace && touchScheme === 'buttons'));
   $('scheme-ui').classList.toggle('hidden', !(touch && inRace && touchScheme !== 'buttons'));
@@ -1691,8 +1709,8 @@ function grantItem(k) {
     const it = ITEMS[k.item];
     // Item roulette (POLISH.md §2.5.1): the slot spins for 850 ms and lands on the
     // real item; useItem is blocked while BKFX.spinning. Falls back to instant reveal.
-    if (window.BKFX && BKFX.roulette(it, ITEMS, { tick: i => A.tone(840 + i * 45, 0.03, 'square', 0.016), land: () => { A.pickup(); showFeed(`<img class="feed-ic" src="${it.img}" alt=""> <b>${it.name}</b> — ${it.desc}`); } })) return;
-    updateItemSlot(); A.pickup(); showFeed(`<img class="feed-ic" src="${it.img}" alt=""> <b>${it.name}</b> — ${it.desc}`);
+    if (window.BKFX && BKFX.roulette(it, ITEMS, { tick: i => A.tone(840 + i * 45, 0.03, 'square', 0.016), land: () => { A.pickup(); showFeed(`<img class="feed-ic" src="${it.img}" alt=""> <b>${it.name}</b> — ${it.desc}`, 'desc'); } })) return;
+    updateItemSlot(); A.pickup(); showFeed(`<img class="feed-ic" src="${it.img}" alt=""> <b>${it.name}</b> — ${it.desc}`, 'desc');
   }
 }
 const BOX_RESPAWN = 2.5, BOX_GHOST = 0.6; // was a flat 4s dead time, then an untelegraphed pop-in — following players couldn't time a box a rival had just taken
@@ -2105,13 +2123,14 @@ function drawMinimap() {
 }
 function showCenter(text, dur = 1.1) { $('center-msg').textContent = text; centerUntil = elapsed + dur; }
 function showToast(text, dur = 2.1) { const t = $('toast'); t.textContent = text; t.style.opacity = 1; toastUntil = elapsed + dur; }
-/* Race feed (HUD clarity pass): barks, item grants/effects and position changes
-   live in a compact stack in the top-centre #top-stack, directly under the
-   item slot — max 3 entries, auto-fading. The middle of the screen belongs to
-   the race, and on touch layouts the bottom-left belongs to the player's thumb,
-   so nothing informational lives in either place. Center screen is reserved
-   for countdown / GO! / lap banners / finish; the top toast keeps only
-   settings confirmations and countdown rocket-start hints. */
+/* Race feed (#48): barks, item grants/effects and position changes live in a
+   compact stack anchored to the TOP edge under the button row — max 2 entries,
+   auto-fading. The middle of the screen belongs to the race in every layout,
+   so nothing informational lives there (PR #38's centred column put this feed
+   at 50-65% screen height on landscape phones). Center screen is reserved for
+   countdown / GO! / lap banners / finish; the top toast keeps only settings
+   confirmations and countdown rocket-start hints. Item pickup descriptions
+   are feed entries with kind 'desc' (gold styling), not a separate toast. */
 const feedEntries = [];
 function showFeed(html, kind = '') {
   const box = $('race-feed'); if (!box) return;
@@ -2120,7 +2139,7 @@ function showFeed(html, kind = '') {
   el.innerHTML = html;
   box.appendChild(el);
   feedEntries.push({ el, until: elapsed + 2.8, out: false });
-  while (box.children.length > 3) { const old = box.firstChild; old.remove(); const i = feedEntries.findIndex(e => e.el === old); if (i >= 0) feedEntries.splice(i, 1); }
+  while (box.children.length > 2) { const old = box.firstChild; old.remove(); const i = feedEntries.findIndex(e => e.el === old); if (i >= 0) feedEntries.splice(i, 1); }
 }
 function pruneFeed() {
   for (let i = feedEntries.length - 1; i >= 0; i--) {
@@ -2299,7 +2318,7 @@ function bindInputs() {
   const stickEls = { steer: $('stick-a'), main: $('stick-a'), pedal: $('stick-b'), dsteer: $('stick-a'), dpedal: $('stick-b') };
   const axisVal = d => { const a = Math.abs(d); if (a < 10) return 0; const v = clamp((a - 10) / 50, 0, 1); return Math.sign(d) * v * (0.65 + 0.35 * v); }; // 10px deadzone, full deflection at 60px, mild curve
   const zoneTaken = z => { for (const r of stickPointers.values()) if (r.zone === z) return true; return false; };
-  const moveNub = (rec, dx, dy) => { if (!rec.el) return; const l = Math.hypot(dx, dy), m = l > 34 ? 34 / l : 1; rec.el.firstElementChild.style.transform = `translate(calc(-50% + ${(dx * m).toFixed(1)}px), calc(-50% + ${(dy * m).toFixed(1)}px))`; };
+  const moveNub = (rec, dx, dy) => { if (!rec.el) return; if (rec.axis === 'x') dy = 0; else if (rec.axis === 'y') dx = 0; /* #49: nub projected onto the stick's real axis */ const l = Math.hypot(dx, dy), m = l > 34 ? 34 / l : 1; rec.el.firstElementChild.style.transform = `translate(calc(-50% + ${(dx * m).toFixed(1)}px), calc(-50% + ${(dy * m).toFixed(1)}px))`; };
   // Gas sticks (Thumbstick main / Pedal / Dual-Stick right) are BINARY (#17 v3): any
   // press = FULL gas; pull down past 24px = FULL brake/reverse while held. No
   // proportional throttle/brake anywhere. Brake engagement is impossible to miss:
@@ -2388,11 +2407,11 @@ function bindInputs() {
     else if (touchScheme === 'autog') zone = zoneTaken('steer') ? 'tap' : 'steer'; // second finger taps for item while the first keeps steering
     if (!zone || (zone !== 'tap' && zoneTaken(zone)) || stickPointers.has(e.pointerId)) return;
     try { layer.setPointerCapture(e.pointerId); } catch (err) { }
-    const rec = { zone, ox: e.clientX, oy: e.clientY, t0: performance.now(), maxDrag: 0, el: stickEls[zone] || null, hist: null, flicked: false, flickArmed: false };
+    const rec = { zone, ox: e.clientX, oy: e.clientY, t0: performance.now(), maxDrag: 0, el: stickEls[zone] || null, hist: null, flicked: false, flickArmed: false, axis: ZONE_AXIS[zone] || '2d' };
     stickPointers.set(e.pointerId, rec);
     if (zone === 'dpedal') dsLatch.gasToken++; // re-touch inside the grace window: gas was never cut
     if (zone === 'dsteer') dsLatch.steerToken++;
-    if (rec.el) { rec.el.style.display = 'block'; rec.el.classList.remove('latched'); rec.el.style.left = e.clientX + 'px'; rec.el.style.top = e.clientY + 'px'; moveNub(rec, 0, 0); }
+    if (rec.el) { shapeStick(rec.el, rec.axis); rec.el.style.display = 'block'; rec.el.classList.remove('latched'); rec.el.style.left = e.clientX + 'px'; rec.el.style.top = e.clientY + 'px'; moveNub(rec, 0, 0); }
     if (zone === 'pedal' || zone === 'dpedal') touchAnalog.throttle = 1; // instant full gas on touchdown
     applyStick(rec, e.clientX, e.clientY);
     e.preventDefault();

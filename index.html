@@ -43,9 +43,10 @@
     <button id="btn-mute" class="icon-btn" title="Mute (M)">🔊</button>
     <button id="btn-pause" class="icon-btn" title="Pause (P)">⏸</button>
   </div>
-  <!-- Top-centre stack (mobile ergonomics): on touch layouts the player's left
-       thumb covers the bottom-left, so the item slot + race feed live up here,
-       directly under the button row. Bottom half = controls only. -->
+  <!-- HUD top zone (#48): this wrapper is display:contents — the item slot
+       anchors to the top-left corner under the position block, and the race
+       feed hangs from the top edge under the button row. Nothing informational
+       renders in the middle band of the screen in any layout. -->
   <div id="top-stack">
     <div id="item-slot"><div id="item-icon">·</div><div id="item-name"></div></div>
     <div id="autog-note" class="hidden">🚗 AUTO-GAS ON — just steer!</div>

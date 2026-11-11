@@ -17,7 +17,7 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 - **Eight tracks in two cups**, each with its own signature moment, soundtrack, and hazards.
 - **Grand Prix, Quick Race, and Time Trial** (with a ghost of your best run), three engine classes, and three levels of rivals.
 - **One to four players** on one screen.
-- **Sixteen racers** with their own stats, karts in their colours, and things to say when they hit you.
+- **Sixteen racers** with their own stats, signature karts, and things to say when they hit you.
 - **Sixteen items**, weighted by position. Leaders get defence; the back of the pack gets the comeback kit.
 - **Real kart-racer driving**: hop into a drift and hold it for a blue, orange, or purple mini-turbo; trick off ramps; slipstream; collect coins for top speed; nail the rocket start.
 - **A generated soundtrack** with a theme for every track, an announcer, and a final-lap lift.
@@ -27,7 +27,14 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 | ![Silicon Valley Circuit](screenshots/race-silicon-valley.jpg) | ![Bliss Hills](screenshots/race-bliss-hills.jpg) |
 | ![Burning Circuit](screenshots/race-burning-circuit.jpg) | ![Four-player split-screen](screenshots/split-screen.jpg) |
 | ![Datacenter Dash](screenshots/race-datacenter-dash.jpg) | ![Mars Colony](screenshots/race-mars-colony.jpg) |
+| ![Capitol Hill Climb](screenshots/race-capitol-hill.jpg) | ![Choosing a cup](screenshots/menu-cups.jpg) |
 | ![Racer select](screenshots/racers.jpg) | ![On a phone](screenshots/phone.jpg) |
+
+### The grid
+
+Thirteen racers drive a kart of their own: a steel wedge, a rocket with a parcel strapped on, a graphics card with working fans, a stretch limo, a yacht, a beige desktop PC, and more.
+
+![All sixteen racers in their karts](screenshots/karts.jpg)
 
 ## Controls
 

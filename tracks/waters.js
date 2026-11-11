@@ -9,6 +9,12 @@ export const def = {
   name: 'International Waters GP', sky: 0xffc37e, fog: 0xffd2a0, ground: 0x1fa8a0, roadSeed: 4,
   shoulder: 0xc9a06c,
   points: [[0,-190],[150,-160],[245,-70],[255,40],[190,130],[90,180],[-30,190],[-150,160],[-240,80],[-255,-30],[-200,-120],[-110,-175]],
+  // HAND-AUTHORED profiles (docs/track-design-waters.md) — keyframes [u, value]:
+  // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT
+  // turn — and this harbour oval turns right all the way around, so the bank
+  // never changes sign; it breathes with the sweeper radii instead).
+  elev: [[0, 0], [0.04, 0], [0.10, 1.0], [0.16, 2.0], [0.24, 3.0], [0.30, 5.0], [0.36, 8.0], [0.42, 6.2], [0.48, 5.2], [0.52, 6.0], [0.585, 3.5], [0.65, 4.0], [0.70, 5.0], [0.78, 3.6], [0.86, 2.0], [0.93, 0.8], [0.97, 0]],
+  bank: [[0, 0], [0.05, 0], [0.10, 3], [0.15, 4], [0.20, 8], [0.245, 4], [0.283, 9], [0.32, 5], [0.40, 3], [0.50, 3], [0.60, 4], [0.66, 5], [0.692, 8], [0.73, 5], [0.778, 8], [0.83, 4], [0.90, 2], [0.96, 0]],
 };
 
 /* ---------- small local helpers (duplicated per module by design) ---------- */
@@ -51,9 +57,10 @@ function nearestIdx(ctx, x, z) {
   for (let i = 0; i < ctx.N; i++) { const s = ctx.samples[i], dx = s.x - x, dz = s.z - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; best = i; } }
   return best;
 }
-function atFrac(ctx, frac, lat, y = 0) {
+function atFrac(ctx, frac, lat, y = null) { // default y = real terrain/sea-surface height (TRACK 3D profiles)
   const i = Math.floor(frac * ctx.N) % ctx.N, s = ctx.samples[i], n = ctx.normals[i];
-  return { pos: new ctx.THREE.Vector3(s.x + n.x * lat, y, s.z + n.z * lat), idx: i, sample: s };
+  const x = s.x + n.x * lat, z = s.z + n.z * lat;
+  return { pos: new ctx.THREE.Vector3(x, y === null ? (ctx.terrainHeightAt ? ctx.terrainHeightAt(x, z) : 0) : y, z), idx: i, sample: s };
 }
 function faceTrack(obj, sample) { obj.lookAt(sample.x, 0, sample.z); }
 
@@ -93,7 +100,7 @@ export function dress(ctx) {
 
   /* ----- centrepiece: the biggest yacht, anchored mid-oval ----- */
   const mega = yacht(THREE, 98, ['S.S. EXTRADITION DENIED'], 0xd4af37);
-  mega.position.set(centroid.x + 6, 0, centroid.z + 4); mega.rotation.y = 0.5;
+  mega.position.set(centroid.x + 6, ctx.terrainHeightAt ? ctx.terrainHeightAt(centroid.x + 6, centroid.z + 4) : 0, centroid.z + 4); mega.rotation.y = 0.5;
   scene.add(mega); bobs.push({ o: mega, ph: 0.4, amp: 0.5, roll: 0.012 });
 
   /* ----- Ellison's yacht (bigger) vs Murdoch's (dishes) ----- */
@@ -115,7 +122,7 @@ export function dress(ctx) {
 
   /* ----- start-line buoy sign: the whole premise, on two floats ----- */
   const buoySign = sign(THREE, textPanel(THREE, ['12 NAUTICAL MILES OUT', 'BEYOND THIS POINT, TAXES ARE', 'A SOCIAL CONSTRUCT'], { w: 768, h: 300, font: 46 }), 17, 6.6);
-  { const { pos, sample } = atFrac(ctx, 0.015, HALF_W + 9); buoySign.position.copy(pos); buoySign.position.y = -0.4; faceTrack(buoySign, sample); scene.add(buoySign); }
+  { const { pos, sample } = atFrac(ctx, 0.015, HALF_W + 9); buoySign.position.copy(pos); buoySign.position.y = pos.y - 0.4; faceTrack(buoySign, sample); scene.add(buoySign); }
   bobs.push({ o: buoySign, ph: 2.2, amp: 0.22, roll: 0.02 });
 
   /* ----- seastead platform inside the west of the oval ----- */
@@ -146,7 +153,8 @@ export function dress(ctx) {
   }
   { const idx = nearestIdx(ctx, -120, 60), s = ctx.samples[idx], n = ctx.normals[idx];
     const inward = ((centroid.x - s.x) * n.x + (centroid.z - s.z) * n.z) > 0 ? 1 : -1;
-    plat.position.set(s.x + n.x * inward * 58, 0, s.z + n.z * inward * 58); scene.add(plat); }
+    const px = s.x + n.x * inward * 58, pz = s.z + n.z * inward * 58;
+    plat.position.set(px, ctx.terrainHeightAt ? ctx.terrainHeightAt(px, pz) : 0, pz); scene.add(plat); }
   bobs.push({ o: plat, ph: 0.9, amp: 0.18, roll: 0.006 });
 
   /* ----- channel buoys ringing the course ----- */
@@ -165,10 +173,10 @@ export function dress(ctx) {
 
   /* ----- extra floating signage ----- */
   const exitSign = sign(THREE, textPanel(THREE, ['NEXT EXIT:', 'JURISDICTION SHOPPING →'], { w: 640, h: 220, bg: '#0b3d4a', border: '#7fdcff', font: 48 }), 13, 4.5);
-  { const { pos, sample } = atFrac(ctx, 0.82, -(HALF_W + 9)); exitSign.position.copy(pos); exitSign.position.y = -0.4; faceTrack(exitSign, sample); scene.add(exitSign); }
+  { const { pos, sample } = atFrac(ctx, 0.82, -(HALF_W + 9)); exitSign.position.copy(pos); exitSign.position.y = pos.y - 0.4; faceTrack(exitSign, sample); scene.add(exitSign); }
   bobs.push({ o: exitSign, ph: 4.0, amp: 0.2, roll: 0.018 });
   const flagSign = sign(THREE, textPanel(THREE, ['REGISTERED IN: 🚩', 'A DRAWING OF A FLAG'], { w: 640, h: 220, bg: '#101736', border: '#ffd94a', font: 48 }), 13, 4.5);
-  { const { pos, sample } = atFrac(ctx, 0.52, HALF_W + 9); flagSign.position.copy(pos); flagSign.position.y = -0.4; faceTrack(flagSign, sample); scene.add(flagSign); }
+  { const { pos, sample } = atFrac(ctx, 0.52, HALF_W + 9); flagSign.position.copy(pos); flagSign.position.y = pos.y - 0.4; faceTrack(flagSign, sample); scene.add(flagSign); }
   bobs.push({ o: flagSign, ph: 5.2, amp: 0.2, roll: 0.018 });
 
   /* ----- sun glitter on the water ----- */

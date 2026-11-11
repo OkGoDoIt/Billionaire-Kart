@@ -14,6 +14,9 @@ const h = (tag, attrs = {}, ...kids) => {
   return e;
 };
 const hex = n => '#' + n.toString(16).padStart(6, '0');
+/* Cup art: a gold, silver, or bronze trophy for a podium finish, and a three-star rating. */
+const trophyImg = rank => rank >= 1 && rank <= 3 ? h('img', { class: 'trophy', src: `assets/ui/trophy-${['gold', 'silver', 'bronze'][rank - 1]}.webp`, alt: '' }) : null;
+const starRow = n => h('span', { class: 'star-row', role: 'img', 'aria-label': `${n} of 3 stars` }, [0, 1, 2].map(i => h('img', { class: i < n ? '' : 'off', src: 'assets/ui/star.webp', alt: '' })));
 const PLAYER_COLORS = ['#ff4d6d', '#38b6ff', '#ffd23c', '#2ee6a6'];
 const LEVELS = [['easy', 'Relaxed'], ['normal', 'Competitive'], ['hard', 'Ruthless']];
 const CC_LIST = [50, 100, 150];
@@ -197,10 +200,10 @@ export class Menus {
     const cards = CUPS.map(cup => {
       const tracks = cupTracks(cup), t = A.save.trophy(cup.id, flow.cc);
       return h('button', { class: 'card cup', 'data-f': true, 'data-default': cup.id === A.save.data.last.cup, disabled: !tracks.length, style: `--cc:${hex(cup.color)}`, onclick: () => { A.save.data.last.cup = cup.id; A.save.write(); A.startCup(cup); } },
-        h('div', { class: 'cup-trophy' + (t ? ' r' + t.rank : '') }, t ? ['', '🏆', '🥈', '🥉'][t.rank] || '' : ''),
+        h('img', { class: 'cup-emblem', src: cup.emblem, alt: '' }),
         h('h2', {}, cup.name), h('p', {}, cup.blurb),
         h('ol', {}, cup.tracks.map(id => h('li', { class: TRACK_BY_ID[id] ? '' : 'soon' }, TRACK_BY_ID[id]?.name || 'Coming soon'))),
-        t && h('div', { class: 'cup-best' }, `Best: ${t.rank}${ordinalSuffix(t.rank)}, ${t.points} points`));
+        t && h('div', { class: 'cup-best' }, trophyImg(t.rank), h('span', {}, `${t.rank <= 3 ? '' : 'Best: '}${t.rank}${ordinalSuffix(t.rank)}, ${t.points} points`), t.rank === 1 && starRow(t.stars)));
     });
     return { el: h('div', {}, this.header('Choose a cup', `${CLASSES[flow.cc].label} · ${LEVELS.find(l => l[0] === flow.level)[1]} rivals`), h('div', { class: 'cards two' }, cards)) };
   }
@@ -249,7 +252,7 @@ export class Menus {
     const A = this.app, best = Math.min(...playerRanks);
     const head = best === 1 ? 'Champion!' : best === 2 ? 'Second place' : best === 3 ? 'Third place' : `${best}${ordinalSuffix(best)} place`;
     const el = h('div', {}, h('div', { class: 'panel cupres' },
-      h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && h('div', { class: 'stars' }, '★'.repeat(stars) + '☆'.repeat(3 - stars)),
+      h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
       h('div', { class: 'foot' }, this.btn('Continue', () => A.quitToMenu(), { cls: 'go', def: true }))));
     return { el, onBack: () => false };

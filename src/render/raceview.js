@@ -24,7 +24,7 @@ export class RaceView {
     this.fx = new Particles(this.root, gfx.q.particles);
     this.anim = [];                          // per-frame callbacks from scenery
     track.clearColliders();
-    if (def.decorate) def.decorate({ THREE, track, group: this.root, gfx, anim: this.anim, look: def.look, view: this });
+    if (def.decorate) def.decorate({ THREE, track, group: this.root, gfx, anim: this.anim, look: def.look, view: this, densityScale: race.players.length > 2 ? 0.5 : race.players.length === 2 ? 0.75 : 1 });
 
     // pickups
     this.boxes = race.items.boxes.map(b => { const m = buildItemBox(); m.position.set(b.x, b.y, b.z); m.rotation.set(0.5, Math.random() * 6, 0.3); this.root.add(m); return { b, m, pop: 1 }; });
@@ -44,6 +44,10 @@ export class RaceView {
 
     // karts and cameras
     this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0 }));
+    // real shadows cost one extra pass per view: with three or four views, use contact shadows instead
+    const many = race.players.length > 2;
+    gfx.sun.castShadow = gfx.q.shadow > 0 && !many; gfx.renderer.shadowMap.enabled = gfx.sun.castShadow;
+    for (const v of this.karts) v.blob.visible = !gfx.sun.castShadow;
     this.viewOf = new Map(this.karts.map(v => [v.kart, v]));
     this.cams = race.players.map((k, i) => new ChaseCam(k, track, i));
     this.intro = null; this.time = 0; this.flash = 0;
@@ -227,5 +231,6 @@ export class RaceView {
     this.root.traverse(o => { if (o.isMesh || o.isPoints || o.isSprite) { o.geometry?.dispose?.(); } });
     this.gfx.setViews([]);
     this.gfx.post.blur = 0; this.gfx.post.flash = 0;
+    this.gfx.sun.castShadow = this.gfx.q.shadow > 0; this.gfx.renderer.shadowMap.enabled = this.gfx.sun.castShadow;
   }
 }

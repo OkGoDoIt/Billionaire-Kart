@@ -44,7 +44,9 @@ const skyVert = /* glsl */`
   varying vec3 vDir;
   void main() {
     vDir = normalize(position);
-    vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    // rotate with the camera but never translate: the sky is always centred on whoever is looking,
+    // which also keeps it correct when several split-screen views render in one frame
+    vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0);
     gl_Position = p.xyww;
   }`;
 
@@ -120,7 +122,6 @@ export class Sky {
     const mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: skyVert, fragmentShader: skyFrag, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false, toneMapped: true });
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), mat);
     this.mesh.frustumCulled = false; this.mesh.renderOrder = -1000; this.mesh.name = 'sky';
-    this.mesh.onBeforeRender = (r, s, cam) => { this.mesh.position.copy(cam.getWorldPosition(_v)); };
     this.sunDir = this.uniforms.uSunDir.value;
   }
   /** top/bottom: elevation in degrees covered by the image. rot: turns (0..1) to spin it around. */

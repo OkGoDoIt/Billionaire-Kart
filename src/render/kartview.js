@@ -11,6 +11,8 @@ const TIER_RGB = [[0.75, 0.8, 0.9], [0.25, 0.65, 1.0], [1.0, 0.55, 0.1], [0.95, 
 const TIER_HEX = [0xffffff, 0x40a8ff, 0xff8a1a, 0xf04dff];
 const ghostMat = new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.32, depthWrite: false });
 const _v = new THREE.Vector3(), _c = new THREE.Color();
+const BLOB_GEO = new THREE.CircleGeometry(1, 20);
+const BLOB_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
 export const TAG_LAYER = 4;
 
 function nameTag(racer, isPlayer, pIndex) {
@@ -46,6 +48,8 @@ export class KartView {
     this.tag = nameTag(kart.racer, kart.isPlayer, kart.playerIndex);
     this.tag.position.set(0, 2.75, 0); this.tag.layers.set(kart.isPlayer ? TAG_LAYER + 1 + kart.playerIndex : TAG_LAYER);
     rig.root.add(this.tag);
+    // soft contact shadow, used when real shadows are off (low quality, or three or more split-screen views)
+    this.blob = new THREE.Mesh(BLOB_GEO, BLOB_MAT); this.blob.rotation.x = -Math.PI / 2; this.blob.renderOrder = 3; this.blob.visible = false; scene.add(this.blob);
     // boost glow at the exhausts
     this.flames = rig.exhausts.map(a => {
       const m = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.8, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
@@ -145,6 +149,7 @@ export class KartView {
     if (k.starT > 0) { _c.setHSL((this.t * 1.6) % 1, 1, 0.55); this.paint.color.copy(_c); this.paint.emissive.copy(_c); this.paint.emissiveIntensity = 0.9; }
     else if (this.paint.emissiveIntensity > 0) { this.paint.color.copy(this.baseColor); this.paint.emissive.setRGB(0, 0, 0); this.paint.emissiveIntensity = 0; }
 
+    if (this.blob.visible) { const h = clamp(k.y - k.gy, 0, 6), sc = this.scale * (1 + h * 0.12); this.blob.position.set(x, k.gy + 0.06, z); this.blob.scale.set(sc * 1.25, sc * 1.6, 1); this.blob.rotation.z = -yaw; this.blob.material.opacity = 0.42; }
     this._trail(dt);
     this._particles(dt);
     // name tags fade with distance and hide for karts right next to the camera
@@ -230,5 +235,5 @@ export class KartView {
     void TIER_HEX; void KART; void smoothstep;
   }
 
-  dispose(scene) { scene.remove(this.rig.root); this.paint.dispose(); this.tag.material.map.dispose(); this.tag.material.dispose(); }
+  dispose(scene) { scene.remove(this.rig.root); scene.remove(this.blob); this.paint.dispose(); this.tag.material.map.dispose(); this.tag.material.dispose(); }
 }

@@ -20,7 +20,7 @@ export class Scenery {
     this.rng = makeRng(hashString(ctx.track.id) + seed);
     this.hit = makeGroundHit();
     this.shadows = ctx.gfx.q.shadow > 0;
-    this.density = ctx.gfx.q.scenery ?? 1;   // lower quality tiers thin out scattered scenery
+    this.density = (ctx.gfx.q.scenery ?? 1) * (ctx.densityScale ?? 1);   // lower quality tiers thin out scattered scenery
   }
 
   /** Ground height at a point (road, shoulder, or terrain). */

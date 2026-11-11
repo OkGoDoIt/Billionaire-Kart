@@ -321,7 +321,8 @@ export class Kart {
       this.vy -= g * dt; this.y += this.vy * dt; this.airT += dt; this.stats.airtime += dt;
       if (this.y <= gy) {
         const impact = -this.vy;
-        this.y = gy; this.grounded = true; this.vy = 0;
+        // carry on at the ground's own vertical speed, so a downhill landing does not bounce us straight back into the air
+        this.y = gy; this.grounded = true; this.vy = clamp((gy - this.gy) / dt, -40, 8);
         if (this.airT > 0.12 || impact > 6) { this.landed = clamp(impact / 16, 0.2, 1); this.emit('land', impact); }
         if (this.trick) { this.trick = false; this.boost('trick'); this.emit('trickLand'); }
         this.hopping = false; this.airT = 0;

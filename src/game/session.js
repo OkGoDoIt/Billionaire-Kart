@@ -28,7 +28,7 @@ export class RaceSession {
     const entries = [...pool.map(racer => ({ racer, player: -1, level: config.level || 'normal' })), ...humans.map((racer, i) => ({ racer, player: i, autoTrick: config.players[i].autoTrick }))];
     if (config.order) entries.sort((a, b) => config.order.indexOf(a.racer.id) - config.order.indexOf(b.racer.id));
     this.race = new Race({ track, cc: config.cc || 150, laps: config.laps, seed: (config.seed ?? 1) + 17, entries, mode: config.mode, countdown: config.countdown });
-    this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k) });
+    this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k), tv: !!config.tv });
     app.input.assign = config.players.length === 1 ? ['any'] : config.players.map(p => p.device);
     this.autopilots = config.auto ? this.race.players.map(k => new AIDriver(k, 'hard', makeRng(99))) : null;
     // HUD per player

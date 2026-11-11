@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { buildTrackMesh, trackUniforms } from '../track/trackmesh.js';
 import { KartView } from './kartview.js';
-import { ChaseCam, IntroCam } from './chasecam.js';
+import { ChaseCam, IntroCam, TvCam } from './chasecam.js';
 import { Particles, rgbOf } from './particles.js';
 import { buildItemBox, buildItemModel, coinGeometry, coinMaterial } from '../models/items.js';
 import { OBSTACLE_MODELS } from '../models/props.js';
@@ -13,8 +13,8 @@ const CONFETTI = [[1, 0.82, 0.24], [1, 0.3, 0.43], [0.22, 0.71, 1], [0.18, 0.9, 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3(), _e = new THREE.Euler();
 
 export class RaceView {
-  constructor(gfx, race, def, { onEvent = null } = {}) {
-    this.gfx = gfx; this.race = race; this.def = def; this.onEvent = onEvent;
+  constructor(gfx, race, def, { onEvent = null, tv = false } = {}) {
+    this.gfx = gfx; this.race = race; this.def = def; this.onEvent = onEvent; this.tv = tv;
     const scene = gfx.scene, track = race.track;
     this.root = new THREE.Group(); this.root.name = 'race'; scene.add(this.root);
     this.sky = gfx.setSky(def.sky || 'day', def.skyOverrides || {});
@@ -67,7 +67,7 @@ export class RaceView {
     const rects = n <= 1 ? [[0, 0, 1, 1]] : n === 2 ? [[0, 0.5, 1, 0.5], [0, 0, 1, 0.5]] : [[0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5], [0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5]];
     this.views = this.cams.map((c, i) => ({ camera: c.camera, rect: rects[i], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v) }));
     if (!n) { // spectator: follow the leader
-      const c = new ChaseCam(this.race.karts[0], this.race.track, 9); this.cams = [c]; this.spectate = true;
+      const c = this.tv ? new TvCam(this.race.karts[0], this.race.track) : new ChaseCam(this.race.karts[0], this.race.track, 9); this.cams = [c]; this.spectate = true;
       this.views = [{ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v) }];
     }
     this.gfx.setViews(this.views);
@@ -187,13 +187,13 @@ export class RaceView {
     // cameras
     if (this.intro && !this.intro.done) { const q = this.intro.update(dt); this.views[0].focus.copy(q); }
     else {
-      if (this.spectate) { const lead = race.order[0]; if (lead && this.cams[0].kart !== lead && (this._specT = (this._specT || 0) + dt) > 4) { this.cams[0].kart = lead; this._specT = 0; } }
+      if (this.spectate) { this._specT = (this._specT || 0) + dt; if (this._specT > 7) { this._specT = 0; const pick = race.order[Math.floor(Math.random() * Math.min(4, race.order.length))]; if (pick && !pick.finished) { this.cams[0].kart = pick; this.cams[0].snap(); } } }
       const w = gfx.renderer.domElement.width, h = gfx.renderer.domElement.height;
       this.cams.forEach((c, i) => { const r = this.views[i].rect; c.update(dt, this.viewOf.get(c.kart), (r[2] * w) / (r[3] * h)); });
     }
     // post effects for the single-player view
     const k = this.cams[0]?.kart;
-    if (k) gfx.post.blur += (((k.boostT > 0 || k.bulletT > 0) ? 0.055 : 0) + (k.starT > 0 ? 0.02 : 0) - gfx.post.blur) * Math.min(1, dt * 6);
+    if (k) gfx.post.blur += ((this.spectate ? 0 : ((k.boostT > 0 || k.bulletT > 0) ? 0.055 : 0) + (k.starT > 0 ? 0.02 : 0)) - gfx.post.blur) * Math.min(1, dt * 6);
     this.flash = Math.max(0, this.flash - dt * 2.6); gfx.post.flash = this.flash * 0.75;
   }
 

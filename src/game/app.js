@@ -75,7 +75,7 @@ export class App {
   _clearScene() {
     this.session?.dispose(); this.session = null; this.attract = false;
     this.showroom?.dispose(); this.showroom = null;
-    this.trackCard?.remove(); this.trackCard = null;
+    this.trackCard?.remove(); this.trackCard = null; this.hintCard?.remove(); this.hintCard = null;
   }
 
   /* ---------- title and attract race ---------- */
@@ -83,7 +83,7 @@ export class App {
   _attract() {
     this._clearScene();
     const id = TRACKS[Math.floor(this.rng() * TRACKS.length)].id;
-    this.session = new RaceSession(this, { trackId: id, cc: 150, level: 'hard', players: [], intro: false, seed: Math.floor(this.rng() * 1e5), laps: 3, quiet: true, countdown: 0.4 });
+    this.session = new RaceSession(this, { trackId: id, cc: 150, level: 'hard', players: [], intro: false, seed: Math.floor(this.rng() * 1e5), laps: 3, quiet: true, countdown: 0.4, tv: true });
     this.attract = true;
   }
   onRaceDone(session, results) {
@@ -128,10 +128,20 @@ export class App {
       card.innerHTML = `${cupLine ? `<div class="cup-line">${cupLine}</div>` : ''}<h1>${def.name}</h1><p>${def.tagline || ''}</p>`;
       this.ui.appendChild(card);
       if (this.session.phase !== 'intro') setTimeout(() => this.onCountdown(), 1400);
+      if (!this.save.data.seenHowTo && config.players.length === 1 && !this.session.touch) this._hint();
       this.audio?.music?.(def.music || def.id);
       this.audio?.say?.('track_' + def.id, { force: true, delay: 0.7 });
     });
   }
+  /** First race only: a short reminder of the two controls people miss. */
+  _hint() {
+    const pad = this.input.lastDevice.startsWith('pad');
+    const card = el('div', 'hint-card', pad ? '<b>Right bumper</b> drift &nbsp;·&nbsp; <b>Left bumper</b> use item' : '<kbd>Space</kbd> drift &nbsp;·&nbsp; <kbd>E</kbd> use item &nbsp;·&nbsp; <kbd>Esc</kbd> pause');
+    this.ui.appendChild(card); this.hintCard = card;
+    setTimeout(() => { card.classList.add('out'); setTimeout(() => card.remove(), 500); }, 14000);
+    this.save.data.seenHowTo = true; this.save.write();
+  }
+
   /** Called by the session when the flyover ends. */
   onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
 

@@ -43,8 +43,8 @@ export class Hud {
     const S = this.mapSize = 220; c.width = c.height = S * 2; // 2x for sharpness
     const b = tr.bounds, pad = 22, span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
     const sc = (S * 2 - pad * 2) / span, ox = (S * 2 - (b.maxX - b.minX) * sc) / 2, oz = (S * 2 - (b.maxZ - b.minZ) * sc) / 2;
-    // viewed from above: +x right, +z down, but mirrored in x so a left turn looks like a left turn
-    this.mapXY = (x, z) => [S * 2 - ((x - b.minX) * sc + ox), (z - b.minZ) * sc + oz];
+    // a true top-down view: +x to the right, +z down the screen
+    this.mapXY = (x, z) => [(x - b.minX) * sc + ox, (z - b.minZ) * sc + oz];
     const bg = this.mapBg = document.createElement('canvas'); bg.width = bg.height = S * 2;
     const g = bg.getContext('2d');
     const path = new Path2D();
@@ -69,7 +69,7 @@ export class Hud {
       g.fillStyle = hex(k.racer.color); g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill();
     }
     const k = this.kart, [x, y] = this.mapXY(k.x, k.z);
-    g.save(); g.translate(x, y); g.rotate(k.yaw + Math.PI); // mirrored map: heading rotates the other way
+    g.save(); g.translate(x, y); g.rotate(Math.PI - k.yaw);   // the arrow is drawn pointing up; heading is measured from +z toward +x
     g.fillStyle = '#12142b'; g.beginPath(); g.moveTo(0, -20); g.lineTo(14, 13); g.lineTo(0, 7); g.lineTo(-14, 13); g.closePath(); g.fill();
     g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -14); g.lineTo(9, 9); g.lineTo(0, 4); g.lineTo(-9, 9); g.closePath(); g.fill();
     g.restore();

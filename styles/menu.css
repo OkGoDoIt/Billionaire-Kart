@@ -173,3 +173,6 @@ kbd { font-family: var(--body); font-weight: 700; background: #fff; color: var(-
 .panel.results .foot .btn { font-size: calc(var(--u) * 2.05); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.8) calc(var(--u) * 0.6); white-space: nowrap; }
 
 .res-quote { font-size: calc(var(--u) * 1.75); font-style: italic; opacity: 0.92; margin-top: calc(var(--u) * 0.8) !important; text-align: center; } .res-quote b { font-style: normal; color: var(--gold); }
+
+.hint-card { position: absolute; left: 50%; bottom: calc(min(1vw, 1.78vh) * 4 + var(--safe-b)); transform: translateX(-50%); --u: min(1vw, 1.78vh); font-family: var(--body); font-weight: 600; font-size: calc(var(--u) * 2.1); color: #fff; background: rgba(18,20,43,0.86); border: calc(var(--u) * 0.3) solid rgba(255,255,255,0.8); border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.6); pointer-events: none; white-space: nowrap; animation: menu-in 0.4s ease-out 1.5s both; z-index: 6; }
+.hint-card b { color: var(--gold); } .hint-card.out { transition: opacity 0.5s; opacity: 0; }

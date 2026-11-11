@@ -7,6 +7,12 @@ import { lam, box, cyl, cone, sign, plaque, canvasSign, scatterEach, clouds, anc
 export const TRACK = {
   name: 'WeWork Memorial GP', sky: 0x9aa5b1, fog: 0xb8bec6, ground: 0x77755f, shoulder: 0x8c7a5a, roadSeed: 7,
   points: [[0, -255], [150, -225], [240, -130], [225, -10], [255, 105], [180, 205], [70, 240], [-60, 215], [-150, 245], [-235, 160], [-205, 40], [-245, -70], [-190, -180], [-80, -225]],
+  // HAND-AUTHORED profiles (docs/track-design-wework.md) — keyframes [u, value]:
+  // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT turn).
+  // Two office floors: flat lobby level, a collapsed-floor dip, the mezzanine ramp
+  // up to Floor 2 (+6 m), and the fire-escape descent back to the lobby.
+  elev: [[0, 0], [0.13, 0], [0.20, 0.5], [0.307, 1.0], [0.33, 0], [0.375, -2.5], [0.42, 0], [0.47, 3.0], [0.52, 6.0], [0.586, 6.0], [0.667, 6.5], [0.736, 6.0], [0.78, 5.0], [0.83, 2.5], [0.886, 1.0], [0.92, 0], [0.97, 0]],
+  bank: [[0, 0], [0.174, 9], [0.208, 0], [0.241, -7], [0.274, 0], [0.307, 10], [0.35, 0], [0.392, 2], [0.43, 0], [0.461, 4], [0.50, 0], [0.536, -9], [0.561, 0], [0.586, 13], [0.627, 0], [0.667, 11], [0.702, 0], [0.736, -10], [0.768, 0], [0.800, 9], [0.843, 0], [0.886, 6], [0.93, 0]],
 };
 export const CARD = { emoji: '🏢', desc: 'A ruined coworking cathedral. The kombucha is gone.' };
 
@@ -20,8 +26,8 @@ const SIGNS = [
   ['ELEVATE THE WORLD\'S CONSCIOUSNESS (FORECLOSED)', 0.92, 1, 330],
 ];
 
-function phoneBooth(ctx, x, z, ry, tint) {
-  const g = new ctx.THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; ctx.scene.add(g);
+function phoneBooth(ctx, x, z, ry, tint, groundY = 0) {
+  const g = new ctx.THREE.Group(); g.position.set(x, groundY, z); g.rotation.y = ry; ctx.scene.add(g);
   const shell = new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(1.7, 3.6, 1.7), lam(ctx, tint));
   shell.position.y = 1.8; shell.castShadow = true; g.add(shell);
   const glass = new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(1.3, 2.6, 0.1),
@@ -30,8 +36,8 @@ function phoneBooth(ctx, x, z, ry, tint) {
   return g;
 }
 
-function deskRow(ctx, x, z, ry, n) {
-  const g = new ctx.THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; ctx.scene.add(g);
+function deskRow(ctx, x, z, ry, n, groundY = 0) {
+  const g = new ctx.THREE.Group(); g.position.set(x, groundY, z); g.rotation.y = ry; ctx.scene.add(g);
   const top = new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(n * 2.4, 0.18, 1.3), lam(ctx, 0xd8cfc0));
   top.position.y = 1.15; top.castShadow = true; g.add(top);
   for (let i = 0; i < n; i++) {
@@ -144,19 +150,19 @@ export function build(ctx) {
   /* ---- phone-booth pods, still reservable in the app (the app is gone) ---- */
   const boothTints = [0xe4572e, 0x3f6d8e, 0x5b8c5a, 0x8e6cc8];
   scatterEach(ctx, 12, ctx.HALF_W + 9, ctx.HALF_W + 30, (p, i) =>
-    phoneBooth(ctx, p.x, p.z, ctx.rand(0, 6.3), boothTints[i % 4]));
+    phoneBooth(ctx, p.x, p.z, ctx.rand(0, 6.3), boothTints[i % 4], p.y));
 
   /* ---- hot-desk rows out on the dead lawn ---- */
   deskRow(ctx, trackCenter.x - 34, trackCenter.z + 30, 0.4, 5);
   deskRow(ctx, trackCenter.x + 38, trackCenter.z - 26, -0.9, 4);
   scatterEach(ctx, 8, ctx.HALF_W + 20, ctx.HALF_W + 52, (p, i) =>
-    deskRow(ctx, p.x, p.z, ctx.rand(0, 6.3), 2 + (i % 3)));
+    deskRow(ctx, p.x, p.z, ctx.rand(0, 6.3), 2 + (i % 3), p.y));
 
   /* ---- rubble & fallen signage of the empire ---- */
   scatterEach(ctx, 16, ctx.HALF_W + 6, ctx.HALF_W + 44, p => {
     const s = ctx.rand(0.7, 2.2);
     const rock = new ctx.THREE.Mesh(new ctx.THREE.DodecahedronGeometry(s), lam(ctx, 0x9a958a));
-    rock.position.set(p.x, s * 0.5, p.z); rock.rotation.set(ctx.rand(0, 3), ctx.rand(0, 3), 0);
+    rock.position.set(p.x, p.y + s * 0.5, p.z); rock.rotation.set(ctx.rand(0, 3), ctx.rand(0, 3), 0);
     rock.castShadow = true; scene.add(rock);
   });
 

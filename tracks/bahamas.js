@@ -8,6 +8,12 @@ import { lam, box, cyl, cone, sph, sign, plaque, canvasSign, scatterEach, clouds
 export const TRACK = {
   name: 'Bahamas Crypto GP', sky: 0x7fd4f7, fog: 0xcfeef5, ground: 0xe8d8a8, shoulder: 0x2ec4b6, roadSeed: 9,
   points: [[0, -250], [155, -220], [240, -120], [210, 0], [250, 110], [165, 205], [45, 240], [-85, 215], [-215, 190], [-250, 70], [-220, -60], [-250, -150], [-140, -220]],
+  // HAND-AUTHORED profiles (docs/track-design-bahamas.md) — keyframes [u, value]:
+  // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT turn).
+  // Sea level at the beachfront, a causeway climb over the marina inlet, and
+  // Courthouse Hill: the law sits at the top of the lap's second climb.
+  elev: [[0, 0], [0.10, 0], [0.179, 0.5], [0.248, 1.0], [0.313, 1.5], [0.36, 2.5], [0.44, 6.0], [0.50, 8.0], [0.55, 6.5], [0.623, 3.5], [0.68, 3.0], [0.74, 5.0], [0.80, 7.5], [0.834, 7.0], [0.88, 3.5], [0.93, 0], [0.97, 0]],
+  bank: [[0, 0], [0.088, 3], [0.135, 0], [0.179, 10], [0.214, 0], [0.248, -10], [0.281, 0], [0.313, 12], [0.395, 0], [0.476, 2], [0.55, 0], [0.623, 10], [0.666, 0], [0.708, 5], [0.745, 0], [0.782, -9], [0.808, 0], [0.834, 14], [0.90, 0], [0.97, 0]],
 };
 export const CARD = { emoji: '🏝️', desc: 'Beachfront past the FTX ruins. 0% tax, 100% vibes.' };
 
@@ -22,8 +28,8 @@ const SIGNS = [
 ];
 
 const palmCrowns = [];
-function palm(ctx, x, z, s = 1) {
-  const g = new ctx.THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ctx.rand(0, 6.3); ctx.scene.add(g);
+function palm(ctx, x, z, s = 1, groundY = 0) {
+  const g = new ctx.THREE.Group(); g.position.set(x, groundY, z); g.rotation.y = ctx.rand(0, 6.3); ctx.scene.add(g);
   let px = 0;
   for (let i = 0; i < 3; i++) { // curved trunk from stacked, drifting segments
     const seg = new ctx.THREE.Mesh(new ctx.THREE.CylinderGeometry(0.28 * s, 0.34 * s, 2.2 * s, 7), lam(ctx, 0x9a7b52));
@@ -135,14 +141,14 @@ export function build(ctx) {
   eaPlaque.position.set(0, 4.4, 0); ea.add(eaPlaque);
 
   /* ---- beach dressing: palms, umbrellas, loungers, blank nameplates ---- */
-  scatterEach(ctx, 14, ctx.HALF_W + 7, ctx.HALF_W + 40, p => palm(ctx, p.x, p.z, ctx.rand(0.85, 1.25)));
+  scatterEach(ctx, 14, ctx.HALF_W + 7, ctx.HALF_W + 40, p => palm(ctx, p.x, p.z, ctx.rand(0.85, 1.25), p.y));
   palm(ctx, trackCenter.x + 30, trackCenter.z - 20, 1.2);
   palm(ctx, trackCenter.x - 42, trackCenter.z + 26, 1.05);
   ctx.animators.push((dt, t) => palmCrowns.forEach(({ crown, ph }) => { crown.rotation.z = Math.sin(t * 1.1 + ph) * 0.055; }));
   scatterEach(ctx, 10, ctx.HALF_W + 8, ctx.HALF_W + 30, (p, i) => {
-    cyl(ctx, 0.09, 0.09, 2.6, 0xf2f2f2, p.x, 1.3, p.z);
-    cone(ctx, 2.3, 1.1, [0xff5da2, 0xffd94a, 0x2ec4b6][i % 3], p.x, 2.9, p.z, { seg: 8 });
-    box(ctx, 2.2, 0.35, 0.8, 0xf2ead8, p.x + 1.8, 0.45, p.z, { ry: ctx.rand(0, 3) });
+    cyl(ctx, 0.09, 0.09, 2.6, 0xf2f2f2, p.x, p.y + 1.3, p.z);
+    cone(ctx, 2.3, 1.1, [0xff5da2, 0xffd94a, 0x2ec4b6][i % 3], p.x, p.y + 2.9, p.z, { seg: 8 });
+    box(ctx, 2.2, 0.35, 0.8, 0xf2ead8, p.x + 1.8, p.y + 0.45, p.z, { ry: ctx.rand(0, 3) });
   });
   // exchange HQ row with half the nameplates blank — the plates are the joke
   for (let i = 0; i < 4; i++) {

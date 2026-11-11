@@ -8,6 +8,12 @@ import { lam, box, cyl, cone, sph, sign, plaque, scatterEach, clouds, anchorGrou
 export const TRACK = {
   name: 'Burning Man GP', sky: 0x3b2f52, fog: 0x6b5570, ground: 0xd8c49c, shoulder: 0x8a6f4d, roadSeed: 8,
   points: [[0, -260], [170, -215], [255, -90], [225, 40], [260, 150], [150, 235], [10, 255], [-130, 230], [-250, 145], [-225, 10], [-255, -120], [-160, -215], [-60, -245]],
+  // HAND-AUTHORED profiles (docs/track-design-burning-man.md) — keyframes [u, value]:
+  // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT turn).
+  // The playa is dust-flat and stays honest: three designed earth berms only — one
+  // feeding the hairpin, the long Overlook Berm facing the Man, and home rollers.
+  elev: [[0, 0], [0.10, 0], [0.16, 1.0], [0.198, 2.0], [0.269, 3.5], [0.332, 1.0], [0.40, 1.5], [0.47, 4.0], [0.55, 8.0], [0.61, 6.5], [0.671, 5.0], [0.748, 3.5], [0.78, 2.0], [0.821, 3.0], [0.87, 1.5], [0.93, 0], [0.97, 0]],
+  bank: [[0, 0], [0.098, 3], [0.15, 0], [0.198, 8], [0.234, 0], [0.269, -9], [0.30, 0], [0.332, 13], [0.50, 0], [0.671, 11], [0.71, 0], [0.748, -7], [0.785, 0], [0.821, 10], [0.866, 0], [0.911, 3], [0.95, 0]],
 };
 export const CARD = { emoji: '🔥', desc: 'Dusk on the playa. Radical self-reliance, valet available.' };
 
@@ -21,8 +27,8 @@ const SIGNS = [
   ['10 PRINCIPLES, 0 SHOWERS', 0.90, 1, 200],
 ];
 
-function artCar(ctx, x, z, ry, kind) {
-  const g = new ctx.THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; ctx.scene.add(g);
+function artCar(ctx, x, z, ry, kind, groundY = 0) {
+  const g = new ctx.THREE.Group(); g.position.set(x, groundY, z); g.rotation.y = ry; ctx.scene.add(g);
   const base = new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(3.2, 1.1, 6.4), lam(ctx, [0xc75146, 0x3f6d8e, 0xe0a526][kind % 3]));
   base.position.y = 1.0; base.castShadow = true; g.add(base);
   for (const [wx, wz] of [[-1.7, 2.2], [1.7, 2.2], [-1.7, -2.2], [1.7, -2.2]]) {
@@ -102,7 +108,7 @@ export function build(ctx) {
   manPlaque.position.set(trackCenter.x, 6, trackCenter.z + 11.5); scene.add(manPlaque);
 
   /* ---- art cars: parked on the playa + a mutant-vehicle parade on the infield ---- */
-  scatterEach(ctx, 9, ctx.HALF_W + 14, ctx.HALF_W + 46, (p, i) => artCar(ctx, p.x, p.z, ctx.rand(0, 6.3), i % 3));
+  scatterEach(ctx, 9, ctx.HALF_W + 14, ctx.HALF_W + 46, (p, i) => artCar(ctx, p.x, p.z, ctx.rand(0, 6.3), i % 3, p.y));
   for (let i = 0; i < 3; i++) {
     const a = i / 3 * Math.PI * 2 + 0.7;
     artCar(ctx, trackCenter.x + Math.cos(a) * 52, trackCenter.z + Math.sin(a) * 52, a + Math.PI / 2, (i + 1) % 3);
@@ -121,7 +127,7 @@ export function build(ctx) {
   for (const side of [-1, 1]) {
     const p = atLap(ctx, wFrac, side * (ctx.HALF_W + 3.5));
     const bank = new ctx.THREE.Mesh(new ctx.THREE.PlaneGeometry(64, 8.5), dustMat);
-    bank.position.set(p.x, 4, p.z); bank.rotation.y = wHead + (side > 0 ? Math.PI : 0);
+    bank.position.set(p.x, p.y + 4, p.z); bank.rotation.y = wHead + (side > 0 ? Math.PI : 0);
     scene.add(bank); banks.push(bank);
   }
   const wSign = sign(ctx, 'WHITEOUT — RADICAL VISIBILITY: NONE', wFrac - 0.035, 1, 45);
@@ -129,11 +135,11 @@ export function build(ctx) {
 
   /* ---- temple-ish shade structures + MOOP piles (matter out of place) ---- */
   scatterEach(ctx, 7, ctx.HALF_W + 18, ctx.HALF_W + 55, p => {
-    for (const sx of [-1, 1]) cyl(ctx, 0.18, 0.18, 5.4, 0x8a6f4d, p.x + sx * 3.4, 2.7, p.z);
-    cone(ctx, 5.2, 2.2, 0xe8dcc2, p.x, 6.2, p.z, { seg: 4 });
+    for (const sx of [-1, 1]) cyl(ctx, 0.18, 0.18, 5.4, 0x8a6f4d, p.x + sx * 3.4, p.y + 2.7, p.z);
+    cone(ctx, 5.2, 2.2, 0xe8dcc2, p.x, p.y + 6.2, p.z, { seg: 4 });
   });
   scatterEach(ctx, 12, ctx.HALF_W + 5, ctx.HALF_W + 30, p => {
-    sph(ctx, ctx.rand(0.4, 0.9), 0xb8a888, p.x, 0.35, p.z); // glitter, probably
+    sph(ctx, ctx.rand(0.4, 0.9), 0xb8a888, p.x, p.y + 0.35, p.z); // glitter, probably
   });
 
   for (const [text, frac, side, hue] of SIGNS) sign(ctx, text, frac, side, hue);

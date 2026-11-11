@@ -7,6 +7,12 @@ import { lam, box, cyl, cone, sph, sign, plaque, scatterEach, clouds, anchorGrou
 export const TRACK = {
   name: 'Metaverse Plaza GP', sky: 0x8fd8ff, fog: 0xbfeaff, ground: 0xdfe6ee, shoulder: 0x6c5ce7, roadSeed: 6,
   points: [[0, -250], [140, -230], [235, -140], [215, -20], [250, 90], [170, 200], [60, 245], [-80, 225], [-205, 190], [-245, 60], [-215, -80], [-150, -195], [-60, -240]],
+  // HAND-AUTHORED profiles (docs/track-design-metaverse.md) — keyframes [u, value]:
+  // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT turn).
+  // The plaza is flat; the verticality is unfinished geometry: a loading ramp up to
+  // the un-rendered second floor (the Sky Deck), then a buffering ramp back down.
+  elev: [[0, 0], [0.10, 0], [0.176, 1.5], [0.246, 2.5], [0.312, 2.0], [0.36, 2.0], [0.44, 5.5], [0.52, 10.0], [0.58, 10.5], [0.642, 10.5], [0.70, 7.0], [0.78, 3.5], [0.86, 1.0], [0.93, 0]],
+  bank: [[0, 0], [0.081, 3], [0.125, 0], [0.176, 11], [0.211, 0], [0.246, -8], [0.279, 0], [0.312, 11], [0.40, 0], [0.483, 3], [0.56, 0], [0.642, 9], [0.77, 0], [0.903, 5], [0.945, 0]],
 };
 export const CARD = { emoji: '🥽', desc: 'A glossy empty plaza. Population: you + bots.' };
 
@@ -21,10 +27,10 @@ const SIGNS = [
   ['$47B WELL SPENT', 0.95, -1, 300],
 ];
 
-function leglessStatue(ctx, x, z, s, suitColor, skinColor) {
+function leglessStatue(ctx, x, z, s, suitColor, skinColor, groundY = 0) {
   // The defining Metaverse avatar: torso, arms, big head — and NO legs.
   // It floats above its plinth, exactly like the real thing.
-  const g = new ctx.THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ctx.rand(0, Math.PI * 2); ctx.scene.add(g);
+  const g = new ctx.THREE.Group(); g.position.set(x, groundY, z); g.rotation.y = ctx.rand(0, Math.PI * 2); ctx.scene.add(g);
   const plinth = new ctx.THREE.Mesh(new ctx.THREE.CylinderGeometry(2.6 * s, 3.1 * s, 1.6 * s, 8), lam(ctx, 0xb9c2cc));
   plinth.position.y = 0.8 * s; plinth.castShadow = true; g.add(plinth);
   const body = new ctx.THREE.Group(); body.position.y = 1.6 * s; g.add(body);
@@ -80,19 +86,19 @@ export function build(ctx) {
   /* ---- legless avatar statues ringing the plaza ---- */
   const suits = [0x1877f2, 0x10a37f, 0xd23b2e, 0xff9900, 0x7b4fd0, 0x22242a];
   scatterEach(ctx, 10, ctx.HALF_W + 26, ctx.HALF_W + 60, (p, i) =>
-    leglessStatue(ctx, p.x, p.z, ctx.rand(0.9, 1.5), suits[i % suits.length], 0xf2c79b));
+    leglessStatue(ctx, p.x, p.z, ctx.rand(0.9, 1.5), suits[i % suits.length], 0xf2c79b, p.y));
   // two greeters flank the start straight
   for (const side of [-1, 1]) {
     const p = atLap(ctx, 0.985, side * (ctx.HALF_W + 14));
-    leglessStatue(ctx, p.x, p.z, 1.6, 0x1877f2, 0xf2c79b);
+    leglessStatue(ctx, p.x, p.z, 1.6, 0x1877f2, 0xf2c79b, p.y);
   }
 
   /* ---- low-poly plaza trees in planters (rendered nature) ---- */
   scatterEach(ctx, 26, ctx.HALF_W + 8, ctx.HALF_W + 48, p => {
-    box(ctx, 3.4, 1.1, 3.4, 0xc3ccd6, p.x, 0.55, p.z, { ry: ctx.rand(0, 3) });
-    cyl(ctx, 0.22, 0.3, 2.0, 0x8a8f96, p.x, 2.0, p.z);
+    box(ctx, 3.4, 1.1, 3.4, 0xc3ccd6, p.x, p.y + 0.55, p.z, { ry: ctx.rand(0, 3) });
+    cyl(ctx, 0.22, 0.3, 2.0, 0x8a8f96, p.x, p.y + 2.0, p.z);
     const blob = new ctx.THREE.Mesh(new ctx.THREE.IcosahedronGeometry(ctx.rand(1.8, 2.6), 0), lam(ctx, 0x37d67a));
-    blob.position.set(p.x, 4.4, p.z); blob.castShadow = true; scene.add(blob);
+    blob.position.set(p.x, p.y + 4.4, p.z); blob.castShadow = true; scene.add(blob);
   });
 
   /* ---- reality-vs-render gag: one real tree, one "rendered" tree ---- */

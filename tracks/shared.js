@@ -51,11 +51,16 @@ export function sph(ctx, r, color, x, y, z, o = {}) {
   return place(m, x, y, z, { parent: ctx.scene, ...o });
 }
 
-/** World position at a fraction of the lap, offset laterally (signed) from the centre line. */
+/** World position at a fraction of the lap, offset laterally (signed) from the centre line.
+ * The y is the GROUND height there (terrainHeightAt: banked road plane blended to
+ * ambient terrain) plus the caller's offset — so anchored dressing sits on the real
+ * ground on elevated/banked tracks, not on the y=0 plane. */
 export function atLap(ctx, frac, lat = 0, y = 0) {
   const i = ((Math.floor(frac * ctx.N) % ctx.N) + ctx.N) % ctx.N;
   const s = ctx.samples[i], n = ctx.normals[i];
-  return new ctx.THREE.Vector3(s.x + n.x * lat, y, s.z + n.z * lat);
+  const x = s.x + n.x * lat, z = s.z + n.z * lat;
+  const base = ctx.terrainHeightAt ? ctx.terrainHeightAt(x, z) : 0;
+  return new ctx.THREE.Vector3(x, base + y, z);
 }
 /** Heading (rotation.y) of the track tangent at a fraction of the lap. */
 export function headingAt(ctx, frac) {
@@ -68,7 +73,7 @@ export function anchorGroup(ctx, frac, lat, y = 0) {
   const p = atLap(ctx, frac, lat, y), c = atLap(ctx, frac, 0, y);
   const g = new ctx.THREE.Group();
   g.position.copy(p);
-  g.lookAt(c.x, y, c.z);
+  g.lookAt(c.x, c.y, c.z);
   (ctx.scene).add(g);
   return g;
 }
@@ -115,7 +120,7 @@ export function scatterEach(ctx, count, minLat, maxLat, fn) {
 
 /** Simple low-poly tree: trunk + icosahedron blob canopy. Returns the group. */
 export function blobTree(ctx, x, z, s = 1, canopy = 0x2e7d32, trunk = 0x7a4a21) {
-  const g = new ctx.THREE.Group(); g.position.set(x, 0, z); ctx.scene.add(g);
+  const g = new ctx.THREE.Group(); g.position.set(x, ctx.terrainHeightAt ? ctx.terrainHeightAt(x, z) : 0, z); ctx.scene.add(g);
   const t = new ctx.THREE.Mesh(new ctx.THREE.CylinderGeometry(0.3 * s, 0.45 * s, 2.4 * s, 6), lam(ctx, trunk));
   t.position.y = 1.2 * s; t.castShadow = true; g.add(t);
   const c = new ctx.THREE.Mesh(new ctx.THREE.IcosahedronGeometry(2.2 * s, 0), lam(ctx, canopy));

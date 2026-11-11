@@ -58,7 +58,7 @@ export class ChaseCam {
     this.y = damp(this.y, p.y, k.grounded ? 12 : 6, dt);
     _want.set(p.x - Math.sin(yaw) * dist, this.y + height + k.pitch * -1.2, p.z - Math.cos(yaw) * dist);
     // keep the camera above the ground behind the kart
-    const gy = this.track.hasTerrain ? Math.max(this.track.terrainHeight(_want.x, _want.z), -1e3) : -1e3;
+    const gy = this.track.hasTerrain && !this.track.tunnel[k.hint] && !this.track.bridge[k.hint] ? Math.max(this.track.terrainHeight(_want.x, _want.z), -1e3) : -1e3;
     const road = this._g || (this._g = { y: 0 }); void road;
     if (_want.y < gy + 0.9) _want.y = gy + 0.9;
     this.pos.copy(_want);

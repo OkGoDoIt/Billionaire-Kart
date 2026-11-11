@@ -9,10 +9,10 @@ import { Sky, SKY_PRESETS } from './sky.js';
 import { clamp } from '../core/util.js';
 
 export const QUALITY = {
-  low:    { label: 'Low',    maxPixelRatio: 1,    msaa: 0, bloom: false, shadow: 0,    shadowRange: 0,  particles: 0.5, aniso: 2 },
-  medium: { label: 'Medium', maxPixelRatio: 1.25, msaa: 2, bloom: true,  shadow: 1024, shadowRange: 42, particles: 0.8, aniso: 4 },
-  high:   { label: 'High',   maxPixelRatio: 1.5,  msaa: 4, bloom: true,  shadow: 2048, shadowRange: 55, particles: 1,   aniso: 8 },
-  ultra:  { label: 'Ultra',  maxPixelRatio: 2,    msaa: 4, bloom: true,  shadow: 4096, shadowRange: 75, particles: 1,   aniso: 16 },
+  low:    { label: 'Low',    maxPixelRatio: 1,    msaa: 0, bloom: false, shadow: 0,    shadowRange: 0,  particles: 0.5, aniso: 2, scenery: 0.4 },
+  medium: { label: 'Medium', maxPixelRatio: 1.25, msaa: 2, bloom: true,  shadow: 1024, shadowRange: 42, particles: 0.8, aniso: 4, scenery: 0.7 },
+  high:   { label: 'High',   maxPixelRatio: 1.5,  msaa: 4, bloom: true,  shadow: 2048, shadowRange: 55, particles: 1,   aniso: 8, scenery: 1 },
+  ultra:  { label: 'Ultra',  maxPixelRatio: 2,    msaa: 4, bloom: true,  shadow: 4096, shadowRange: 75, particles: 1,   aniso: 16, scenery: 1 },
 };
 
 export function detectQuality() {

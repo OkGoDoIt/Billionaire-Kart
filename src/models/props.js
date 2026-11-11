@@ -295,4 +295,47 @@ export function blimp(text = 'BILLIONAIRE KART', { color = 0xf4f4f0, accent = 0x
   grp.rotation.y = 0; return grp;
 }
 
+/* ---------- default obstacle models (tracks can supply their own by name) ---------- */
+export const OBSTACLE_MODELS = {
+  barrel() {
+    const b = new ModelBuilder();
+    b.add('y', cyl(0.85, 0.85, 1.7, 16), { p: [0, 0.85, 0] });
+    for (const y of [0.35, 0.85, 1.35]) b.add('k', torus(0.86, 0.07, 6, 18), { p: [0, y, 0], r: [Math.PI / 2, 0, 0] });
+    b.add('k', cyl(0.6, 0.6, 0.06, 14), { p: [0, 1.72, 0] });
+    return b.build({ y: paint(0xffc928, { rough: 0.5 }), k: MAT.black });
+  },
+  crate() {
+    const b = new ModelBuilder();
+    b.add('w', box(1.9, 1.9, 1.9, 0.12, 2), { p: [0, 0.95, 0] });
+    for (const s of [1, -1]) { b.add('t', box(2.0, 0.22, 2.0, 0.05, 1), { p: [0, 0.95 + s * 0.78, 0] }); }
+    return b.build({ w: plastic(0xc99655, 0.85), t: plastic(0x8a5a2e, 0.85) });
+  },
+  drone() {
+    const b = new ModelBuilder();
+    b.add('body', sphere(0.6, 14, 10), { p: [0, 1.5, 0], s: [1, 0.5, 1.2] });
+    b.add('eye', sphere(0.2, 10, 8), { p: [0, 1.45, 0.62] });
+    for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { b.add('arm', cyl(0.06, 0.06, 1.2, 6), { p: [x * 0.55, 1.55, z * 0.55], r: [Math.PI / 2, 0, x * z > 0 ? -Math.PI / 4 : Math.PI / 4] }); b.add('rotor', cyl(0.5, 0.5, 0.04, 14), { p: [x * 0.95, 1.7, z * 0.95] }); }
+    return b.build({ body: paint(0xf4f4f0, { rough: 0.35 }), eye: glow(0xff3040, 3), arm: MAT.dark, rotor: new THREE.MeshStandardMaterial({ color: 0x9aa4b8, transparent: true, opacity: 0.45, roughness: 0.4 }) });
+  },
+  bot() {
+    const b = new ModelBuilder();
+    b.add('base', cyl(0.95, 1.05, 0.5, 18), { p: [0, 0.3, 0] });
+    b.add('body', cyl(0.6, 0.8, 1.2, 14), { p: [0, 1.1, 0] });
+    b.add('head', sphere(0.55, 14, 10), { p: [0, 1.9, 0] });
+    b.add('eye', box(0.7, 0.16, 0.2, 0.06, 1), { p: [0, 1.95, 0.46] });
+    b.add('light', sphere(0.14, 8, 6), { p: [0, 2.5, 0] });
+    return b.build({ base: MAT.dark, body: paint(0xf4f4f0, { rough: 0.4 }), head: paint(0xf4f4f0, { rough: 0.3 }), eye: glow(0x35e0ff, 3), light: glow(0xffb020, 4) });
+  },
+  flame() {
+    // timed jet: a column of fire; userData.setActive toggles it
+    const grp = new THREE.Group(), b = new ModelBuilder();
+    b.add('ring', torus(0.9, 0.16, 8, 18), { p: [0, 0.1, 0], r: [Math.PI / 2, 0, 0] });
+    grp.add(b.build({ ring: MAT.dark }));
+    const m = new THREE.Mesh(new THREE.ConeGeometry(0.9, 4.2, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0xff8a20, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    m.position.y = 2.2; grp.add(m);
+    grp.userData.setActive = (on, warn, t) => { m.visible = on || warn; m.scale.set(on ? 1 + Math.sin(t * 40) * 0.1 : 0.35, on ? 1 + Math.sin(t * 33) * 0.12 : 0.16, on ? 1 : 0.35); m.position.y = on ? 2.2 : 0.4; };
+    return grp;
+  },
+};
+
 void loft; void tube;

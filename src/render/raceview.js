@@ -6,6 +6,7 @@ import { KartView } from './kartview.js';
 import { ChaseCam, IntroCam } from './chasecam.js';
 import { Particles, rgbOf } from './particles.js';
 import { buildItemBox, buildItemModel, coinGeometry, coinMaterial } from '../models/items.js';
+import { OBSTACLE_MODELS } from '../models/props.js';
 import { clamp } from '../core/util.js';
 
 const CONFETTI = [[1, 0.82, 0.24], [1, 0.3, 0.43], [0.22, 0.71, 1], [0.18, 0.9, 0.65], [0.62, 0.42, 1], [1, 1, 1]];
@@ -33,6 +34,12 @@ export class RaceView {
       this.coinScale = new Float32Array(coins.length).fill(1);
     }
     this.things = new Map();                 // hazards and shots -> meshes
+    // scripted track obstacles (patrols, orbiters, timed jets)
+    this.obstacles = race.obstacles.map(o => {
+      const make = def.models?.[o.model] || OBSTACLE_MODELS[o.model] || OBSTACLE_MODELS.barrel;
+      const m = make(o); m.traverse(n => { if (n.isMesh && !n.material.transparent) n.castShadow = gfx.q.shadow > 0; });
+      this.root.add(m); return { o, m };
+    });
 
     // karts and cameras
     this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0 }));
@@ -113,6 +120,7 @@ export class RaceView {
         case 'shotGone': case 'hazardGone': { const t = this.things.get(d.id); if (t) { fx.burst(d.x, d.y + 0.4, d.z, 10, [1, 1, 1], 6, 0.25, 0.3); this.root.remove(t); this.things.delete(d.id); } break; }
         case 'shotBounce': fx.burst(d.x, d.y, d.z, 6, [1, 0.9, 0.6], 5, 0.2, 0.25, 1); break;
         case 'kartHit': break;
+        case 'obstacleHit': fx.burst(d.obstacle.x, d.obstacle.y + 1, d.obstacle.z, 14, [1, 0.8, 0.3], 7, 0.3, 0.4); break;
         case 'blueHit': this.flash = 0.6; this.gfx.post.flashColor.setRGB(0.6, 0.75, 1); break;
       }
       this.onEvent?.('race', e);
@@ -163,6 +171,11 @@ export class RaceView {
       this.coinMesh.instanceMatrix.needsUpdate = true;
     }
     this._things(dt);
+    for (const { o, m } of this.obstacles) {
+      m.position.set(o.x, o.y + (o.model === 'drone' ? Math.sin(this.time * 3 + o.id) * 0.15 : 0), o.z); m.rotation.y = o.yaw || 0;
+      if (m.userData.setActive) m.userData.setActive(o.active, o.warn, this.time);
+      if (o.kind === 'timed' && o.active && o.model === 'flame' && this.fx.count(30, dt)) this.fx.flame(o.x + (Math.random() - 0.5), o.y + 0.5, o.z + (Math.random() - 0.5), 0, 9 + Math.random() * 5, 0, [1, 0.6, 0.2], 1.2, 0.4);
+    }
     for (const fn of this.anim) fn(dt, this.time);
     this.fx.update(dt);
 

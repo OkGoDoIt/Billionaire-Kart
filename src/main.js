@@ -6,7 +6,7 @@ import { RaceSession } from './game/session.js';
 import { preloadFaces } from './models/driver.js';
 import { buildKart } from './models/kart.js';
 import { RACERS, RACER_BY_ID } from './content/racers.js';
-import { TRACKS } from './content/tracks.js';
+import { TRACKS, TRACK_BY_ID, registerTrack } from './content/tracks.js';
 
 await document.fonts.load('40px "Luckiest Guy"').catch(() => {});
 await preloadFaces();
@@ -33,6 +33,9 @@ if (q.get('view') === 'kart') {
   };
   requestAnimationFrame(frame);
 } else {
+  // a track file that is not in the registry yet can still be loaded by name while it is being built
+  const wanted = q.get('track');
+  if (wanted && !TRACK_BY_ID[wanted]) registerTrack((await import(`./tracks/${wanted}.js`)).default);
   const start = () => {
     app.session?.dispose();
     app.session = new RaceSession(app, {
@@ -48,6 +51,18 @@ if (q.get('view') === 'kart') {
     if (action === 'confirm') app.session.skipIntro();
     if (action === 'reset') app.session.race.players[0]?.startRescue();
   };
+  // ?fly=1 parks the camera on the track for authoring screenshots: BK.fly = { s, lat, h, back, look } or { top: true }
+  if (q.get('fly')) {
+    const fly = BK.fly = { s: +(q.get('s') || 0), lat: 0, h: 5, back: 12, look: 22, top: q.get('fly') === 'top' };
+    const P = new THREE.Vector3(), Q = new THREE.Vector3();
+    app.afterUpdate = s => {
+      const tr = s.race.track, cam = s.view.views[0].camera;
+      for (const h of s.huds) h.setVisible(false);
+      if (fly.top) { const b = tr.bounds, span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ); cam.position.set(b.cx, b.maxY + span * 0.95, b.cz + span * 0.35); cam.lookAt(b.cx, b.minY, b.cz); s.view.views[0].focus.set(b.cx, 0, b.cz); }
+      else { tr.pointAt(fly.s - fly.back, fly.lat, P, fly.h); tr.pointAt(fly.s + fly.look, 0, Q, 1.2); cam.position.copy(P); cam.lookAt(Q); s.view.views[0].focus.copy(Q); }
+      if (cam.fov !== 60) { cam.fov = 60; cam.updateProjectionMatrix(); }
+    };
+  }
   start();
   let last = performance.now();
   const frame = now => { const dt = Math.min(0.1, (now - last) / 1000); last = now; app.session.frame(dt); requestAnimationFrame(frame); };

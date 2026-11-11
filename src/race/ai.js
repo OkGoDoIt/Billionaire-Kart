@@ -78,6 +78,14 @@ export class AIDriver {
       if (k.starT > 0 && o.vulnerable) { want += l > 0 ? 0.6 : -0.6; continue; } // hunt with a star
       want += (l >= 0 ? -1 : 1) * (1 - f / 30);
     }
+    for (const o of race.obstacles || []) {
+      if (!o.active && !o.warn) continue;
+      const dx = o.x - k.x, dz = o.z - k.z, f = dx * sy + dz * cy;
+      if (f < 0.5 || f > 14 + sp * 0.5) continue;
+      const l = dx * cy - dz * sy; if (Math.abs(l) > o.radius + 1.6) continue;
+      if (this.skill < 0.5 && (o.id + k.id) % 3 === 0) continue;       // weaker drivers miss some
+      want += (l >= 0 ? -1.5 : 1.5);
+    }
     for (const h of race.hazards || []) {
       if (h.owner === k && h.age < 1) continue;
       const dx = h.x - k.x, dz = h.z - k.z, f = dx * sy + dz * cy;

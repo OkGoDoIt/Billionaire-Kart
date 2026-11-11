@@ -3,7 +3,7 @@
 import { Kart, CLASSES, TUNE } from './kart.js';
 import { AIDriver, rubberBand } from './ai.js';
 import { ItemSystem } from './items.js';
-import { makeRng, clamp } from '../core/util.js';
+import { makeRng, clamp, loopDelta } from '../core/util.js';
 
 export const GP_POINTS = [15, 12, 10, 8, 6, 4, 2, 1];
 const NO_INPUT = { steer: 0, throttle: 0, brake: 0, drift: false, item: false };
@@ -32,6 +32,8 @@ export class Race {
     });
     this.players = this.karts.filter(k => k.isPlayer).sort((a, b) => a.playerIndex - b.playerIndex);
     this.items = new ItemSystem(this, { items: opts.items !== false && this.mode !== 'timetrial', coins: opts.coins !== false });
+    this.obstacles = this.track.obstacleDefs.map(d => ({ ...d, x: 0, y: 0, z: 0, yaw: 0, active: true, t: d.phase }));
+    this._obstacles(0);
     if (this.mode === 'timetrial') for (const k of this.players) { k.item = 'boost'; k.itemUses = 3; }
     this._rank();
   }
@@ -59,6 +61,7 @@ export class Race {
       k.prevItem = !!inp.item;
     }
     this._collide();
+    this._obstacles(dt);
     this.items.step(dt);
     this._rank();
     this._finish(dt);
@@ -93,6 +96,33 @@ export class Race {
         const j = -(1 + 0.45) * vn / (1 / mA + 1 / mB);
         A.vx -= (j / mA) * nx; A.vz -= (j / mA) * nz; B.vx += (j / mB) * nx; B.vz += (j / mB) * nz;
         if (vn < -2.5) { A.emit('bump', { v: -vn, other: B }); B.emit('bump', { v: -vn, other: A }); }
+      }
+    }
+  }
+
+  /** Track obstacles: patrols, orbiters, and timed hazards, all on fixed schedules. */
+  _obstacles(dt) {
+    const tr = this.track, P = this._op || (this._op = { x: 0, y: 0, z: 0 });
+    for (const o of this.obstacles) {
+      o.t += dt;
+      let s = o.a.s, lat = o.a.lat;
+      if (o.kind === 'patrol') {
+        const ds = loopDelta(o.a.s, o.b.s, tr.length), dist = Math.hypot(ds, o.b.lat - o.a.lat) || 1;
+        const ph = (o.t * o.speed / dist) % 2, f = ph < 1 ? ph : 2 - ph, e = f * f * (3 - 2 * f);
+        s = o.a.s + ds * e; lat = o.a.lat + (o.b.lat - o.a.lat) * e;
+        o.yaw = tr.yawAt(s) + (Math.abs(ds) < 1 ? (ph < 1 ? 1 : -1) * Math.sign(o.b.lat - o.a.lat) * Math.PI / 2 : ph < 1 ? 0 : Math.PI);
+      } else if (o.kind === 'orbit') {
+        const a = o.t * o.speed / Math.max(1, o.orbit); s = o.a.s + Math.cos(a) * o.orbit; lat = o.a.lat + Math.sin(a) * o.orbit; o.yaw = tr.yawAt(s) - a;
+      } else if (o.kind === 'timed') { o.active = ((o.t / o.period) % 1) < o.duty; o.warn = !o.active && ((o.t / o.period) % 1) > 1 - 0.18; }
+      tr.pointAt(s, lat, P, o.lift); o.x = P.x; o.y = P.y; o.z = P.z;
+      if (!o.active || this.frozen) continue;
+      for (const k of this.karts) {
+        if (k.rescueT > 0 || k.ghostT > 0) continue;
+        const dx = k.x - o.x, dz = k.z - o.z, rr = o.radius + k.radius * 0.85;
+        if (dx * dx + dz * dz > rr * rr || Math.abs(k.y - o.y) > 2.2) continue;
+        if (k.invincible) { if (o.kind !== 'timed') { o.t += 0; } continue; }
+        if (o.effect === 'bump') { const d = Math.hypot(dx, dz) || 1; k.x = o.x + (dx / d) * rr; k.z = o.z + (dz / d) * rr; const vn = (k.vx * dx + k.vz * dz) / d; if (vn < 0) { k.vx -= (dx / d) * vn * 1.6; k.vz -= (dz / d) * vn * 1.6; k.vx *= 0.7; k.vz *= 0.7; k.emit('bump', { v: -vn, other: null }); } }
+        else if (k.hurt(o.effect)) this.emit('obstacleHit', { kart: k, obstacle: o });
       }
     }
   }

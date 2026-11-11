@@ -20,6 +20,7 @@ export class Scenery {
     this.rng = makeRng(hashString(ctx.track.id) + seed);
     this.hit = makeGroundHit();
     this.shadows = ctx.gfx.q.shadow > 0;
+    this.density = ctx.gfx.q.scenery ?? 1;   // lower quality tiers thin out scattered scenery
   }
 
   /** Ground height at a point (road, shoulder, or terrain). */
@@ -57,6 +58,7 @@ export class Scenery {
   scatter({ count = 50, min = 16, max = 90, maxSlope = 0.7, minGap = 0, where = null, tries = 30 }) {
     const tr = this.track, g = tr.grid, out = [];
     if (!g) return out;
+    count = Math.max(1, Math.round(count * this.density));
     const w = (g.nx - 1) * g.cell, d = (g.nz - 1) * g.cell;
     let attempts = count * tries;
     while (out.length < count && attempts-- > 0) {

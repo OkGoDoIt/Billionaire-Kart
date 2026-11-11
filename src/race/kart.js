@@ -413,7 +413,7 @@ export class Kart {
     const tr = this.race.track;
     this.rescueT -= dt;
     // back up a little from the last safe sample so we do not respawn on a ramp lip
-    const i = (this.lastSafeI - 6 + tr.N) % tr.N;
+    const i = tr.respawn[(this.lastSafeI - 6 + tr.N) % tr.N];
     const t = clamp(1 - (this.rescueT - 0.5) / 1.6, 0, 1);
     const tx = tr.px[i], tz = tr.pz[i], ty = tr.py[i];
     if (this.rescueT > 1.5) { // lift out where we fell

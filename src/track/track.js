@@ -177,7 +177,7 @@ export class Track {
       }
     }
     for (const r of def.bridges || []) for (const i of this._range(r.from, r.to)) this.bridge[i] = 1;
-    for (const r of def.tunnels || []) for (const i of this._range(r.from, r.to)) this.tunnel[i] = 1;
+    for (const r of def.tunnels || []) for (const i of this._range(r.from, r.to)) { this.tunnel[i] = 1; this.edgeL[i] = EDGE.WALL; this.edgeR[i] = EDGE.WALL; if (r.through) this.bridge[i] = 1; }
     for (const r of def.gaps || []) for (const i of this._range(r.from, r.to)) { this.gap[i] = 1; this.bridge[i] = 1; }
     for (const r of def.zones || []) for (const i of this._range(r.from, r.to)) this.surf[i] = SURFACES[r.surface];
     // walls and void edges have no shoulder; inner-corner shoulders are limited by the corner radius
@@ -210,6 +210,7 @@ export class Track {
       const lats = r.lats || Array.from({ length: n }, (_, k) => (n === 1 ? 0 : lerp(-hw, hw, k / (n - 1))) + (r.lat ?? 0));
       return { i, s: i * this.ds, lats };
     });
+    this.obstacleDefs = (def.obstacles || []).map((o, k) => ({ id: k, kind: o.kind || 'patrol', model: o.model || 'barrel', radius: o.radius ?? 1.4, effect: o.effect || 'spin', speed: o.speed ?? 6, period: o.period ?? 4, duty: o.duty ?? 0.5, phase: o.phase ?? 0, orbit: o.orbit ?? 4, a: { s: this.sAtCp(o.at ?? o.from), lat: o.lat ?? (o.lats ? o.lats[0] : 0) }, b: { s: this.sAtCp(o.to ?? o.at ?? o.from), lat: o.lats ? o.lats[1] : (o.lat2 ?? o.lat ?? 0) }, lift: o.lift ?? 0 }));
     this.coinSpots = [];
     for (const c of def.coins || []) {
       const i0 = this.indexAtCp(c.from), i1 = this.indexAtCp(c.to ?? c.from);
@@ -219,6 +220,17 @@ export class Track {
         const i = mod(Math.round(i0 + span * f), this.N);
         const lat = Array.isArray(c.lat) ? lerp(c.lat[0], c.lat[1], f) : typeof c.lat === 'function' ? c.lat(f) : (c.lat ?? 0);
         this.coinSpots.push({ i, s: i * this.ds, lat, air: c.air ?? 0 });
+      }
+    }
+    // Rescue points: never put a kart back so close to a gap that it cannot build speed to clear it.
+    const N = this.N, runup = Math.round(70 / this.ds);
+    this.respawn = new Int32Array(N); for (let i = 0; i < N; i++) this.respawn[i] = i;
+    for (let i = 0; i < N; i++) {
+      if (this.gap[i] && !this.gap[mod(i - 1, N)]) {                 // first sample of a gap
+        let first = i; for (const r of this.ramps) { const d = mod(i - r.i0, N); if (d < Math.round(30 / this.ds)) first = r.i0; }
+        const safe = mod(first - runup, N);
+        let j = safe; while (j !== i) { this.respawn[j] = safe; j = (j + 1) % N; }
+        j = i; while (this.gap[j]) { this.respawn[j] = safe; j = (j + 1) % N; }
       }
     }
     void L;

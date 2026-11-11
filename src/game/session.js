@@ -90,6 +90,7 @@ export class RaceSession {
       if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
     }
     view.update(dt, this.acc / STEP);
+    app.afterUpdate?.(this);
     app.audio?.frame(dt, race, view);
     app.gfx.render(dt);
   }

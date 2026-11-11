@@ -230,6 +230,97 @@ export function buildTrackMesh(track, look = {}) {
     void hit;
   }
 
+  /* ----- bridges: deck sides, underside, and pillars ----- */
+  {
+    const g = new Geo(), gp = new Geo(); let any = false;
+    const T = 1.1; // deck thickness
+    let prev = -1;
+    for (let r = 0; r <= N; r++) {
+      const i = r % N;
+      if (!track.bridge[i] || track.gap[i] || track.tunnel[i] || track.def.bridgeDeck === false) { prev = -1; continue; }
+      any = true;
+      const a = hwL[i] + 0.25, b = -hwR[i] - 0.25, first = g.count;
+      const L = [px[i] + lx[i] * a, py[i] + ly[i] * a, pz[i] + lz[i] * a], R = [px[i] + lx[i] * b, py[i] + ly[i] * b, pz[i] + lz[i] * b];
+      g.v(L[0], L[1] + 0.02, L[2], lx[i], 0, lz[i], 0, (r * ds) / 6); g.v(L[0], L[1] - T, L[2], lx[i], 0, lz[i], 0.3, (r * ds) / 6);
+      g.v(R[0], R[1] - T, R[2], -lx[i], 0, -lz[i], 0.7, (r * ds) / 6); g.v(R[0], R[1] + 0.02, R[2], -lx[i], 0, -lz[i], 1, (r * ds) / 6);
+      if (prev >= 0) { g.quad(first, prev, first + 1, prev + 1); g.quad(prev + 1, first + 1, prev + 2, first + 2); g.quad(prev + 2, first + 2, prev + 3, first + 3); }
+      prev = first;
+      // a pillar every ~26 m, down to the land or water below
+      if (Math.round((r * ds) / 26) !== Math.round(((r - 1) * ds) / 26) && track.def.bridgePillars !== false) {
+        const below = track.hasTerrain ? Math.max(track.terrainHeight(px[i], pz[i]), track.water ?? -1e3) : py[i] - 40;
+        const top = py[i] - T, hgt = top - below + 2;
+        if (hgt > 1.5) {
+          const w = Math.min(a, 5), c = gp.count, tx = track.tx[i], tz = track.tz[i], lxx = lx[i], lzz = lz[i];
+          for (const [su, sv] of [[1, 1], [1, -1], [-1, -1], [-1, 1]]) for (const y of [top, below - 2]) gp.v(px[i] + lxx * w * su + tx * 1.2 * sv, y, pz[i] + lzz * w * su + tz * 1.2 * sv, lxx * su, 0, lzz * su, 0, 0);
+          for (let k = 0; k < 4; k++) { const n0 = c + k * 2, n1 = c + ((k + 1) % 4) * 2; gp.tri(n0, n0 + 1, n1); gp.tri(n1, n0 + 1, n1 + 1); }
+        }
+      }
+    }
+    if (any) {
+      mats.deck = new THREE.MeshStandardMaterial({ color: L.deck ?? 0xd9dde6, roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
+      add('deck', g.build(), mats.deck, { cast: true });
+      if (gp.count) add('pillars', gp.build(true), mats.deck, { cast: true });
+    }
+  }
+
+  /* ----- glowing rails along void edges, so the drop is always readable ----- */
+  {
+    const g = new Geo(); let any = false;
+    for (const side of [1, -1]) {
+      const hw = side > 0 ? hwL : hwR, edge = side > 0 ? track.edgeL : track.edgeR; let prev = -1;
+      for (let r = 0; r <= N; r++) {
+        const i = r % N;
+        if (edge[i] !== EDGE.VOID || track.gap[i]) { prev = -1; continue; }
+        any = true;
+        const a = (hw[i] - 0.05) * side, b = (hw[i] + 0.3) * side;
+        const v0 = g.v(px[i] + lx[i] * a + ux[i] * 0.05, py[i] + ly[i] * a + uy[i] * 0.05, pz[i] + lz[i] * a + uz[i] * 0.05, ux[i], uy[i], uz[i], 0, r * ds * 0.25);
+        g.v(px[i] + lx[i] * b + ux[i] * 0.16, py[i] + ly[i] * b + uy[i] * 0.16, pz[i] + lz[i] * b + uz[i] * 0.16, ux[i], uy[i], uz[i], 1, r * ds * 0.25);
+        if (prev >= 0) { if (side > 0) g.quad(prev, prev + 1, v0, v0 + 1); else g.quad(prev + 1, prev, v0 + 1, v0); }
+        prev = v0;
+      }
+    }
+    if (any) {
+      mats.rail = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: L.rail ?? 0x35e0ff, emissiveIntensity: 2.4, roughness: 0.4, side: THREE.DoubleSide });
+      add('rails', g.build(), mats.rail);
+    }
+  }
+
+  /* ----- tunnels: an arched shell over the road with light strips ----- */
+  {
+    const g = new Geo(), gPort = new Geo(); let prev = -1, any = false;
+    const ARC = 10, H = track.def.tunnelHeight ?? 7.5;
+    for (let r = 0; r <= N; r++) {
+      const i = r % N;
+      if (!track.tunnel[i]) { prev = -1; continue; }
+      any = true;
+      const first = g.count, a = hwL[i] + 0.7, b = hwR[i] + 0.7, mid = (a - b) / 2, half = (a + b) / 2;
+      for (let k = 0; k <= ARC; k++) {
+        const t = k / ARC, ang = Math.PI * t, lat = mid + Math.cos(ang) * half, up = Math.sin(ang) * H;
+        const x = px[i] + lx[i] * lat + ux[i] * up, y = py[i] + ly[i] * lat + uy[i] * up, z = pz[i] + lz[i] * lat + uz[i] * up;
+        g.v(x, y, z, -(lx[i] * Math.cos(ang) + ux[i] * Math.sin(ang)), -(ly[i] * Math.cos(ang) + uy[i] * Math.sin(ang)), -(lz[i] * Math.cos(ang) + uz[i] * Math.sin(ang)), t * 4, (r * ds) / 8);
+      }
+      if (prev >= 0) for (let k = 0; k < ARC; k++) g.quad(prev + k + 1, prev + k, first + k + 1, first + k);
+      // portal face at each end: a thick arch ring facing outward
+      const isEnd = !track.tunnel[(i + 1) % N] || !track.tunnel[mod(i - 1, N)];
+      if (isEnd) {
+        const c = gPort.count, out = 2.2;
+        for (let k = 0; k <= ARC; k++) {
+          const ang = Math.PI * (k / ARC);
+          for (const e of [0, out]) { const lat = mid + Math.cos(ang) * (half + e), up = Math.sin(ang) * (H + e); gPort.v(px[i] + lx[i] * lat + ux[i] * up, py[i] + ly[i] * lat + uy[i] * up, pz[i] + lz[i] * lat + uz[i] * up, track.tx[i], 0, track.tz[i], k / ARC, e ? 1 : 0); }
+          if (k) { const q = c + (k - 1) * 2; gPort.tri(q, q + 1, q + 2); gPort.tri(q + 2, q + 1, q + 3); }
+        }
+      }
+      prev = first;
+    }
+    if (any) {
+      const tex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#2a2f3d'; x.fillRect(0, 0, 256, 256); x.fillStyle = '#353b4c'; for (let k = 0; k < 4; k++) x.fillRect(k * 64 + 3, 3, 58, 250); x.fillStyle = '#fff6d8'; x.fillRect(120, 96, 16, 64); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t; })();
+      mats.tunnel = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: L.tunnelLight ?? 0xfff0c0, emissiveIntensity: 0.55, roughness: 0.6, side: THREE.DoubleSide });
+      add('tunnel', g.build(), mats.tunnel);
+      mats.portal = new THREE.MeshStandardMaterial({ color: L.portal ?? 0xcfd5e2, roughness: 0.7, side: THREE.DoubleSide });
+      if (gPort.count) add('portals', gPort.build(), mats.portal, { cast: true });
+    }
+  }
+
   /* ----- ramps ----- */
   if (track.ramps.length) {
     const g = new Geo();

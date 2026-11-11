@@ -7,6 +7,8 @@ import { ChaseCam, IntroCam, TvCam } from './chasecam.js';
 import { Particles, rgbOf } from './particles.js';
 import { buildItemBox, buildItemModel, coinGeometry, coinMaterial } from '../models/items.js';
 import { OBSTACLE_MODELS } from '../models/props.js';
+import { buildKart } from '../models/kart.js';
+import { RACER_BY_ID } from '../content/racers.js';
 import { clamp } from '../core/util.js';
 
 const CONFETTI = [[1, 0.82, 0.24], [1, 0.3, 0.43], [0.22, 0.71, 1], [0.18, 0.9, 0.65], [0.62, 0.42, 1], [1, 1, 1]];
@@ -78,6 +80,23 @@ export class RaceView {
   }
 
   startIntro() { this.intro = new IntroCam(this.race.track, this.views[0].camera); }
+
+  /** Time trial: show a translucent replay of the best run. ghost: { racer, step, time, d: [x,y,z,yaw,...] } */
+  setGhost(ghost) {
+    if (!ghost?.d?.length) return;
+    const rig = buildKart(RACER_BY_ID[ghost.racer] || this.race.players[0].racer, { shadow: false });
+    const mat = new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.3, depthWrite: false });
+    rig.root.traverse(o => { if (o.isMesh) { o.material = mat; o.castShadow = false; } });
+    this.root.add(rig.root); this.ghost = { rig, data: ghost };
+  }
+  _ghost() {
+    const g = this.ghost; if (!g) return;
+    const d = g.data.d, n = d.length / 4, f = this.race.time / g.data.step, i = Math.min(n - 1, Math.floor(f)), j = Math.min(n - 1, i + 1), t = f - Math.floor(f);
+    g.rig.root.visible = !this.race.frozen && f < n - 1;
+    const yaw = d[i * 4 + 3] + Math.atan2(Math.sin(d[j * 4 + 3] - d[i * 4 + 3]), Math.cos(d[j * 4 + 3] - d[i * 4 + 3])) * t;
+    g.rig.root.position.set(d[i * 4] + (d[j * 4] - d[i * 4]) * t, d[i * 4 + 1] + (d[j * 4 + 1] - d[i * 4 + 1]) * t, d[i * 4 + 2] + (d[j * 4 + 2] - d[i * 4 + 2]) * t);
+    g.rig.root.rotation.y = yaw;
+  }
 
   /** Call before each sim step so rendering can interpolate. */
   snapshot() { for (const v of this.karts) v.snapshot(); }
@@ -176,6 +195,7 @@ export class RaceView {
       this.coinMesh.instanceMatrix.needsUpdate = true;
     }
     this._things(dt);
+    this._ghost();
     for (const { o, m } of this.obstacles) {
       m.position.set(o.x, o.y + (o.model === 'drone' ? Math.sin(this.time * 3 + o.id) * 0.15 : 0), o.z); m.rotation.y = o.yaw || 0;
       if (m.userData.setActive) m.userData.setActive(o.active, o.warn, this.time);

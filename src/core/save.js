@@ -35,4 +35,7 @@ export class Save {
     this.write();
   }
   trophy(cupId, cc) { return this.data.trophies[`${cupId}:${cc}`] || null; }
+  /* Time-trial ghosts are stored one per track under their own keys, so a full storage quota cannot break the main save. */
+  ghost(trackId) { try { const raw = localStorage.getItem(`${KEY}:ghost:${trackId}`); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+  setGhost(trackId, ghost) { try { localStorage.setItem(`${KEY}:ghost:${trackId}`, JSON.stringify(ghost)); } catch { /* out of space: keep the old one */ } }
 }

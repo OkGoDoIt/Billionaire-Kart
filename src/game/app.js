@@ -160,6 +160,7 @@ export class App {
     let records = null;
     if (mine) {
       records = this.save.recordRace(cfg.trackId, cfg.mode === 'timetrial' ? 'tt' : cfg.cc, mine.time, mine.bestLap, mine.racer.id, mine.rank === 1);
+      if (cfg.mode === 'timetrial' && session.rec && records.newBestRace) this.save.setGhost(cfg.trackId, { racer: session.rec.racer, step: session.rec.step, time: mine.time, d: session.rec.d });
       const st = this.save.data.stats; st.coins += mine.stats.coins; st.hitsGiven += mine.stats.hitsGiven; st.hitsTaken += mine.stats.hitsTaken; this.save.write();
     }
     let gp = null;

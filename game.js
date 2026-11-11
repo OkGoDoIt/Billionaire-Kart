@@ -14,6 +14,23 @@ import { TRACK as WEWORK_TRACK, build as buildWeWork } from './tracks/wework.js'
 import { TRACK as BURNING_TRACK, build as buildBurningMan } from './tracks/burningman.js';
 import { TRACK as BAHAMAS_TRACK, build as buildBahamas } from './tracks/bahamas.js';
 
+/* Concatenate non-indexed geometries with identical attributes (the foliage
+   blobs). Local helper — the bot vendors only specific three/addons modules,
+   so BufferGeometryUtils is not available in the test harness. */
+function mergeGeos(geos) {
+  const names = Object.keys(geos[0].attributes);
+  const total = geos.reduce((n, g) => n + g.attributes.position.count, 0);
+  const out = new THREE.BufferGeometry();
+  for (const name of names) {
+    const itemSize = geos[0].attributes[name].itemSize;
+    const arr = new Float32Array(total * itemSize);
+    let off = 0;
+    for (const g of geos) { arr.set(g.attributes[name].array, off); off += g.attributes[name].array.length; }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, itemSize));
+  }
+  return out;
+}
+
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -615,6 +632,24 @@ function scatterPos(minLat, maxLat) {
   return new THREE.Vector3(x, terrainHeightAt(x, z), z); // props sit on the real terrain, never floating/sunk
 }
 
+/* Building facades: drawn window grids — a lit-window emissive layer over a
+   glass/concrete base, two variants so towers don't read as one repeated box. */
+function facadeMaterial(base, win, litRatio) {
+  const cols = 8, rows = 12;
+  const litGrid = Array.from({ length: cols * rows }, () => Math.random() < litRatio); // one pattern, both maps
+  const draw = (litOnly) => (g, w, h) => {
+    g.fillStyle = litOnly ? '#000000' : base; g.fillRect(0, 0, w, h);
+    const cw = w / cols, ch = h / rows;
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const lit = litGrid[y * cols + x];
+      if (litOnly) { if (lit) { g.fillStyle = '#ffc978'; g.fillRect(x * cw + 3, y * ch + 3, cw - 6, ch - 6); } }
+      else { g.fillStyle = lit ? '#ffd9a0' : win; g.fillRect(x * cw + 3, y * ch + 3, cw - 6, ch - 6); }
+    }
+  };
+  const map = canvasTexture(256, 384, draw(false));
+  const emissiveMap = canvasTexture(256, 384, draw(true));
+  return new THREE.MeshStandardMaterial({ map, emissiveMap, emissive: 0xffb765, emissiveIntensity: 0.55, roughness: 0.32, metalness: 0.25, envMapIntensity: 0.9 });
+}
 function buildScenery(trackIdx) {
   const modBuild = TRACK_MODULES[trackIdx];
   if (modBuild) { trackAnimators = []; modBuild(sceneryContext()); return; } // Batch 3: module ships its own full dressing (own signage/set piece/sky)
@@ -625,24 +660,44 @@ function buildScenery(trackIdx) {
   if (tr.buildDressing) {
     tr.buildDressing(sceneryContext()); // Batch 2 dressing; shared billboards/grandstand/clouds below still run
   } else if (trackIdx === 0) {
-    const trunkM = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.32, 0.5, 2.6, 6), GMAT.flatProp(0x7a4a21), COUNT);
-    const leafM = new THREE.InstancedMesh(new THREE.ConeGeometry(2.3, 5.6, 8), GMAT.flatProp(0x2e7d32), COUNT);
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+    // trees: tapered trunk + a 3-blob foliage cluster (merged icosahedra), per-instance green variation
+    const trunkM = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.3, 0.52, 2.9, 7), GMAT.flatProp(0x7a4a21), COUNT);
+    const b1 = new THREE.IcosahedronGeometry(1.95, 0); b1.translate(0, 4.9, 0);
+    const b2 = new THREE.IcosahedronGeometry(1.4, 0); b2.translate(1.1, 3.8, 0.35);
+    const b3 = new THREE.IcosahedronGeometry(1.25, 0); b3.translate(-1.05, 4.0, -0.4);
+    const leafM = new THREE.InstancedMesh(mergeGeos([b1, b2, b3]), GMAT.flatProp(0xffffff), COUNT);
+    const m = new THREE.Matrix4(), e = new THREE.Euler(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), col = new THREE.Color();
     for (let i = 0; i < COUNT; i++) {
       const p = scatterPos(HALF_W + 7, HALF_W + 62), s = rand(0.8, 1.7);
-      sc.set(s, s, s); m.compose(new THREE.Vector3(p.x, p.y + 1.3 * s, p.z), q, sc); trunkM.setMatrixAt(i, m);
-      m.compose(new THREE.Vector3(p.x, p.y + (2.6 + 2.6) * s, p.z), q, sc); leafM.setMatrixAt(i, m);
+      q.setFromEuler(e.set(rand(-0.05, 0.05), Math.random() * Math.PI * 2, rand(-0.05, 0.05)));
+      sc.set(s, s * rand(0.9, 1.15), s);
+      m.compose(new THREE.Vector3(p.x, p.y + 1.45 * s, p.z), q, sc); trunkM.setMatrixAt(i, m);
+      m.compose(new THREE.Vector3(p.x, p.y, p.z), q, sc); leafM.setMatrixAt(i, m);
+      leafM.setColorAt(i, col.setHSL(0.29 + Math.random() * 0.04, 0.5, 0.24 + Math.random() * 0.13));
     }
     trunkM.castShadow = leafM.castShadow = true; scene.add(trunkM, leafM);
-    // office buildings — one shared glass/steel panel material
-    const towerMat = GMAT.metalPanels({ repeat: 2 });
+    // office buildings — three facade variants + rooftop props (AC units, water towers, antennas)
+    const towerMats = [GMAT.metalPanels({ repeat: 2 }), facadeMaterial('#2c3844', '#7fa3bd', 0.16), facadeMaterial('#9aa3ab', '#33506e', 0.08)];
+    const acGeo = new THREE.BoxGeometry(2.6, 1.1, 2.0), acMat = GMAT.flatProp(0x8d949c);
+    const tankGeo = new THREE.CylinderGeometry(1.5, 1.5, 3.2, 10), tankRoofGeo = new THREE.ConeGeometry(1.8, 1.2, 10), tankMat = GMAT.flatProp(0x6e4a2f);
+    const antGeo = new THREE.CylinderGeometry(0.07, 0.12, 7, 5), antMat = GMAT.flatProp(0x33373d);
     for (let i = 0; i < 24; i++) {
       const p = scatterPos(HALF_W + 42, HALF_W + 95), hgt = rand(14, 46);
-      const b = new THREE.Mesh(new THREE.BoxGeometry(rand(9, 18), hgt, rand(9, 18)), towerMat);
+      const bw = rand(9, 18), bd = rand(9, 18);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(bw, hgt, bd), towerMats[i % 3]);
       b.position.set(p.x, p.y + hgt / 2 - 1.5, p.z); b.rotation.y = Math.random() * Math.PI; scene.add(b);
+      const roof = new THREE.Group(); roof.position.set(p.x, p.y + hgt - 1.5, p.z); roof.rotation.y = b.rotation.y; scene.add(roof);
+      if (i % 5 === 0) { const t = new THREE.Mesh(tankGeo, tankMat); t.position.set(bw * 0.22, 1.6, 0); roof.add(t); const tr = new THREE.Mesh(tankRoofGeo, tankMat); tr.position.set(bw * 0.22, 3.8, 0); roof.add(tr); }
+      else if (i % 2 === 0) { const ac = new THREE.Mesh(acGeo, acMat); ac.position.set(-bw * 0.2, 0.55, bd * 0.15); ac.castShadow = true; roof.add(ac); }
+      if (hgt > 30 && i % 3 === 0) { const an = new THREE.Mesh(antGeo, antMat); an.position.set(bw * 0.3, 3.5, -bd * 0.25); roof.add(an); }
     }
   } else if (mars) {
-    const rockM = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.6), GMAT.flatProp(0x7e3b22), COUNT);
+    // rocks: noise-displaced icosahedra (position-hash displacement — shared verts move together, no cracks)
+    const rockGeo = new THREE.IcosahedronGeometry(1.7, 1);
+    { const rp = rockGeo.attributes.position, v = new THREE.Vector3();
+      for (let i = 0; i < rp.count; i++) { v.fromBufferAttribute(rp, i); const hsh = Math.sin(v.x * 12.9898 + v.y * 78.233 + v.z * 37.719) * 43758.5453; v.multiplyScalar(1 + (hsh - Math.floor(hsh) - 0.5) * 0.55); rp.setXYZ(i, v.x, v.y, v.z); }
+      rockGeo.computeVertexNormals(); }
+    const rockM = new THREE.InstancedMesh(rockGeo, GMAT.flatProp(0x7e3b22), COUNT);
     const m = new THREE.Matrix4(), e = new THREE.Euler(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
     for (let i = 0; i < COUNT; i++) {
       const p = scatterPos(HALF_W + 6, HALF_W + 70), s = rand(0.5, 2.6);
@@ -650,9 +705,13 @@ function buildScenery(trackIdx) {
       m.compose(new THREE.Vector3(p.x, p.y + 0.6 * s - 0.4, p.z), q, sc); rockM.setMatrixAt(i, m);
     }
     rockM.castShadow = true; scene.add(rockM);
-    for (let i = 0; i < 7; i++) { // mesas
+    for (let i = 0; i < 7; i++) { // mesas — jittered slabs, not clean boxes
       const p = scatterPos(HALF_W + 70, HALF_W + 130), hgt = rand(10, 24);
-      const mesa = new THREE.Mesh(new THREE.BoxGeometry(rand(30, 60), hgt, rand(24, 44)), GMAT.flatProp(0x93482a));
+      const mg = new THREE.BoxGeometry(rand(30, 60), hgt, rand(24, 44), 3, 1, 3);
+      const mp = mg.attributes.position, v = new THREE.Vector3();
+      for (let j = 0; j < mp.count; j++) { v.fromBufferAttribute(mp, j); const hsh = Math.sin(v.x * 5.13 + v.z * 9.71) * 24634.63; const n = (hsh - Math.floor(hsh) - 0.5) * 2.4; mp.setXYZ(j, v.x + n, v.y, v.z + n * 0.7); }
+      mg.computeVertexNormals();
+      const mesa = new THREE.Mesh(mg, GMAT.flatProp(0x93482a));
       mesa.position.set(p.x, p.y + hgt / 2 - 2, p.z); scene.add(mesa);
     }
     // rocket prop near the start
@@ -708,17 +767,23 @@ function buildScenery(trackIdx) {
 
 function buildItemBoxes() {
   const tex = boxTexture();
-  const geo = new THREE.BoxGeometry(2.5, 2.5, 2.5);
+  const shellGeo = new RoundedBoxGeometry(2.5, 2.5, 2.5, 3, 0.32);
+  const coreGeo = new RoundedBoxGeometry(1.6, 1.6, 1.6, 2, 0.22);
+  const shellMat = GMAT.glass({ color: 0xffc46b, opacity: 0.38, roughness: 0.12 }); // translucent amber shell…
+  const coreMat = new THREE.MeshStandardMaterial({ map: tex, emissive: 0xcc8800, emissiveIntensity: 1.6, roughness: 0.4, transparent: true }); // …glowing "?" core inside (bloom bait); transparent so the ghost-in can fade it
   const fractions = [0.10, 0.27, 0.44, 0.61, 0.78, 0.93];
   for (const f of fractions) {
     const idx = Math.floor(f * N);
     for (const lat of [-7.5, -2.5, 2.5, 7.5]) {
       const s = samples[idx], n = normals[idx];
-      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, emissive: 0xcc8800, emissiveIntensity: 1.6, roughness: 0.4, transparent: true })); // hot emissive so bloom picks the boxes up; transparent so the respawn ghost-in can fade the box back
+      const mesh = new THREE.Group();
+      const shellM = shellMat.clone(), coreM = coreMat.clone(); // per-box clones — the respawn ghost-in fades ONE box, so its materials can't be shared
+      mesh.add(new THREE.Mesh(shellGeo, shellM));
+      mesh.add(new THREE.Mesh(coreGeo, coreM));
       const baseY = roadYAt(idx, lat) + 1.7; // boxes float over the road surface, banking and all
       mesh.position.set(s.x + n.x * lat, baseY, s.z + n.z * lat);
       scene.add(mesh);
-      itemBoxes.push({ mesh, idx, baseY, active: true, respawnT: 0, phase: Math.random() * 6 });
+      itemBoxes.push({ mesh, idx, baseY, active: true, respawnT: 0, phase: Math.random() * 6, setFade: o => { shellM.opacity = 0.38 * o; coreM.opacity = o; } }); // setFade: ghost-in/reset/pickup drive this instead of a single mesh.material (glass group has two materials)
     }
   }
 }
@@ -746,74 +811,202 @@ function faceTexture(r, racerIdx) { // one shared canvas-face painter, per-racer
     if (racerIdx === 13) { g.fillStyle = '#20222a'; g.beginPath(); g.arc(96, 84, 3.5, 0, 7); g.fill(); } // Holmes: beauty mark
   });
 }
+/* Kart hull: an extruded plan-view outline (tapered nose, flared pods, rounded
+   rear) with a bevelled edge — reads as a sculpted body, not stacked boxes. */
+function hullGeometry() {
+  const s = new THREE.Shape();
+  s.moveTo(0, 2.42);
+  s.bezierCurveTo(0.55, 2.42, 0.78, 2.18, 0.86, 1.72);
+  s.bezierCurveTo(0.94, 1.2, 1.13, 0.75, 1.16, 0.1);
+  s.bezierCurveTo(1.18, -0.6, 1.14, -1.25, 1.02, -1.66);
+  s.bezierCurveTo(0.94, -1.9, 0.5, -1.98, 0, -1.98);
+  s.bezierCurveTo(-0.5, -1.98, -0.94, -1.9, -1.02, -1.66);
+  s.bezierCurveTo(-1.14, -1.25, -1.18, -0.6, -1.16, 0.1);
+  s.bezierCurveTo(-1.13, 0.75, -0.94, 1.2, -0.86, 1.72);
+  s.bezierCurveTo(-0.78, 2.18, -0.55, 2.42, 0, 2.42);
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 0.34, bevelEnabled: true, bevelThickness: 0.11, bevelSize: 0.09, bevelSegments: 2, curveSegments: 7, steps: 1 });
+  geo.rotateX(Math.PI / 2); // shape +Y → world +Z (forward); extrusion → down, so translate up
+  geo.translate(0, 0.75, 0);
+  return geo; // occupies y 0.30..0.86 — ground clearance below, cockpit deck on top
+}
+/* Tyre: a lathed profile (rounded shoulders, sidewall step) — a real tyre
+   silhouette instead of a plain cylinder. Rim face texture drawn once per kart. */
+function tyreGeometry(radius, width) {
+  const p = [[0.58, -0.5], [0.86, -0.48], [0.97, -0.33], [1.0, -0.12], [1.0, 0.12], [0.97, 0.33], [0.86, 0.48], [0.58, 0.5]]
+    .map(([rr, yy]) => new THREE.Vector2(rr * radius, yy * width));
+  const geo = new THREE.LatheGeometry(p, 18);
+  geo.rotateZ(Math.PI / 2); // lathe axis Y → axle axis X
+  return geo;
+}
+function rimFaceTexture() {
+  return canvasTexture(128, 128, (g) => {
+    g.fillStyle = '#26282e'; g.beginPath(); g.arc(64, 64, 62, 0, 7); g.fill();
+    g.fillStyle = '#c8ccd4';
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; g.save(); g.translate(64, 64); g.rotate(a); g.fillRect(-7, -56, 14, 40); g.restore(); }
+    g.fillStyle = '#3a3d44'; g.beginPath(); g.arc(64, 64, 17, 0, 7); g.fill();
+    g.fillStyle = '#e8b400'; g.beginPath(); g.arc(64, 64, 8, 0, 7); g.fill();
+  });
+}
 function makeKart(racerIdx, isPlayer) {
   const r = RACERS[racerIdx];
   const root = new THREE.Group();          // position + heading
   const tilt = new THREE.Group(); root.add(tilt); // body lean
   const bodyMat = GMAT.kartPaint(r.color); // clearcoat paint — the single biggest visual jump (gfx/materials.js)
-  const darkMat = GMAT.mattePlastic(new THREE.Color(r.color).multiplyScalar(0.6).getHex());
-  const suitMat = GMAT.mattePlastic(r.suit);
+  const darkMat = GMAT.mattePlastic(new THREE.Color(r.color).multiplyScalar(0.55).getHex());
+  const blackMat = GMAT.mattePlastic(0x191b20);
+  const suitMat = racerIdx === 4 ? GMAT.mattePlastic(r.suit, { roughness: 0.42 }) : GMAT.mattePlastic(r.suit); // Jensen's leather gets a sheen
   const add = (geo, mat, x, y, z, parent = tilt) => { const ms = new THREE.Mesh(geo, mat); ms.position.set(x, y, z); ms.castShadow = true; parent.add(ms); return ms; };
 
-  add(new RoundedBoxGeometry(2.3, 0.55, 3.4, 3, 0.13), bodyMat, 0, 0.62, 0);           // body
-  add(new RoundedBoxGeometry(1.7, 0.38, 1.0, 2, 0.09), darkMat, 0, 0.52, 1.95);        // nose
-  add(new RoundedBoxGeometry(2.5, 0.4, 1.1, 2, 0.1), bodyMat, 0, 0.5, -0.9);           // sidepods
-  add(new RoundedBoxGeometry(1.35, 0.85, 0.35, 2, 0.08), GMAT.mattePlastic(0x191b20), 0, 1.05, -1.1); // seat
-  add(new THREE.BoxGeometry(2.2, 0.13, 0.55), darkMat, 0, 1.32, -1.85);               // spoiler
-  add(new THREE.BoxGeometry(0.18, 0.5, 0.18), darkMat, -0.8, 1.0, -1.8);
-  add(new THREE.BoxGeometry(0.18, 0.5, 0.18), darkMat, 0.8, 1.0, -1.8);
-  const pipeGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.55, 8); pipeGeo.rotateX(Math.PI / 2);
+  /* ---- kart body ---- */
+  add(hullGeometry(), bodyMat, 0, 0, 0);                                                        // sculpted hull
+  const cowl = add(new THREE.SphereGeometry(0.62, 18, 12), bodyMat, 0, 0.72, 1.62);              // nose cowl
+  cowl.scale.set(1.0, 0.52, 1.5);
+  add(new RoundedBoxGeometry(0.5, 0.07, 1.15, 2, 0.03), GMAT.mattePlastic(0xf2f2f2), 0, 1.04, 1.55); // nose stripe
+  add(new RoundedBoxGeometry(2.34, 0.09, 0.52, 2, 0.04), blackMat, 0, 0.36, 2.18);               // front wing
+  add(new RoundedBoxGeometry(0.07, 0.3, 0.5, 2, 0.03), blackMat, -1.14, 0.46, 2.18);              // wing endplates
+  add(new RoundedBoxGeometry(0.07, 0.3, 0.5, 2, 0.03), blackMat, 1.14, 0.46, 2.18);
+  for (const sx of [-1, 1]) {                                                                    // sidepods + intakes
+    const pod = add(new THREE.CapsuleGeometry(0.3, 0.95, 3, 10), darkMat, sx * 1.06, 0.56, -0.25);
+    pod.rotation.x = Math.PI / 2;
+    add(new RoundedBoxGeometry(0.34, 0.16, 0.5, 2, 0.05), blackMat, sx * 1.08, 0.86, 0.18);
+  }
+  add(new RoundedBoxGeometry(1.34, 0.12, 1.6, 2, 0.05), blackMat, 0, 0.88, -0.5);                // cockpit tub
+  const coaming = add(new THREE.TorusGeometry(0.68, 0.085, 8, 22), darkMat, 0, 0.94, -0.52);     // cockpit rim
+  coaming.rotation.x = Math.PI / 2; coaming.scale.set(1, 1.28, 1);
+  const seatBack = add(new RoundedBoxGeometry(1.12, 1.02, 0.3, 2, 0.1), blackMat, 0, 1.22, -1.08); // seat + headrest
+  seatBack.rotation.x = -0.14;
+  add(new RoundedBoxGeometry(0.6, 0.34, 0.2, 2, 0.07), blackMat, 0, 1.78, -1.18);
+  add(new RoundedBoxGeometry(0.78, 0.46, 0.55, 2, 0.08), GMAT.darkMetal({}), 0, 1.02, -1.52);    // engine block
+  add(new RoundedBoxGeometry(0.5, 0.2, 0.4, 2, 0.06), GMAT.carbonFibre({ repeat: 3 }), 0, 1.34, -1.52); // airbox
+  for (const sx of [-1, 1]) { const py = add(new THREE.BoxGeometry(0.14, 0.52, 0.14), blackMat, sx * 0.82, 1.28, -1.88); py.rotation.x = 0.18; }
+  const blade = add(new RoundedBoxGeometry(2.3, 0.09, 0.56, 2, 0.04), GMAT.carbonFibre({ repeat: 4 }), 0, 1.56, -1.98); // spoiler
+  blade.rotation.x = 0.14;
+  add(new RoundedBoxGeometry(0.07, 0.36, 0.6, 2, 0.03), blackMat, -1.12, 1.5, -1.98);
+  add(new RoundedBoxGeometry(0.07, 0.36, 0.6, 2, 0.03), blackMat, 1.12, 1.5, -1.98);
   const pipeMat = GMAT.chrome();
-  add(pipeGeo, pipeMat, -0.45, 0.55, -1.95); add(pipeGeo, pipeMat, 0.45, 0.55, -1.95);
+  for (const sx of [-1, 1]) { // exhausts: pipe + flared tip, angled up
+    const pipeGeo = new THREE.CylinderGeometry(0.085, 0.095, 0.6, 10); pipeGeo.rotateX(Math.PI / 2 - 0.18);
+    add(pipeGeo, pipeMat, sx * 0.42, 0.62, -1.92);
+    const tipGeo = new THREE.CylinderGeometry(0.13, 0.09, 0.22, 10); tipGeo.rotateX(Math.PI / 2 - 0.18);
+    add(tipGeo, pipeMat, sx * 0.42, 0.68, -2.2);
+  }
+  // steering: angled column + wheel the driver's hands actually reach
+  const column = add(new THREE.CylinderGeometry(0.05, 0.05, 0.62, 8), GMAT.darkMetal({}), 0, 1.08, 0.22);
+  column.rotation.x = 0.85;
+  const swheel = add(new THREE.TorusGeometry(0.3, 0.05, 8, 20), blackMat, 0, 1.26, 0.06);
+  swheel.rotation.x = -0.72; // wheel plane square to the column, facing the driver
+  add(new THREE.BoxGeometry(0.5, 0.07, 0.05), blackMat, 0, 1.26, 0.06).rotation.x = -0.72;
+  add(new THREE.SphereGeometry(0.075, 10, 8), GMAT.darkMetal({}), 0, 1.26, 0.06);
 
-  // wheels — front on steer pivots; rubber with tread bump + chrome hub that spins with the wheel
-  const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.46, 22); wheelGeo.rotateZ(Math.PI / 2);
-  const wheelMat = GMAT.rubber({});
-  const hubGeo = new THREE.CylinderGeometry(0.21, 0.21, 0.5, 14); hubGeo.rotateZ(Math.PI / 2);
-  const hubMat = GMAT.chrome({ roughness: 0.25 });
-  const mkWheel = (parent, x, y, z) => { const w = new THREE.Mesh(wheelGeo, wheelMat); w.position.set(x, y, z); w.castShadow = true; w.add(new THREE.Mesh(hubGeo, hubMat)); parent.add(w); return w; };
-  const pivotL = new THREE.Group(); pivotL.position.set(-1.18, 0.5, 1.18); tilt.add(pivotL);
-  const pivotR = new THREE.Group(); pivotR.position.set(1.18, 0.5, 1.18); tilt.add(pivotR);
-  const wFL = mkWheel(pivotL, 0, 0, 0), wFR = mkWheel(pivotR, 0, 0, 0);
-  const wRL = mkWheel(tilt, -1.18, 0.5, -1.18), wRR = mkWheel(tilt, 1.18, 0.5, -1.18);
-
-  // driver — duos (Larry & Sergey) get TWO smaller figures side by side, that's the joke
-  const skinMat = GMAT.skinTone(r.skin);
-  const visorMat = racerIdx === 2 ? GMAT.glass({ color: 0x223044, opacity: 0.55 }) : new THREE.MeshStandardMaterial({ color: 0x0c0e14, roughness: 0.15, metalness: 0.6 });
-  const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(r, racerIdx), roughness: 0.85 });
-  if (r.duo) {
-    for (const sx of [-0.42, 0.42]) {
-      add(new RoundedBoxGeometry(0.74, 0.88, 0.56, 2, 0.1), suitMat, sx, 1.36, -0.55); // torso
-      add(new THREE.SphereGeometry(0.37, 14, 10), skinMat, sx, 2.08, -0.5);          // head
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.56), faceMat); face.position.set(sx, 2.08, -0.14); tilt.add(face);
-      const h = add(new THREE.SphereGeometry(0.43, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), bodyMat, sx, 2.19, -0.5);
-      h.scale.y = 0.82;                                                              // helmet
-      add(new THREE.BoxGeometry(0.52, 0.15, 0.08), visorMat, sx, 2.1, -0.1);         // visor
-      const arm = add(new THREE.BoxGeometry(0.16, 0.16, 0.8), suitMat, sx * 1.55, 1.45, 0.02); arm.rotation.x = -0.55;
+  /* ---- wheels: lathed tyres, spoked rims, slight camber; rears bigger ---- */
+  const tyreMat = GMAT.rubber({});
+  const rimMat = GMAT.darkMetal({ roughness: 0.35 });
+  const faceMatWheel = new THREE.MeshStandardMaterial({ map: rimFaceTexture(), roughness: 0.38, metalness: 0.65 });
+  const lipGeo = new THREE.TorusGeometry(0.30, 0.035, 8, 20); lipGeo.rotateY(Math.PI / 2);
+  const lipMat = GMAT.chrome({ roughness: 0.25 });
+  const mkWheel = (parent, x, y, z, radius, width) => {
+    const camber = new THREE.Group(); camber.position.set(x, y, z); camber.rotation.z = Math.sign(x) * 0.05; parent.add(camber);
+    const spin = new THREE.Group(); camber.add(spin);
+    const tyre = new THREE.Mesh(tyreGeometry(radius, width), tyreMat); tyre.castShadow = true; spin.add(tyre);
+    const rimGeo = new THREE.CylinderGeometry(radius * 0.6, radius * 0.6, width * 0.86, 14); rimGeo.rotateZ(Math.PI / 2);
+    spin.add(new THREE.Mesh(rimGeo, rimMat));
+    for (const fx of [-1, 1]) {
+      const face = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.58, 14), faceMatWheel);
+      face.position.x = fx * width * 0.44; face.rotation.y = fx > 0 ? Math.PI / 2 : -Math.PI / 2; spin.add(face);
+      const lip = new THREE.Mesh(lipGeo, lipMat); lip.position.x = fx * width * 0.47; lip.scale.setScalar(radius / 0.5); spin.add(lip);
     }
+    return spin; // game spins wheels[i].rotation.x — the spin group IS the hook
+  };
+  const pivotL = new THREE.Group(); pivotL.position.set(-1.18, 0.48, 1.18); tilt.add(pivotL);
+  const pivotR = new THREE.Group(); pivotR.position.set(1.18, 0.48, 1.18); tilt.add(pivotR);
+  const wFL = mkWheel(pivotL, 0, 0, 0, 0.48, 0.44), wFR = mkWheel(pivotR, 0, 0, 0, 0.48, 0.44);
+  const wRL = mkWheel(tilt, -1.18, 0.54, -1.18, 0.54, 0.52), wRR = mkWheel(tilt, 1.18, 0.54, -1.18, 0.54, 0.52);
+
+  /* ---- driver: articulated figure, bare head — the hair/hat IS the read ---- */
+  const skinMat = GMAT.skinTone(r.skin);
+  const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(r, racerIdx), roughness: 0.85 });
+  // face drawn on a patch bent to hug the head sphere (was a flat floating plane)
+  const facePatch = (rad) => {
+    const g = new THREE.PlaneGeometry(rad * 1.32, rad * 1.32, 6, 6);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i);
+      const z = Math.sqrt(Math.max(0.004, rad * rad - x * x - y * y));
+      pos.setXYZ(i, x * 1.03, y * 1.03, z * 1.03);
+    }
+    g.computeVertexNormals();
+    return g;
+  };
+  // hair/hat silhouettes per racer: [colour, capDepth] — iconic reads at distance
+  const HAIR = { 0: [0x4a3423, 0.58], 1: [0x5a4030, 0.6], 2: [0x3a2a1c, 0.55], 4: [0x14151a, 0.6], 5: [0x9aa0a3, 0.55], 6: [0x2a2019, 0.62], 7: [0x3b2d24, 0.58], 8: [0xe6c15c, 0.72], 9: [0xbdbdbd, 0.5], 11: [0x8a7a68, 0.58], 12: [0x2e2622, 0.5], 13: [0xa8895a, 0.66], 14: [0xdcdcdc, 0.55], 15: [0xe8e8e8, 0.5], 16: [0xd8d8d2, 0.66] };
+  const buildFigure = (cx, s, hairSpec) => {
+    const cy = (y) => 0.9 + (y - 0.9) * s, cz = (z) => -0.5 + (z + 0.5) * s; // scale about the seat base
+    const torso = add(new THREE.CapsuleGeometry(0.34 * s, 0.5 * s, 4, 12), suitMat, cx, cy(1.48), cz(-0.55));
+    torso.scale.set(1.18, 1, 0.82); torso.rotation.x = -0.07;
+    for (const sx of [-1, 1]) { // arms: shoulder → steering-wheel grips, hands on the rim
+      const arm = add(new THREE.CapsuleGeometry(0.105 * s, 0.52 * s, 3, 8), suitMat, cx + sx * 0.36 * s, cy(1.44), cz(-0.18));
+      arm.rotation.x = 2.05; arm.rotation.z = sx * 0.22; // axis tipped forward-down: shoulder → wheel grip
+      add(new THREE.SphereGeometry(0.105 * s, 10, 8), skinMat, cx + sx * 0.24 * s, cy(1.3), cz(0.1)); // hand
+      const leg = add(new THREE.CapsuleGeometry(0.125 * s, 0.44 * s, 3, 8), GMAT.mattePlastic(new THREE.Color(r.suit).multiplyScalar(0.7).getHex()), cx + sx * 0.24 * s, cy(0.98), cz(-0.02));
+      leg.rotation.x = Math.PI / 2 - 0.35;
+    }
+    add(new THREE.CylinderGeometry(0.13 * s, 0.15 * s, 0.22 * s, 10), skinMat, cx, cy(1.98), cz(-0.5)); // neck
+    const headR = 0.5 * s, headY = cy(2.18), headZ = cz(-0.5);
+    add(new THREE.SphereGeometry(headR, 20, 14), skinMat, cx, headY, headZ);           // head
+    for (const sx of [-1, 1]) add(new THREE.SphereGeometry(0.09 * s, 8, 6), skinMat, cx + sx * headR * 0.98, headY, headZ); // ears
+    const face = new THREE.Mesh(facePatch(headR), faceMat); face.position.set(cx, headY, headZ); tilt.add(face);
+    if (hairSpec) {
+      const [hCol, depth] = hairSpec;
+      const hairMat = GMAT.mattePlastic(hCol, { roughness: 0.92 });
+      // cap tipped back (−0.38 rad): the rim rises over the brow in front, falls to the neck behind
+      const cap = add(new THREE.SphereGeometry(headR * 1.045, 18, 12, 0, Math.PI * 2, 0, Math.PI * Math.min(depth, 0.58)), hairMat, cx, headY + headR * 0.06, headZ - headR * 0.04);
+      cap.scale.y = 0.94; cap.rotation.x = -0.38;
+      if (racerIdx === 1) for (const [ox, oy, oz] of [[-0.2, 0.42, -0.05], [0.15, 0.46, -0.2], [0.02, 0.4, 0.18]]) add(new THREE.SphereGeometry(0.16 * s, 8, 6), hairMat, cx + ox * s, headY + oy * s, headZ + oz * s); // Sam: curls
+      if (racerIdx === 8) { // Trump: the swoop — fringe slab swept over the forehead
+        const fringe = add(new RoundedBoxGeometry(0.88 * s, 0.17 * s, 0.42 * s, 2, 0.06), hairMat, cx + 0.04 * s, headY + headR * 0.62, headZ + headR * 0.62);
+        fringe.rotation.x = 0.35; fringe.rotation.z = -0.1;
+      }
+      if (racerIdx === 13) { // Holmes: long panels framing the face + back fall
+        for (const sx of [-1, 1]) add(new RoundedBoxGeometry(0.17 * s, 0.92 * s, 0.34 * s, 2, 0.06), hairMat, cx + sx * headR * 0.92, headY - 0.42 * s, headZ + 0.02);
+        add(new RoundedBoxGeometry(0.8 * s, 0.85 * s, 0.15 * s, 2, 0.06), hairMat, cx, headY - 0.38 * s, headZ - headR * 0.92);
+      }
+      if (racerIdx === 14) add(new RoundedBoxGeometry(0.46 * s, 0.26 * s, 0.14 * s, 2, 0.05), hairMat, cx, headY - headR * 0.52, headZ + headR * 0.82); // Ellison: white beard
+    }
+    return { headY, headZ, headR };
+  };
+  if (r.duo) { // Larry & Sergey: two figures, one wheel — Larry hair, Sergey in the Google cap
+    buildFigure(-0.44, 0.8, [0x2e2622, 0.58]);
+    const fig = buildFigure(0.44, 0.8, null);
+    const capMat = GMAT.mattePlastic(0x4285f4, { roughness: 0.8 });
+    const capTop = add(new THREE.SphereGeometry(fig.headR * 1.05, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.46), capMat, 0.44, fig.headY + fig.headR * 0.08, fig.headZ - fig.headR * 0.03);
+    capTop.scale.y = 0.9; capTop.rotation.x = -0.15;
+    const brim = add(new THREE.CylinderGeometry(fig.headR * 1.02, fig.headR * 1.02, 0.035, 14, 1, false, -0.7, 1.4), capMat, 0.44, fig.headY + fig.headR * 0.18, fig.headZ + fig.headR * 0.35);
+    brim.scale.set(1, 1, 1.35);
+    add(new THREE.SphereGeometry(0.06, 8, 6), capMat, 0.44, fig.headY + fig.headR * 1.02, fig.headZ);
   } else {
-    add(new RoundedBoxGeometry(1.05, 0.95, 0.62, 2, 0.12), suitMat, 0, 1.38, -0.55);  // torso
-    const armGeo = new THREE.BoxGeometry(0.22, 0.22, 0.95);
-    const armL = add(armGeo, suitMat, -0.64, 1.5, 0.02); armL.rotation.x = -0.55;
-    const armR = add(armGeo, suitMat, 0.64, 1.5, 0.02); armR.rotation.x = -0.55;
-    add(new THREE.SphereGeometry(0.5, 16, 12), skinMat, 0, 2.18, -0.5);              // head
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.78), faceMat); face.position.set(0, 2.18, -0.02); tilt.add(face);
-    const helm = add(new THREE.SphereGeometry(0.58, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), bodyMat, 0, 2.3, -0.5); // helmet cap
-    helm.scale.y = 0.82;
-    add(new THREE.BoxGeometry(0.74, 0.2, 0.1), visorMat, 0, 2.2, -0.02);             // visor
+    buildFigure(0, 1, racerIdx === 3 ? null : (HAIR[racerIdx] || [0x333333, 0.58])); // Bezos: proudly bald
+    if (racerIdx === 8) { // Trump's red tie over the navy suit
+      add(new RoundedBoxGeometry(0.15, 0.5, 0.05, 1, 0.02), GMAT.mattePlastic(0xc0272d), 0, 1.52, -0.24).rotation.x = 0.1;
+      add(new RoundedBoxGeometry(0.13, 0.13, 0.05, 1, 0.02), GMAT.mattePlastic(0xc0272d), 0, 1.8, -0.29);
+    }
+    if (racerIdx === 11) { // Bill's glasses (geometry, not paint)
+      const gMat = GMAT.darkMetal({ roughness: 0.3 });
+      for (const sx of [-1, 1]) { const ring = add(new THREE.TorusGeometry(0.14, 0.02, 6, 16), gMat, sx * 0.19, 2.24, 0.03); }
+      add(new THREE.BoxGeometry(0.12, 0.03, 0.03), gMat, 0, 2.26, 0.03);
+    }
   }
 
   // per-racer props
-  if (racerIdx === 0) { const cone = add(new THREE.ConeGeometry(0.36, 1.15, 10), GMAT.flatProp(0xf2f2f2), 0, 1.55, -1.7); cone.rotation.x = 0.5; }
+  if (racerIdx === 0) { const cone = add(new THREE.ConeGeometry(0.36, 1.15, 10), GMAT.flatProp(0xf2f2f2), 0, 1.78, -1.55); cone.rotation.x = 0.5; }
   if (racerIdx === 1) { const halo = add(new THREE.TorusGeometry(0.42, 0.07, 8, 20), new THREE.MeshStandardMaterial({ color: 0xffd94a, emissive: 0xaa8800, emissiveIntensity: 1.5 }), 0, 2.95, -0.5); halo.rotation.x = Math.PI / 2; }
   if (racerIdx === 2) { const chain = add(new THREE.TorusGeometry(0.36, 0.08, 8, 22), new THREE.MeshStandardMaterial({ color: 0xffd94a, emissive: 0x997700, emissiveIntensity: 0.55, metalness: 0.85, roughness: 0.25 }), 0, 1.82, -0.26); chain.rotation.x = 0.55; } // the Zuckaissance gold chain
-  if (racerIdx === 3) { add(new THREE.BoxGeometry(1.15, 1.15, 1.15), GMAT.flatProp(0xb5823c), 0, 1.6, -1.6); }
-  if (racerIdx === 4) { add(new THREE.BoxGeometry(1.5, 0.1, 0.5), new THREE.MeshStandardMaterial({ color: 0x76b900, emissive: 0x76b900, emissiveIntensity: 1.4 }), 0, 0.78, 2.35); }
+  if (racerIdx === 3) { add(new THREE.BoxGeometry(0.8, 0.8, 0.8), GMAT.flatProp(0xb5823c), 0, 2.0, -1.98); } // Bezos: parcel strapped to the spoiler
+  if (racerIdx === 4) { add(new THREE.BoxGeometry(1.5, 0.1, 0.5), new THREE.MeshStandardMaterial({ color: 0x76b900, emissive: 0x76b900, emissiveIntensity: 1.4 }), 0, 0.47, 2.18); } // Jensen: GPU light-bar on the front wing
 
   const nameSpr = nameSprite(r, isPlayer);
   root.add(nameSpr);
   const kart = {
-    racerIdx, racer: r, isPlayer, mesh: root, nameSpr, tilt, wheels: [wFL, wFR, wRL, wRR], pivots: [pivotL, pivotR],
+    racerIdx, racer: r, isPlayer, mesh: root, nameSpr, tilt, paintMat: bodyMat, wheels: [wFL, wFR, wRL, wRR], pivots: [pivotL, pivotR],
     pos: new THREE.Vector3(), heading: 0, velHeading: 0, speed: 0, steerVis: 0, spinVis: 0,
     continuous: 0, sampleIdx: 0, lateral: 0, finished: false, finishTime: null, projected: false, autopilot: false,
     item: null, spinT: 0, shrinkT: 0, starT: 0, boostT: 0, driftCharge: 0, drifting: false, starTouchCd: 0,
@@ -853,7 +1046,7 @@ function placeGrid() {
   bananas.forEach(b => scene.remove(b.mesh)); bananas = [];
   projectiles.forEach(p => killProjectile(p)); projectiles = [];
   bombs.forEach(b => scene.remove(b.mesh)); bombs = [];
-  itemBoxes.forEach(b => { b.active = true; b.mesh.visible = true; b.respawnT = 0; b.mesh.material.opacity = 1; b.mesh.scale.setScalar(1); });
+  itemBoxes.forEach(b => { b.active = true; b.mesh.visible = true; b.respawnT = 0; b.setFade(1); b.mesh.scale.setScalar(1); });
   raceTime = 0; finishDelay = -1;
   prevPlayerCont = playerKart().continuous;
   updateItemSlot();
@@ -1115,7 +1308,7 @@ function attachKartFX(k) {
   fx.beaconBeam = mk(FXGEO.beam, FXMAT.beam, 0, 3.5, 13);
   fx.heldOrbit = new THREE.Group(); g.add(fx.heldOrbit); // held item, orbiting the kart (built lazily per item id)
   fx.held = {}; fx.heldCur = null;
-  fx.bodyMat = k.tilt.children[0].material; // kart paint — flashed by Viral Moment
+  fx.bodyMat = k.paintMat || k.tilt.children[0].material; // kart paint (explicit handle from makeKart; child-order fallback) — flashed by Viral Moment
   fx.starLit = false;
   fx.trail = makeTrail(20, 1.1, 0xffd94a); scene.add(fx.trail.mesh);
   k.fx = fx;
@@ -1443,18 +1636,18 @@ function updateItemBoxes(dt) {
       b.respawnT -= dt;
       if (b.respawnT <= 0) { // live again: full opacity, full size, pickable
         b.active = true; b.mesh.visible = true;
-        b.mesh.material.opacity = 1; b.mesh.scale.setScalar(1);
+        b.setFade(1); b.mesh.scale.setScalar(1);
       } else if (b.respawnT <= BOX_GHOST) { // ghost-in: the final 0.6s fades/scales the box back as a visible-but-not-yet-active telegraph
         const t = 1 - b.respawnT / BOX_GHOST;
         b.mesh.visible = true;
-        b.mesh.material.opacity = 0.25 + 0.55 * t;
+        b.setFade(0.25 + 0.55 * t);
         b.mesh.scale.setScalar(0.6 + 0.4 * t);
       }
       continue;
     }
     for (const k of karts) {
       if (k.item || k.finished) continue;
-      if (k.pos.distanceToSquared(b.mesh.position) < 8.5) { b.active = false; b.mesh.visible = false; b.mesh.material.opacity = 1; b.mesh.scale.setScalar(1); b.respawnT = BOX_RESPAWN; grantItem(k); break; }
+      if (k.pos.distanceToSquared(b.mesh.position) < 8.5) { b.active = false; b.mesh.visible = false; b.setFade(1); b.mesh.scale.setScalar(1); b.respawnT = BOX_RESPAWN; grantItem(k); break; }
     }
   }
 }
@@ -1466,38 +1659,68 @@ function leakMesh() { // Data Leak: glossy dark puddle ON the road + glowing dat
   sheen.rotation.x = -Math.PI / 2; sheen.position.y = 0.12; g.add(sheen);
   const rim = new THREE.Mesh(FXGEO.ring, new THREE.MeshBasicMaterial({ color: 0x2fb9ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
   rim.position.y = 0.12; rim.scale.setScalar(1.6); g.add(rim); g.userData.rim = rim;
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.72, 16), new THREE.MeshBasicMaterial({ color: 0x2fb9ff, transparent: true, opacity: 0.7 })); // organic satellite blob (model pass)
+  blob.rotation.x = -Math.PI / 2; blob.position.set(1.15, 0.1, 0.55); g.add(blob);
   const dropMat = new THREE.MeshStandardMaterial({ color: 0x2fb9ff, emissive: 0x1177bb, emissiveIntensity: 0.9, roughness: 0.2 });
   for (const [dx, dz, s] of [[-0.7, 0.4, 0.3], [0.55, -0.5, 0.24], [0.15, 0.75, 0.19]]) {
-    const d = new THREE.Mesh(new THREE.SphereGeometry(s, 10, 8), dropMat);
+    const d = new THREE.Mesh(new THREE.SphereGeometry(s, 12, 10), dropMat);
     d.position.set(dx, 0.28, dz); d.scale.y = 1.35; g.add(d);
   }
   return g;
 }
 function projectileMesh(type) {
   const g = new THREE.Group();
-  if (type === 'green') {
-    const geo = new THREE.CylinderGeometry(0.34, 0.34, 1.15, 10); geo.rotateZ(Math.PI / 2);
-    const scroll = new THREE.Mesh(geo, GMAT.flatProp(0xf5efdd)); g.add(scroll);
-    const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.2), GMAT.flatProp(0xd23b2e)); g.add(ribbon);
-  } else if (type === 'red') {
-    const bird = new THREE.Mesh(new THREE.SphereGeometry(0.58, 12, 10), GMAT.flatProp(0x1d9bf0)); g.add(bird);
-    const beakGeo = new THREE.ConeGeometry(0.22, 0.55, 8); beakGeo.rotateX(Math.PI / 2);
-    const beak = new THREE.Mesh(beakGeo, GMAT.flatProp(0xffa53a)); beak.position.z = 0.65; g.add(beak);
-  } else if (type === 'blue') {
-    const case_ = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.7, 0.45), GMAT.flatProp(0x7a4a21)); g.add(case_);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.16, 0.49), new THREE.MeshStandardMaterial({ color: 0xffd94a, emissive: 0x997700, emissiveIntensity: 0.7 })); g.add(trim);
+  if (type === 'green') { // Subpoena: rolled scroll, sealed
+    const geo = new THREE.CylinderGeometry(0.34, 0.34, 1.15, 14); geo.rotateZ(Math.PI / 2);
+    const scroll = new THREE.Mesh(geo, GMAT.mattePlastic(0xf5efdd, { roughness: 0.6 })); g.add(scroll);
+    for (const ex of [-1, 1]) { // rolled end-rings + end caps
+      const ringGeo = new THREE.TorusGeometry(0.3, 0.055, 8, 16); ringGeo.rotateY(Math.PI / 2);
+      const ring = new THREE.Mesh(ringGeo, GMAT.mattePlastic(0xe3d9c2, { roughness: 0.6 })); ring.position.x = ex * 0.55; g.add(ring);
+      const capGeo = new THREE.CircleGeometry(0.3, 14); const cap = new THREE.Mesh(capGeo, GMAT.mattePlastic(0xe3d9c2, { roughness: 0.6 }));
+      cap.position.x = ex * 0.58; cap.rotation.y = ex > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(cap);
+    }
+    const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.76, 0.2), GMAT.flatProp(0xd23b2e)); g.add(ribbon);
+    const seal = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), new THREE.MeshStandardMaterial({ color: 0xb01e24, roughness: 0.3, emissive: 0x550000, emissiveIntensity: 0.6 }));
+    seal.position.set(0, -0.3, 0.26); seal.scale.z = 0.5; g.add(seal); // wax seal
+  } else if (type === 'red') { // Viral Tweet: an actual bird — body, head, wings, tail
+    const blue = GMAT.mattePlastic(0x1d9bf0, { roughness: 0.55 });
+    const bodyB = new THREE.Mesh(new THREE.SphereGeometry(0.56, 16, 12), blue); bodyB.scale.set(1, 0.92, 1.18); g.add(bodyB);
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.44, 12, 10), GMAT.mattePlastic(0xeaf6fd, { roughness: 0.6 })); belly.position.set(0, -0.14, 0.16); belly.scale.set(0.85, 0.8, 0.95); g.add(belly);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.33, 14, 10), blue); head.position.set(0, 0.26, 0.42); g.add(head);
+    const beakGeo = new THREE.ConeGeometry(0.19, 0.5, 10); beakGeo.rotateX(Math.PI / 2);
+    const beak = new THREE.Mesh(beakGeo, GMAT.flatProp(0xffa53a)); beak.position.set(0, 0.22, 0.82); g.add(beak);
+    for (const sx of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), GMAT.mattePlastic(0x101216)); eye.position.set(sx * 0.15, 0.36, 0.66); g.add(eye);
+      const wing = new THREE.Mesh(new RoundedBoxGeometry(0.62, 0.07, 0.34, 1, 0.03), blue); wing.position.set(sx * 0.6, 0.18, -0.02); wing.rotation.z = sx * 0.5; g.add(wing);
+    }
+    const tail = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.06, 0.42, 1, 0.03), blue); tail.position.set(0, 0.12, -0.68); tail.rotation.x = -0.5; g.add(tail);
+  } else if (type === 'blue') { // Antitrust Suit: lawyer's briefcase — rounded, handled, clasped
+    const case_ = new THREE.Mesh(new RoundedBoxGeometry(1.05, 0.75, 0.5, 2, 0.09), GMAT.mattePlastic(0x7a4a21, { roughness: 0.5 })); g.add(case_);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(1.09, 0.15, 0.54), new THREE.MeshStandardMaterial({ color: 0xffd94a, emissive: 0x997700, emissiveIntensity: 0.7, metalness: 0.7, roughness: 0.3 })); g.add(trim);
+    const handleGeo = new THREE.TorusGeometry(0.21, 0.045, 8, 14, Math.PI); const handle = new THREE.Mesh(handleGeo, GMAT.darkMetal({})); handle.position.y = 0.4; g.add(handle);
+    for (const cx of [-0.28, 0.28]) { const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.2, 0.05), GMAT.chrome({ roughness: 0.3 })); clasp.position.set(cx, 0.05, 0.26); g.add(clasp); }
   }
   g.traverse(o => o.castShadow = true);
   return g;
 }
-function bombMesh() {
+function bombMesh() { // Pink Slip: bomb + the dreaded paper slip + a real fuse cord
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.95, 14, 12), new THREE.MeshStandardMaterial({ color: 0x23242c, roughness: 0.35, metalness: 0.5, emissive: 0xff2222, emissiveIntensity: 0 }));
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.95, 22, 16), new THREE.MeshStandardMaterial({ color: 0x23242c, roughness: 0.32, metalness: 0.55, emissive: 0xff2222, emissiveIntensity: 0 }));
   body.castShadow = true; g.add(body);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.4, 8), GMAT.chrome({ roughness: 0.35 })); cap.position.y = 1.0; g.add(cap);
-  const spark = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa53a })); spark.position.set(0.14, 1.32, 0); g.add(spark);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.4, 10), GMAT.chrome({ roughness: 0.35 })); cap.position.y = 1.0; g.add(cap);
+  const fuseCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 1.14, 0), new THREE.Vector3(0.16, 1.36, 0.05), new THREE.Vector3(0.34, 1.44, -0.08)]);
+  const fuse = new THREE.Mesh(new THREE.TubeGeometry(fuseCurve, 8, 0.032, 6), GMAT.mattePlastic(0x8a6f4d)); g.add(fuse);
+  const spark = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa53a })); spark.position.set(0.34, 1.44, -0.08); g.add(spark);
   const glowSm = new THREE.SpriteMaterial({ map: GTEX.particleSprite(), color: 0xffa53a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
-  const glow = new THREE.Sprite(glowSm); glow.position.set(0.14, 1.32, 0); glow.scale.setScalar(0.9); g.add(glow); // blinking fuse light, pulsed in updateBombs
+  const glow = new THREE.Sprite(glowSm); glow.position.set(0.34, 1.44, -0.08); glow.scale.setScalar(0.9); g.add(glow); // blinking fuse light at the fuse tip, pulsed in updateBombs
+  const slipTex = canvasTexture(128, 160, (g2) => {
+    g2.fillStyle = '#ffd7e0'; g2.fillRect(0, 0, 128, 160);
+    g2.fillStyle = '#b01e24'; g2.font = '900 25px system-ui'; g2.textAlign = 'center';
+    g2.fillText('PINK', 64, 55); g2.fillText('SLIP', 64, 85);
+    g2.fillStyle = '#7a4a52'; for (let y = 108; y < 150; y += 13) g2.fillRect(18, y, 92, 5);
+  });
+  const slip = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.65), new THREE.MeshStandardMaterial({ map: slipTex, side: THREE.DoubleSide, roughness: 0.9 }));
+  slip.position.set(0.3, 0.72, 0.78); slip.rotation.set(-0.25, 0.35, 0.1); g.add(slip);
   g.userData.body = body; g.userData.glow = glow;
   return g;
 }
@@ -2516,7 +2739,7 @@ window.BKTT = (function () {
     const blob = new THREE.Mesh(new THREE.CircleGeometry(1.75, 28), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 }));
     blob.rotation.x = -Math.PI / 2; blob.position.y = 0.365; grp.add(blob);
     const hold = new THREE.Group(); hold.position.y = 0.35; grp.add(hold);
-    R = { r, sc, cam, grp, hold };
+    R = { r, sc, cam, grp, hold, cv };
   }
   function setRacer(i) {
     cur = i;
@@ -2537,7 +2760,9 @@ window.BKTT = (function () {
     if (!active()) { if (alive) { alive = false; $('racer-detail').classList.remove('tt-on'); } return; }
     if (!R) { try { init(); setRacer(cur >= 0 ? cur : selectedRacer); } catch (e) { window.BKTT = null; return; } }
     if (!alive) { alive = true; $('racer-detail').classList.add('tt-on'); }
-    const media = $('detail-media'), w = media.clientWidth, h = media.clientHeight;
+    const media = $('detail-media');
+    if (R.cv.parentNode !== media) media.appendChild(R.cv); // renderDetail() rewrites #detail-media innerHTML per selection, detaching the stage canvas — re-attach, or the turntable goes blank after the first racer change
+    const w = media.clientWidth, h = media.clientHeight;
     if (w && (w !== lastW || h !== lastH)) { lastW = w; lastH = h; R.r.setSize(w, h, false); R.cam.aspect = w / h; R.cam.updateProjectionMatrix(); }
     spin += dt * 0.35; R.grp.rotation.y = spin;
     if (holder) {

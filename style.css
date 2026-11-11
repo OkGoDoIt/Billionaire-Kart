@@ -77,17 +77,17 @@ button { font-family:inherit; cursor:pointer; }
 #drift-bar { width:170px; height:10px; background:rgba(10,14,30,.5); border:2px solid rgba(255,255,255,.5); border-radius:6px; overflow:hidden; margin-left:auto; }
 #drift-fill { height:100%; width:0%; background:#6cf; border-radius:6px; transition:background .15s; }
 #drift-label { font-size:11px; font-weight:700; font-style:italic; letter-spacing:2px; color:#fff; text-shadow:var(--hud-shadow); margin-top:2px; }
-/* Input-aware layout (Addendum 3). CLASSIC (default — keyboard/mouse/gamepad,
-   no on-screen controls rendered): #top-stack is display:contents, so the item
-   slot sits in its original lower-left corner and the feed stacks above it.
-   TOUCH (body.touch-ui, set by refreshTouchUI exactly when on-screen controls
-   render): the stack becomes a centred column under the button row — item
-   slot, Auto-Gas note, feed — because the player's thumbs own the bottom. */
+/* HUD layout (#48, supersedes PR #38's centred stack): the middle band of the
+   screen belongs to the race in EVERY layout. #top-stack is display:contents —
+   its children anchor independently: the item slot lives in the TOP-LEFT corner
+   under the position/lap block, and the race feed hangs from the TOP edge
+   under the button row. (PR #38 stacked slot+feed in one centred column at
+   top:112px; on a ~400px-tall landscape phone the feed then landed at 50-65%
+   screen height — across the pack — and the empty slot's navy circle + "·"
+   read as a stick base parked at screen centre.) */
 #top-stack { display:contents; }
-body.touch-ui #top-stack { position:absolute; top:calc(112px + var(--sa-t)); left:50%; transform:translateX(-50%); z-index:12; display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; }
-/* Item slot: MK circle (POLISH.md §2.5) — ink ring, gold inner ring when holding, roulette states */
-#item-slot { position:absolute; left:calc(16px + var(--sa-l)); bottom:calc(16px + var(--sa-b)); width:96px; height:96px; background:radial-gradient(circle at 50% 32%, rgba(38,52,96,.88), rgba(5,10,25,.94)); border:5px solid var(--ink-pure); border-radius:50%; box-shadow:0 5px 0 rgba(10,10,20,.55), inset 0 0 0 3px rgba(255,255,255,.28), inset 0 3px 0 rgba(255,255,255,.35); display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; transition:transform .06s; }
-body.touch-ui #item-slot { position:relative; left:auto; bottom:auto; flex:none; }
+/* Item slot: MK circle (POLISH.md §2.5) — ink ring, gold inner ring when holding, roulette states. Corner placement (#48): top-left, below the position/lap block, all schemes. */
+#item-slot { position:absolute; left:calc(16px + var(--sa-l)); top:calc(150px + var(--sa-t)); width:96px; height:96px; background:radial-gradient(circle at 50% 32%, rgba(38,52,96,.88), rgba(5,10,25,.94)); border:5px solid var(--ink-pure); border-radius:50%; box-shadow:0 5px 0 rgba(10,10,20,.55), inset 0 0 0 3px rgba(255,255,255,.28), inset 0 3px 0 rgba(255,255,255,.35); display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; transition:transform .06s; z-index:12; }
 #item-slot:active { transform:scale(.9); }
 #item-slot.has-item { box-shadow:0 5px 0 rgba(10,10,20,.55), inset 0 0 0 3px var(--yellow), inset 0 3px 0 rgba(255,255,255,.35), 0 0 22px rgba(255,217,0,.5); animation:slotpop .35s var(--curve-pop), slotpulse 1.6s ease-in-out .4s infinite; }
 @keyframes slotpop { 0%{transform:scale(.68)} 55%{transform:scale(1.16)} 100%{transform:scale(1)} }
@@ -109,20 +109,22 @@ body.touch-ui #item-slot { position:relative; left:auto; bottom:auto; flex:none;
 /* Countdown numerals: giant checker-filled display type (POLISH.md §2.4) */
 #center-msg { position:absolute; top:32%; left:50%; transform:translate(-50%,-50%) rotate(-6deg); font-family:var(--font-display); font-size:min(30vh,250px); line-height:1; letter-spacing:.02em; text-align:center; white-space:nowrap; background:repeating-conic-gradient(#ffd900 0% 25%, #ffb300 0% 50%); background-size:.5em .5em; -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff) drop-shadow(0 7px 0 rgba(10,10,20,.85)); }
 /* Toast: settings confirmations + countdown rocket-start hints ONLY (all race
-   events moved to #race-feed). It hangs BELOW the top-center button row
-   (12px + 44px buttons = clears at ~62px) — the old top:9-16% placement put it
-   directly under/behind the sound & pause buttons on landscape phones. */
-#toast { position:absolute; top:calc(70px + var(--sa-t)); left:50%; transform:translateX(-50%); z-index:20; max-width:94vw; font-family:var(--font-display); font-size:30px; letter-spacing:.02em; color:var(--yellow); -webkit-text-stroke:1.5px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure),0 5px 12px rgba(0,0,0,.4); text-align:center; opacity:0; transition:opacity .25s; }
-/* Race feed: barks, item grants/effects and position changes land here —
-   never mid-screen. CLASSIC: lower-left, stacked above the corner item slot.
-   TOUCH: inside the top-centre stack, directly under the slot. Max 3 entries
-   (JS-capped), auto-fading. */
-#race-feed { position:absolute; left:calc(16px + var(--sa-l)); bottom:calc(124px + var(--sa-b)); display:flex; flex-direction:column; align-items:flex-start; gap:4px; max-width:min(46vw,350px); pointer-events:none; }
-body.touch-ui #race-feed { position:static; align-items:center; max-width:min(88vw,350px); }
-.feed-item { width:max-content; max-width:100%; text-align:left; background:var(--chip-dark); border-left:4px solid var(--yellow); border-radius:8px; padding:4px 10px; font-size:13.5px; font-weight:600; line-height:1.3; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.65); opacity:1; transition:opacity .3s; animation:feedin .18s var(--curve-out); }
-body.touch-ui .feed-item { text-align:center; border-left:none; border-bottom:3px solid var(--yellow); }
-.feed-item.bark { border-left-color:#fff; font-style:italic; }
-body.touch-ui .feed-item.bark { border-bottom-color:#fff; }
+   events moved to #race-feed). It hangs below the feed zone at the top edge
+   (#48: the feed owns 62px downward for its max 2 entries, the toast sits
+   under it) — never in the middle band. */
+#toast { position:absolute; top:calc(128px + var(--sa-t)); left:50%; transform:translateX(-50%); z-index:20; max-width:94vw; font-family:var(--font-display); font-size:30px; letter-spacing:.02em; color:var(--yellow); -webkit-text-stroke:1.5px var(--ink-pure); text-shadow:0 3px 0 var(--ink-pure),0 5px 12px rgba(0,0,0,.4); text-align:center; opacity:0; transition:opacity .25s; }
+/* Race feed (#48): barks, item grants/effects and position changes land here —
+   anchored to the TOP edge under the button row in every layout, stacking
+   downward, max 2 entries (JS-capped), compact small type, auto-fading. The
+   item pickup description is a feed entry too (kind 'desc', gold styling) —
+   not its own centre bar. When the Auto-Gas note is up it takes the first
+   slot under the buttons and the feed + toast shift down one notch. */
+#race-feed { position:absolute; top:calc(62px + var(--sa-t)); left:50%; transform:translateX(-50%); z-index:11; display:flex; flex-direction:column; align-items:center; gap:4px; max-width:min(88vw,430px); pointer-events:none; }
+#hud:has(#autog-note:not(.hidden)) #race-feed { top:calc(100px + var(--sa-t)); }
+#hud:has(#autog-note:not(.hidden)) #toast { top:calc(166px + var(--sa-t)); }
+.feed-item { width:max-content; max-width:100%; text-align:center; background:var(--chip-dark); border-bottom:3px solid var(--yellow); border-radius:8px; padding:3px 10px; font-size:13.5px; font-weight:600; line-height:1.3; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.65); opacity:1; transition:opacity .3s; animation:feedin .18s var(--curve-out); }
+.feed-item.bark { border-bottom-color:#fff; font-style:italic; }
+.feed-item.desc { background:linear-gradient(180deg,#ffe95c,#ffd900); color:var(--ink); text-shadow:none; border-bottom:3px solid var(--ink); font-weight:700; }
 .feed-item.out { opacity:0; }
 @keyframes feedin { from{ opacity:0; transform:translateY(-6px) } to{ opacity:1; transform:none } }
 #flash-overlay { position:fixed; inset:0; z-index:8; pointer-events:none; background:#eaf7ff; opacity:0; }
@@ -227,12 +229,9 @@ h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95;
 @media (max-width:640px) {
   #pos-big { font-size:46px; } #pos-suffix{font-size:21px;} #lap-label{font-size:15px;}
   #minimap { width:104px; height:104px; } #standings { display:none; }
-  #speed-num { font-size:36px; } #item-slot { width:80px; height:80px; } #item-icon{font-size:33px;} #item-icon .slot-ic{width:46px;height:46px;} #item-name{font-size:7.5px;}
-  #center-msg { font-size:min(22vh,150px); } #toast { font-size:19px; top:calc(64px + var(--sa-t)); }
-  body.touch-ui #top-stack { top:calc(100px + var(--sa-t)); }
+  #speed-num { font-size:36px; } #item-slot { width:80px; height:80px; top:calc(114px + var(--sa-t)); } #item-icon{font-size:33px;} #item-icon .slot-ic{width:46px;height:46px;} #item-name{font-size:7.5px;}
+  #center-msg { font-size:min(22vh,150px); } #toast { font-size:19px; top:calc(122px + var(--sa-t)); }
   #hud-portrait { width:40px; height:40px; }
-  #race-feed { bottom:calc(104px + var(--sa-b)); }
-  body.touch-ui #race-feed { max-width:88vw; }
   .feed-item { font-size:12.5px; }
   #drift-bar { width:110px; }
   .logo-billionaire, .logo-kart { -webkit-text-stroke-width:2px; }
@@ -257,6 +256,21 @@ h1 { font-family:var(--font-display); font-size:min(16vw,94px); line-height:.95;
 .stick.latched .stick-nub { background:#ffd94a; }
 .stick.latched::after { content:'GAS HELD'; position:absolute; left:50%; bottom:6px; transform:translateX(-50%); font-size:10px; font-weight:800; letter-spacing:.06em; color:#ffd94a; white-space:nowrap; }
 .stick.latched[id="stick-a"]::after { content:'HELD'; }
+/* Axis-constrained sticks (#49): the drawn control surface must match the axes
+   the stick actually drives in the current scheme. A 1D steering stick renders
+   as a horizontal track (wide short pill), a 1D throttle/brake stick as a
+   vertical track (tall pill), and the nub is projected onto that axis in
+   moveNub — it can no longer wander diagonally through dead space. A genuinely
+   2D stick (Thumbstick main) keeps the circle. Classes are set per scheme by
+   shapeStick() in game.js, at scheme switch and again at every touch. */
+.stick.axis-x { width:150px; height:56px; border-radius:999px; }
+.stick.axis-y { width:56px; height:150px; border-radius:999px; }
+/* In a 56px-wide vertical pill the BRAKE / GAS HELD labels can't fit inside —
+   they ride alongside the pill instead of across it. */
+.stick.axis-y .stick-brake-label { left:auto; right:calc(100% + 8px); bottom:auto; top:50%; transform:translateY(-50%); }
+.stick.axis-y.latched::after { left:auto; right:calc(100% + 8px); bottom:auto; top:50%; transform:translateY(-50%); }
+/* In the flat horizontal pill the HELD tag floats just above the track. */
+.stick.axis-x.latched::after { bottom:auto; top:-20px; }
 #scheme-ui { position:fixed; inset:0; z-index:7; pointer-events:none; }
 #scheme-ui .tc-btn { position:absolute; pointer-events:auto; display:none; }
 body[data-scheme="stick1"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; left:16px; top:50%; transform:translateY(-50%); width:84px; height:84px; }
@@ -267,8 +281,7 @@ body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-brake2 { display:flex; ri
 body[data-scheme="autog"] #scheme-ui:not(.hidden) #btn-drift2 { display:flex; left:122px; bottom:24px; width:78px; height:78px; }
 /* Classic placement sits below the toast zone (70px + ~36px) so a countdown
    hint never lands on it; in touch mode it's a stack child instead. */
-#autog-note { position:absolute; top:calc(114px + var(--sa-t)); left:50%; transform:translateX(-50%); background:var(--chip-dark); border:3px solid var(--yellow); color:var(--yellow); padding:5px 14px; border-radius:999px; font-weight:700; font-size:14px; letter-spacing:.05em; white-space:nowrap; }
-body.touch-ui #autog-note { position:static; transform:none; flex:none; }
+#autog-note { position:absolute; top:calc(62px + var(--sa-t)); left:50%; transform:translateX(-50%); z-index:11; background:var(--chip-dark); border:3px solid var(--yellow); color:var(--yellow); padding:5px 14px; border-radius:999px; font-weight:700; font-size:14px; letter-spacing:.05em; white-space:nowrap; }
 
 /* ================= LANDSCAPE PHONES (playtest fix: no HUD collisions) ================= */
 @media (max-height: 500px) {
@@ -280,13 +293,11 @@ body.touch-ui #autog-note { position:static; transform:none; flex:none; }
   #drift-bar { width:110px; }
   #pos-big { font-size:44px; }
   #hud-portrait { width:38px; height:38px; }
-  #toast { top:calc(62px + var(--sa-t)); font-size:19px; }
-  body.touch-ui #top-stack { top:calc(92px + var(--sa-t)); }
-  #item-slot { width:76px; height:76px; }
+  #toast { top:calc(120px + var(--sa-t)); font-size:19px; }
+  #item-slot { width:76px; height:76px; top:calc(110px + var(--sa-t)); }
   #item-icon { font-size:32px; }
   #item-icon .slot-ic { width:44px; height:44px; }
-  #race-feed { bottom:calc(100px + var(--sa-b)); max-width:320px; }
-  body.touch-ui #race-feed { max-width:320px; }
+  #race-feed { max-width:320px; }
   .feed-item { font-size:12px; padding:3px 8px; }
   .tc-btn { width:60px; height:60px; font-size:12px; }
   .tc-gas { width:76px; height:76px; }

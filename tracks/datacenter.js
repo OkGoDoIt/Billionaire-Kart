@@ -14,6 +14,13 @@ export const def = {
   name: 'AI Datacenter GP', sky: 0xcfd8dc, fog: 0xd8cfc0, ground: 0xc2a878, roadSeed: 3,
   shoulder: 0x8f8a80,
   points: [[-170,-170],[-60,-178],[60,-178],[170,-170],[225,-105],[230,-30],[205,45],[232,105],[180,168],[80,160],[30,185],[-30,160],[-90,182],[-150,168],[-222,110],[-205,30],[-232,-40],[-225,-110]],
+  // HAND-AUTHORED profiles (docs/track-design-datacenter.md) — keyframes [u, value]:
+  // elev = road height in metres; bank = cross-slope in degrees (+ banks a RIGHT turn).
+  // The +4 m plateau (u 0.065–0.165) is load-bearing design: the server hall is a
+  // rigid structure straddling the north straight, so the road runs dead level
+  // at plinth height from ramp-top to hall exit.
+  elev: [[0, 0], [0.02, 0], [0.065, 4.0], [0.165, 4.0], [0.20, 4.5], [0.26, 3.2], [0.32, 2.0], [0.40, 0.5], [0.433, 1.5], [0.50, 2.6], [0.56, 3.4], [0.615, 6.0], [0.645, 8.0], [0.68, 6.4], [0.74, 4.2], [0.80, 2.6], [0.846, 3.2], [0.90, 1.6], [0.96, 0]],
+  bank: [[0, 3], [0.035, 0], [0.10, 0], [0.19, 0], [0.227, 11], [0.26, 4], [0.293, 9], [0.32, 4], [0.344, 10], [0.368, 0], [0.393, -13], [0.415, 0], [0.433, 14], [0.465, 0], [0.497, 11], [0.53, 0], [0.562, -12], [0.58, 0], [0.598, 14], [0.62, 0], [0.642, -13], [0.66, 0], [0.681, 10], [0.72, 6], [0.793, 13], [0.82, 0], [0.846, -12], [0.865, 0], [0.891, 9], [0.915, 5], [0.939, 7], [0.955, 0]],
 };
 
 /* ---------- small local helpers (duplicated per module by design) ---------- */
@@ -56,9 +63,10 @@ function nearestIdx(ctx, x, z) {
   for (let i = 0; i < ctx.N; i++) { const s = ctx.samples[i], dx = s.x - x, dz = s.z - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; best = i; } }
   return best;
 }
-function atFrac(ctx, frac, lat, y = 0) { // position + heading at a track fraction with lateral offset
+function atFrac(ctx, frac, lat, y = null) { // position + heading at a track fraction with lateral offset; default y = real terrain height (TRACK 3D profiles)
   const i = Math.floor(frac * ctx.N) % ctx.N, s = ctx.samples[i], n = ctx.normals[i];
-  return { pos: new ctx.THREE.Vector3(s.x + n.x * lat, y, s.z + n.z * lat), idx: i, sample: s };
+  const x = s.x + n.x * lat, z = s.z + n.z * lat;
+  return { pos: new ctx.THREE.Vector3(x, y === null ? (ctx.terrainHeightAt ? ctx.terrainHeightAt(x, z) : 0) : y, z), idx: i, sample: s };
 }
 function faceTrack(obj, sample) { obj.lookAt(sample.x, 0, sample.z); }
 
@@ -213,8 +221,8 @@ export function dress(ctx) {
     const person = new THREE.Group(); // little protester holding it: body + head
     person.add(box(THREE, 0.62, 1.05, 0.4, crowdCols[i % crowdCols.length], 0, 0.55, 0));
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), new THREE.MeshLambertMaterial({ color: 0xeec39a })); head.position.y = 1.32; person.add(head);
-    person.position.set(pos.x + rand(-0.8, 0.8), 0, pos.z + rand(-0.8, 0.8)); scene.add(person);
-    anim.tickers.push({ o: person, ph: Math.random() * 6, amp: 0.07, base: 0 }); // gentle bobbing crowd
+    person.position.set(pos.x + rand(-0.8, 0.8), pos.y, pos.z + rand(-0.8, 0.8)); scene.add(person);
+    anim.tickers.push({ o: person, ph: Math.random() * 6, amp: 0.07, base: pos.y }); // gentle bobbing crowd (base = terrain height at the sign)
   });
 
   /* ----- power lines marching off the east side ----- */

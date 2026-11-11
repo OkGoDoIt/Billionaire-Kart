@@ -99,7 +99,7 @@ const TRACK_MODULES = [null, null, null, null, null, buildMetaverse, buildWeWork
 if (window.BK_TRACKS) for (const t of window.BK_TRACKS) TRACKS.push(t); // Batch 2 classic-script tracks (Bliss/Tunnel/Davos) register as indices 9-11 (#11)
 let trackFx = null, lastPlayerLap = 1, trackAnimators = []; // trackFx: Batch 1 {update,onLap}; trackAnimators: Batch 3 per-frame hooks
 let currentDef = null; // Batch 2: active track def (buildWorld sets it; drives tick / countdownView / chime)
-function sceneryContext() { return { THREE, scene, samples, normals, tangents, N, HALF_W, trackCenter, rand, clamp, scatterPos, headingOf, clouds, canvasTexture, billboardTexture, stripGeometry, animators: trackAnimators }; }
+function sceneryContext() { return { THREE, scene, samples, normals, tangents, N, HALF_W, trackCenter, rand, clamp, scatterPos, headingOf, clouds, canvasTexture, billboardTexture, stripGeometry, animators: trackAnimators, terrainHeightAt }; }
 const BILLBOARDS = ['AGI COMING SOON™', 'GPU GO BRRR', 'THIS SIGN COST $4.20', 'NOW HIRING: PROMPT WHISPERERS', 'MARS OR BUST', 'YOUR DATA HERE', 'NOT FINANCIAL ADVICE', 'SYNERGY DOWNSHIFT AHEAD', 'PIVOT! PIVOT!', 'DISRUPTING TRAFFIC SINCE 2026'];
 
 /* ================= ITEMS ================= */

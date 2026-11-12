@@ -190,10 +190,11 @@ export class Menus {
     }));
     const stage = h('div', { class: 'r-stage' });
     const el = h('div', {}, this.header(n > 1 ? `Player ${player + 1}: pick your racer` : 'Pick your racer'),
-      h('div', { class: 'racer-layout' }, grid, stage, h('aside', { class: 'racer-card', style: n > 1 ? `--pc:${PLAYER_COLORS[player]}` : '' }, h('div', { class: 'r-top' }, big, h('div', { class: 'r-id' }, h('div', { class: 'r-head' }, name, title), quote)), bio, stats, go)));
+      h('div', { class: 'racer-layout' }, h('div', { class: 'racer-grid-box' }, grid), stage, h('aside', { class: 'racer-card', style: n > 1 ? `--pc:${PLAYER_COLORS[player]}` : '' }, h('div', { class: 'r-top' }, big, h('div', { class: 'r-id' }, h('div', { class: 'r-head' }, name, title), quote)), bio, stats, go)));
     return {
       el, onOpen: () => { A.showRoomFor(flow.racers.slice(0, player).map(id => RACER_BY_ID[id]).concat([current])); show(current); },
-      stage: true, onLayout: () => A.showroom?.setStage(stage.getBoundingClientRect()),
+      // on a short upright screen the portraits and the card take the height; the turntable steps aside rather than show as a sliver
+      stage: true, onLayout: () => { const r = stage.getBoundingClientRect(), room = r.height >= 90 && r.width >= 90; A.showroom?.setShown(room); if (room) A.showroom?.setStage(r); },
       onBack: () => { flow.racers.length = player; },
     };
   }

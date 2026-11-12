@@ -45,6 +45,21 @@ export const TUNE = {
   draftTime: 1.15, draftDist: 16, draftWidth: 2.2,
 };
 
+/* What the 1-5 racer stats are worth. Every line is centred on 3, so a middle-stat racer drives
+   the same whatever the spread. Per point away from 3: */
+export const STATS = {
+  top: 0.024,        // top speed, fraction of the class top (1.024 at 3)
+  accel: 1.9,        // pull from standstill, m/s^2 before the class factor (13.9 at 3)
+  accelHold: 0,      // how much of that pull survives near top speed (the falloff is 0.82 at 3)
+  offroad: 0,        // off-road top speed, fraction of the surface's own factor
+  recover: 0,        // shorter stun after a hit, fraction of the stun
+  turn: 0.05,        // turn and drift rate (1.05 at 3)
+  mtCharge: 0.02,    // mini-turbo charge rate (1.07 at 3; weight takes mtWeight per point)
+  mtWeight: 0.05,
+  mtBoost: 0,        // mini-turbo boost duration, fraction of the tier's duration
+  mass: 0.15,        // bump mass (1.15 at 3)
+};
+
 let nextId = 1;
 
 export class Kart {
@@ -53,11 +68,16 @@ export class Kart {
     this.racer = racer; this.slot = slot; this.isPlayer = isPlayer; this.playerIndex = playerIndex; this.ai = ai;
     const st = racer.stats;
     const cls = race.cls;
-    this.baseTop = cls.top * (0.952 + 0.024 * st.speed);          // speed 1..5 -> -2.4%..+7.2% around the class speed
-    this.accel = (8.2 + 1.9 * st.accel) * cls.accel;               // m/s^2 at standstill
-    this.handling = 0.9 + 0.05 * st.handling;                       // turn-rate multiplier
-    this.mass = 0.7 + 0.15 * st.weight;                             // for bumping
-    this.mtRate = 1.16 - 0.05 * st.weight + 0.02 * st.handling;     // mini-turbo charge multiplier
+    const S = STATS, d = k => st[k] - 3;
+    this.baseTop = cls.top * (1.024 + S.top * d('speed'));
+    this.accel = (13.9 + S.accel * d('accel')) * cls.accel;          // m/s^2 at standstill
+    this.accelFall = 0.82 - S.accelHold * d('accel');                // share of the pull lost at top speed
+    this.offroadMul = 1 + S.offroad * d('accel');                    // off-road top speed, times the surface's factor
+    this.stunMul = 1 - S.recover * d('accel');                       // hit stun duration
+    this.handling = 1.05 + S.turn * d('handling');                   // turn-rate multiplier
+    this.mass = 1.15 + S.mass * d('weight');                         // for bumping
+    this.mtRate = 1.07 + S.mtCharge * d('handling') - S.mtWeight * d('weight');   // mini-turbo charge multiplier
+    this.mtDur = 1 + S.mtBoost * d('handling');                      // mini-turbo duration multiplier
     this.radius = TUNE.radius;
     this.hit = makeGroundHit(); this.probe = makeGroundHit();
     this.events = [];
@@ -123,7 +143,7 @@ export class Kart {
   hurt(kind, from = null) {
     if (!this.vulnerable || this.hitT > 0) return false;
     this.hitKind = kind;
-    this.hitDur = this.hitT = kind === 'tumble' ? TUNE.tumbleT : kind === 'squash' ? TUNE.squashT : TUNE.spinT;
+    this.hitDur = this.hitT = (kind === 'tumble' ? TUNE.tumbleT : kind === 'squash' ? TUNE.squashT : TUNE.spinT) * this.stunMul;
     if (kind === 'tumble') { this.vy = 11; this.grounded = false; this.airT = 0.2; }
     if (kind === 'squash') this.squashT = 2.4;
     const keep = kind === 'tumble' ? 0.18 : kind === 'squash' ? 0.2 : 0.42;
@@ -140,7 +160,7 @@ export class Kart {
     if (!this.drifting && !this.driftArmed) { this.driftCharge = 0; this.driftTier = 0; return; }
     const tier = this.driftTier;
     if (release && this.drifting && tier > 0) {
-      this.boost('mini', TUNE.tierBoost[tier - 1], TUNE.tierMul[tier - 1]);
+      this.boost('mini', TUNE.tierBoost[tier - 1] * this.mtDur, TUNE.tierMul[tier - 1]);
       this.emit('miniTurbo', tier); this.stats.drifts++;
     }
     this.drifting = false; this.driftArmed = false; this.driftCharge = 0; this.driftTier = 0; this.driftDir = 0;
@@ -193,7 +213,7 @@ export class Kart {
     const surf = this.surface;
     const boosting = this.boostT > 0;
     const offroad = surf.offroad && !boosting && this.starT <= 0;
-    let top = this.top * (offroad ? surf.speed : surf.offroad ? 1 : surf.speed);
+    let top = this.top * (offroad ? Math.min(1, surf.speed * this.offroadMul) : surf.offroad ? 1 : surf.speed);
     if (this.starT > 0) top *= 1.12;
     if (this.squashT > 0) top *= 0.6;
     const topBoost = top * (boosting ? this.boostMul : 1);
@@ -256,7 +276,7 @@ export class Kart {
       } else if (throttle > 0 && !brake) {
         if (vf < top) {
           const r = clamp(vf / top, 0, 1);
-          vf += this.accel * throttle * (1 - r * r * 0.82) * (vf < 0 ? 2.2 : 1) * dt;
+          vf += this.accel * throttle * (1 - r * r * this.accelFall) * (vf < 0 ? 2.2 : 1) * dt;
           if (vf > top) vf = top;
         } else vf = approach(vf, top, (offroad ? T.offroadDecel : T.boostFade) * dt);
       } else if (brake > 0) {
@@ -287,7 +307,9 @@ export class Kart {
     let hit = tr.ground(this.x, this.z, this.hint, this.hit, this.y);
     // Far off the road (a shortcut across open ground): another stretch of track may now be
     // the nearest one. Re-attach to it so surfaces, limits, and progress follow the kart.
-    if (hit.outside > 7 && (this._reattachT = (this._reattachT || 0) + dt) > 0.12) {
+    // (every step once near the outer limit, so a fast kart is not stopped by the limit of the stretch it is leaving)
+    const outer = hit.side > 0 ? tr.outerL[hit.i] : tr.outerR[hit.i];
+    if (hit.outside > 7 && ((this._reattachT = (this._reattachT || 0) + dt) > 0.12 || hit.outside > outer - 6)) {
       this._reattachT = 0;
       const j = tr.nearest(this.x, this.z, -1, this.y);
       const far = Math.min(Math.abs(j - hit.i), tr.N - Math.abs(j - hit.i));

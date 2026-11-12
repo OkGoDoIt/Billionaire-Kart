@@ -24,17 +24,71 @@ const FLAME_GEO = (() => {
 const BLOB_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
 export const TAG_LAYER = 4;
 
+/* Name tags. Every tag in the running race is in TAGS; just before a camera draws them, the tags are sorted nearest
+   first and a tag that would land on a nearer one, or on that camera's own kart, fades out. Each camera keeps its own
+   fade per tag, so split-screen views declutter independently, and a fade (not a pop) keeps a bunched pack calm. */
+const TAGS = new Set(), _tp = new THREE.Vector3(), _ts = new THREE.Vector3(), _plans = new WeakMap();
+const TAG_FADE = 8;   // per second
+function tagRect(cam, x, y, z, hw, hh, out) {
+  _tp.set(x, y, z).applyMatrix4(cam.matrixWorldInverse);
+  if (_tp.z > -0.5) return null;   // behind the camera, or in the lens
+  const P = cam.projectionMatrix.elements, d = -_tp.z, cx = (P[0] * _tp.x + P[8] * _tp.z) / d, cy = (P[5] * _tp.y + P[9] * _tp.z) / d;
+  const w = hw * P[0] / d, h = hh * P[5] / d;
+  out.l = cx - w; out.r = cx + w; out.b = cy - h; out.t = cy + h; out.d = d; return out;
+}
+const hits = (a, b, m) => a.l - m * (a.r - a.l) < b.r && b.l < a.r + m * (a.r - a.l) && a.b - m * (a.t - a.b) < b.t && b.b < a.t + m * (a.t - a.b);
+function tagPlan(cam, scene, frame) {
+  let plan = _plans.get(cam);
+  if (plan && plan.frame === frame) return plan;
+  if (!plan) _plans.set(cam, plan = { frame, want: new Map() });
+  plan.frame = frame; plan.want.clear();
+  let own = null; const list = [];
+  for (const kv of TAGS) {
+    let top = kv.rig.root; while (top.parent) top = top.parent;
+    if (top !== scene) { if (!top.isScene) TAGS.delete(kv); continue; }   // a finished race's karts
+    const tag = kv.tag;
+    if (!cam.layers.test(tag.layers)) { if (kv.kart.isPlayer) own = kv; continue; }
+    if (!tag.visible || !kv.rig.root.visible || tag.userData.base <= 0.02) continue;
+    _ts.setFromMatrixPosition(tag.matrixWorld);
+    const r = tagRect(cam, _ts.x, _ts.y, _ts.z, tag.scale.x * 0.5 * tag.userData.wFrac, tag.scale.y * 0.5 * tag.userData.hFrac, { kv });
+    if (r) list.push(r);
+  }
+  // the camera's own kart, driver and all: no tag is drawn over it
+  const mine = own && tagRect(cam, own.pos.x, own.pos.y + 1.1, own.pos.z, 1.3 * own.scale, 1.25 * own.scale, {});
+  list.sort((a, b) => a.d - b.d);
+  const shown = [];
+  for (const r of list) {
+    const was = (r.kv.tag.userData.fade.get(cam) ?? 1) > 0.5, m = was ? 0.04 : 0.15;   // a little hysteresis, so two tags at the edge do not flicker
+    const ok = !(mine && hits(r, mine, 0)) && !shown.some(s => hits(r, s, m));
+    if (ok) shown.push(r);
+    plan.want.set(r.kv, ok ? 1 : 0);
+  }
+  return plan;
+}
+function declutter(renderer, scene, cam) {
+  const kv = this.userData.view; if (!kv) return;
+  const plan = tagPlan(cam, scene, renderer.info.render.frame), fade = this.userData.fade, now = performance.now();
+  const last = this.userData.last.get(cam) ?? now, dt = Math.min(0.1, (now - last) / 1000); this.userData.last.set(cam, now);
+  const v = fade.get(cam) ?? 1, want = plan.want.get(kv) ?? 0;
+  const next = want > v ? Math.min(want, v + dt * TAG_FADE) : Math.max(want, v - dt * TAG_FADE);
+  fade.set(cam, next);
+  this.material.opacity = this.userData.base * next;
+}
+
 function nameTag(racer, isPlayer, pIndex) {
   const text = isPlayer ? `P${pIndex + 1}` : racer.name;
+  let pill = 1;
   const tex = canvasTex(256, 72, (g, w, h) => {
     g.font = '40px "Luckiest Guy", "Arial Black", sans-serif';
-    const tw = Math.min(w - 36, g.measureText(text).width), bw = tw + 44, x = (w - bw) / 2;
+    const tw = Math.min(w - 36, g.measureText(text).width), bw = tw + 44, x = (w - bw) / 2; pill = bw / w;
     g.fillStyle = 'rgba(14,16,34,0.78)'; g.beginPath(); g.roundRect(x, 8, bw, 50, 25); g.fill();
     g.fillStyle = '#' + new THREE.Color(racer.color).getHexString(); g.beginPath(); g.roundRect(x, 8, 12, 50, [25, 0, 0, 25]); g.fill();
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w / 2 + 4, 35, w - 40);
   }, { repeat: false, mip: true });
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, sizeAttenuation: true }));
   s.scale.set(2.3, 0.65, 1); s.renderOrder = 30;
+  s.userData = { wFrac: pill, hFrac: 50 / 72, base: 0, fade: new WeakMap(), last: new WeakMap() };
+  s.onBeforeRender = declutter;
   return s;
 }
 
@@ -56,7 +110,7 @@ export class KartView {
     // name tag
     this.tag = nameTag(kart.racer, kart.isPlayer, kart.playerIndex);
     this.tag.position.set(0, 2.75, 0); this.tag.layers.set(kart.isPlayer ? TAG_LAYER + 1 + kart.playerIndex : TAG_LAYER);
-    rig.root.add(this.tag);
+    rig.root.add(this.tag); this.tag.userData.view = this; TAGS.add(this);
     // soft contact shadow, used when real shadows are off (low quality, or three or more split-screen views)
     this.blob = new THREE.Mesh(BLOB_GEO, BLOB_MAT); this.blob.rotation.x = -Math.PI / 2; this.blob.renderOrder = 3; this.blob.visible = false; scene.add(this.blob);
     // boost glow at the exhausts
@@ -163,7 +217,8 @@ export class KartView {
     this._trail(dt);
     this._particles(dt);
     // name tags fade with distance and hide for karts right next to the camera
-    if (camPos) { const d = camPos.distanceTo(this.pos); this.tag.material.opacity = clamp((60 - d) / 20, 0, 1) * clamp((d - 9) / 5, 0, 1) * 0.92 * (k.rescueT > 0 ? 0.3 : 1); this.tag.visible = this.tag.material.opacity > 0.02; }
+    // (declutter() then fades out any that would land on a nearer tag or on the viewer's own kart)
+    if (camPos) { const d = camPos.distanceTo(this.pos), o = this.tag.userData.base = clamp((60 - d) / 20, 0, 1) * clamp((d - 9) / 5, 0, 1) * 0.92 * (k.rescueT > 0 ? 0.3 : 1); this.tag.material.opacity = o; this.tag.visible = o > 0.02; }
     this.tag.position.y = 2.75 * this.scale;
     void time;
   }
@@ -245,5 +300,5 @@ export class KartView {
     void TIER_HEX; void KART; void smoothstep;
   }
 
-  dispose(scene) { scene.remove(this.rig.root); scene.remove(this.blob); this.paint.dispose(); this.tag.material.map.dispose(); this.tag.material.dispose(); }
+  dispose(scene) { TAGS.delete(this); scene.remove(this.rig.root); scene.remove(this.blob); this.paint.dispose(); this.tag.material.map.dispose(); this.tag.material.dispose(); }
 }

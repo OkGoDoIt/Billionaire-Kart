@@ -126,6 +126,8 @@ export default {
     { from: 28.2, to: 30.2, n: 5, lat: [-4, 4] },
     { from: 32.2, to: 33.6, n: 4, lat: -4 },
   ],
+  // rivals cut the meadow too, between the mines; on the east half, where the meadow is widest (see docs/track-authoring.md)
+  shortcuts: [{ name: 'meadow', from: 22.2, to: 27.9, path: [[-30, 166], [-16, 151], [-13, 132], [-19, 112]] }],
   obstacles: [
     // error dialogs drifting across the road
     { kind: 'patrol', model: 'dialog', at: 4.3, lats: [1.5, 6.5], speed: 4, effect: 'spin', radius: 1.7 },

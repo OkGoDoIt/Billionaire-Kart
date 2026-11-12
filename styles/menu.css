@@ -98,6 +98,7 @@
   /* four rows of whole, square portraits, as big as the height allows; the name sits on a plate under each one */
   --vh: 100vh; --plate: calc(var(--u) * 2.15); --side: clamp(calc(var(--u) * 6), calc((var(--vh) - var(--safe-t) - var(--safe-b) - var(--u) * 18) / 4 - var(--plate)), calc(var(--u) * 13)); }
 @supports (height: 100dvh) { .racer-layout { --vh: 100dvh; } }
+.racer-grid-box { display: contents; }   /* upright, it becomes the box the portraits are sized to fit */
 .racer-grid { grid-row: 1 / 3; display: grid; grid-template-columns: repeat(4, var(--side)); grid-auto-rows: calc(var(--side) + var(--plate)); gap: calc(var(--u) * 1.05) calc(var(--u) * 1.3); align-content: start; }
 .racer-tile { font: inherit; position: relative; display: flex; flex-direction: column; border: calc(var(--u) * 0.4) solid var(--ink); border-radius: calc(var(--u) * 1.8); background: var(--ink); padding: 0; cursor: pointer; overflow: hidden; min-height: 0; box-shadow: 0 calc(var(--u) * 0.6) 0 rgba(0,0,0,0.42); transition: transform 0.1s; }
 .racer-tile img { flex: 1; min-height: 0; width: 100%; object-fit: cover; object-position: 50% 30%; display: block; background: var(--rc); }

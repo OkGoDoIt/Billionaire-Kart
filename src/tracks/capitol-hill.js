@@ -112,6 +112,8 @@ export default {
     { from: 32.0, to: 34.0, n: 3, lat: 6 },
     { from: 39.0, to: 41.0, n: 3, lat: -6 },
   ],
+  // rivals cut the Mall too, on the lane between the topiary and the protest signs (see docs/track-authoring.md)
+  shortcuts: [{ name: 'the Mall', from: 5.9, to: 11.2, path: [[149, 178], [136, 188], [100, 191], [88, 182]] }],
   obstacles: [
     // the motorcade crawls across the road
     { kind: 'patrol', model: 'motorcade', at: 1.35, lats: [-9, -5], speed: 3.5, effect: 'spin', radius: 2.0 },

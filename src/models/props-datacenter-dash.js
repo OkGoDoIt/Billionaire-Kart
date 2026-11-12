@@ -6,7 +6,7 @@
    merged meshes (materials are shared, so the track can bake many props into
    one mesh per material). Canvas textures are only made when a builder runs. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, cone, torus, lathe, plastic, glow, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, cone, torus, lathe, loft, plastic, glow, MAT } from './build.js';
 import { makeRng } from '../core/util.js';
 
 const DARK = plastic(0x2c323c, 0.55, 0.3), STEEL = plastic(0x8d96a6, 0.4, 0.7), CONCRETE = plastic(0xb4b8bc, 0.9);
@@ -198,16 +198,34 @@ export function intake(r = 2.0) {
   return b.build({ pipe: plastic(0x2f6fc0, 0.45, 0.2), grate: plastic(0x2c323c, 0.6, 0.4) });
 }
 
-/** A small motor launch, along Z, sitting on y = 0 (its waterline). */
-export function boat(stripe = 0x1f6bff) {
+/** A motor cruiser, about 9 m long along Z (bow at +Z), sitting on y = 0 (its waterline): a lofted hull with a
+    raked bow, a teak deck, a cabin with windows, a boot stripe, and its name on both sides of the hull.
+    nameMat/nameUV: a shared material holding the names, and this boat's [u0, v0, u1, v1] in it. */
+export function boat({ hull = 0xffffff, stripe = 0x1f6bff, nameMat = null, nameUV = null } = {}) {
   const b = new ModelBuilder();
-  b.add('hull', box(2.6, 1.3, 6.4, 0.5, 2), { p: [0, 0.35, 0] });
-  b.add('hull', cone(1.3, 2.4, 4), { p: [0, 0.35, 4.1], r: [Math.PI / 2, Math.PI / 4, 0], s: [1, 1, 0.5] });
-  b.add('stripe', cube(2.66, 0.25, 6.3), { p: [0, 0.75, 0] });
-  b.add('cabin', box(2.0, 1.1, 2.2, 0.25, 1), { p: [0, 1.5, -0.4] });
-  b.add('glass', cube(1.8, 0.45, 0.06), { p: [0, 1.7, 0.72] });
-  b.add('dark', cube(0.4, 0.8, 0.5), { p: [0, 0.8, -3.4] });
-  return b.build({ hull: tintBody(), stripe: plastic(stripe, 0.45), cabin: plastic(0xf4f4f0, 0.5), glass: plastic(0x2a3a4a, 0.2, 0.3), dark: DARK });
+  b.add('hull', loft([
+    { z: -4.2, w: 1.3, h: 0.8, y: 0.45, n: 5 }, { z: -3, w: 1.55, h: 0.9, y: 0.45, n: 4 }, { z: 0, w: 1.6, h: 0.95, y: 0.5, n: 3.5 },
+    { z: 2.4, w: 1.25, h: 1.0, y: 0.62, n: 3 }, { z: 3.8, w: 0.6, h: 0.95, y: 0.8, n: 2.5 }, { z: 4.7, w: 0.1, h: 0.6, y: 1.1, n: 2 },
+  ], 22, 4));
+  b.add('deck', box(2.5, 0.14, 6.6, 0.05, 1), { p: [0, 1.38, -0.6] });
+  for (const sx of [1, -1]) b.add('stripe', cube(0.08, 0.2, 5.6), { p: [sx * 1.6, 0.66, -1.2] });
+  b.add('cabin', box(2.0, 1.25, 2.6, 0.25, 2), { p: [0, 2.05, -0.8] });
+  b.add('roof', box(2.3, 0.14, 3.0, 0.05, 1), { p: [0, 2.74, -0.8] });
+  b.add('glass', cube(1.84, 0.5, 0.06), { p: [0, 2.25, 0.52], r: [-0.3, 0, 0] });
+  for (const sx of [1, -1]) b.add('glass', cube(0.05, 0.45, 2.0), { p: [sx * 1.01, 2.22, -0.8] });
+  b.add('dark', cyl(0.05, 0.05, 1.3, 5), { p: [0, 3.4, -1.4] });
+  b.add('dark', box(0.5, 0.7, 0.5, 0.08, 1), { p: [0, 1.0, -4.35] });
+  for (const z of [0.6, 1.8, 3.0]) for (const sx of [1, -1]) b.add('rail', cyl(0.03, 0.03, 0.55, 4), { p: [sx * (z > 2 ? 0.9 : 1.15), 1.7, z] });
+  b.add('ring', torus(0.32, 0.09, 6, 12), { p: [1.32, 2.1, -2.2], r: [0, Math.PI / 2, 0] });
+  if (nameMat && nameUV) {
+    const [u0, v0, u1, v1] = nameUV;
+    for (const sx of [1, -1]) {
+      const g = new THREE.PlaneGeometry(3.0, 0.58), uv = g.attributes.uv;
+      uv.setXY(0, u0, v1); uv.setXY(1, u1, v1); uv.setXY(2, u0, v0); uv.setXY(3, u1, v0);
+      b.add('name', g, { p: [sx * 1.62, 1.1, -1.5], r: [0, sx * Math.PI / 2, 0] });
+    }
+  }
+  return b.build({ hull: plastic(hull, 0.35), deck: plastic(0xb98a55, 0.8), stripe: plastic(stripe, 0.4), cabin: plastic(0xf6f6f2, 0.45), roof: plastic(stripe, 0.45), glass: plastic(0x1d2c3c, 0.15, 0.4), dark: DARK, rail: STEEL, ring: plastic(0xff5a2a, 0.5), name: nameMat || DARK });
 }
 
 /** A wooden jetty `len` metres long along +Z, deck at y = 0, on long piles reaching `depth` metres down. */

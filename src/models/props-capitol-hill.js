@@ -9,6 +9,8 @@ import * as THREE from 'three';
 import { ModelBuilder, box, sphere, cyl, cone, torus, lathe, plastic, paint, glow, MAT } from './build.js';
 import { canvasTex } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
+// the sign toolkit (world-space quads, a text atlas, a static baker, LED panels) is shared with Crypto Cove
+export { Quads, makeBaker, makeAtlas, fitText, signDraw, ledPanel, SIGN_FONT, SANS } from './props-crypto-cove.js';
 
 const MARBLE = 0xf2efe6, MARBLE_D = 0xe0d9c8, STONE = 0xe8e1d0, GOLD = 0xd4af37;
 const marble = () => plastic(MARBLE, 0.55);
@@ -395,5 +397,172 @@ export function redTape() {
     const a = pts[i], c = pts[i + 1], dx = c[0] - a[0], dy = c[1] - a[1], dz = c[2] - a[2], len = Math.hypot(dx, dy, dz);
     b.add('tape', box(0.78, 0.05, len + 0.08, 0.02, 1), { p: [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2], r: [-Math.atan2(dy, Math.hypot(dx, dz)), Math.atan2(dx, dz), 0] });
   }
-  return b.build({ body: paint(0x2a2d36, { rough: 0.35, clear: 0.6 }), teeth: MAT.steel, core: plastic(0xf2efe6, 0.6), tape: paint(0xd0142f, { rough: 0.35, clear: 0.5 }) });
+  const grp = b.build({ body: paint(0x2a2d36, { rough: 0.35, clear: 0.6 }), teeth: MAT.steel, core: plastic(0xf2efe6, 0.6), tape: paint(0xd0142f, { rough: 0.35, clear: 0.5 }) });
+  const s = new ModelBuilder(); s.add('p', cyl(0.05, 0.05, 0.9, 5), { p: [-0.5, 1.85, -0.9] }); grp.add(s.build({ p: MAT.dark }));
+  grp.add(labelBoard('RED TAPE', 1.6, 0.5, [-0.5, 2.45, -0.9], { bg: '#ffffff', fg: '#d0142f' }));
+  return grp;
 }
+
+/** A double-sided label (two panels back to back so neither reads mirrored), facing ±Z. Materials cached by text. */
+const labelCache = new Map();
+function labelBoard(text, w, h, p, { bg = '#ffd23c', fg = '#12142b' } = {}) {
+  const key = text + bg + fg;
+  if (!labelCache.has(key)) labelCache.set(key, new THREE.MeshStandardMaterial({ roughness: 0.6, map: canvasTex(512, Math.round(512 * h / w), (g, W, H) => {
+    g.fillStyle = bg; g.fillRect(0, 0, W, H); let s = 96; g.font = `${s}px "Luckiest Guy", "Arial Black", sans-serif`;
+    while (g.measureText(text).width > W - 30 && s > 16) { s -= 4; g.font = `${s}px "Luckiest Guy", "Arial Black", sans-serif`; }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = fg; g.fillText(text, W / 2, H / 2 + 4);
+  }, { repeat: false }) }));
+  const m = labelCache.get(key), grp = new THREE.Group();
+  for (const s of [1, -1]) { const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); q.position.z = s * 0.03; q.rotation.y = s > 0 ? 0 : Math.PI; grp.add(q); }
+  grp.position.set(p[0], p[1], p[2]);
+  return grp;
+}
+
+/** Lobbyist drone: the stock drone's size, with a briefcase of cash slung underneath and a name tag. */
+export function lobbyistDrone() {
+  const b = new ModelBuilder();
+  b.add('body', sphere(0.6, 14, 10), { p: [0, 1.5, 0], s: [1, 0.5, 1.2] });
+  b.add('eye', sphere(0.2, 10, 8), { p: [0, 1.45, 0.62] });
+  for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { b.add('arm', cyl(0.06, 0.06, 1.2, 6), { p: [x * 0.55, 1.55, z * 0.55], r: [Math.PI / 2, 0, x * z > 0 ? -Math.PI / 4 : Math.PI / 4] }); b.add('rotor', cyl(0.5, 0.5, 0.04, 14), { p: [x * 0.95, 1.7, z * 0.95] }); }
+  b.add('arm', cyl(0.03, 0.03, 0.5, 4), { p: [0, 1.05, 0] });
+  b.add('case', box(0.9, 0.6, 0.25, 0.06, 2), { p: [0, 0.55, 0] });
+  b.add('cash', box(0.6, 0.12, 0.27, 0.02, 1), { p: [0, 0.62, 0] });
+  const grp = b.build({ body: paint(0x12142b, { rough: 0.35 }), eye: glow(0x38ff74, 3), arm: MAT.dark, rotor: new THREE.MeshStandardMaterial({ color: 0x9aa4b8, transparent: true, opacity: 0.45, roughness: 0.4 }), case: paint(0x6b4a2a, { rough: 0.5 }), cash: plastic(0x58b368, 0.7) });
+  grp.add(labelBoard('LOBBYIST', 1.5, 0.45, [0, 2.15, 0], { bg: '#12142b', fg: '#38ff74' }));
+  return grp;
+}
+
+/* ---------- the joke pass: big set pieces ---------- */
+/** A man in a suit, about 1.9 m tall before scaling, facing +Z. Instance it with tints for the suit. */
+export function suit() {
+  const b = new ModelBuilder();
+  for (const s of [1, -1]) { b.add('suit', cyl(0.13, 0.12, 0.9, 7), { p: [s * 0.15, 0.45, 0] }); b.add('suit', box(0.2, 0.12, 0.34, 0.04, 1), { p: [s * 0.15, 0.06, 0.06] }); }
+  b.add('suit', box(0.62, 0.72, 0.34, 0.12, 2), { p: [0, 1.25, 0] });
+  b.add('shirt', box(0.2, 0.5, 0.05, 0.02, 1), { p: [0, 1.36, 0.17] });
+  b.add('tie', box(0.08, 0.42, 0.06, 0.02, 1), { p: [0, 1.32, 0.19] });
+  for (const s of [1, -1]) b.add('suit', cyl(0.08, 0.08, 0.7, 6), { p: [s * 0.37, 1.18, 0.02], r: [0, 0, s * 0.12] });
+  b.add('tie', box(0.42, 0.3, 0.1, 0.03, 1), { p: [0.44, 0.75, 0.04] });                    // a briefcase (in tie red: fewer materials)
+  b.add('head', sphere(0.17, 10, 8), { p: [0, 1.78, 0] });
+  b.add('shirt', new THREE.SphereGeometry(0.175, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2.2), { p: [0, 1.8, -0.01] });   // white hair
+  const suitMat = new THREE.MeshStandardMaterial({ color: 0x23262e, roughness: 0.7 }); suitMat.userData.tintable = true;
+  return b.build({ suit: suitMat, shirt: plastic(0xf2f2f0, 0.6), tie: plastic(0xb3122a, 0.5), head: plastic(0xe6b98f, 0.7) }, { cast: false });
+}
+export const SUIT_TINTS = [0x23262e, 0x1f2a44, 0x2e2e2e, 0x3a3f4b, 0x14161c];
+
+/**
+ * The revolving door between two towers: REGULATOR (classical, on -X) and INDUSTRY (glass, on +X).
+ * The towers are TW wide and TH tall, their centres ±off from the door. Faces ±Z. userData.door is the
+ * part that spins (about Y); userData.signs: the board centres on each roof and over the door, in local space.
+ */
+export function revolvingDoorComplex({ TW = 15, TH = 36, off = 20, R = 9.5, DH = 24 } = {}) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  // REGULATOR: marble with pilasters, a cornice and a pediment
+  const rx = -off;
+  b.add('marble', box(TW + 3, 2.4, TW + 3, 0.2, 2), { p: [rx, 1.2, 0] });
+  b.add('marble', box(TW, TH, TW, 0.2, 2), { p: [rx, 2.4 + TH / 2, 0] });
+  for (const s of [1, -1]) for (let k = 0; k < 5; k++) { const u = -TW / 2 + 1.2 + k * (TW - 2.4) / 4; b.add('col', box(0.9, TH - 3, 0.6, 0.1, 1), { p: [rx + u, 2.4 + (TH - 3) / 2 + 0.5, s * (TW / 2 + 0.2)] }); }
+  for (const s of [1, -1]) for (let f = 0; f < 8; f++) for (let k = 0; k < 4; k++) b.add('win', box(1.6, 2.4, 0.2, 0.05, 1), { p: [rx - TW / 2 + 2.6 + k * (TW - 5.2) / 3, 6 + f * 4, s * (TW / 2 + 0.05)] });
+  b.add('gold', box(TW + 1.2, 1.2, TW + 1.2, 0.1, 1), { p: [rx, 2.4 + TH + 0.6, 0] });
+  b.add('marbleD', box(TW + 0.4, 2.2, TW + 0.4, 0.2, 2), { p: [rx, 2.4 + TH + 2.3, 0] });
+  // INDUSTRY: a blue glass tower with a dark crown
+  const ix = off;
+  b.add('dark', box(TW + 3, 2.4, TW + 3, 0.2, 2), { p: [ix, 1.2, 0] });
+  b.add('glass', box(TW, TH + 4, TW, 0.2, 2), { p: [ix, 2.4 + (TH + 4) / 2, 0] });
+  for (let f = 1; f < 11; f++) b.add('mull', box(TW + 0.15, 0.25, TW + 0.15, 0.05, 1), { p: [ix, 2.4 + f * (TH + 4) / 11, 0] });
+  for (const u of [-TW / 4, 0, TW / 4]) for (const s of [1, -1]) { b.add('mull', box(0.25, TH + 4, 0.2, 0.05, 1), { p: [ix + u, 2.4 + (TH + 4) / 2, s * (TW / 2 + 0.05)] }); b.add('mull', box(0.2, TH + 4, 0.25, 0.05, 1), { p: [ix + s * (TW / 2 + 0.05), 2.4 + (TH + 4) / 2, u] }); }
+  b.add('dark', box(TW + 0.6, 2.4, TW + 0.6, 0.2, 2), { p: [ix, 2.4 + TH + 4 + 1.2, 0] });
+  // the drum: a floor, a crown with a gold band, two curved glass walls left open toward ±Z
+  b.add('dark', cyl(R + 0.6, R + 0.8, 0.8, 40), { p: [0, 0.4, 0] });
+  b.add('dark', cyl(R + 0.8, R + 0.8, 2.6, 40), { p: [0, DH + 1.3, 0] });
+  b.add('gold', cyl(R + 0.85, R + 0.85, 0.5, 40, true), { p: [0, DH + 0.4, 0] });
+  for (const s of [1, -1]) for (let k = 0; k <= 4; k++) { const a = s * Math.PI / 2 + (k - 2) * 0.42; b.add('dark', cyl(0.28, 0.28, DH, 8), { p: [Math.sin(a) * R, DH / 2 + 0.8, Math.cos(a) * R] }); }
+  grp.add(b.build({ marble: plastic(0xf2efe6, 0.55), marbleD: plastic(0xe0d9c8, 0.62), col: plastic(0xfaf8f2, 0.45), win: plastic(0x3a3f4a, 0.4, 0.2), gold: paint(0xd4af37, { rough: 0.3, metal: 0.65, clear: 0.4 }), dark: plastic(0x23262e, 0.45, 0.4), glass: new THREE.MeshStandardMaterial({ color: 0x5aa2d8, roughness: 0.12, metalness: 0.55, envMapIntensity: 1.4 }), mull: plastic(0x1b2533, 0.4, 0.5) }));
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xbfe2ff, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.3, depthWrite: false, side: THREE.DoubleSide });
+  { const wb = new ModelBuilder(); for (const s of [1, -1]) wb.add('w', new THREE.CylinderGeometry(R, R, DH, 24, 1, true, s * Math.PI / 2 - 0.95, 1.9), { p: [0, DH / 2 + 0.8, 0] }); grp.add(wb.build({ w: wallMat }, { cast: false })); }
+  // the door: four glass wings on a post, spinning
+  const door = new THREE.Group(), d = new ModelBuilder();
+  d.add('frame', cyl(0.5, 0.5, DH, 12), { p: [0, DH / 2 + 0.8, 0] });
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; d.add('frame', box(R - 0.6, 0.5, 0.4, 0.1, 1), { p: [Math.cos(a) * (R / 2), DH + 0.4, -Math.sin(a) * (R / 2)], r: [0, a, 0] }); d.add('frame', box(R - 0.6, 0.5, 0.4, 0.1, 1), { p: [Math.cos(a) * (R / 2), 1.2, -Math.sin(a) * (R / 2)], r: [0, a, 0] }); d.add('frame', box(0.4, DH, 0.4, 0.1, 1), { p: [Math.cos(a) * (R - 0.5), DH / 2 + 0.8, -Math.sin(a) * (R - 0.5)] }); d.add('pane', box(R - 1, DH - 1.4, 0.15, 0.05, 1), { p: [Math.cos(a) * (R / 2), DH / 2 + 0.8, -Math.sin(a) * (R / 2)], r: [0, a, 0] }); }
+  door.add(d.build({ frame: paint(0xd4af37, { rough: 0.3, metal: 0.65 }), pane: new THREE.MeshStandardMaterial({ color: 0xd8f0ff, transparent: true, opacity: 0.35, roughness: 0.05, depthWrite: false }) }, { cast: false }));
+  grp.add(door);
+  grp.userData.door = door;
+  grp.userData.signs = { reg: [rx, 2.4 + TH + 7.6, 0], ind: [ix, 2.4 + TH + 4 + 7.4, 0], door: [0, TH + 21, 0], tw: TW };
+  return grp;
+}
+
+/** A bronze statue of a senator on the phone (a flip phone, naturally), about 19 m tall with its plinth. Faces +Z. */
+export function phoneStatue() {
+  const b = new ModelBuilder(), P = 5.5;
+  b.add('stone', box(10, P, 8, 0.25, 2), { p: [0, P / 2, 0] });
+  b.add('stoneD', box(11, 0.8, 9, 0.2, 1), { p: [0, P - 0.1, 0] });
+  b.add('stoneD', box(11.4, 1, 9.4, 0.2, 1), { p: [0, 0.5, 0] });
+  const S = 6.6;                                                    // the figure is a 2 m man scaled up
+  const at = (x, y, z) => [x * S, P + y * S, z * S];
+  for (const s of [1, -1]) { b.add('bronze', cyl(0.14 * S, 0.13 * S, 0.95 * S, 10), { p: at(s * 0.16, 0.48, 0) }); b.add('bronze', box(0.22 * S, 0.12 * S, 0.36 * S, 0.04 * S, 1), { p: at(s * 0.16, 0.06, 0.06) }); }
+  b.add('bronze', box(0.66 * S, 0.78 * S, 0.38 * S, 0.12 * S, 2), { p: at(0, 1.3, 0) });
+  b.add('bronze', box(0.7 * S, 0.12 * S, 0.4 * S, 0.05 * S, 1), { p: at(0, 1.66, 0) });
+  b.add('bronze', cyl(0.085 * S, 0.085 * S, 0.72 * S, 8), { p: at(-0.4, 1.22, 0.02), r: [0, 0, -0.1] });   // one arm down
+  b.add('bronze', cyl(0.085 * S, 0.085 * S, 0.42 * S, 8), { p: at(0.38, 1.45, 0.04), r: [0, 0, 0.5] });     // the other up to the ear
+  b.add('bronze', cyl(0.08 * S, 0.08 * S, 0.4 * S, 8), { p: at(0.36, 1.72, 0.06), r: [0, 0, -0.65] });
+  b.add('bronze', sphere(0.19 * S, 14, 10), { p: at(0, 1.92, 0) });
+  b.add('bronze', sphere(0.08 * S, 8, 6), { p: at(0, 1.84, 0.17) });            // nose
+  // the flip phone, open, at his ear, with its little antenna
+  b.add('phone', box(0.09 * S, 0.2 * S, 0.035 * S, 0.01 * S, 1), { p: at(0.21, 1.86, 0.06), r: [0.2, 0, -0.2] });
+  b.add('phone', box(0.09 * S, 0.18 * S, 0.035 * S, 0.01 * S, 1), { p: at(0.2, 2.03, 0.12), r: [-0.7, 0, -0.2] });
+  b.add('phone', cyl(0.008 * S, 0.008 * S, 0.12 * S, 5), { p: at(0.25, 2.12, 0.17), r: [-0.6, 0, -0.2] });
+  b.add('gold', box(0.1 * S, 0.06 * S, 0.02 * S, 0.01 * S, 1), { p: at(0.2, 2.0, 0.145), r: [-0.7, 0, -0.2] });
+  return b.build({ stone: plastic(0xe8e1d0, 0.7), stoneD: plastic(0xd6cdb9, 0.75), bronze: paint(0x4f8a74, { rough: 0.55, metal: 0.35, clear: 0.2 }), phone: plastic(0x2a2d36, 0.4, 0.4), gold: glow(0x9fe6ff, 1.2) });
+}
+
+/** The K Street cash cannon: a gold cannon on a carriage, barrel along +Z raised by `elev`. userData.muzzle: local muzzle point. */
+export function cashCannon({ elev = 0.62 } = {}) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('wood', box(4.2, 1.4, 7, 0.2, 2), { p: [0, 1.6, -0.6] });
+  for (const s of [1, -1]) { b.add('wheel', cyl(1.6, 1.6, 0.5, 20), { p: [s * 2.4, 1.6, 0.6], r: [0, 0, Math.PI / 2] }); b.add('gold', cyl(0.4, 0.4, 0.62, 10), { p: [s * 2.4, 1.6, 0.6], r: [0, 0, Math.PI / 2] }); }
+  b.add('wood', box(2.6, 0.8, 4, 0.2, 2), { p: [0, 0.4, -4.4] });
+  const barrel = new ModelBuilder(), L = 9;
+  barrel.add('gold', lathe([[0, -1.4], [1.25, -1.4], [1.35, -0.6], [1.1, 0], [0.95, L * 0.7], [1.1, L * 0.72], [1.0, L], [0.7, L], [0.7, L - 0.3], [0, L - 0.3]], 20));
+  barrel.add('dark', cyl(0.68, 0.68, 0.1, 16), { p: [0, L - 0.25, 0] });
+  barrel.add('gold', sphere(0.8, 12, 8), { p: [0, -1.8, 0] });
+  const bar = barrel.build({ gold: paint(0xd4af37, { rough: 0.28, metal: 0.8, clear: 0.4 }), dark: MAT.black });
+  const pivot = new THREE.Group(); pivot.position.set(0, 3.1, 0.4); pivot.rotation.x = Math.PI / 2 - elev; pivot.add(bar); grp.add(pivot);
+  grp.add(b.build({ wood: plastic(0x5a3a22, 0.8), wheel: plastic(0x3a2616, 0.8), gold: paint(0xd4af37, { rough: 0.3, metal: 0.7 }) }));
+  grp.userData.muzzle = [0, 3.1 + Math.sin(elev) * (L - 0.3), 0.4 + Math.cos(elev) * (L - 0.3)];
+  grp.userData.elev = elev;
+  return grp;
+}
+
+/** A giant lectern with a senator behind it and a huge open book. Faces +Z (the lectern front). userData.face: the front panel (centre, w, h). userData.page: the turning page. */
+export function filibusterLectern() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('stone', box(16, 1.2, 12, 0.2, 2), { p: [0, 0.6, -1] });
+  b.add('wood', box(9, 9, 4, 0.3, 2), { p: [0, 1.2 + 4.5, 1.5] });
+  b.add('wood', box(10, 0.8, 5.4, 0.2, 2), { p: [0, 10.6, 1.4], r: [0.25, 0, 0] });
+  b.add('gold', box(9.2, 0.4, 0.3, 0.05, 1), { p: [0, 9.6, 3.55] });
+  for (const s of [1, -1]) b.add('dark', cyl(0.12, 0.12, 2.6, 6), { p: [s * 1.2, 12, 2.8], r: [0.5, 0, s * 0.2] });     // microphones
+  // the senator: shoulders, a head, a jacket, behind the lectern
+  b.add('suit', box(6.2, 5, 3, 0.8, 3), { p: [0, 11.5, -2.2] });
+  b.add('shirt', box(1.6, 3.2, 0.2, 0.1, 1), { p: [0, 12.2, -0.65] });
+  b.add('tie', box(0.6, 2.8, 0.25, 0.1, 1), { p: [0, 12.0, -0.55] });
+  b.add('head', sphere(1.9, 16, 12), { p: [0, 15.6, -2.0] });
+  b.add('hair', new THREE.SphereGeometry(1.95, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.4), { p: [0, 15.9, -2.1] });
+  for (const s of [1, -1]) b.add('dark', box(0.5, 0.18, 0.1, 0.03, 1), { p: [s * 0.7, 15.9, -0.2] });               // reading glasses
+  // the book: two thick halves open on the lectern
+  for (const s of [1, -1]) b.add('paper', box(3.6, 0.6, 3.8, 0.1, 1), { p: [s * 1.85, 11.4, 1.3], r: [0.25, 0, -s * 0.06] });
+  grp.add(b.build({ stone: plastic(0xe8e1d0, 0.7), wood: plastic(0x6b4325, 0.6), gold: paint(0xd4af37, { rough: 0.3, metal: 0.65 }), dark: MAT.dark, suit: plastic(0x1f2a44, 0.7), shirt: plastic(0xffffff, 0.6), tie: plastic(0x1f3f8a, 0.5), head: plastic(0xe6b98f, 0.7), hair: plastic(0xd9dbe0, 0.8), paper: plastic(0xf7f2e2, 0.7) }));
+  const page = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.6).translate(1.7, 0, 0), new THREE.MeshStandardMaterial({ color: 0xfffbef, roughness: 0.7, side: THREE.DoubleSide }));
+  const hinge = new THREE.Group(); hinge.position.set(0, 11.75, 1.3); hinge.rotation.x = -Math.PI / 2 + 0.25; hinge.add(page); grp.add(hinge);
+  grp.userData.page = hinge;
+  grp.userData.face = { c: [0, 5.6, 3.52], w: 8.2, h: 6.4 };
+  return grp;
+}
+
+/** One dollar bill as a small flat quad (instance it). */
+export function billGeometry() {
+  const g = new THREE.PlaneGeometry(2.6, 1.12);
+  return g;
+}
+export const billMaterial = () => new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide, map: canvasTex(128, 56, (g, w, h) => {
+  g.fillStyle = '#9fd6a0'; g.fillRect(0, 0, w, h); g.strokeStyle = '#2f6b3a'; g.lineWidth = 4; g.strokeRect(3, 3, w - 6, h - 6);
+  g.fillStyle = '#2f6b3a'; g.beginPath(); g.ellipse(w / 2, h / 2, 13, 17, 0, 0, 7); g.fill(); g.fillStyle = '#9fd6a0'; g.font = 'bold 24px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('$', w / 2, h / 2 + 1);
+}, { repeat: false }) });

@@ -56,7 +56,8 @@ const skyFrag = /* glsl */`
   uniform vec3 uZenith, uHorizon, uGround, uSun, uSunDir, uCloud, uCloudShade;
   uniform float uTime, uCover, uScale, uStars, uCloudsOn, uGain;
   uniform vec3 uClear;
-  uniform sampler2D uPano; uniform float uPanoOn, uPanoTop, uPanoBottom, uPanoRot;
+  uniform sampler2D uPano; uniform float uPanoOn, uPanoTop, uPanoBottom, uPanoRot; uniform vec3 uPanoTint;
+  uniform sampler2D uDomeFrame, uDomePano; uniform float uDomeOn; uniform vec4 uDomeRect; uniform vec2 uDomeEl, uDomeTan;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float noise(vec2 p) {
@@ -71,6 +72,17 @@ const skyFrag = /* glsl */`
     // gradient: ground haze -> horizon -> zenith
     vec3 col = mix(uHorizon, uZenith, pow(smoothstep(0.0, 1.0, max(h, 0.0)), 0.55));
     col = mix(col, uGround, smoothstep(0.0, -0.25, h));
+    // a baked sky for the whole dome (see cloudcard.js): a panorama all the way round, and a sharper patch where a reference view looks
+    if (uDomeOn > 0.5) {
+      float daz = atan(d.z, d.x), del = asin(clamp(h, -1.0, 1.0));
+      col = texture2D(uDomePano, vec2(daz / 6.28318530718 + 0.5, clamp((del - uDomeEl.x) / (uDomeEl.y - uDomeEl.x), 0.004, 0.996))).rgb;
+      if (d.x > 0.2) {
+        vec2 dp = vec2(960.0 + (d.z / d.x) / (2.0 * uDomeTan.x) * 1920.0, 540.0 - (d.y / d.x) / (2.0 * uDomeTan.y) * 1080.0);
+        float inside = min(min(dp.x - uDomeRect.x, uDomeRect.z - dp.x), min(dp.y - uDomeRect.y, uDomeRect.w - dp.y));
+        float w = smoothstep(8.0, 150.0, inside) * smoothstep(0.2, 0.36, d.x);
+        if (w > 0.0) col = mix(col, texture2D(uDomeFrame, vec2((dp.x - uDomeRect.x) / (uDomeRect.z - uDomeRect.x), (uDomeRect.w - dp.y) / (uDomeRect.w - uDomeRect.y))).rgb, w);
+      }
+    }
     // sun disc and glow
     float sd = max(dot(d, normalize(uSunDir)), 0.0);
     col += uSun * (pow(sd, 350.0) * 3.0 + pow(sd, 24.0) * 0.22 + pow(sd, 4.0) * 0.08);
@@ -81,7 +93,7 @@ const skyFrag = /* glsl */`
       col += vec3(st) * uStars * smoothstep(0.02, 0.3, h);
     }
     // clouds: projected onto a plane above the viewer, puffy thresholded noise with a lit top
-    if (uCloudsOn > 0.5 && h > 0.015) {
+    if (uCloudsOn > 0.5 && uDomeOn < 0.5 && h > 0.015) {
       vec2 cp = d.xz / (h + 0.12) * 1.15 * uScale + vec2(uTime * 0.006, uTime * 0.002);
       float n = fbm(cp);
       float n2 = fbm(cp + vec2(0.06, 0.04) * normalize(uSunDir.xz + 0.001));
@@ -104,8 +116,11 @@ const skyFrag = /* glsl */`
         float u = fract(atan(d.x, d.z) / 6.28318530718 + uPanoRot);
         u = u > 0.5 ? (1.0 - u) * 2.0 : u * 2.0;
         vec4 p = texture2D(uPano, vec2(u, v));
-        vec3 pc = mix(p.rgb, uHorizon, 0.16);
-        col = mix(col, pc, p.a * smoothstep(0.0, 0.03, v));
+        // an optional tint for the painted horizon's greens only (its blue mountains and its roofs keep their color)
+        vec3 pt = mix(p.rgb, p.rgb * uPanoTint, clamp((p.g - max(p.r, p.b)) * 4.0, 0.0, 1.0));
+        vec3 pc = mix(pt, uHorizon, 0.16);
+        float keep = uClear.z > -1.5 ? 1.0 - smoothstep(uClear.z - 0.42, uClear.z + 0.1, dot(normalize(d.xz + 1e-5), uClear.xy)) : 1.0;   // the cleared wedge shows no painted horizon either
+        col = mix(col, pc, p.a * smoothstep(0.0, 0.03, v) * keep);
       }
     }
     gl_FragColor = vec4(col * uGain, 1.0);
@@ -122,7 +137,8 @@ export class Sky {
       uTime: { value: 0 }, uGain: { value: 1 }, uCover: { value: p.cloudCover }, uScale: { value: p.cloudScale }, uStars: { value: p.stars }, uCloudsOn: { value: 1 },
       // clearSky: [compass bearing of the middle of the wedge (0 = +z, 90 = +x), half-width], in degrees; z = -2 means none
       uClear: { value: p.clearSky ? new THREE.Vector3(Math.sin(p.clearSky[0] * Math.PI / 180), Math.cos(p.clearSky[0] * Math.PI / 180), Math.cos(p.clearSky[1] * Math.PI / 180)) : new THREE.Vector3(1, 0, -2) },
-      uPano: { value: null }, uPanoOn: { value: 0 }, uPanoTop: { value: 0.6 }, uPanoBottom: { value: -0.12 }, uPanoRot: { value: 0 },
+      uDomeFrame: { value: null }, uDomePano: { value: null }, uDomeOn: { value: 0 }, uDomeRect: { value: new THREE.Vector4() }, uDomeEl: { value: new THREE.Vector2(0, 1) }, uDomeTan: { value: new THREE.Vector2(1, 1) },
+      uPano: { value: null }, uPanoTint: { value: new THREE.Vector3(1, 1, 1) }, uPanoOn: { value: 0 }, uPanoTop: { value: 0.6 }, uPanoBottom: { value: -0.12 }, uPanoRot: { value: 0 },
     };
     const mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: skyVert, fragmentShader: skyFrag, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false, toneMapped: true });
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), mat);
@@ -130,10 +146,15 @@ export class Sky {
     this.sunDir = this.uniforms.uSunDir.value;
   }
   /** top/bottom: elevation in degrees covered by the image. rot: turns (0..1) to spin it around. */
-  setPanorama(tex, { top = 28, bottom = -8, rot = 0 } = {}) {
+  setPanorama(tex, { top = 28, bottom = -8, rot = 0, tint = null } = {}) {
+    if (tint) this.uniforms.uPanoTint.value.set(...tint);
     tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.ClampToEdgeWrapping; tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.anisotropy = 4;
     this.uniforms.uPano.value = tex; this.uniforms.uPanoOn.value = 1; this.uniforms.uPanoTop.value = top * Math.PI / 180; this.uniforms.uPanoBottom.value = bottom * Math.PI / 180; this.uniforms.uPanoRot.value = rot;
+  }
+  /** Show a baked sky over the whole dome in place of the gradient and the procedural clouds (see bakeSkyDome in cloudcard.js). */
+  setDome(dome) {
+    const u = this.uniforms; u.uDomeFrame.value = dome.frame; u.uDomePano.value = dome.pano; u.uDomeRect.value.set(...dome.frameRect); u.uDomeEl.value.set(...dome.el); u.uDomeTan.value.set(...dome.tan); u.uDomeOn.value = 1;
   }
   update(time) { this.uniforms.uTime.value = time; }
   /** Bake a blurred environment map from this sky for image-based lighting. */

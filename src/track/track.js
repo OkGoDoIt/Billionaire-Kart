@@ -175,6 +175,7 @@ export class Track {
         if (r.shoulder != null) { if (L) this.shL[i] = r.shoulder; if (R) this.shR[i] = r.shoulder; }
         if (r.outer != null) { if (L) this.outerL[i] = r.outer; if (R) this.outerR[i] = r.outer; }
         if (r.style != null) this.wallStyle[i] = r.style;
+        if (r.blend != null) { this.blendSide ||= [new Float32Array(this.N).fill(-1), new Float32Array(this.N).fill(-1)]; if (L) this.blendSide[0][i] = r.blend; if (R) this.blendSide[1][i] = r.blend; }   // per-side terrain blend (opt-in)
         if (r.hoarding != null) { if (L) this.hoardL[i] = r.hoarding ? 1 : 0; if (R) this.hoardR[i] = r.hoarding ? 1 : 0; }
       }
     }
@@ -447,7 +448,7 @@ export class Track {
         const over = along > this.ds * 1.5 ? Math.sqrt(bd) - hw : Math.abs(lat) - hw;
         const latC = clamp(lat, -(this.hwR[best] + this.shR[best] + 1), this.hwL[best] + this.shL[best] + 1);
         const planeY = this.py[best] + clamp(pl[0], -this.ds, this.ds) * this.ty[best] + latC * this.ly[best];
-        const w = smoothstep(sh, sh + blend, over);
+        const bs = this.blendSide?.[left ? 0 : 1][best], w = smoothstep(sh, sh + (bs >= 0 ? bs : blend), over);
         H[idx] = lerp(planeY - base, far, w);
         D[idx] = over; S[idx] = over - sh; NI[idx] = best;
       }

@@ -8,8 +8,8 @@ import { Scenery, partsOf } from '../render/scenery.js';
 import * as P from '../models/props.js';
 import * as B from '../models/props-bliss-hills.js';
 import * as S from '../models/props-silicon-valley.js';   // the sign kit: canvas atlas, baker, text fitting
-import { skyCard, farHills } from '../render/cloudcard.js';
-import { VIEW, HILL, SKY, CLOUD_COVER, CLOUD_FILL, FAR_HILLS, dipRadius, wallpaperHeight, wallpaperWeight, wallpaperPaint, toPicture } from '../content/bliss-wallpaper.js';
+import { bakeSkyDome, farHills } from '../render/cloudcard.js';
+import { VIEW, HILL, SKY, CLOUD_COVER, FAR_HILLS, dipRadius, wallpaperHeight, wallpaperWeight, wallpaperPaint, toPicture } from '../content/bliss-wallpaper.js';
 
 const LAKE = { x: -62, z: 42, r: 34 };
 const MEADOW = { x: -20, z: 136, r: 40 };
@@ -52,8 +52,8 @@ export default {
   width: 18,
   sky: 'day',
   // a deep, clean blue with the sun behind the viewer; the procedural clouds keep out of the east, where the authored ones hang
-  skyOverrides: { zenith: 0x1468ee, horizon: 0x8fbcf3, cloudCover: 0.5, sunDir: [-0.5, 0.74, -0.38], clearSky: [90, 62], fog: 0xa3c6f3, fogNear: 520, fogFar: 1900 },
-  backdrop: { img: 'assets/backdrops/bliss-hills.webp', top: 27, bottom: -9, rot: 0.3 },
+  skyOverrides: { zenith: 0x1468ee, horizon: 0x8fbcf3, cloudCover: 0.5, sunDir: [-0.5, 0.74, -0.38], clearSky: [90, 50], fog: 0xa3c6f3, fogNear: 520, fogFar: 1900 },
+  backdrop: { img: 'assets/backdrops/bliss-hills.webp', top: 27, bottom: -9, rot: 0.3, tint: [1.0, 0.86, 0.42] },   // the painted far hills, pulled toward the same greens
   // the opening shot is the wallpaper, shown without the game's color grade so the measured colors come out as measured
   intro: [{ pos: [VIEW.x, VIEW.eye, VIEW.z], look: [VIEW.x + 100, VIEW.eye, VIEW.z], fov: VIEW.fov, dur: 3.2, grade: { sat: 1, contrast: 1, vignette: 0 } },
     { pos: [-34, 30, 8], look: [CLIPPY.x, 26, CLIPPY.z], pos1: [-10, 30, 16], look1: [CLIPPY.x, 28, CLIPPY.z], fov: 45, dur: 3 }],   // then Clippy, offering to help
@@ -141,7 +141,10 @@ export default {
   terrain: {
     cell: 3, margin: 160, marginX: [160, 405], marginZ: [215, 160], blend: 22, water: -1.4,
     color(x, z, h, slope, over, out) {
-      const w = wallpaperWeight(x, z); if (w <= 0) return;
+      const w = wallpaperWeight(x, z);
+      // cloud shadows drift over every hill the way they lie over the famous one: broad, soft, and olive
+      if (w < 1) { const sh = smoothstep(0.44, 0.62, fbm(x * 0.0052 + 3.1, z * 0.0052 + 1.7, 2, 91)) * 0.5 * (1 - w); out[0] *= 1 - sh * 0.62; out[1] *= 1 - sh * 0.5; out[2] *= 1 - sh * 0.35; }
+      if (w <= 0) return;
       const c = [0, 0, 0], p = x - VIEW.x > 2 ? toPicture(x, h, z) : [960, 1070];
       wallpaperPaint(p[0], p[1], c); mixInto(out, c, w);
     },
@@ -174,7 +177,8 @@ export default {
     road: { base: 0x5d6373, line: 0xffffff, center: 0xffd23c },
     kerb: [0xe23b3b, 0xf7f7f2],
     shoulder: 0xd9c78f,
-    terrain: { low: 0x4fb83a, high: 0x7ed957, dry: 0xa8e06a, rock: 0x9c9388, sand: 0xe9d7a2, dirt: 0xbf9f6e },
+    // the whole track wears the wallpaper's greens (the calibrated colors of its lit, middling, and brightest grass), so the famous hill is not a patch of different lawn
+    terrain: { low: 0x6f9f24, high: 0x97cb1d, dry: 0xa3d61c, rock: 0x9c9388, sand: 0xe9d7a2, dirt: 0xbf9f6e },
     water: 0x2f9be6,
     ads: ['HAVE YOU TRIED REBOOTING', 'NOT RESPONDING', '640K IS ENOUGH', 'DEFRAG TODAY', 'PRESS ANY KEY', 'ABORT RETRY FAIL', 'INSERT DISK 2', 'DIAL-UP SPEEDS', 'CTRL ALT DELIGHT', 'SAFE MODE', 'SCREENSAVER INC', 'PLUG AND PRAY'],
   },
@@ -192,11 +196,19 @@ export default {
     // nothing is ever planted in the wallpaper view: it stays a hill, a field, and a sky
     const free = (x, z) => wallpaperWeight(x, z) <= 0 && !(x > 118 && z < 60 && z > -140) && !taken.some(([tx, tz, r]) => (tx - x) ** 2 + (tz - z) ** 2 < r * r);
 
-    // the wallpaper's sky and clouds, hung far to the east, with the far hills that show over the right shoulder
+    // the wallpaper's sky, continued over the whole dome so it has no edge, and the far hills that show over the right shoulder
     {
-      const small = (ctx.gfx.q?.pixels || 2e6) < 1.2e6, exposure = ctx.gfx.renderer.toneMappingExposure, eye = [VIEW.x, VIEW.eye, VIEW.z];
-      ctx.group.add(skyCard(ctx.gfx.renderer, { sky: SKY, cover: CLOUD_COVER, fill: CLOUD_FILL, rect: [-700, -430, 2620, 560], eye, fov: VIEW.fov, distance: 1500, exposure, width: small ? 2048 : 4096, height: small ? 608 : 1216 }));
-      ctx.group.add(farHills({ points: FAR_HILLS, eye, fov: VIEW.fov, exposure }));
+      const small = (ctx.gfx.q?.pixels || 2e6) < 1.2e6 || matchMedia('(pointer: coarse)').matches, exposure = ctx.gfx.renderer.toneMappingExposure, eye = [VIEW.x, VIEW.eye, VIEW.z];
+      const dome = bakeSkyDome(ctx.gfx.renderer, { sky: SKY, cover: CLOUD_COVER, fov: VIEW.fov, small });
+      ctx.gfx.sky.setDome(dome);
+      const keeper = new THREE.Object3D(); keeper.userData.dispose = dome.dispose; ctx.group.add(keeper);
+      // The far hills and the cleared horizon belong to the opening shot only: they are composed for that one viewpoint.
+      // Once the camera leaves it, the painted horizon runs all the way round like everywhere else.
+      const far = farHills({ points: FAR_HILLS, eye, fov: VIEW.fov, exposure }); ctx.group.add(far);
+      const clear = ctx.gfx.sky.uniforms.uClear.value, clearZ = clear.z;
+      const opening = () => !!(view.intro && !view.intro.done && view.intro.t < view.intro.shots[0].dur);
+      const apply = () => { const on = opening(); far.visible = on; clear.z = on ? clearZ : -2; };
+      apply(); anim.push(apply);
     }
     // the near field: a dark earth bank where the dip runs out of the picture on the left, dry stalks along it, and buttercups
     {
@@ -345,23 +357,23 @@ export default {
     for (const [cx, cz] of [[-90, 146], [-98, 136], [-30, 118], [-40, 124]]) for (let k = 0; k < 4; k++) treeSpots.push({ x: cx + rng.range(-5, 5), z: cz + rng.range(-5, 5), y: 0, yaw: 0 });
     treeSpots.forEach(t => { t.y = track.terrainHeight(t.x, t.z); });
     treeSpots.push(...sc.scatter({ count: 42, min: 40, max: 230, maxSlope: 0.55, minGap: 12, where: clear }));
-    const oakA = partsOf(P.roundTree(1, { h: 8, leafA: 0x6fcf4a, leafB: 0x92de5c })), oakB = partsOf(P.roundTree(2, { h: 9.5, leafA: 0x5cc243, leafB: 0x7fd456 })), oakC = partsOf(P.roundTree(3, { h: 6.5, leafA: 0x86d957, leafB: 0xa6e46a }));
+    const oakA = partsOf(P.roundTree(1, { h: 8, leafA: 0x5f9e22, leafB: 0x86c02e })), oakB = partsOf(P.roundTree(2, { h: 9.5, leafA: 0x4f8a1e, leafB: 0x74ae2a })), oakC = partsOf(P.roundTree(3, { h: 6.5, leafA: 0x7fb62c, leafB: 0xa0cf3a }));
     sc.instances(oakA, treeSpots.filter((_, i) => i % 3 === 0), { scale: [0.85, 1.45], yaw: 'random', tilt: 0.04 });
     sc.instances(oakB, treeSpots.filter((_, i) => i % 3 === 1), { scale: [0.85, 1.5], yaw: 'random', tilt: 0.04 });
     sc.instances(oakC, treeSpots.filter((_, i) => i % 3 === 2), { scale: [0.85, 1.35], yaw: 'random', tilt: 0.04 });
 
     // flowering bushes everywhere close to the road, and wildflowers in the meadow
     const low = sc.scatter({ count: 250, min: 14.5, max: 60, maxSlope: 0.7, minGap: 2.6, where: (x, z) => free(x, z) && !nearLake(x, z) && !inMeadow(x, z) });
-    sc.instances(partsOf(P.bush(1, { color: 0x5fc24a, flower: 0xffe04a })), low.filter((_, i) => i % 4 === 0), { scale: [0.8, 1.6], yaw: 'random' });
-    sc.instances(partsOf(P.bush(2, { color: 0x72cf52, flower: 0xffffff })), low.filter((_, i) => i % 4 === 1), { scale: [0.8, 1.5], yaw: 'random' });
-    sc.instances(partsOf(P.bush(3, { color: 0x58b948, flower: 0xff8ac4 })), low.filter((_, i) => i % 4 === 2), { scale: [0.8, 1.5], yaw: 'random' });
-    sc.instances(partsOf(P.bush(5, { color: 0x6ac94e, flower: 0xffe04a })), low.filter((_, i) => i % 4 === 3), { scale: [0.7, 1.3], yaw: 'random' });
+    sc.instances(partsOf(P.bush(1, { color: 0x5a9a22, flower: 0xffe04a })), low.filter((_, i) => i % 4 === 0), { scale: [0.8, 1.6], yaw: 'random' });
+    sc.instances(partsOf(P.bush(2, { color: 0x70ae2a, flower: 0xffffff })), low.filter((_, i) => i % 4 === 1), { scale: [0.8, 1.5], yaw: 'random' });
+    sc.instances(partsOf(P.bush(3, { color: 0x528f20, flower: 0xff8ac4 })), low.filter((_, i) => i % 4 === 2), { scale: [0.8, 1.5], yaw: 'random' });
+    sc.instances(partsOf(P.bush(5, { color: 0x68a628, flower: 0xffe04a })), low.filter((_, i) => i % 4 === 3), { scale: [0.7, 1.3], yaw: 'random' });
     const meadowFlowers = sc.scatter({ count: 50, min: 8, max: 40, maxSlope: 0.5, minGap: 4, where: (x, z) => inMeadow(x, z) });
-    sc.instances(partsOf(P.bush(7, { color: 0x7fd456, flower: 0xffffff })), meadowFlowers, { scale: [0.4, 0.7], yaw: 'random', cast: false });
+    sc.instances(partsOf(P.bush(7, { color: 0x86bc30, flower: 0xffffff })), meadowFlowers, { scale: [0.4, 0.7], yaw: 'random', cast: false });
     // reeds and rocks round the lake
     const shore = sc.scatter({ count: 40, min: 12, max: 90, maxSlope: 0.9, minGap: 3, where: (x, z, h) => h > track.water + 0.2 && h < track.water + 1.6 });
     sc.instances(partsOf(P.rock(2, { r: 1.1 })), shore.filter((_, i) => i % 3 === 0), { scale: [0.6, 1.6], yaw: 'random', sink: 0.2, tints: [0xb8b0a4, 0xa39c92, 0xc7bfb2] });
-    sc.instances(partsOf(P.bush(6, { color: 0x4fa83e })), shore.filter((_, i) => i % 3 !== 0), { scale: [0.7, 1.2], yaw: 'random' });
+    sc.instances(partsOf(P.bush(6, { color: 0x4a8420 })), shore.filter((_, i) => i % 3 !== 0), { scale: [0.7, 1.2], yaw: 'random' });
 
     // arrow boards on the outside of every real corner
     const chev = P.chevronBoard();

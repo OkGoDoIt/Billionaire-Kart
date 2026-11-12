@@ -86,50 +86,51 @@ function standard({ b, K }) {
 }
 
 /* ---------- wedge: an angular brushed-steel truck ---------- */
-function wedge({ b, K, M, main }) {
-  M.main = paint(main, { rough: 0.3, clear: 0.7 });
-  M.body = paint(0xc5cad1, { rough: 0.24, metal: 0.92, clear: 0.3 });
-  M.tail = glow(0xff2a2a, 2.2);
-  const bev = { bevel: 0.03 };
-  // hood: one long flat plane rising from the nose to the cockpit
-  b.add('body', side([[1.44, 0.26], [1.44, 0.46], [0.42, 0.735], [0.42, 0.26]], 0.36, bev));
-  // cockpit walls follow the same line up to the peak behind the driver
-  for (const sx of [1, -1]) b.add('body', side([[0.44, 0.26], [0.44, 0.735], [-0.62, 1.0], [-0.62, 0.26]], 0.045, { bevel: 0.015 }), { p: [sx * 0.415, 0, 0] });
-  b.add('body', side([[0.44, 0.26], [0.44, 0.42], [-0.62, 0.42], [-0.62, 0.26]], 0.42, bev));
-  // the tail block: a flat ridge, then one long slope down to a sheer back
-  b.add('body', side([[-0.58, 0.26], [-0.58, 0.985], [-0.72, 1.0], [-1.34, 0.8], [-1.34, 0.26]], 0.46, bev));
-  // tinted glass on both slopes
-  const hoodY = z => 0.46 + (1.44 - z) * (0.275 / 1.02), tailY = z => 1.0 - (-0.72 - z) * (0.2 / 0.62);
-  b.add('second', side([[0.98, hoodY(0.98)], [0.5, hoodY(0.5)], [0.5, hoodY(0.5) + 0.02], [0.98, hoodY(0.98) + 0.02]], 0.29, { bevel: 0.006 }));
-  b.add('second', side([[-0.8, tailY(-0.8)], [-1.24, tailY(-1.24)], [-1.24, tailY(-1.24) + 0.02], [-0.8, tailY(-0.8) + 0.02]], 0.38, { bevel: 0.006 }));
-  // red skirts and angular flares
-  b.add('main', side([[0.4, 0.235], [1.46, 0.235], [1.46, 0.36], [0.4, 0.36]], 0.37, { bevel: 0.015 }));
-  b.add('main', side([[-1.36, 0.235], [0.42, 0.235], [0.42, 0.36], [-1.36, 0.36]], 0.47, { bevel: 0.015 }));
+function wedge({ b, K, M }) {
+  // The stainless pickup, from photographs: one crease from nose to a single roof peak, one long slope back to a
+  // sheer tail, slab sides, black trapezoid arches, a light bar across each end. Open-topped so the driver shows.
+  M.body = paint(0xd3d7dc, { rough: 0.36, metal: 0.55, clear: 0.2 });   // brushed, not mirror: a mirror goes black under a sunset sky
+  M.glassd = plastic(0x0a0c11, 0.06, 0.7);
+  M.tail = glow(0xff2a2a, 2.4);
+  const bev = { bevel: 0.018 };
+  const PZ = 0.34, PY = 0.98, NZ = 1.5, NY = 0.6, TZ = -1.42, TY = 0.72, CZ = -0.76;       // peak, nose top, tail top, back of the cockpit
+  const hood = z => NY + (NZ - z) * (PY - NY) / (NZ - PZ), roof = z => PY - (PZ - z) * (PY - TY) / (PZ - TZ);
+  // nose to peak: bonnet and windshield are one plane
+  b.add('body', side([[NZ, 0.26], [NZ, NY], [PZ, PY], [PZ, 0.26]], 0.56, bev));
+  // cab sides carry the roofline back; the bed is one block under the sloping cover
+  for (const sx of [1, -1]) b.add('body', side([[PZ + 0.02, 0.26], [PZ + 0.02, PY], [CZ, roof(CZ)], [CZ, 0.26]], 0.05, { bevel: 0.012 }), { p: [sx * 0.51, 0, 0] });
+  b.add('body', side([[PZ + 0.02, 0.26], [PZ + 0.02, 0.42], [CZ, 0.42], [CZ, 0.26]], 0.5, bev));
+  b.add('body', side([[CZ + 0.02, 0.26], [CZ + 0.02, roof(CZ)], [TZ, TY], [TZ, 0.26]], 0.56, bev));
+  // dark glass: the huge flat windshield, and the wedge of side window under the roofline
+  b.add('glassd', side([[1.02, hood(1.02) + 0.004], [PZ + 0.05, hood(PZ + 0.05) + 0.004], [PZ + 0.05, hood(PZ + 0.05) + 0.02], [1.02, hood(1.02) + 0.02]], 0.5, { bevel: 0.004 }));
+  for (const sx of [1, -1]) b.add('glassd', side([[PZ - 0.06, 0.7], [PZ - 0.06, PY - 0.045], [CZ + 0.12, roof(CZ + 0.12) - 0.04], [CZ + 0.3, 0.7]], 0.006, { bevel: 0 }), { p: [sx * 0.563, 0, 0] });
+  // the bed cover, in slats
+  for (let k = 0; k < 5; k++) { const z0 = CZ - 0.06 - k * 0.118, z1 = z0 - 0.1; b.add('black', side([[z0, roof(z0) + 0.004], [z1, roof(z1) + 0.004], [z1, roof(z1) + 0.016], [z0, roof(z0) + 0.016]], 0.47, { bevel: 0.003 })); }
+  // black lower cladding: bumpers, sills, and the trapezoid arches
+  b.add('black', side([[NZ + 0.03, 0.22], [NZ + 0.03, 0.37], [1.14, 0.37], [1.14, 0.22]], 0.575, { bevel: 0.012 }));
+  b.add('black', side([[TZ - 0.03, 0.22], [TZ - 0.03, 0.33], [-1.12, 0.33], [-1.12, 0.22]], 0.575, { bevel: 0.012 }));
+  b.add('black', side([[0.42, 0.22], [0.42, 0.33], [-0.3, 0.33], [-0.3, 0.22]], 0.585, { bevel: 0.01 }));
   for (const sx of [1, -1]) {
-    // trapezoid steel wheel arches, bolted to the body sides, legs down to red running boards between the wheels
-    b.add('body', side(shiftZ(arch(K.frontR, -0.07, 0.05), K.frontZ), 0.235, { bevel: 0.014 }), { p: [sx * 0.575, 0, 0] });
-    b.add('body', side(shiftZ(arch(K.rearR, -0.13, 0.055), K.rearZ), 0.225, { bevel: 0.014 }), { p: [sx * 0.665, 0, 0] });
-    b.add('main', box(0.34, 0.1, 0.84, 0.02, 1), { p: [sx * 0.55, 0.29, 0.06] });
-    b.add('black', box(0.02, 0.06, 0.7, 0.008, 1), { p: [sx * 0.722, 0.29, 0.06] });
-    // arch liners so the wheel wells read dark, not see-through
-    b.add('black', side(shiftZ([[K.frontR + 0.06, K.frontR - 0.07], [K.frontR * 0.55 + 0.03, 2 * K.frontR + 0.05], [-(K.frontR * 0.55 + 0.03), 2 * K.frontR + 0.05], [-(K.frontR + 0.06), K.frontR - 0.07]], K.frontZ), 0.012, { bevel: 0 }), { p: [sx * 0.36, 0, 0] });
+    b.add('black', side(shiftZ(arch(K.frontR, -0.07, 0.075), K.frontZ), 0.1, { bevel: 0.012 }), { p: [sx * 0.585, 0, 0] });
+    b.add('black', side(shiftZ(arch(K.rearR, -0.13, 0.08), K.rearZ), 0.11, { bevel: 0.012 }), { p: [sx * 0.6, 0, 0] });
+    // door seams, so the slab sides read as panels
+    for (const z of [PZ - 0.02, -0.2]) b.add('black', sbox(0.004, 0.36, 0.008), { p: [sx * 0.562, 0.5, z] });
   }
-  // the famous unbreakable rear window, cracked
-  {
-    const cz = -1.0, cy = tailY(cz) + 0.03, sl = Math.atan(0.2 / 0.62);
-    for (let i = 0; i < 7; i++) { const a = i / 7 * PI * 2 + 0.3, l = 0.1 + (i % 3) * 0.04; b.add('white', sbox(l, 0.008, 0.008), { p: [0.1 + Math.cos(a) * l / 2, cy + Math.sin(a) * l / 2 * Math.sin(sl), cz + Math.sin(a) * l / 2 * Math.cos(sl)], r: [-sl, -a, 0] }); }
-    b.add('white', torus(0.07, 0.005, 3, 12), { p: [0.1, cy, cz], r: [PI / 2 - sl, 0, 0] });
+  // the unbreakable window, as demonstrated
+  for (const [cx, cz] of [[-0.566, 0.02]]) {
+    const cy = 0.8;
+    for (let i = 0; i < 7; i++) { const a = i / 7 * PI * 2 + 0.3, l = 0.07 + (i % 3) * 0.03; b.add('white', sbox(0.006, 0.006, l), { p: [cx, cy + Math.sin(a) * l / 2, cz + Math.cos(a) * l / 2], r: [-a, 0, 0] }); }
+    b.add('white', torus(0.045, 0.004, 3, 12), { p: [cx, cy, cz], r: [0, PI / 2, 0] });
   }
-  // full-width light bars
-  b.add('lamp', box(0.66, 0.035, 0.03, 0.01, 1), { p: [0, 0.445, 1.452] });
-  b.add('tail', box(0.88, 0.035, 0.03, 0.01, 1), { p: [0, 0.775, -1.352] });
-  for (const sx of [1, -1]) b.add('black', box(0.1, 0.06, 0.02, 0.01, 1), { p: [sx * 0.4, 0.3, -1.35] });
-  // seat: the tail face is the backrest
+  // light bars: one white line across the nose, one red across the tail
+  b.add('lamp', box(1.06, 0.03, 0.03, 0.008, 1), { p: [0, NY - 0.03, NZ + 0.006] });
+  b.add('tail', box(1.06, 0.035, 0.03, 0.008, 1), { p: [0, TY - 0.04, TZ - 0.006] });
+  // seat against the bed wall
   b.add('seat', box(0.5, 0.1, 0.42, 0.04, 2), { p: [0, 0.47, -0.36] });
-  b.add('seat', box(0.5, 0.42, 0.06, 0.03, 2), { p: [0, 0.74, -0.55] });
+  b.add('seat', box(0.5, 0.4, 0.06, 0.03, 2), { p: [0, 0.7, -0.62] });
   column(b, { x: 0, y: 0.5, z: -0.3 });
   axles(b, K);
-  return { plate: { p: [0, 0.6, -1.36], rx: 0 }, exhausts: [[0.44, 0.26, -1.36], [-0.44, 0.26, -1.36]], wheel: { style: 'knobby', rim: MAT.dark, hub: M.body } };
+  return { plate: { p: [0, 0.535, TZ - 0.012], rx: 0, s: 0.66 }, exhausts: [[0.44, 0.28, TZ - 0.02], [-0.44, 0.28, TZ - 0.02]], wheel: { style: 'knobby', rim: MAT.dark, hub: MAT.dark } };
 }
 
 /* ---------- pod: a smooth two-tone egg with a glowing waist ---------- */

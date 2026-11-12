@@ -3,7 +3,7 @@
    obstacle. Each builder returns a THREE.Group on y = 0, facing +Z. Textures are
    only created inside the functions, so this module imports cleanly in Node. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, torus, tube, plastic, paint, glow, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, torus, tube, lathe, plastic, paint, glow, MAT } from './build.js';
 import { canvasTex } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
 
@@ -194,7 +194,13 @@ export function hayBale() {
   return b.build({ hay: plastic(0xe8b84a, 0.95), end: plastic(0xd09a32, 0.95), twine: plastic(0xa8782a, 0.9) });
 }
 
-let dialogTex = null;
+/* What the dialogs say, one per dialog in turn. */
+const DIALOGS = [
+  { title: 'KART.EXE', lines: ['KART.EXE HAS', 'STOPPED RESPONDING'], buttons: ['CLOSE'] },
+  { title: 'CONFIRM', lines: ['ARE YOU SURE?'], buttons: ['YES', 'YES'] },
+  { title: 'WARNING', lines: ['YOU ARE ABOUT', 'TO LOSE. OK?'], buttons: ['OK'] },
+];
+const dialogTexs = []; let dialogN = 0;
 /** Error dialog obstacle: a chunky floating grey window, 3 m wide, hovering 0.4 m up.
     Thin along X so it reads face-on from the road whichever way it patrols. */
 export function errorDialog() {
@@ -205,25 +211,95 @@ export function errorDialog() {
   // per face (s = +1 is the +X face; its viewer's right is -Z): close button top right,
   // warning triangle on the left, OK button bottom right
   for (const s of [1, -1]) {
-    const fx = s * (T / 2 + 0.06), zr = -s;
+    const zr = -s;
     b.add('red', box(0.16, 0.36, 0.42, 0.06, 2), { p: [s * (T / 2 + 0.08), y0 + H + bar / 2 - 0.05, zr * (W / 2 - 0.34)] });
     for (const r of [Math.PI / 4, -Math.PI / 4]) b.add('white', box(0.05, 0.26, 0.06, 0.02, 1), { p: [s * (T / 2 + 0.17), y0 + H + bar / 2 - 0.05, zr * (W / 2 - 0.34)], r: [r, 0, 0] });
-    b.add('yellow', prism(1.1, 0.95, 0.14), { p: [fx, y0 + 0.55, -zr * 0.82], r: [0, Math.PI / 2, 0] });
-    b.add('black', box(0.05, 0.4, 0.12, 0.02, 1), { p: [s * (T / 2 + 0.14), y0 + 0.93, -zr * 0.82] });
-    b.add('black', sphere(0.07, 8, 6), { p: [s * (T / 2 + 0.14), y0 + 0.68, -zr * 0.82] });
-    b.add('btn', box(0.08, 0.34, 0.8, 0.05, 1), { p: [s * (T / 2 + 0.03), y0 + 0.3, zr * 0.85] });
   }
   grp.add(b.build({ grey: plastic(0xc3c3c3, 0.55), blue: paint(0x1f4fd0, { rough: 0.35, clear: 0.4 }), red: paint(0xe5352b, { rough: 0.35, clear: 0.4 }), white: MAT.white, yellow: paint(0xffd23c, { rough: 0.4 }), black: MAT.black, btn: plastic(0xdedede, 0.5) }));
-  dialogTex = dialogTex || canvasTex(256, 128, (g, w, h) => {
-    g.fillStyle = '#c3c3c3'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#12142b'; g.font = 'bold 30px "Arial Black", Arial, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle';
-    g.fillText('NOT', 120, 34); g.fillText('RESPONDING', 92, 70, 160);
-  }, { repeat: false, aniso: 4 });
-  const mat = new THREE.MeshStandardMaterial({ map: dialogTex, roughness: 0.6 });
+  const which = dialogN++ % DIALOGS.length, D = DIALOGS[which];
+  const dialogTex = dialogTexs[which] || (dialogTexs[which] = canvasTex(512, 320, (g, w, h) => {
+    g.fillStyle = '#ece9d8'; g.fillRect(0, 0, w, h);
+    const bar = g.createLinearGradient(0, 0, 0, 56); bar.addColorStop(0, '#3a8cff'); bar.addColorStop(1, '#0a4fd6'); g.fillStyle = bar; g.fillRect(0, 0, w, 56);
+    g.fillStyle = '#ffffff'; g.font = 'bold 34px "Arial Black", Arial, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(D.title, 18, 30);
+    g.fillStyle = '#e5352b'; g.fillRect(w - 52, 8, 42, 40); g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.beginPath(); g.moveTo(w - 42, 18); g.lineTo(w - 20, 38); g.moveTo(w - 20, 18); g.lineTo(w - 42, 38); g.stroke();
+    g.fillStyle = '#12142b'; g.textAlign = 'center';
+    const n = D.lines.length; D.lines.forEach((l, k) => { let s = 50; g.font = `${s}px "Arial Black", Arial, sans-serif`; while (g.measureText(l).width > w - 40 && s > 16) { s -= 2; g.font = `${s}px "Arial Black", Arial, sans-serif`; } g.fillText(l, w / 2, 140 + (k - (n - 1) / 2) * 56); });
+    const bw = 170, gap = 30, x0 = w / 2 - (D.buttons.length * bw + (D.buttons.length - 1) * gap) / 2;
+    D.buttons.forEach((t, k) => { const x = x0 + k * (bw + gap); g.fillStyle = '#ffffff'; g.fillRect(x, 230, bw, 64); g.strokeStyle = '#12142b'; g.lineWidth = 4; g.strokeRect(x, 230, bw, 64); g.fillStyle = '#12142b'; g.font = 'bold 36px "Arial Black", Arial, sans-serif'; g.fillText(t, x + bw / 2, 263); });
+  }, { repeat: false, aniso: 4 }));
+  const mat = new THREE.MeshStandardMaterial({ map: dialogTex, emissiveMap: dialogTex, emissive: 0xffffff, emissiveIntensity: 0.15, roughness: 0.6 });
   for (const s of [1, -1]) {
     const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.2, H - 0.16), mat);
     face.position.set(s * (T / 2 + 0.005), y0 + H / 2, 0); face.rotation.y = s * Math.PI / 2;
     grp.add(face);
   }
   return grp;
+}
+
+/* ---------- the joke pass: Clippy, the recycle bin, the modem, mines, cards ---------- */
+/** The paperclip assistant, H metres tall, facing +Z. userData.brows bob; userData.body sways. */
+export function clippy({ H = 34 } = {}) {
+  const grp = new THREE.Group(), body = new THREE.Group(), b = new ModelBuilder(), k = H / 34, pts = [];
+  const line = (x0, y0, x1, y1, n = 8) => { for (let i = 0; i < n; i++) { const t = i / n; pts.push([(x0 + (x1 - x0) * t) * k, (y0 + (y1 - y0) * t) * k, 0]); } };
+  const arc = (cx, cy, r, a0, a1, n = 16) => { for (let i = 0; i < n; i++) { const a = a0 + (a1 - a0) * (i / n); pts.push([(cx + Math.cos(a) * r) * k, (cy + Math.sin(a) * r) * k, 0]); } };
+  // inner end, inner U, up the right, big top bend, down the left, outer U, up to the outer end
+  line(-2.2, 21, -2.2, 7.5); arc(0, 7.5, 2.2, Math.PI, Math.PI * 2); line(2.2, 7.5, 2.2, 28.5); arc(-1.9, 28.5, 4.1, 0, Math.PI, 20);
+  line(-6, 28.5, -6, 6); arc(-1, 6, 5, Math.PI, Math.PI * 2, 20); line(4, 6, 4, 25, 6); pts.push([4 * k, 25 * k, 0]);
+  b.add('wire', tube(pts, 0.75 * k, pts.length * 3, 12));
+  for (const p of [pts[0], pts[pts.length - 1]]) b.add('wire', sphere(0.75 * k, 12, 8), { p });
+  // eyes on the upper part, looking out
+  for (const x of [-2.6, 1.6]) { b.add('eye', sphere(2.0 * k, 20, 14), { p: [x * k, 24 * k, 1.2 * k], s: [1, 1.15, 0.6] }); b.add('pupil', sphere(0.9 * k, 14, 10), { p: [(x + 0.35) * k, 23.6 * k, 2.3 * k], s: [1, 1, 0.5] }); }
+  body.add(b.build({ wire: plastic(0xdfe5ee, 0.16, 1), eye: plastic(0xffffff, 0.3), pupil: MAT.black }));
+  const brows = new THREE.Group(), bb = new ModelBuilder();
+  for (const [x, r] of [[-2.6, 0.25], [1.6, -0.25]]) bb.add('brow', box(3.4 * k, 0.6 * k, 0.6 * k, 0.25 * k, 2), { p: [x * k, 27 * k, 1.6 * k], r: [0, 0, r] });
+  brows.add(bb.build({ brow: MAT.black })); body.add(brows);
+  grp.add(body);
+  // the sheet of lined paper he lives on
+  const paper = new ModelBuilder();
+  paper.add('paper', box(20 * k, 0.4, 26 * k, 0.1, 1), { p: [0, 0.2, 0] });
+  for (let i = 0; i < 9; i++) paper.add('rule', new THREE.BoxGeometry(18 * k, 0.05, 0.25), { p: [0, 0.42, (-10 + i * 2.5) * k] });
+  paper.add('margin', new THREE.BoxGeometry(0.3, 0.06, 25 * k), { p: [-6.5 * k, 0.43, 0] });
+  grp.add(paper.build({ paper: plastic(0xfffbe0, 0.8), rule: plastic(0x7fb2ff, 0.7), margin: plastic(0xff6b6b, 0.7) }));
+  body.position.y = 0.4;
+  grp.userData.brows = brows; grp.userData.body = body;
+  return grp;
+}
+
+/** The recycle bin: a ribbed bin R wide, H tall, stuffed with dead products (their labels are atlas signs). */
+export function recycleBin({ R = 7, H = 14 } = {}) {
+  const b = new ModelBuilder();
+  b.add('bin', lathe([[R * 0.82, 0], [R, H], [R * 1.06, H], [R * 1.06, H + 0.6], [R * 0.95, H + 0.6], [R * 0.78, 0.5], [0, 0.5]], 32));
+  for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, rr = R * 0.92; b.add('rib', new THREE.BoxGeometry(0.5, H * 0.92, 0.5), { p: [Math.cos(a) * rr, H * 0.5, Math.sin(a) * rr], r: [0, -a, Math.atan2(R * 0.18, H) * 0], s: 1 }); }
+  // the junk heaped inside
+  const rng = makeRng(7), junk = ['j0', 'j1', 'j2', 'j3'];
+  for (let i = 0; i < 14; i++) { const a = rng() * 6.28, d = rng() * R * 0.7; b.add(junk[i % 4], box(2 + rng() * 2.5, 1.5 + rng() * 2, 2 + rng() * 2, 0.2, 1), { p: [Math.cos(a) * d, H - 1 + rng() * 2.5, Math.sin(a) * d], r: [rng() - 0.5, rng() * 3, rng() - 0.5] }); }
+  return b.build({ bin: plastic(0xbfd3e6, 0.35, 0.2), rib: plastic(0x8fa9c4, 0.4, 0.2), j0: plastic(0x2a2d36, 0.5), j1: plastic(0x7a8a3a, 0.6), j2: plastic(0x2f6bff, 0.5), j3: plastic(0xe6dcc0, 0.6) });
+}
+
+/** A beige external modem the size of a house, front (with its LEDs) on +Z. userData.leds: lit LED meshes. */
+export function modem({ W = 24, D = 14, Hh = 5 } = {}) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('beige', box(W, Hh, D, 1.2, 3), { p: [0, Hh / 2 + 0.8, 0] });
+  b.add('beigeD', box(W * 0.94, 0.5, D * 0.94, 0.2, 1), { p: [0, 0.5, 0] });
+  for (let i = 0; i < 7; i++) b.add('beigeD', new THREE.BoxGeometry(W * 0.7, 0.25, 0.3), { p: [0, Hh + 0.85, -D * 0.3 + i * 0.9] });
+  b.add('dark', box(W * 0.8, 1.2, 0.3, 0.2, 1), { p: [0, Hh * 0.55 + 0.8, D / 2 + 0.05] });
+  grp.add(b.build({ beige: plastic(BEIGE, 0.6), beigeD: plastic(BEIGE_D, 0.65), dark: MAT.dark }));
+  const leds = [];
+  for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), glow(i % 3 ? 0x37ff6a : 0xff3b30, 2.2)); m.position.set((i - 3.5) * W * 0.095, Hh * 0.55 + 0.8, D / 2 + 0.3); grp.add(m); leds.push(m); }
+  grp.userData.leds = leds;
+  return grp;
+}
+
+/** A Minesweeper mine (stands in for the hay bales on the meadow; same footprint). */
+export function mine() {
+  const b = new ModelBuilder(), R = 0.95, y = 1.05;
+  b.add('mine', sphere(R, 18, 14), { p: [0, y, 0] });
+  for (const [x, yy, z] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0.7, 0.7, 0], [-0.7, 0.7, 0], [0, 0.7, 0.7], [0, 0.7, -0.7]]) {
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x, yy, z).normalize()), e = new THREE.Euler().setFromQuaternion(q);
+    b.add('mine', cyl(0.07, 0.16, 0.7, 8), { p: [x / Math.hypot(x, yy, z) * (R + 0.2), y + yy / Math.hypot(x, yy, z) * (R + 0.2), z / Math.hypot(x, yy, z) * (R + 0.2)], r: [e.x, e.y, e.z] });
+  }
+  b.add('shine', box(0.36, 0.36, 0.1, 0.04, 1), { p: [-0.32, y + 0.36, R * 0.82], r: [-0.4, -0.3, 0] });
+  b.add('flagpole', cyl(0.05, 0.05, 2.4, 6), { p: [0.2, y + 1.6, -0.2] });
+  b.add('flag', prism(0.9, 0.7, 0.06), { p: [0.55, y + 2.4, -0.2], r: [0, 0, -Math.PI / 2] });
+  return b.build({ mine: plastic(0x16171c, 0.45, 0.3), shine: plastic(0xffffff, 0.4), flagpole: MAT.dark, flag: paint(0xe5352b, { rough: 0.4 }) });
 }

@@ -584,7 +584,7 @@ function decorate(ctx) {
       palls.push({ m, x: m.position.x, z: m.position.z, ph: k * 2 + y, drift: off > 100 });
     }
   });
-  anim.push((dt, time) => { for (const p of palls) { p.m.rotation.y = time * 0.01 + p.ph; const f = p.drift ? (time * 4) % 260 : 0; p.m.position.x = p.x + wx * f + Math.sin(time * 0.05 + p.ph) * 8; p.m.position.z = p.z + wz * f; p.m.material.opacity = p.m.material.opacity; } });
+  anim.push((dt, time) => { const sg = view.dcLake?.smog ?? 0; for (const p of palls) { p.op0 ??= p.m.material.opacity; p.m.material.opacity = Math.min(1, p.op0 * (0.55 + 1.5 * sg)); p.m.rotation.y = time * 0.01 + p.ph; const f = p.drift ? (time * 4) % 260 : 0; p.m.position.x = p.x + wx * f + Math.sin(time * 0.05 + p.ph) * 8; p.m.position.z = p.z + wz * f; p.m.material.opacity = p.m.material.opacity; } });
 
   // ---- pines over every slope, and a few on the campus edges ----
   const keep = (x, z) => !inHall(x, z) && !TOWERS.some(t => near(x, z, t, 22)) && !dishes.some(d => near(x, z, d, 16)) && !chains.flat().some(([px, pz]) => near(x, z, { x: px, z: pz }, 7))
@@ -1157,7 +1157,9 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
   }
 
   // update: everything follows the race's lake level
-  const st = { level: LAKE.full, lap: 1, pct: 100, shown: -1, t: 0 };
+  const st = { level: LAKE.full, lap: 1, pct: 100, shown: -1, t: 0, smog: 0 };
+  const SMOG = { zenith: 0x6f5e48, horizon: 0xb5996c, ground: 0xa58d6c, sun: 0xffa860, cloud: 0xb7a58a, cloudShade: 0x74644f, cloudCover: 0.88, fog: 0xa88e68, fogNear: 70, fogFar: 560,
+    sunLight: 0xffb070, sunIntensity: 2.1, hemiSky: 0xc9ad84, hemiGround: 0x6f6a4c, panoTint: [0.78, 0.62, 0.44] };
   view.dcLake = st;
   const Yax = new THREE.Vector3(0, 1, 0), Mx = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), Pp = new THREE.Vector3(), Z = new THREE.Vector3(0, 0, 1);
   const cWet = new THREE.Color(0x8a8070), cDry = new THREE.Color(0xffffff);
@@ -1167,6 +1169,9 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     st.level = Number.isFinite(y) ? y : LAKE.full;
     st.lap = race?.lakeLap ? Math.min(race.lakeLap, race.laps) : 1;
     water.position.y = st.level;
+    // the sky starts blue and is brown by the flag: the plants have had three laps to work on it
+    st.smog += (Math.min(1, (view.showProgress || 0) * 1.2) - st.smog) * Math.min(1, dt * 0.6);
+    ctx.gfx.shiftSky(SMOG, st.smog);
     const f = clamp((LAKE.full - st.level) / (LAKE.full - LAKE.low), 0, 1);
     waterMat.color.copy(cFull).lerp(cLow, f * 0.55);
     crackMat.color.copy(cWet).lerp(cDry, race && race.lakeLap >= race.laps ? 1 : 0);

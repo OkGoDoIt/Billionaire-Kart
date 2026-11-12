@@ -297,6 +297,46 @@ export default {
       if (smoke) for (let k = 0, n = view.fx.count(1.5 + reach * 0.15, dt); k < n && pts.length; k++) { const p = pts[Math.floor(rng() * pts.length)]; smoke.emit({ x: p.x, y: p.y + 3, z: p.z, vx: rng.range(-0.8, 0.8), vy: 4 + rng() * 2, vz: rng.range(-0.8, 0.8), color: [0.14, 0.12, 0.12], color2: [0.42, 0.36, 0.36], size: 6 + rng() * 4, grow: 2.2, drag: 0.2, gravity: -0.3, life: 7 + rng() * 3, alpha: 0.6, fadeIn: 0.08, spin: rng.range(-0.3, 0.3), rot: rng() * 6.28 }); }
     });
 
+    // ---- the burn you cannot miss: real flames climbing the Man, a smoke column, and a sky that catches ----
+    {
+      const tex = new THREE.CanvasTexture(Object.assign(document.createElement('canvas'), { width: 8, height: 128 }));
+      { const g = tex.image.getContext('2d'), gr = g.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,244,190,1)'); gr.addColorStop(0.25, 'rgba(255,170,40,0.95)'); gr.addColorStop(0.7, 'rgba(240,70,10,0.6)'); gr.addColorStop(1, 'rgba(160,20,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 8, 128); }
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const cone = new THREE.ConeGeometry(1, 1, 10, 4, true); cone.translate(0, 0.5, 0);
+      const mat = new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(2.2, 1.7, 1.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      // tongues of flame at burn points up the body, plus a crown over the head
+      const pts = body.slice().sort((p, q) => p.lvl - q.lvl), N = 16, top = pts[pts.length - 1];
+      const tongues = []; for (let k = 0; k < N; k++) { const p = pts[Math.floor((k + 0.5) / N * pts.length)]; tongues.push({ x: p.x, y: p.y - 1.5, z: p.z, lvl: p.lvl, r: 3.2 + rng() * 2.4, h: 10 + rng() * 8, ph: rng() * 6.28 }); }
+      tongues.push({ x: top.x, y: top.y, z: top.z, lvl: 31, r: 7, h: 30, ph: 1.3 }, { x: top.x, y: top.y - 6, z: top.z, lvl: 28, r: 9, h: 20, ph: 4.1 });
+      const flames = new THREE.InstancedMesh(cone, mat, tongues.length); flames.frustumCulled = false; flames.renderOrder = 6; ctx.group.add(flames);
+      const column = new THREE.Mesh(new THREE.CylinderGeometry(26, 5, 150, 14, 1, true), new THREE.MeshBasicMaterial({ color: 0x1c1614, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      column.position.set(top.x, top.y + 82, top.z); column.renderOrder = 5; ctx.group.add(column);
+      const FIRE = { zenith: 0x3a0e14, horizon: 0xff5a1c, ground: 0xb8401c, fog: 0xc8552a, fogNear: 110, fogFar: 700, hemiSky: 0xff9a5c, hemiGround: 0xc0603a, cloud: 0xff9a5a, cloudShade: 0x5a1c18 };
+      const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S = new THREE.Vector3();
+      let reach = 2, heat = 0, t = 0, fell = false;
+      anim.push(dt => {
+        t += dt;
+        const lap = view.showLap || 1, laps = view.race?.laps ?? 3, last = lap >= laps;
+        reach += ((last ? 34 : lap >= laps - 1 ? 15 : 5) - reach) * Math.min(1, dt * 0.5);
+        heat += ((last ? 1 : 0) - heat) * Math.min(1, dt * 0.35);
+        tongues.forEach((f, k) => {
+          const on = smoothstep(f.lvl - 2, f.lvl + 2, reach), fl = 0.78 + 0.22 * Math.sin(t * 9 + f.ph) + 0.12 * Math.sin(t * 23 + f.ph * 2);
+          S.set(f.r * on * (0.9 + 0.1 * Math.sin(t * 13 + f.ph)), Math.max(0.001, f.h * on * fl * (1 + heat * 0.5)), f.r * on);
+          M.compose(V.set(f.x + Math.sin(t * 3 + f.ph) * 0.5, f.y, f.z), Q.setFromAxisAngle(V.clone().set(0, 1, 0), t * 0.6 + f.ph), S); flames.setMatrixAt(k, M);
+        });
+        flames.instanceMatrix.needsUpdate = true;
+        column.material.opacity = 0.16 * smoothstep(8, 16, reach) + 0.5 * heat; column.rotation.y = t * 0.07;
+        ctx.gfx.shiftSky(FIRE, heat * (0.72 + 0.1 * Math.sin(t * 5.3) + 0.06 * Math.sin(t * 11.7)));
+        if (heat > 0.3) {
+          // embers on the wind, across the road around the Bowl
+          for (let k = 0, n = view.fx.count(60 * heat, dt); k < n; k++) { const a = rng() * 6.28, d = 10 + rng() * 70; view.fx.spark(top.x + Math.cos(a) * d, top.y - 30 + rng() * 34, top.z + Math.sin(a) * d, 5 + rng() * 4, -1 + rng() * 3, rng.range(-3, 3), [1, 0.55, 0.15], 0.5 + rng() * 0.5, 1.6 + rng()); }
+          if (smoke) for (let k = 0, n = view.fx.count(6 * heat, dt); k < n; k++) smoke.emit({ x: top.x + rng.range(-5, 5), y: top.y + rng() * 20, z: top.z + rng.range(-5, 5), vx: 2 + rng(), vy: 9 + rng() * 5, vz: rng.range(-1, 1), color: [0.1, 0.08, 0.08], color2: [0.3, 0.26, 0.25], size: 14 + rng() * 12, life: 5 + rng() * 3, grow: 2.2, alpha: 0.6 });
+        }
+        // the flag: he goes up in one last roar
+        if (!fell && view.showProgress >= 1) { fell = true; view.fx.burst(top.x, top.y - 10, top.z, 220, [1, 0.6, 0.15], 34, 1.2, 2.6, 14); tongues.forEach(f => { f.h *= 1.5; f.r *= 1.25; }); }
+      });
+    }
+
     // ---- the temple, across the playa ----
     bake.add(sc.place(B.temple({ h: 16 }), TEMPLE.x, TEMPLE.z, { yaw: 0.35 }));
     const lanterns = []; for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; lanterns.push({ x: TEMPLE.x + Math.cos(a) * 17, z: TEMPLE.z + Math.sin(a) * 17, yaw: a }); }

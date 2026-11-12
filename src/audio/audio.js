@@ -1,6 +1,8 @@
-/* Audio: synthesized engine, drift, and boost loops per local player; one-shot
-   effects (generated samples when present, synthesized otherwise); announcer
-   lines; and looping music with crossfades and a final-lap lift. */
+/* Audio: synthesized engine, drift, and boost loops per local player; a small
+   pool of rival engine voices and a positional crowd loop at the start/finish
+   grandstands; one-shot effects (generated samples when present, synthesized
+   otherwise); announcer lines; and looping music with crossfades and a
+   final-lap lift. */
 import { SAMPLES, MUSIC, VOICE } from '../content/audio-manifest.js';
 import { clamp, makeRng, hashString } from '../core/util.js';
 
@@ -41,7 +43,7 @@ export class AudioEngine {
     const nb = this.noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.setVolumes(this.vol.music, this.vol.sfx);
-    for (const name of ['ui_move', 'ui_select', 'coin', 'item_box', 'boost', 'hit', 'count', 'go']) this.load(name);
+    for (const name of ['ui_move', 'ui_select', 'coin', 'item_box', 'boost', 'hit', 'count', 'go', 'crowd']) this.load(name);
     if (ctx.state !== 'running') ctx.resume?.().catch(() => {});
     ctx.addEventListener?.('statechange', () => { if (ctx.state === 'running' && !this.kicked) this._kick(); });
     this._kick();
@@ -134,7 +136,11 @@ export class AudioEngine {
 
   /* ---------- continuous kart loops ---------- */
   _makeLoop() {
-    const c = this.ctx, out = c.createGain(); out.gain.value = 0; out.connect(this.sfx);
+    const c = this.ctx, out = c.createGain(); out.gain.value = 0;
+    // a stereo panner per loop: frame() parks each split-screen engine on its own side
+    let panNode = null, tail = out;
+    if (c.createStereoPanner) { panNode = c.createStereoPanner(); out.connect(panNode); tail = panNode; }
+    tail.connect(this.sfx);
     // engine: two detuned saws and a sub, through a low-pass that opens with revs, chopped by a "putt" tremolo
     const o1 = c.createOscillator(), o2 = c.createOscillator(), sub = c.createOscillator(), lp = c.createBiquadFilter(), eg = c.createGain(), trem = c.createOscillator(), tg = c.createGain();
     o1.type = 'sawtooth'; o2.type = 'sawtooth'; sub.type = 'square'; lp.type = 'lowpass'; lp.Q.value = 2.5; eg.gain.value = 0.5;
@@ -143,11 +149,11 @@ export class AudioEngine {
     o1.connect(lp); o2.connect(lp); sub.connect(sg); sg.connect(lp); lp.connect(eg); eg.connect(out);
     // tyres: band-passed noise for drifting; low rumble off the road; wind at speed; jet for boosts
     const mkNoise = (type, f, q) => { const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(this.sfx); s.start(0, Math.random()); return { s, fl, g }; };
-    const L = { out, o1, o2, sub, lp, trem, drift: mkNoise('bandpass', 2400, 5), rumble: mkNoise('lowpass', 220, 0.7), wind: mkNoise('highpass', 2600, 0.5), jet: mkNoise('bandpass', 700, 0.8), rev: 0 };
+    const L = { out, panNode, o1, o2, sub, lp, trem, drift: mkNoise('bandpass', 2400, 5), rumble: mkNoise('lowpass', 220, 0.7), wind: mkNoise('highpass', 2600, 0.5), jet: mkNoise('bandpass', 700, 0.8), rev: 0 };
     for (const o of [o1, o2, sub, trem]) o.start();
     return L;
   }
-  _killLoops() { for (const L of this.loops) { for (const o of [L.o1, L.o2, L.sub, L.trem]) { try { o.stop(); } catch { /* already stopped */ } } for (const n of [L.drift, L.rumble, L.wind, L.jet]) { try { n.s.stop(); } catch { /* already stopped */ } n.g.disconnect(); } L.out.disconnect(); } this.loops = []; }
+  _killLoops() { for (const L of this.loops) { for (const o of [L.o1, L.o2, L.sub, L.trem]) { try { o.stop(); } catch { /* already stopped */ } } for (const n of [L.drift, L.rumble, L.wind, L.jet]) { try { n.s.stop(); } catch { /* already stopped */ } n.g.disconnect(); } L.out.disconnect(); L.panNode?.disconnect(); } this.loops = []; }
 
   /** Per rendered frame during a race. */
   frame(dt, race, view) {
@@ -176,15 +182,133 @@ export class AudioEngine {
       L.wind.g.gain.setTargetAtTime(on ? 0.03 * clamp(sp - 0.5, 0, 1) * k1 : 0, t, 0.1);
       L.jet.g.gain.setTargetAtTime(on && (k.boostT > 0 || k.bulletT > 0) ? 0.16 * k1 : 0, t, 0.05);
       L.jet.fl.frequency.setTargetAtTime(600 + sp * 500, t, 0.1);
-      void pan;
+      if (L.panNode) L.panNode.pan.setTargetAtTime(pan, t, 0.05);
     });
     // final-lap lift and hype-cycle shimmer on the music
     const lead = players[0];
     const want = lead && !lead.finished && lead.lap >= race.laps && race.laps > 1 ? 1.1 : 1;
     if (want !== this.musicRate) this.setMusicRate(want);
+    this._updateRivals(dt, race, quiet);
+    this._crowdTick(dt, race);
     void view;
   }
-  stopLoops() { if (this.ctx) this._killLoops(); }
+  stopLoops() { if (this.ctx) { this._killLoops(); this._killRivals(); } }
+
+  /* ---------- rival engines (#149) ----------
+     A fixed pool of two light engine voices, lent to the nearest rival karts
+     and driven from the primary player's kart, so an approach from behind is
+     heard before it is seen. Distance sets the volume, the rival's own speed
+     sets the pitch, and its bearing sets the stereo pan. */
+  _makeRivalVoice() {
+    const c = this.ctx, out = c.createGain(); out.gain.value = 0;
+    let panNode = null, tail = out;
+    if (c.createStereoPanner) { panNode = c.createStereoPanner(); out.connect(panNode); tail = panNode; }
+    tail.connect(this.sfx);
+    // the local engine recipe, minus the tyre, wind, and boost noise chains
+    const o1 = c.createOscillator(), o2 = c.createOscillator(), sub = c.createOscillator(), lp = c.createBiquadFilter(), eg = c.createGain(), trem = c.createOscillator(), tg = c.createGain(), sg = c.createGain();
+    o1.type = 'sawtooth'; o2.type = 'sawtooth'; sub.type = 'square'; lp.type = 'lowpass'; lp.Q.value = 2.5; eg.gain.value = 0.5;
+    trem.type = 'sawtooth'; tg.gain.value = 0.28; trem.connect(tg); tg.connect(eg.gain);
+    sg.gain.value = 0.5;
+    o1.connect(lp); o2.connect(lp); sub.connect(sg); sg.connect(lp); lp.connect(eg); eg.connect(out);
+    for (const o of [o1, o2, sub, trem]) o.start();
+    return { out, panNode, o1, o2, sub, lp, trem, rev: 0, kart: null, arm: 0, coolUntil: 0 };
+  }
+  _killRivals() {
+    if (!this.rivalPool) return;
+    for (const V of this.rivalPool) { for (const o of [V.o1, V.o2, V.sub, V.trem]) { try { o.stop(); } catch { /* already stopped */ } } V.out.disconnect(); V.panNode?.disconnect(); }
+    this.rivalPool = null;
+  }
+  _updateRivals(dt, race, quiet) {
+    const me = race.players[0];
+    if (!me) { if (this.rivalPool) for (const V of this.rivalPool) V.out.gain.setTargetAtTime(0, this.t, 0.1); return; }
+    if (!this.rivalPool) this.rivalPool = [this._makeRivalVoice(), this._makeRivalVoice()];
+    const t = this.t, sy = Math.sin(me.yaw), cy = Math.cos(me.yaw), near = [];
+    for (const k of race.karts) {
+      if (k.isPlayer || k.finished || k.rescueT > 0) continue;
+      const dx = k.x - me.x, dz = k.z - me.z, d = Math.hypot(dx, dz);
+      if (d > 46) continue;
+      // fwd > 0: the rival is ahead of me; side > 0: on my right
+      near.push({ k, d, fwd: dx * sy + dz * cy, side: dz * sy - dx * cy });
+    }
+    near.sort((a, b) => a.d - b.d);
+    for (let i = 0; i < this.rivalPool.length; i++) {
+      const V = this.rivalPool[i], C = near[i];
+      if (!C || quiet) { V.out.gain.setTargetAtTime(0, t, 0.09); V.kart = null; V.arm = 0; continue; }
+      const k = C.k;
+      if (V.kart !== k) { V.kart = k; V.arm = 0; }
+      const sp = clamp(k.speed / k.baseTop, 0, 1.6);
+      const target = race.frozen ? 0.12 : clamp(sp * 0.85 + (k.grounded ? 0 : 0.18) + (k.boostT > 0 ? 0.2 : 0), 0.1, 1.5);
+      V.rev += (target - V.rev) * Math.min(1, dt * 7);
+      const f = (52 + V.rev * 150) * 0.94;   // a shade under the local pitch recipe, so a rival never phases as my own engine
+      V.o1.frequency.setTargetAtTime(f, t, 0.03); V.o2.frequency.setTargetAtTime(f * 1.008 + 1, t, 0.03);
+      V.sub.frequency.setTargetAtTime(f * 0.5, t, 0.03); V.trem.frequency.setTargetAtTime(f * 0.5, t, 0.03);
+      V.lp.frequency.setTargetAtTime(380 + V.rev * 1900, t, 0.05);
+      const att = Math.pow(clamp(1 - C.d / 42, 0, 1), 1.5);
+      V.out.gain.setTargetAtTime(att * (0.045 + Math.min(V.rev, 1.2) * 0.07) * (k.shrinkT > 0 ? 0.6 : 1), t, 0.07);
+      if (V.panNode) V.panNode.pan.setTargetAtTime(clamp(C.side / Math.max(10, C.d), -1, 1), t, 0.05);
+      // a pass-by: the rival crosses from clearly behind to clearly ahead (or the reverse, as I pass them)
+      if (V.arm === -1 && C.fwd > 2.5) { if (t >= V.coolUntil) { this._whoosh(C, 1); V.coolUntil = t + 1; } V.arm = 1; }
+      else if (V.arm === 1 && C.fwd < -2.5) { if (t >= V.coolUntil) { this._whoosh(C, -1); V.coolUntil = t + 1; } V.arm = -1; }
+      else if (V.arm === 0) V.arm = C.fwd < -2.5 ? -1 : C.fwd > 2.5 ? 1 : 0;
+    }
+  }
+  /** The air a passing kart pushes past the listener: a band sweep, rising as
+      they come through, falling as they drop behind. */
+  _whoosh(C, dir) {
+    this.noise({ dur: 0.38, vol: 0.22 * clamp(1 - C.d / 25, 0.3, 1), type: 'bandpass', f: dir > 0 ? 600 : 2400, f1: dir > 0 ? 2400 : 600, q: 1.1, pan: clamp(C.side / Math.max(8, C.d), -1, 1) });
+  }
+
+  /* ---------- crowd (#148) ----------
+     One loop of the crowd sample under a low-pass, gain-driven. In a race it
+     follows the local players' distance to the start/finish line (the
+     grandstands live there), builds through the final lap, and jumps on line
+     crossings and finishes; on the results and podium screens it settles to
+     a low bed. It routes through the sfx bus, so the mute and the sfx volume
+     apply as they do to every other effect. */
+  _crowdBed() {
+    const B = this.crowd || (this.crowd = { gain: null, excite: 0 });
+    if (!this.ctx || B.gain) return B;
+    const buf = this.buffers.get('crowd');
+    if (!buf) { this.load('crowd'); return B; }
+    const c = this.ctx, src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+    const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 850;
+    const g = c.createGain(); g.gain.value = 0;
+    src.connect(fl); fl.connect(g); g.connect(this.sfx);
+    src.start(0, buf.duration > 0.2 ? Math.random() * (buf.duration - 0.1) : 0);
+    B.gain = g;
+    return B;
+  }
+  _crowdMode(mode) {
+    this.crowdModeWanted = mode;
+    this.crowdDuck = false;   // a pause in some earlier race must not mute this one
+    if (!this.ctx) return;
+    const B = this._crowdBed();
+    if (!B.gain) { this.load('crowd').then(() => { if (this.crowd?.gain && this.crowdModeWanted === mode) this._crowdMode(mode); }); return; }
+    if (mode === 'ambient') B.gain.gain.setTargetAtTime(0.15, this.t, 0.9);
+    else if (mode === 'off') B.gain.gain.setTargetAtTime(0, this.t, 0.4);
+    if (mode !== 'race') B.excite = 0;
+  }
+  _exciteCrowd(v) { const B = this.crowd || (this.crowd = { gain: null, excite: 0 }); B.excite = Math.min(1, B.excite + v); }
+  _crowdTick(dt, race) {
+    // A session built before the first unlock never delivered its start
+    // event (event() drops everything pre-context), so if a live race is
+    // running and no mode was ever set, engage the crowd from here.
+    if (this.crowdModeWanted === undefined && race.state !== 'done' && race.players?.length) this._crowdMode('race');
+    const B = this._crowdBed(); if (!B.gain) return;
+    if (this.crowdDuck) { B.gain.gain.setTargetAtTime(0, this.t, 0.12); return; }
+    if ((this.crowdModeWanted || 'off') !== 'race') return;   // ambient and off levels are held by _crowdMode
+    B.excite = Math.max(0, B.excite - dt * 0.3);
+    const L = race.track.length; let prox = 0, runIn = 0;
+    for (const p of race.players) {
+      const d = Math.min(p.s, L - p.s);
+      prox = Math.max(prox, clamp(1 - d / 48, 0, 1));
+      if (!p.finished && race.laps > 1 && p.lap >= race.laps) runIn = Math.max(runIn, 0.1 + 0.2 * clamp(p.s / L, 0, 1));
+    }
+    const t = this.t, wander = 0.92 + 0.08 * Math.sin(t * 0.6) * Math.sin(t * 0.23 + 1.7);
+    let target = clamp((0.36 * prox * prox + runIn + B.excite * 0.45) * wander, 0, 0.8);
+    if (race.frozen) target *= 0.55;   // on the grid and in the flyover the crowd is there, not yet loud
+    B.gain.gain.setTargetAtTime(target, t, 0.3);
+  }
 
   /* ---------- events from the game ---------- */
   kartEvent(e, kart, local) {
@@ -211,8 +335,8 @@ export class AudioEngine {
       case 'rescue': if (local) this.play('rescue'); break;
       case 'inked': if (local) this.play('ink'); break;
       case 'robbed': if (local) this.play('steal'); break;
-      case 'lap': if (local && e.data > 1 && e.data <= kart.race.laps) { this.play('lap'); if (e.data === kart.race.laps) this.say('final_lap', { force: true }); } break;
-      case 'finish': if (local) { this.play(e.data <= 3 ? 'finish_good' : 'finish'); this.say(e.data === 1 ? 'winner' : 'finish', { force: true, delay: 0.4 }); } break;
+      case 'lap': if (local) { if (e.data === kart.race.laps && kart.race.laps > 1) { this._exciteCrowd(0.55); this.play('crowd', { vol: 0.55, gap: 0.6 }); } else if (e.data > 1) this._exciteCrowd(0.3); if (e.data > 1 && e.data <= kart.race.laps) { this.play('lap'); if (e.data === kart.race.laps) this.say('final_lap', { force: true }); } } break;
+      case 'finish': if (local) { this.play(e.data <= 3 ? 'finish_good' : 'finish'); this.say(e.data === 1 ? 'winner' : 'finish', { force: true, delay: 0.4 }); this._exciteCrowd(1); this.play('crowd', { vol: e.data <= 3 ? 0.85 : 0.6, gap: 0.6 }); } break;
       case 'rankUp': if (local && kart.race.time > 4) { this.play('rank_up', { vol: 0.5 }); if (e.data === 1) this.say('first_place'); } break;
       case 'rankDown': if (local && kart.race.time > 4) this.play('rank_down', { vol: 0.4 }); break;
       case 'draft': if (local) this.play('boost', { vol: 0.6, rate: 1.2 }); break;
@@ -229,17 +353,18 @@ export class AudioEngine {
       case 'shock': this.play('shock', { vol: this._nearPoint(race, e.data.x, e.data.z, 70) }); break;
       case 'ink': this.play('ink', { vol: 0.6 }); break;
       case 'blueArrive': if (e.data.target.isPlayer) this.play('warning', { rate: 1.3, gap: 0.5 }); break;
+      case 'finish': this._exciteCrowd(0.15); break;   // every kart home stirs the grandstand a little
       case 'shotBounce': this.play('bounce', { vol: this._nearPoint(race, e.data.x, e.data.z, 40) * 0.6 }); break;
     }
   }
   event(name, data) {
     if (!this.ctx) return;
-    if (name === 'pause') { this.pausedLoops = true; this.play('ui_back'); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.2, this.t, 0.1); }
-    else if (name === 'resume') { this.pausedLoops = false; this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.55, this.t, 0.1); }
-    else if (name === 'results') { this.stopLoops(); this.setMusicRate(1); if (data === 1) this.say('you_win', { delay: 0.3 }); }
-    else if (name === 'podium') { this.play('finish_good'); this.say(data === 1 ? 'champion' : 'cup_over', { force: true, delay: 0.5 }); }
-    else if (name === 'introStart') { this.stopLoops(); this.pausedLoops = false; }
-    else if (name === 'countdownStart') { this.pausedLoops = false; }
+    if (name === 'pause') { this.pausedLoops = true; this.crowdDuck = true; if (this.crowd?.gain) this.crowd.gain.gain.setTargetAtTime(0, this.t, 0.12); this.play('ui_back'); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.2, this.t, 0.1); }
+    else if (name === 'resume') { this.pausedLoops = false; this.crowdDuck = false; this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.55, this.t, 0.1); }
+    else if (name === 'results') { this.stopLoops(); this.setMusicRate(1); if (data === 1) this.say('you_win', { delay: 0.3 }); this._crowdMode('ambient'); }
+    else if (name === 'podium') { this.play('finish_good'); this.say(data === 1 ? 'champion' : 'cup_over', { force: true, delay: 0.5 }); this._crowdMode('ambient'); }
+    else if (name === 'introStart') { this.stopLoops(); this.pausedLoops = false; this._crowdMode('race'); }
+    else if (name === 'countdownStart') { this.pausedLoops = false; this._crowdMode('race'); }
   }
   racerPicked(r) { this.play('ui_select'); void r; }
   _nearness(kart) { const race = kart.race; return this._nearPoint(race, kart.x, kart.z, 45); }
@@ -247,6 +372,7 @@ export class AudioEngine {
 
   /* ---------- music ---------- */
   music(id) {
+    if (id === 'menu') this._crowdMode('off');   // back in the menus, the grandstand goes home
     if (!this.ctx) { this.pendingMusic = id; return; }
     if (id === this.musicId) return;
     this.musicId = id; this.musicRate = 1;

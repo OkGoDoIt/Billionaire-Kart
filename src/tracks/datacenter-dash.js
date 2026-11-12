@@ -218,7 +218,6 @@ export default {
     },
   },
   look: {
-    groundDetail: 0.05,
     road: { base: 0x575c66, line: 0xffffff, center: 0xffd23c },
     kerb: [0x1f6bff, 0xf4f6f8],
     shoulder: 0xa7aaa6,
@@ -682,7 +681,6 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? '#ffc928' : '#1a1d26'; g.fillRect(0, i * h / 16, w * 0.035, h / 16); g.fillRect(w * 0.965, i * h / 16, w * 0.035, h / 16); }
     g.fillStyle = 'rgba(31,107,255,0.85)'; for (let j = 0; j < 4; j++) g.fillRect(w * 0.494, j * h / 4 + h * 0.05, w * 0.012, h * 0.14);
   }, { repeat: true });
-  { const gm = view.trackMesh?.userData?.mats?.ground; if (gm) { gm.map = null; gm.needsUpdate = true; } }   // clean flat-shaded ground, no stretched blotches on the cuts
   const roadMat = view.trackMesh?.userData?.mats?.road_hallfloor;
   if (roadMat) { roadMat.map = roadTex; roadMat.emissiveMap = roadTex; roadMat.emissive.set(0xffffff); roadMat.emissiveIntensity = 0.22; roadMat.roughness = 0.5; roadMat.needsUpdate = true; }
   const wallTex = canvasTexture(THREE, 256, 256, (g, w, h) => { g.fillStyle = '#eceef1'; g.fillRect(0, 0, w, h); g.fillStyle = '#cfd4da'; g.fillRect(0, 0, 3, h); g.fillRect(w / 2, 0, 3, h); g.fillStyle = '#dde1e6'; g.fillRect(0, h - 3, w, 3); }, { repeat: true });
@@ -999,8 +997,8 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
   const water = new THREE.Mesh(wg, waterMat); water.position.y = LAKE.full; water.receiveShadow = true; water.renderOrder = 1; group.add(water);
   const cFull = new THREE.Color(0x2f86c8), cLow = new THREE.Color(0x6b6a48);
 
-  /* the exposed bed: a crack pattern draped over the terrain, fading out above the old shoreline */
-  let crackMat;
+  /* the exposed bed: a crack pattern draped over the terrain; per-vertex alpha follows the live water level (see update below) */
+  let crackMat, crackFade = null;
   {
     const gr = track.grid, q = new Quads(true);
     const ix0 = Math.max(0, Math.floor((LAKE.cx - LAKE.RX - 8 - gr.x0) / gr.cell)), ix1 = Math.min(gr.nx - 1, Math.ceil((LAKE.cx + LAKE.RX + 8 - gr.x0) / gr.cell));
@@ -1028,7 +1026,13 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
       g.putImageData(img, 0, 0);
     }, { repeat: true });
     crackMat = new THREE.MeshStandardMaterial({ map: crack, vertexColors: true, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2, color: 0x8a8070 });
-    const m = new THREE.Mesh(q.geometry(THREE), crackMat); m.matrixAutoUpdate = false; m.renderOrder = 0; group.add(m);
+    const geo = q.geometry(THREE);
+    const m = new THREE.Mesh(geo, crackMat); m.matrixAutoUpdate = false; m.renderOrder = 0; group.add(m);
+    // per-vertex bed height and baked shoreline fade: update() scales the alpha by how far the
+    // water has dropped below each point, so a submerged bed shows no cracks (water over mud)
+    const nv = geo.attributes.position.count, vh = new Float32Array(nv), vb = new Float32Array(nv);
+    for (let k = 0; k < nv; k++) { vh[k] = geo.attributes.position.getY(k) - 0.05; vb[k] = geo.attributes.color.getW(k); }
+    crackFade = { color: geo.attributes.color, h: vh, base: vb, at: Infinity };
   }
 
   /* the pipes: three fat blue straws from intake towers in the lake, high over the bed on stilts, over the dam on a gantry, down to the pumps, across the campus into the halls */
@@ -1169,6 +1173,13 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     st.level = Number.isFinite(y) ? y : LAKE.full;
     st.lap = race?.lakeLap ? Math.min(race.lakeLap, race.laps) : 1;
     water.position.y = st.level;
+    // the cracks fade in only as the water drops below each point of the bed
+    if (crackFade && Math.abs(st.level - crackFade.at) > 0.02) {
+      crackFade.at = st.level;
+      const { color, h, base } = crackFade;
+      for (let k = 0; k < h.length; k++) color.setW(k, base[k] * smoothstep(0, 0.9, h[k] - st.level));
+      color.needsUpdate = true;
+    }
     // the sky starts blue and is brown by the flag: the plants have had three laps to work on it
     st.smog += (Math.min(1, (view.showProgress || 0) * 1.2) - st.smog) * Math.min(1, dt * 0.6);
     ctx.gfx.shiftSky(SMOG, st.smog);

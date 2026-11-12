@@ -3,6 +3,7 @@
    a canvas (gantries, billboards, blimps, boards, name plates). Reports text that was squashed sideways by a
    maxWidth, or that runs off the edge of its canvas, and saves a start-line screenshot of each track so the
    gantry name can be looked at. Text hidden behind other geometry cannot be detected here: look at the screenshots.
+   Two things are let through on purpose: signs drawn one letter at a time, and tickers far wider than their canvas.
    Usage: node tools/text-check.mjs [--out dir] [--track id]      exits 1 if anything is flagged */
 import http from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -46,8 +47,14 @@ for (const id of tracks) {
   await page.screenshot({ path: join(outdir, `start-${id}.jpg`), type: 'jpeg', quality: 86 });
   const log = await page.evaluate(() => window.__textLog);
   const seen = new Set(), flagged = [];
-  for (const r of log) { if (r.squash >= 0.9 && r.off <= 3 && r.offY <= 3) continue; const k = r.text + r.cw; if (seen.has(k)) continue; seen.add(k); flagged.push(r); }
-  console.log(`\n== ${id}: ${log.length} text draws, ${flagged.length} flagged${errs.length ? ' ERR ' + errs[0] : ''}`);
+  let scrolling = 0;
+  for (const r of log) {
+    if (r.text.trim().length === 1) r.squash = 1;                       // a sign laid out one letter at a time: a narrowed letter there is a choice of typeface
+    if (r.off > r.cw * 0.6) { r.off = 0; scrolling++; }                   // far wider than its canvas: a ticker that scrolls past, not a sign that was cut
+    if (r.squash >= 0.9 && r.off <= 3 && r.offY <= 3) continue;
+    const k = r.text + r.cw; if (seen.has(k)) continue; seen.add(k); flagged.push(r);
+  }
+  console.log(`\n== ${id}: ${log.length} text draws, ${flagged.length} flagged${scrolling ? ` (${scrolling} scrolling, not checked)` : ''}${errs.length ? ' ERR ' + errs[0] : ''}`);
   total += flagged.length;
   for (const r of flagged) console.log(`   ${r.squash < 0.9 ? 'squashed to ' + Math.round(r.squash * 100) + '%' : ''}${r.off > 3 ? ' runs ' + r.off + 'px off the side' : ''}${r.offY > 3 ? ' runs ' + r.offY + 'px off top/bottom' : ''} | "${r.text}" | ${r.font.slice(0, 34)} | canvas ${r.cw}x${r.ch}${r.dom ? ' (HUD ' + r.cls + ')' : ''}`);
   await page.close();

@@ -7,3 +7,6 @@ tools/vendor/
 .env
 .env.*
 .claude/
+
+# Roger's reference photo for the Bliss Hills opening shot: kept out of the repository on purpose
+assets/bliss.jpg

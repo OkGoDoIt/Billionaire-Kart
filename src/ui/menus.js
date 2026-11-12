@@ -60,6 +60,7 @@ export class Menus {
     const first = def.el.querySelector('[data-f][data-default]') || def.el.querySelector('[data-f]');
     if (first) this.focus(first, false);
     def.onOpen?.(); def.onLayout?.();
+    this.app.showroom?.setShown(!!def.stage);   // the turntable karts appear only on screens that place them
     if (def.onLayout) requestAnimationFrame(() => { if (this.screen === def) def.onLayout(); });   // again once fonts and images have settled the layout
   }
   focus(el, sound = true) {
@@ -192,7 +193,7 @@ export class Menus {
       h('div', { class: 'racer-layout' }, grid, stage, h('aside', { class: 'racer-card', style: n > 1 ? `--pc:${PLAYER_COLORS[player]}` : '' }, h('div', { class: 'r-top' }, big, h('div', { class: 'r-id' }, h('div', { class: 'r-head' }, name, title), quote)), bio, stats, go)));
     return {
       el, onOpen: () => { A.showRoomFor(flow.racers.slice(0, player).map(id => RACER_BY_ID[id]).concat([current])); show(current); },
-      onLayout: () => A.showroom?.setStage(stage.getBoundingClientRect()),
+      stage: true, onLayout: () => A.showroom?.setStage(stage.getBoundingClientRect()),
       onBack: () => { flow.racers.length = player; },
     };
   }
@@ -279,7 +280,7 @@ export class Menus {
       h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
       h('div', { class: 'foot' }, this.btn('Continue', () => A.quitToMenu(), { cls: 'go', def: true }))));
-    return { el, onBack: () => false, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
+    return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 
   /* ---------- options ---------- */

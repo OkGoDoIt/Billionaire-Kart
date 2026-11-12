@@ -193,8 +193,8 @@ kbd { font-family: var(--body); font-weight: 700; background: #fff; color: var(-
 .item-tile.sel { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.3); z-index: 1; }
 .item-tile.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.3); z-index: 2; }
 .item-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: calc(var(--u) * 1.4); background: rgba(18,20,43,0.93); border: calc(var(--u) * 0.45) solid #fff; border-radius: calc(var(--u) * 2.6); padding: calc(var(--u) * 2.4) calc(var(--u) * 2.6) calc(var(--u) * 2.8); box-shadow: 0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.4); }
-.i-icon { width: calc(var(--u) * 15); height: calc(var(--u) * 15); border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 calc(var(--u) * 0.5) #0b0d20, 0 0 0 calc(var(--u) * 0.85) rgba(255,255,255,0.85); }
-.item-card h2 { font-size: calc(var(--u) * 3.4); color: var(--gold); }
+.i-icon { width: calc(var(--u) * 12.5); height: calc(var(--u) * 12.5); border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 calc(var(--u) * 0.5) #0b0d20, 0 0 0 calc(var(--u) * 0.85) rgba(255,255,255,0.85); }
+.item-card h2 { font-size: calc(var(--u) * 3); color: var(--gold); }
 .i-desc { font-size: calc(var(--u) * 2.1); line-height: 1.3; margin-top: calc(var(--u) * 0.6) !important; }
 .panel.records { width: min(100%, calc(var(--u) * 90)); }
 .records table { width: 100%; border-collapse: collapse; font-size: calc(var(--u) * 2); }
@@ -234,8 +234,11 @@ body.must-turn .hud, body.must-turn .track-card, body.must-turn .hint-card { vis
 
 .res-quote { font-size: calc(var(--u) * 1.75); font-style: italic; opacity: 0.92; margin-top: calc(var(--u) * 0.8) !important; text-align: center; } .res-quote b { font-style: normal; color: var(--gold); }
 
-.hint-card { position: absolute; left: 50%; bottom: calc(min(1vw, 1.78vh) * 4 + var(--safe-b)); transform: translateX(-50%); --u: min(1vw, 1.78vh); font-family: var(--body); font-weight: 600; font-size: calc(var(--u) * 2.1); color: #fff; background: rgba(18,20,43,0.86); border: calc(var(--u) * 0.3) solid rgba(255,255,255,0.8); border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.6); pointer-events: none; white-space: nowrap; animation: menu-in 0.4s ease-out 1.5s both; z-index: 6; }
+/* centered with margins, not a transform: the entry animation's transform would replace a translateX(-50%) and leave the card hanging over the position badge */
+.hint-card { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; max-width: calc(100% - min(1vw, 1.78vh) * 6); bottom: calc(min(1vw, 1.78vh) * 1.6 + var(--safe-b)); --u: min(1vw, 1.78vh); font-family: var(--body); font-weight: 600; font-size: calc(var(--u) * 2.1); color: #fff; background: rgba(18,20,43,0.86); border: calc(var(--u) * 0.3) solid rgba(255,255,255,0.8); border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.6); pointer-events: none; white-space: nowrap; animation: menu-in 0.4s ease-out 1.5s both; z-index: 6; }
 .hint-card b { color: var(--gold); } .hint-card.out { transition: opacity 0.5s; opacity: 0; }
+/* on a squarer screen the corner blocks reach further in, so the hint sits above the lap counter instead of beside it */
+@media (max-aspect-ratio: 3/2) and (orientation: landscape) { .hint-card { bottom: calc(12vh + var(--safe-b)); } }
 
 /* cup standings: a slim panel on the right so the podium shows on the left */
 .screen-cupResults { align-items: flex-end; }

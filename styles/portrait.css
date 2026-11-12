@@ -146,8 +146,7 @@
   .track-card { left: calc(var(--u) * 4 + var(--safe-l)); right: calc(var(--u) * 4 + var(--safe-r)); bottom: calc(var(--u) * 15 + var(--safe-b)); }
   .track-card h1 { font-size: calc(var(--u) * 7); }
   .track-card p { font-size: calc(var(--u) * 2.4); }
-  /* centered with margins, not a transform: the entry animation's transform replaces the base rule's translateX(-50%) */
-  .hint-card { left: 0; right: 0; margin: 0 auto; transform: none; bottom: calc(var(--u) * 6 + var(--safe-b)); white-space: normal; width: max-content; max-width: calc(100% - var(--u) * 6); text-align: center; line-height: 1.6; }
+  .hint-card { bottom: calc(var(--u) * 6 + var(--safe-b)); white-space: normal; max-width: calc(100% - var(--u) * 6); text-align: center; line-height: 1.6; }
 
   /* an upright tablet: the same layouts, sized by height so they keep a phone's proportions */
   @media (min-aspect-ratio: 5/8) {

@@ -7,6 +7,9 @@ import { Track } from '../src/track/track.js';
 import { Race } from '../src/race/race.js';
 import { RACERS } from '../src/content/racers.js';
 import { makeRng } from '../src/core/util.js';
+import { takeSlot } from './slot.mjs';
+
+await takeSlot('sim');   // two heavy jobs at a time on this machine: see slot.mjs
 
 const args = process.argv.slice(2), opt = {};
 for (let i = 0; i < args.length; i++) { const a = args[i]; if (a.startsWith('--')) { const k = a.slice(2); opt[k] = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : true; } }

@@ -10,6 +10,9 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { takeSlot } from './slot.mjs';
+
+await takeSlot('text-check');   // two heavy jobs at a time on this machine: see slot.mjs
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2), opt = {};

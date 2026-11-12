@@ -9,6 +9,9 @@ import { tmpdir } from 'node:os';
 import { extname, join, normalize, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { takeSlot } from './slot.mjs';
+
+await takeSlot('track-shots');   // two heavy jobs at a time on this machine: see slot.mjs
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const id = process.argv[2]; if (!id) { console.error('usage: track-shots.mjs <track-id> [out.jpg]'); process.exit(2); }

@@ -122,7 +122,7 @@
 .r-quote { font-style: italic; font-weight: 500; font-size: calc(var(--u) * 1.8); line-height: 1.25; margin-top: calc(var(--u) * 0.3) !important; }
 .r-bio { font-size: calc(var(--u) * 1.65); line-height: 1.28; opacity: 0.88; margin-top: calc(var(--u) * 0.9) !important; }
 /* the racer's special: what is different about driving them, under the stats it explains */
-.r-special { font-size: calc(var(--u) * 1.55); line-height: 1.26; margin-top: calc(var(--u) * 0.9) !important; padding: calc(var(--u) * 0.7) calc(var(--u) * 1.1); border-radius: calc(var(--u) * 1.2); background: rgba(255,210,60,0.1); border-left: calc(var(--u) * 0.45) solid var(--gold); }
+.r-special { font-size: calc(var(--u) * 1.55); line-height: 1.24; margin-top: calc(var(--u) * 0.8) !important; padding-left: calc(var(--u) * 1); border-left: calc(var(--u) * 0.4) solid var(--gold); }
 .r-special b { color: var(--gold); font-weight: 700; margin-right: 0.2em; }
 .r-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(var(--u) * 1.4); margin-top: calc(var(--u) * 1.1); }
 .stat { display: flex; flex-direction: column; gap: calc(var(--u) * 0.35); font-weight: 600; font-size: calc(var(--u) * 1.5); min-width: 0; }

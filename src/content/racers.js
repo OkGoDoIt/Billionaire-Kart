@@ -98,21 +98,21 @@ export const RACERS = [
    a number is a multiplier unless noted. Each is modest and most carry a cost. The slate is the one Roger
    reviewed for v1 (#51), carried onto v2's numbers (#84). */
 const SPECIALS = {
-  elon:        { name: 'Launch Window', text: 'A launch window you could land a rocket in: start revving early and still get a longer blast-off. Miss it badly and the stall is worse.', startWindow: 2.6, startBoost: 1.17, burnoutAt: 2.9, burnoutT: 1.3 },
-  sam:         { name: 'Scaling Laws', text: 'Every drift boost you land charges the next one 5% faster, up to 25%. Get hit and the curve resets.', streak: 0.05, streakMax: 5 },
-  zuck:        { name: 'Platform Bulk', text: 'You shove rivals aside in a collision. That harvested data profile also makes you a bigger target.', mass: 1.3, targetR: 1.2 },
+  elon:        { name: 'Launch Window', text: 'Rev early and still get a longer blast-off. Miss the window badly and the stall is worse.', startWindow: 2.6, startBoost: 1.17, burnoutAt: 2.9, burnoutT: 1.3 },
+  sam:         { name: 'Scaling Laws', text: 'Every drift boost you land charges the next 5% faster, up to 25%. A hit resets the curve.', streak: 0.05, streakMax: 5 },
+  zuck:        { name: 'Platform Bulk', text: 'You shove rivals aside in a collision, but that data profile makes you a bigger target.', mass: 1.3, targetR: 1.2 },
   bezos:       { name: 'Prime Delivery', text: 'Your orange drift boost arrives early, but the package is smaller.', orangeAt: 0.82, orangeDur: 0.89 },
   jensen:      { name: 'The Jacket Stays On', text: 'Orange drift boosts last longer. The leather jacket stays on during questioning.', orangeDur: 1.26 },
-  satya:       { name: 'Elastic Cloud', text: 'All your boosts last 20% longer, but your drift charges 10% slower. Burst capacity is billed by the second.', boostDur: 1.2, mtRate: 0.9 },
+  satya:       { name: 'Elastic Cloud', text: 'Boosts last 20% longer, drift charges 10% slower. Burst capacity is billed by the second.', boostDur: 1.2, mtRate: 0.9 },
   dario:       { name: 'Safety First', text: 'Charges drift boosts faster. Safety first, speed second.', mtRate: 1.26 },
   demis:       { name: 'AlphaKart Bailout', text: 'Your Government Bailout runs 20% longer. The last move is yours.', bailout: 1.2 },
-  trump:       { name: 'HUGE Boosts', text: 'Your boosts are faster than everyone’s, but your drift charges 15% slower. He does not do the technical corners, folks.', boostMul: 1.05, mtRate: 0.85 },
+  trump:       { name: 'HUGE Boosts', text: 'Faster boosts than anyone, but drift charges 15% slower. He does not do technical corners.', boostMul: 1.05, mtRate: 0.85 },
   cook:        { name: 'Operational Excellence', text: 'Your Series F stays open 30% longer. Every boost arrives on margin.', golden: 1.3 },
-  larrysergey: { name: 'Pre-Mapped Shoulders', text: 'The pair mapped every shoulder, so leaving the road barely slows you. Two egos in one frame, though: traffic shoves you around.', offroad: 0.45, mass: 0.75 },
-  bill:        { name: 'The Foundation Covers It', text: 'The Foundation covers your first spin-out of each race: one hit, fully absorbed. Even philanthropy has a cap.', absorb: 1 },
+  larrysergey: { name: 'Pre-Mapped Shoulders', text: 'They mapped every shoulder, so leaving the road barely slows you. Traffic shoves you around.', offroad: 0.45, mass: 0.75 },
+  bill:        { name: 'The Foundation Covers It', text: 'Your first spin-out of each race is covered. Even philanthropy has a cap.', absorb: 1 },
   thiel:       { name: 'Total Awareness', text: 'Your map shows the item every rival is holding. What you do with that is your business.', seeItems: true },
-  holmes:      { name: 'Vaporware', text: 'Now and then the drivetrain loses power for a second. But Viral Tweets aimed at you lose the thread 30% of the time.', sputter: { every: [6, 14], chance: 0.15, t: 1.2 }, dodgeTweet: 0.3 },
-  ellison:     { name: 'Owns the Media', text: 'Your Smear Campaigns stick 40% longer. You read your own press, so smears stick to you longer too.', inkGive: 1.4, inkTake: 1.4 },
+  holmes:      { name: 'Vaporware', text: 'Now and then the drivetrain loses power. But 30% of Viral Tweets aimed at you lose the thread.', sputter: { every: [6, 14], chance: 0.15, t: 1.2 }, dodgeTweet: 0.3 },
+  ellison:     { name: 'Owns the Media', text: 'Your Smear Campaigns stick 40% longer. So do the ones that hit you: you read your own press.', inkGive: 1.4, inkTake: 1.4 },
   murdoch:     { name: 'Unflappable', text: 'You recover from a spin-out in half the time, and crashes and smears wear off twice as fast.', stun: 0.52, inkTake: 0.5, shrinkTake: 0.5 },
 };
 /* How each one drives as a rival: added to the level's skill, and to a middling 0.5 aggression. */

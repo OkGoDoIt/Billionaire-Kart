@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { EDGE, KERB_W, KERB_H } from './track.js';
 import { clamp, lerp, smoothstep, mod, fbm, noise2 } from '../core/util.js';
-import { roadSkin, kerbTexture, detailTexture, checkerTexture, bannerTexture, DEFAULT_ADS } from '../render/textures.js';
+import { roadSkin, kerbTexture, detailTexture, meadowTexture, checkerTexture, bannerTexture, DEFAULT_ADS } from '../render/textures.js';
 
 /* ---------- tiny geometry builder ---------- */
 export class Geo {
@@ -147,7 +147,11 @@ export function buildTrackMesh(track, look = {}) {
         prev = first;
       }
     }
-    mats.ground = new THREE.MeshStandardMaterial({ vertexColors: true, map: detailTexture(3, 0.2), roughness: 1, metalness: 0, envMapIntensity: 0.35 });
+    // look.groundTexture 'meadow': mown grass; look.groundDetail: how blotchy the ordinary ground is; look.groundMatte: no shine at all
+    // (a standard material always reflects a little white light, which lifts the weakest channel of a saturated color)
+    const groundMap = L.groundTexture === 'meadow' ? meadowTexture(7, matchMedia('(pointer: coarse)').matches ? 512 : 1024) : detailTexture(3, L.groundDetail ?? 0.2);
+    mats.ground = L.groundMatte ? new THREE.MeshLambertMaterial({ vertexColors: true, map: groundMap }) : new THREE.MeshStandardMaterial({ vertexColors: true, map: groundMap, roughness: 1, metalness: 0, envMapIntensity: 0.35 });
+    if (L.groundScale) mats.ground.map.repeat.set(L.groundScale, L.groundScale);   // look.groundScale: a finer grain
     if (g.count) add('shoulders', g.build(), mats.ground);
   }
 
@@ -189,6 +193,9 @@ export function buildTrackMesh(track, look = {}) {
     const cWall = rgb(L.wall), cStripe = rgb(L.wallStripe);
     const bannerTex = bannerTexture(L.ads, 7, { set: track.def.id });   // the track's own boards where it has a set
     const BH = 1.4, adLen = BH * 2 * bannerTex.userData.boards; // 2:1 boards, side by side in one texture tile
+    // a `sides` entry may set wallHeight to draw that stretch of wall lower (collision is unchanged)
+    const wallH = [null, null];
+    for (const r of track.def.sides || []) if (r.wallHeight != null) for (const i of track._range(r.from, r.to)) for (const k of [0, 1]) if (r.side !== (k ? 'L' : 'R')) { wallH[k] ||= new Float32Array(N).fill(1.05); wallH[k][i] = r.wallHeight; }
     for (const side of [1, -1]) {
       const hw = side > 0 ? hwL : hwR, edge = side > 0 ? track.edgeL : track.edgeR, outA = side > 0 ? track.outerL : track.outerR;
       let prevB = -1, prevW = -1;
@@ -207,7 +214,7 @@ export function buildTrackMesh(track, look = {}) {
         } else if (edge[i] === EDGE.WALL) {
           prevB = -1;
           // solid barrier at the road edge: inner face, top, outer face
-          const a = hw[i] * side, b = (hw[i] + 0.55) * side, h = 1.05;
+          const a = hw[i] * side, b = (hw[i] + 0.55) * side, h = wallH[side > 0 ? 0 : 1]?.[i] ?? 1.05;
           const ax = px[i] + lx[i] * a, ay = py[i] + ly[i] * a, az = pz[i] + lz[i] * a;
           const bx = px[i] + lx[i] * b, by = py[i] + ly[i] * b, bz = pz[i] + lz[i] * b;
           const stripe = Math.floor((r * ds) / 4) % 2 === 0;
@@ -298,7 +305,7 @@ export function buildTrackMesh(track, look = {}) {
     const ARC = 10, H = track.def.tunnelHeight ?? 7.5;
     for (let r = 0; r <= N; r++) {
       const i = r % N;
-      if (!track.tunnel[i]) { prev = -1; continue; }
+      if (!track.tunnel[i] || track.def.tunnelShell === false) { prev = -1; continue; }   // a track can build its own tunnel interior
       any = true;
       const first = g.count, a = hwL[i] + 0.7, b = hwR[i] + 0.7, mid = (a - b) / 2, half = (a + b) / 2;
       for (let k = 0; k <= ARC; k++) {

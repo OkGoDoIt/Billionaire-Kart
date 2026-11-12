@@ -19,16 +19,22 @@ export class App {
     this.ui = ui; this.save = new Save();
     const q = quality || (this.save.settings.quality === 'auto' ? detectQuality() : this.save.settings.quality);
     this.gfx = new Gfx(canvas, { quality: q });
+    // automatic quality: a device that cannot hold its frame rate even at the smallest picture drops a tier
+    this.gfx.onStruggle = () => { const order = ['ultra', 'high', 'medium', 'low'], i = order.indexOf(this.gfx.qualityName); if (this.save.settings.quality === 'auto' && !quality && i >= 0 && i < order.length - 1) { this.autoQuality = order[i + 1]; this.gfx.scale = 1; this.gfx.applyQuality(this.autoQuality); } };
     this.input = new Input();
     this.menus = new Menus(this);
     this.audio = new AudioEngine(this.save);
     this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = [];
     this.curtain = el('div', 'curtain'); document.body.appendChild(this.curtain);
-    document.body.appendChild(el('div', 'rotate-hint', 'Turn your phone sideways to race'));
     this.rng = makeRng(Date.now() & 0xffff);
     this.input.onMenu = (a, d) => this.onMenu(a, d);
     this.input.onAnyInput = () => this.audio?.unlock?.();
-    addEventListener('pointerdown', () => this.audio?.unlock?.(), { passive: true });
+    // sound may only start from a gesture, and which gestures count differs by browser: listen for all of them
+    for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, () => this.audio?.unlock?.(), { passive: true, capture: true });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.audio?.suspend?.(); else this.audio?.resumeIfAllowed?.(); });
+    // menus work either way up; a race on a touch screen needs the phone on its side
+    const turned = () => this._onTurn();
+    addEventListener('resize', turned); screen.orientation?.addEventListener?.('change', turned);
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.session && !this.attract && this.session.phase === 'racing' && !this.session.paused && !this.menus.visible) this.pause(); });
     this.applySettings(true);
   }
@@ -59,20 +65,31 @@ export class App {
 
   applySettings(initial = false) {
     const S = this.save.settings;
-    const want = S.quality === 'auto' ? detectQuality() : S.quality;
+    const want = S.quality === 'auto' ? (this.autoQuality || detectQuality()) : S.quality;
     if (!initial && want !== this.gfx.qualityName) this.gfx.applyQuality(want);
-    this.input.touch.autoGas = S.autoGas;
+    if (this.session?.touch) this.session.touch.autoGo = S.autoGo;
     if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
     this.audio?.setVolumes?.(S.music, S.sfx);
     this.shake = S.shake;
   }
 
-  /** Enter or leave full screen; on phones also ask for landscape. Must be called from a user gesture. */
+  /** Enter or leave full screen. Must be called from a user gesture. */
   fullscreen(on) {
     try {
-      if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.({ navigationUI: 'hide' })?.then(() => screen.orientation?.lock?.('landscape')?.catch(() => {})).catch(() => {});
+      if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.({ navigationUI: 'hide' })?.catch(() => {});
       else if (!on && document.fullscreenElement) document.exitFullscreen?.();
     } catch { /* not supported here */ }
+  }
+  /** True while a touch-screen race is on and the phone is upright. */
+  mustTurn() { return !!this.session?.touch && !this.attract && this.session.race.state !== 'done' && matchMedia('(orientation: portrait)').matches; }
+  /** Where the browser allows it (Android, in full screen), hold the screen sideways for the race; elsewhere the pause panel asks. */
+  _lockLandscape(on) { try { if (on) screen.orientation?.lock?.('landscape')?.catch(() => {}); else screen.orientation?.unlock?.(); } catch { /* not supported here */ } }
+  _onTurn() {
+    const turn = this.mustTurn();
+    document.body.classList.toggle('must-turn', turn);
+    if (!this.session?.touch || this.attract) return;
+    if (turn && !this.session.paused) this.pause();
+    else if (this.session.paused && this.menus.screen?.spec.name === 'pause' && !this.menus.stack.length && !!this.menus.screen.el.querySelector('.turn') !== turn) this.menus.reset('pause');
   }
   /** Keep the screen awake while racing (phones dim otherwise, especially with tilt steering). */
   async _wake(on) {
@@ -86,7 +103,7 @@ export class App {
     try { await fn(); } finally { requestAnimationFrame(() => requestAnimationFrame(() => this.curtain.classList.remove('on'))); }
   }
   _clearScene() {
-    this.session?.dispose(); this.session = null; this.attract = false;
+    this.session?.dispose(); this.session = null; this.attract = false; document.body.classList.remove('must-turn');
     this.showroom?.dispose(); this.showroom = null;
     this.trackCard?.remove(); this.trackCard = null; this.hintCard?.remove(); this.hintCard = null;
   }
@@ -131,7 +148,7 @@ export class App {
   }
   _race(config, cupLine = '') {
     this.lastConfig = config; this.lastCupLine = cupLine;
-    this.menus.close(); this._wake(true);
+    this.menus.close(); this._wake(true); this._lockLandscape(true);
     return this.transition(() => {
       this._clearScene();
       config.seed = Math.floor(this.rng() * 1e6);
@@ -144,6 +161,7 @@ export class App {
       if (!this.save.data.seenHowTo && config.players.length === 1 && !this.session.touch) this._hint();
       this.audio?.music?.(def.music || def.id);
       this.audio?.say?.('track_' + def.id, { force: true, delay: 0.7 });
+      this._onTurn();
     });
   }
   /** First race only: a short reminder of the two controls people miss. */
@@ -160,11 +178,11 @@ export class App {
 
   restartRace() { this.menus.close(); this._race(this.lastConfig, this.lastCupLine); }
   backToTracks() { this.transition(() => { this._attract(); this.menus.reset('main'); this.menus.open('tracks'); }); }
-  quitToMenu() { this.gp = null; this._wake(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.audio?.music?.('menu'); }); }
+  quitToMenu() { this.gp = null; this._wake(false); this._lockLandscape(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.audio?.music?.('menu'); }); }
 
   /* ---------- pause ---------- */
   pause() { if (!this.session || this.attract || this.session.paused) return; this.session.setPaused(true); this.session.touch?.setVisible(false); this.menus.reset('pause'); }
-  resume() { this.menus.close(); this.session?.setPaused(false); this.session?.touch?.setVisible(true); }
+  resume() { if (this.mustTurn()) return; this.menus.close(); this.session?.setPaused(false); this.session?.touch?.setVisible(this.session.phase !== 'intro'); }
 
   /* ---------- results ---------- */
   _finishRace(session, results) {
@@ -184,7 +202,7 @@ export class App {
       gp = { totals: g.totals, index: g.index, count: g.tracks.length, last: g.index === g.tracks.length - 1 };
     }
     for (const h of session.huds) h.setVisible(false);
-    session.touch?.setVisible(false);
+    session.touch?.setVisible(false); this._lockLandscape(false); document.body.classList.remove('must-turn');
     this.menus.reset('results', { results, gp, track: def, records });
     this.audio?.event?.('results', mine?.rank);
     this.audio?.music?.('results');

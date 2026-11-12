@@ -15,6 +15,8 @@ export class Showroom {
     this.focus = new THREE.Vector3(0, 0.8, 0);
     this.slots = []; this.rigs = new Map(); this.t = 0; this.fx = new Particles(this.root, 1);
     this.camPos = new THREE.Vector3(0, 2.2, 9); this.camWant = this.camPos.clone(); this.look = new THREE.Vector3(0, 0.9, 0); this.lookWant = this.look.clone();
+    // what to frame (a box in the world) and where on screen to put it (a rectangle the menu leaves free)
+    this.subject = { y: 1.2, w: 5, h: 3 }; this.stage = { cx: 0.5, cy: 0.5, w: 1, h: 1 }; this.stageNow = null;
     gfx.setViews([{ camera: this.camera, rect: [0, 0, 1, 1], focus: this.focus, onBeforeRender: () => this.fx.setViewport(gfx.renderer.domElement.height, this.camera.fov) }]);
   }
 
@@ -27,8 +29,27 @@ export class Showroom {
     g.position.set(x, 0, z); this.root.add(g); return g;
   }
 
-  /** Show these racers on turntables (one per local player). offsetX shifts the group to leave room for UI. */
-  setRacers(racers, { offsetX = 0, spin = true } = {}) {
+  /** The part of the screen the menu leaves free for the scene, as a DOM rectangle. The camera frames the subject inside it. */
+  setStage(r) {
+    const W = Math.max(1, innerWidth), H = Math.max(1, innerHeight);
+    if (r.width < 8 || r.height < 8) return;
+    this.stage = { cx: (r.left + r.width / 2) / W, cy: (r.top + r.height / 2) / H, w: r.width / W, h: r.height / H };
+  }
+  _frame(dt) {
+    const s = this.subject, want = this.stage, W = this.gfx.width || innerWidth, H = this.gfx.height || innerHeight;
+    const st = this.stageNow || (this.stageNow = { ...want });
+    for (const k of ['cx', 'cy', 'w', 'h']) st[k] = dt > 0 ? damp(st[k], want[k], 6, dt) : want[k];
+    // the world height the whole screen must span for the subject to fit inside the stage, both ways
+    const span = Math.max(s.h / st.h, s.w * H / (st.w * W)), dist = span / (2 * Math.tan(this.camera.fov * Math.PI / 360));
+    this.camWant.set(0, s.y + dist * 0.14, dist); this.lookWant.set(0, s.y, 0);
+    const v = this.camera.view || (this.camera.view = { enabled: true, fullWidth: 1, fullHeight: 1, offsetX: 0, offsetY: 0, width: 1, height: 1 });
+    const ox = 0.5 - st.cx, oy = 0.5 - st.cy;
+    if (Math.abs(v.offsetX - ox) > 1e-4 || Math.abs(v.offsetY - oy) > 1e-4 || !v.enabled) { v.enabled = true; v.offsetX = ox; v.offsetY = oy; this.camera.updateProjectionMatrix(); }
+  }
+
+  /** Show these racers on turntables (one per local player). */
+  setRacers(racers, { spin = true } = {}) {
+    const offsetX = 0;
     for (const s of this.slots) this.root.remove(s.group);
     this.slots = [];
     const n = racers.length, gap = n > 2 ? 3.6 : 4.6;
@@ -39,9 +60,7 @@ export class Showroom {
       this.slots.push({ group, holder, racer: null, rig: null, spin, angle: -0.6 + i * 0.2, pop: 1 });
       this.setRacer(i, racer);
     });
-    const dist = n <= 1 ? 8.4 : n === 2 ? 11.5 : 15.5;
-    // offsetX makes room for a menu on the left; looking low lifts the karts above a card at the bottom
-    this.camWant.set(offsetX * 0.35, 2.3, dist); this.lookWant.set(offsetX * 0.35, offsetX ? 0.15 : 1.0, 0);
+    this.subject = { y: 1.2, w: (n - 1) * gap + 4.5, h: 2.7 }; this.podium = false;
   }
   setRacer(i, racer) {
     const s = this.slots[i]; if (!s || s.racer === racer) return;
@@ -63,8 +82,7 @@ export class Showroom {
       const rig = buildKart(racer); holder.add(rig.root);
       this.slots.push({ group, holder, racer, rig, spin: false, angle: 0.5 - i * 0.5 + (i === 2 ? 0.3 : 0), pop: 0, podium: i });
     });
-    // the standings panel sits on the right, so frame the podium in the left part of the screen
-    this.camWant.set(3.9, 3.4, 17.5); this.lookWant.set(3.9, 1.7, 0); this.podium = true;
+    this.subject = { y: 2.0, w: 13.5, h: 5.4 }; this.podium = true;
   }
 
   update(dt) {
@@ -86,6 +104,7 @@ export class Showroom {
     }
     if (this.podium && this.fx.count(26, dt)) this.fx.confetti((Math.random() - 0.5) * 14, 9, (Math.random() - 0.5) * 5, 1, [[1, 0.82, 0.24], [1, 0.3, 0.43], [0.22, 0.71, 1], [0.18, 0.9, 0.65], [1, 1, 1]], 2, 0);
     this.fx.update(dt);
+    this._frame(dt);
     this.camPos.x = damp(this.camPos.x, this.camWant.x, 4, dt); this.camPos.y = damp(this.camPos.y, this.camWant.y, 4, dt); this.camPos.z = damp(this.camPos.z, this.camWant.z, 4, dt);
     this.look.lerp(this.lookWant, 1 - Math.exp(-4 * dt));
     this.camera.position.copy(this.camPos); this.camera.position.x += Math.sin(this.t * 0.3) * 0.25;

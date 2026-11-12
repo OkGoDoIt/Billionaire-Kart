@@ -8,18 +8,24 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Sky, SKY_PRESETS } from './sky.js';
 import { clamp } from '../core/util.js';
 
+/* maxPixelRatio caps sharpness; pixels is a budget of rendered pixels, so a small, dense phone screen can
+   use more of its pixel ratio than a big monitor without costing more to draw. */
 export const QUALITY = {
-  low:    { label: 'Low',    maxPixelRatio: 1,    msaa: 0, bloom: false, shadow: 0,    shadowRange: 0,  particles: 0.5, aniso: 2, scenery: 0.4 },
-  medium: { label: 'Medium', maxPixelRatio: 1.25, msaa: 2, bloom: true,  shadow: 1024, shadowRange: 42, particles: 0.8, aniso: 4, scenery: 0.7 },
-  high:   { label: 'High',   maxPixelRatio: 1.5,  msaa: 4, bloom: true,  shadow: 2048, shadowRange: 55, particles: 1,   aniso: 8, scenery: 1 },
-  ultra:  { label: 'Ultra',  maxPixelRatio: 2,    msaa: 4, bloom: true,  shadow: 4096, shadowRange: 75, particles: 1,   aniso: 16, scenery: 1 },
+  low:    { label: 'Low',    maxPixelRatio: 1.5, pixels: 0.8e6, msaa: 0, bloom: false, shadow: 0,    shadowRange: 0,  particles: 0.5, aniso: 2, scenery: 0.4 },
+  medium: { label: 'Medium', maxPixelRatio: 2,   pixels: 1.5e6, msaa: 2, bloom: true,  shadow: 1024, shadowRange: 42, particles: 0.8, aniso: 4, scenery: 0.7 },
+  high:   { label: 'High',   maxPixelRatio: 2,   pixels: 2.6e6, msaa: 4, bloom: true,  shadow: 2048, shadowRange: 55, particles: 1,   aniso: 8, scenery: 1 },
+  ultra:  { label: 'Ultra',  maxPixelRatio: 3,   pixels: 5e6,   msaa: 4, bloom: true,  shadow: 4096, shadowRange: 75, particles: 1,   aniso: 16, scenery: 1 },
 };
 
 export function detectQuality() {
   const coarse = matchMedia('(pointer: coarse)').matches;
   const small = Math.min(screen.width, screen.height) < 820;
-  const cores = navigator.hardwareConcurrency || 4;
-  if (coarse || small) return cores >= 6 ? 'medium' : 'low';
+  const cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 4;
+  // Phones and tablets: iPhones and iPads under-report their cores, and every one that runs a current
+  // browser handles Medium, so only an Android device that says it is small gets Low. Frame rate is
+  // protected either way by the dynamic resolution below.
+  const apple = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (coarse || small) return apple || (cores >= 6 && mem >= 4) ? 'medium' : 'low';
   return cores >= 8 ? 'high' : 'medium';
 }
 
@@ -161,7 +167,7 @@ export class Gfx {
   resize() {
     const el = this.canvas.parentElement || document.body;
     const w = Math.max(2, el.clientWidth), h = Math.max(2, el.clientHeight);
-    const pr = Math.min(window.devicePixelRatio || 1, this.q.maxPixelRatio) * this.scale;
+    const pr = Math.min(window.devicePixelRatio || 1, this.q.maxPixelRatio, Math.max(1, Math.sqrt(this.q.pixels / (w * h)))) * this.scale;
     if (w === this.width && h === this.height && pr === this.pixelRatio) return;
     this.width = w; this.height = h; this.pixelRatio = pr;
     this.renderer.setPixelRatio(pr);
@@ -223,6 +229,9 @@ export class Gfx {
     this._ft += (dt * 1000 - this._ft) * 0.05;
     this._scaleCooldown -= dt;
     if (this._scaleCooldown > 0) return;
+    // already at the smallest picture and still slow: tell the app, which steps down a quality tier when quality is automatic
+    if (this._ft > 24 && this.scale <= 0.56) { this._slowT = (this._slowT || 0) + 1; if (this._slowT >= 3) { this._slowT = 0; this._scaleCooldown = 6; this.onStruggle?.(); return; } this._scaleCooldown = 1.5; return; }
+    this._slowT = 0;
     if (this._ft > 21 && this.scale > 0.55) { this.scale = clamp(this.scale - 0.12, 0.55, 1); this._scaleCooldown = 2.5; this.resize(); }
     else if (this._ft < 14.5 && this.scale < 1) { this.scale = clamp(this.scale + 0.08, 0.55, 1); this._scaleCooldown = 4; this.resize(); }
   }

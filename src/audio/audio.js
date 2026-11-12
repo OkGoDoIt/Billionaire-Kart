@@ -5,6 +5,14 @@ import { SAMPLES, MUSIC, VOICE } from '../content/audio-manifest.js';
 import { clamp, makeRng, hashString } from '../core/util.js';
 
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
+/* A tenth of a second of silence as a WAV file, for the iPhone playback-category workaround. */
+const SILENT_WAV = (() => {
+  const n = 800, b = new Uint8Array(44 + n), v = new DataView(b.buffer), str = (o, t) => { for (let i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); str(36, 'data'); v.setUint32(40, n, true); b.fill(128, 44);
+  let bin = ''; for (const x of b) bin += String.fromCharCode(x);
+  return 'data:audio/wav;base64,' + (typeof btoa === 'function' ? btoa(bin) : '');
+})();
 
 export class AudioEngine {
   constructor(save) {
@@ -13,9 +21,16 @@ export class AudioEngine {
     this.loops = []; this.musicId = null; this.musicNodes = []; this.musicRate = 1; this.seq = null; this.lastVoiceT = 0; this.cool = new Map();
   }
 
-  /** Create or resume the context. Browsers only allow this after a user gesture. */
+  /** Create or resume the context. Browsers only allow this after a user gesture, and iPhones only
+      count the end of a touch (touchend, pointerup, click), so this is called from all of them. */
   unlock() {
-    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    this._playbackSession();
+    if (this.ctx) {
+      // 'interrupted' is what an iPhone reports after a call, Siri, or a trip to another app
+      if (this.ctx.state !== 'running') this.ctx.resume?.().catch(() => {});
+      if (!this.kicked && this.ctx.state === 'running') this._kick();
+      return;
+    }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     const ctx = this.ctx = new AC({ latencyHint: 'interactive' });
     this.master = ctx.createGain(); this.comp = ctx.createDynamicsCompressor();
@@ -27,8 +42,33 @@ export class AudioEngine {
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.setVolumes(this.vol.music, this.vol.sfx);
     for (const name of ['ui_move', 'ui_select', 'coin', 'item_box', 'boost', 'hit', 'count', 'go']) this.load(name);
+    if (ctx.state !== 'running') ctx.resume?.().catch(() => {});
+    ctx.addEventListener?.('statechange', () => { if (ctx.state === 'running' && !this.kicked) this._kick(); });
+    this._kick();
     if (this.pendingMusic) { const id = this.pendingMusic; this.pendingMusic = null; this.music(id); }
   }
+  /** An iPhone plays web audio as "ambient" sound, which the ring/silent switch mutes. A game the player
+      started on purpose should be heard, so ask for the playback category: through the audio session
+      where the browser has one, and by keeping a silent media element playing where it does not. */
+  _playbackSession() {
+    if (this.sessionSet) return;
+    try {
+      if (navigator.audioSession) { navigator.audioSession.type = 'playback'; this.sessionSet = true; return; }
+      const apple = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (!apple) { this.sessionSet = true; return; }
+      const a = this.silent || (this.silent = Object.assign(document.createElement('audio'), { loop: true, preload: 'auto', src: SILENT_WAV }));
+      a.setAttribute('playsinline', ''); a.setAttribute('x-webkit-airplay', 'deny');
+      a.play().then(() => { this.sessionSet = true; }).catch(() => {});   // refused outside a gesture: the next one tries again
+    } catch { /* not supported here */ }
+  }
+  /** One silent sample, started inside the gesture: older iPhones only start the clock once something has played. */
+  _kick() {
+    try { const s = this.ctx.createBufferSource(); s.buffer = this.ctx.createBuffer(1, 1, 22050); s.connect(this.ctx.destination); s.start(0); this.kicked = this.ctx.state === 'running'; } catch { /* nothing to do */ }
+  }
+  /** Coming back to the tab: pick the sound back up if the browser lets us without a new gesture. */
+  resumeIfAllowed() { if (this.ctx && this.ctx.state !== 'running') this.ctx.resume?.().catch(() => {}); this.silent?.play?.().catch(() => {}); }
+  /** The tab went to the background: stop making sound until it is back. */
+  suspend() { if (this.ctx?.state === 'running') this.ctx.suspend?.().catch(() => {}); this.silent?.pause?.(); }
   get t() { return this.ctx.currentTime; }
   setVolumes(music, sfx) { this.vol.music = music; this.vol.sfx = sfx; if (!this.ctx) return; this.sfx.gain.value = this.muted ? 0 : sfx; this.mus.gain.value = this.muted ? 0 : music * 0.55; }
   toggleMute() { this.muted = !this.muted; this.setVolumes(this.vol.music, this.vol.sfx); }

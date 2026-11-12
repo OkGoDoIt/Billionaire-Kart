@@ -55,6 +55,7 @@ const skyFrag = /* glsl */`
   varying vec3 vDir;
   uniform vec3 uZenith, uHorizon, uGround, uSun, uSunDir, uCloud, uCloudShade;
   uniform float uTime, uCover, uScale, uStars, uCloudsOn, uGain;
+  uniform vec3 uClear;
   uniform sampler2D uPano; uniform float uPanoOn, uPanoTop, uPanoBottom, uPanoRot;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -90,6 +91,8 @@ const skyFrag = /* glsl */`
       vec3 cc = mix(uCloudShade, uCloud, lit);
       cc += uSun * pow(sd, 6.0) * 0.25;
       float fade = smoothstep(0.015, 0.16, h);
+      // an optional wedge of compass directions kept clear, for a track that hangs its own clouds there
+      if (uClear.z > -1.5) m *= 1.0 - smoothstep(uClear.z - 0.14, uClear.z + 0.06, dot(normalize(d.xz + 1e-5), uClear.xy));
       col = mix(col, cc, m * fade * 0.96);
     }
     // optional painted panorama around the horizon (transparent above its own skyline)
@@ -117,6 +120,8 @@ export class Sky {
       uSun: { value: new THREE.Color(p.sun) }, uSunDir: { value: new THREE.Vector3(...p.sunDir).normalize() },
       uCloud: { value: new THREE.Color(p.cloud) }, uCloudShade: { value: new THREE.Color(p.cloudShade) },
       uTime: { value: 0 }, uGain: { value: 1 }, uCover: { value: p.cloudCover }, uScale: { value: p.cloudScale }, uStars: { value: p.stars }, uCloudsOn: { value: 1 },
+      // clearSky: [compass bearing of the middle of the wedge (0 = +z, 90 = +x), half-width], in degrees; z = -2 means none
+      uClear: { value: p.clearSky ? new THREE.Vector3(Math.sin(p.clearSky[0] * Math.PI / 180), Math.cos(p.clearSky[0] * Math.PI / 180), Math.cos(p.clearSky[1] * Math.PI / 180)) : new THREE.Vector3(1, 0, -2) },
       uPano: { value: null }, uPanoOn: { value: 0 }, uPanoTop: { value: 0.6 }, uPanoBottom: { value: -0.12 }, uPanoRot: { value: 0 },
     };
     const mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: skyVert, fragmentShader: skyFrag, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false, toneMapped: true });

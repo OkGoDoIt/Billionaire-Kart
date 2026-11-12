@@ -2,18 +2,26 @@
    famous default wallpaper as a real place: a roller-coaster of green hills,
    three air-time crests on the way down, a banked bowl, and a meadow you can
    cut with a boost. */
-import { fbm, smoothstep } from '../core/util.js';
+import { fbm, smoothstep, clamp } from '../core/util.js';
 
 import { Scenery, partsOf } from '../render/scenery.js';
 import * as P from '../models/props.js';
 import * as B from '../models/props-bliss-hills.js';
 import { bannerTexture } from '../render/textures.js';
+import { skyCard, farHills } from '../render/cloudcard.js';
+import { VIEW, HILL, SKY, CLOUD_COVER, CLOUD_FILL, FAR_HILLS, dipRadius, wallpaperHeight, wallpaperWeight, wallpaperPaint, toPicture } from '../content/bliss-wallpaper.js';
 
 const LAKE = { x: -62, z: 42, r: 34 };
 const MEADOW = { x: -20, z: 136, r: 40 };
 const SWALE = { z: 136, x0: -95, x1: 12, depth: 2.4 };
 const FARM = { x: 40, z: -78, r: 34, y: 4 };
 const RIDGE = { z: 345, x0: -190, x1: 170 };   // wind turbines along the skyline south of the hill
+
+/* The wallpaper: east of turn one stands the hill everybody has stared at. Its shape, colors, sky, and clouds
+   live in ../content/bliss-wallpaper.js; the race opens on the view they were measured for. */
+const lin = hex => [(hex >> 16) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255].map(c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+const mixInto = (out, c, k) => { out[0] += (c[0] - out[0]) * k; out[1] += (c[1] - out[1]) * k; out[2] += (c[2] - out[2]) * k; };
+const DEG = 180 / Math.PI;
 
 export default {
   id: 'bliss-hills',
@@ -22,8 +30,11 @@ export default {
   laps: 3,
   width: 18,
   sky: 'day',
-  skyOverrides: { cloudCover: 0.56 },
+  // a deep, clean blue with the sun behind the viewer; the procedural clouds keep out of the east, where the authored ones hang
+  skyOverrides: { zenith: 0x1468ee, horizon: 0x8fbcf3, cloudCover: 0.5, sunDir: [-0.5, 0.74, -0.38], clearSky: [90, 62], fog: 0xa3c6f3, fogNear: 520, fogFar: 1900 },
   backdrop: { img: 'assets/backdrops/bliss-hills.webp', top: 27, bottom: -9, rot: 0.3 },
+  // the opening shot is the wallpaper, shown without the game's color grade so the measured colors come out as measured
+  intro: [{ pos: [VIEW.x, VIEW.eye, VIEW.z], look: [VIEW.x + 100, VIEW.eye, VIEW.z], fov: VIEW.fov, dur: 3.2, grade: { sat: 1, contrast: 1, vignette: 0 } }],
   offroad: 'grass',
   defaults: { edge: 'open', shoulder: 3.5, outer: 13 },
   path: [
@@ -106,8 +117,15 @@ export default {
     { kind: 'static', model: 'bale', at: 26.75, lat: 15, effect: 'bump', radius: 1.6 },
   ],
   terrain: {
-    cell: 3, margin: 160, blend: 22, water: -1.4,
+    cell: 3, margin: 160, marginX: [160, 405], marginZ: [215, 160], blend: 22, water: -1.4,
+    color(x, z, h, slope, over, out) {
+      const w = wallpaperWeight(x, z); if (w <= 0) return;
+      const c = [0, 0, 0], p = x - VIEW.x > 2 ? toPicture(x, h, z) : [960, 1070];
+      wallpaperPaint(p[0], p[1], c); mixInto(out, c, w);
+    },
     fn(x, z) {
+      const ww = wallpaperWeight(x, z);
+      if (ww >= 1) return wallpaperHeight(x - VIEW.x, z - VIEW.z);
       // big, round, impossibly green hills; a gentle bowl around the lake
       let h = (fbm(x * 0.0055, z * 0.0055, 3, 11) - 0.4) * 34;
       h += (fbm(x * 0.016, z * 0.016, 2, 23) - 0.5) * 4;
@@ -126,10 +144,11 @@ export default {
       h += 26 * Math.exp(-(((z - RIDGE.z) / 48) ** 2)) * smoothstep(RIDGE.x0 - 120, RIDGE.x0, x) * (1 - smoothstep(RIDGE.x1, RIDGE.x1 + 120, x));
       const fk = 1 - smoothstep(FARM.r * 0.7, FARM.r * 1.4, Math.hypot(x - FARM.x, z - FARM.z));
       h = h * (1 - fk) + FARM.y * fk;
-      return h;
+      return ww > 0 ? h + (wallpaperHeight(x - VIEW.x, z - VIEW.z) - h) * ww : h;
     },
   },
   look: {
+    groundTexture: 'meadow', groundScale: 0.142, groundMatte: true,                        // mown grass, one tile to 64 m, so the mower's rows read on the far hill                                                // smooth, mown grass: the hills here are the star
     road: { base: 0x5d6373, line: 0xffffff, center: 0xffd23c },
     kerb: [0xe23b3b, 0xf7f7f2],
     shoulder: 0xd9c78f,
@@ -148,8 +167,60 @@ export default {
     const nearFarm = (x, z) => Math.hypot(x - FARM.x, z - FARM.z) < FARM.r * 1.1;
     const onRidge = (x, z) => Math.abs(z - RIDGE.z) < 22 && x > RIDGE.x0 - 20 && x < RIDGE.x1 + 20;
     const taken = [];                                                   // footprints of landmarks: [x, z, r]
-    const free = (x, z) => !taken.some(([tx, tz, r]) => (tx - x) ** 2 + (tz - z) ** 2 < r * r);
+    // nothing is ever planted in the wallpaper view: it stays a hill, a field, and a sky
+    const free = (x, z) => wallpaperWeight(x, z) <= 0 && !(x > 118 && z < 60 && z > -140) && !taken.some(([tx, tz, r]) => (tx - x) ** 2 + (tz - z) ** 2 < r * r);
 
+    // the wallpaper's sky and clouds, hung far to the east, with the far hills that show over the right shoulder
+    {
+      const small = (ctx.gfx.q?.pixels || 2e6) < 1.2e6, exposure = ctx.gfx.renderer.toneMappingExposure, eye = [VIEW.x, VIEW.eye, VIEW.z];
+      ctx.group.add(skyCard(ctx.gfx.renderer, { sky: SKY, cover: CLOUD_COVER, fill: CLOUD_FILL, rect: [-700, -430, 2620, 560], eye, fov: VIEW.fov, distance: 1500, exposure, width: small ? 2048 : 4096, height: small ? 608 : 1216 }));
+      ctx.group.add(farHills({ points: FAR_HILLS, eye, fov: VIEW.fov, exposure }));
+    }
+    // the near field: a dark earth bank where the dip runs out of the picture on the left, dry stalks along it, and buttercups
+    {
+      const L = ctx.gfx.lightScale ?? 0.6, M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), S = new THREE.Vector3();
+      const at = (az, r) => { const t = az / DEG, x = VIEW.x + Math.cos(t) * r, z = VIEW.z + Math.sin(t) * r; return [x, track.terrainHeight(x, z), z]; };
+      // the bank: a low wall of dark earth standing on the far lip of the field, tallest at the left and gone by the middle
+      const pos = [], col = [], idx = [], dark = lin(0x1f1826), mid = lin(0x3b2a3c);
+      let n = 0;
+      for (let az = -66; az <= -9; az += 1.2) {
+        const k = smoothstep(-9, -24, az), r = dipRadius(az) * 0.86, a = at(az, r), b = at(az, r + 0.5), hgt = (0.06 + 0.36 * k) * (0.8 + rng() * 0.4);
+        pos.push(a[0], a[1] - 0.05, a[2], b[0], a[1] + hgt, b[2]);
+        for (const c of [dark, mid]) { const v = 0.75 + rng() * 0.5; col.push(c[0] * v, c[1] * v, c[2] * v); }
+        if (n) { const o = (n - 1) * 2; idx.push(o, o + 2, o + 1, o + 1, o + 2, o + 3); }
+        n++;
+      }
+      const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); bg.setIndex(idx);
+      ctx.group.add(new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, color: new THREE.Color(L * 1.15, L * 1.15, L * 1.15) })));
+      const stalks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.006, 0.012, 1, 4).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x4e3f52).multiplyScalar(L) }), 320);
+      for (let i = 0; i < 320; i++) { const az = rng.range(-64, -12), p = at(az, dipRadius(az) * 0.86 + rng.range(0, 0.7)); E.set(rng.range(-0.3, 0.3), 0, rng.range(-0.3, 0.3)); S.set(1, 0.2 + rng() * 0.42, 1); stalks.setMatrixAt(i, M4.compose(V.set(p[0], p[1] + 0.3, p[2]), Q.setFromEuler(E), S)); }
+      ctx.group.add(stalks);
+      const flowers = new THREE.InstancedMesh(new THREE.SphereGeometry(0.02, 5, 4), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf2e31c).multiplyScalar(L * 1.25) }), 190);
+      for (let i = 0; i < 190; i++) { const az = rng.range(-50, 50), r = 4 + Math.pow(rng(), 0.45) * (dipRadius(az) - 6), p = at(az, r), k = (0.7 + rng() * 0.7) * Math.max(0.35, r / 20);   /* about the same few pixels each, near or far */ flowers.setMatrixAt(i, M4.makeScale(k, k, k).setPosition(p[0], p[1] + 0.13 + r * 0.006 + rng() * 0.05, p[2])); }
+      ctx.group.add(flowers);
+      // real grass at your feet: tens of thousands of thin blades, each tinted like the ground under it, thinning out with distance
+      {
+        const N = Math.round(70000 * (ctx.gfx.q?.scenery ?? 1)), bp = new Float32Array(N * 9), bc = new Float32Array(N * 9), c = [0, 0, 0];
+        for (let i = 0; i < N; i++) {
+          const az = rng.range(-58, 58), far = dipRadius(az) * 0.8, r = 3.2 + Math.pow(rng(), 1.7) * (far - 3.2), p = at(az, r);
+          const hgt = (0.045 + rng() * 0.065) * (1 + r / 12), w = (0.003 + rng() * 0.003) * (1 + r / 6), t = rng() * 6.283, lx = rng.range(-0.05, 0.05), lz = rng.range(-0.05, 0.05);
+          const pic = toPicture(p[0], p[1], p[2]); wallpaperPaint(pic[0], pic[1], c); const v = 0.78 + rng() * 0.5, y = rng() < 0.1 ? 1.2 : 1;   // the odd blade catches the light
+          bp.set([p[0] - Math.cos(t) * w, p[1], p[2] - Math.sin(t) * w, p[0] + Math.cos(t) * w, p[1], p[2] + Math.sin(t) * w, p[0] + lx, p[1] + hgt, p[2] + lz], i * 9);
+          for (let k = 0; k < 3; k++) { const m = v * (k === 2 ? 1.25 * y : 0.82); bc.set([c[0] * m * (k === 2 ? 1.08 : 1), c[1] * m, c[2] * m * 0.9], i * 9 + k * 3); }
+        }
+        const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.BufferAttribute(bp, 3)); gg.setAttribute('color', new THREE.BufferAttribute(bc, 3));
+        const nrm = new Float32Array(N * 9); for (let i = 1; i < N * 9; i += 3) nrm[i] = 1; gg.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+        const blades = new THREE.Mesh(gg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })); blades.receiveShadow = true; blades.name = 'grass'; ctx.group.add(blades);
+      }
+      // the few sunlit bushes on the right shoulder of the hill, where it meets the far hills
+      const shoulder = [];
+      for (const px of [1606, 1650, 1688, 1702]) {
+        const t = (px / VIEW.frame[0] - 0.5) * 2 * Math.tan(VIEW.fov * Math.PI / 360) * 16 / 9; let bu = 60, be = -9;
+        for (let u = 60; u < 420; u += 2) { const e = (wallpaperHeight(u, u * t) - VIEW.eye) / u; if (e > be) { be = e; bu = u; } }
+        shoulder.push({ x: VIEW.x + bu, z: VIEW.z + bu * t, y: wallpaperHeight(bu, bu * t) - 0.3, yaw: rng() * 6.28 });
+      }
+      sc.instances(partsOf(P.bush(3, { color: 0xa3a13c })), shoulder, { scale: [1.3, 2.0], cast: false });
+    }
     // start/finish gantry and grandstands along the main straight
     const g0 = sc.beside(0, 1, -track.hwL[0]);
     const gantry = P.gantry(track.hwL[0] + track.hwR[0] + 1.5, 'BLISS HILLS', { color: 0x2f6bff, color2: 0xffd23c });
@@ -200,6 +271,7 @@ export default {
     const mons = [], towers = [];
     for (const [at, side, off] of [[2.4, 1, 24], [6.7, 1, 22], [19.1, 1, 30], [24.9, -1, 21], [29.4, -1, 20], [32.7, 1, 24], [12.2, -1, 22]]) {
       const p = sc.beside(at, side, off), i = track.indexAtCp(at);
+      if (!free(p.x, p.z)) continue;
       const tx = track.tx[i], tz = track.tz[i];
       mons.push({ x: p.x, z: p.z, y: sc.y(p.x, p.z), yaw: p.yaw + rng.range(-0.35, 0.35) });
       for (const d of [-5.5, 5.8]) { if (rng() < 0.25) continue; const x = p.x + tx * d + rng.range(-1.5, 1.5), z = p.z + tz * d + rng.range(-1.5, 1.5); towers.push({ x, z, y: sc.y(x, z), yaw: p.yaw + rng.range(-0.6, 0.6) }); }
@@ -272,14 +344,15 @@ export default {
     // big billboards where you are looking anyway
     const ads = ['HAVE YOU TRIED REBOOTING', 'PRESS ANY KEY', 'CTRL ALT DELIGHT', '640K IS ENOUGH', 'DEFRAG TODAY', 'INSERT DISK 2', 'SCREENSAVER INC'];
     [[1.3, 1, 30], [4.9, -1, 24], [10.4, 1, 22], [16.5, -1, 22], [21.0, -1, 26], [29.9, 1, 24], [33.6, -1, 22]].forEach(([at, side, off], i) => {
-      const p = sc.beside(at, side, off), tex = bannerTexture([ads[i]], i + 3);
+      const p = sc.beside(at, side, off); if (!free(p.x, p.z)) return;
+      const tex = bannerTexture([ads[i]], i + 3);
       tex.repeat.set(0.25, 1);
       sc.place(P.billboard(tex, { w: 15, h: 5, legs: 6 }), p.x, p.z, { yaw: p.yaw + rng.range(-0.15, 0.15) });
     });
 
     // hot-air balloons drifting over the hills
     const cols = [[0xff4d6d, 0xffd23c], [0x38b6ff, 0xffffff], [0x2ee6a6, 0xffd23c], [0x9b6bff, 0xff7eb6], [0xff8a3c, 0xffffff]];
-    const balloons = cols.map((c, i) => { const b = P.balloon(c); const a = (i / cols.length) * Math.PI * 2 + 0.9, r = 210 + (i % 2) * 80; b.position.set(-10 + Math.cos(a) * r, 60 + i * 8, 130 + Math.sin(a) * r); b.scale.setScalar(1.4 + (i % 3) * 0.3); ctx.group.add(b); return b; });
+    const balloons = cols.map((c, i) => { const b = P.balloon(c); const a = 1.5 + (i / (cols.length - 1)) * 3.3, r = 210 + (i % 2) * 80;   /* over the west and south, clear of the wallpaper */ b.position.set(-10 + Math.cos(a) * r, 60 + i * 8, 130 + Math.sin(a) * r); b.scale.setScalar(1.4 + (i % 3) * 0.3); ctx.group.add(b); return b; });
     anim.push((dt, time) => { balloons.forEach((b, i) => { b.position.y += Math.sin(time * 0.4 + i * 1.7) * dt * 0.8; b.position.x += Math.sin(time * 0.05 + i) * dt * 0.6; b.rotation.y += dt * 0.05; }); });
   },
 };

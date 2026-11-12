@@ -38,8 +38,12 @@ export class RaceSession {
     // touch controls for a solo player on a touch screen
     this.touch = null;
     if (n === 1 && isTouchDevice() && !config.auto) {
-      this.touch = new TouchControls(app.ui, app.input, this.race.players[0], { onPause: () => app.pause?.() });
+      const S = app.save?.settings || {}, seen = app.save?.data.touchRaces || 0;
+      this.touch = new TouchControls(app.ui, app.input, this.race.players[0], { onPause: () => app.pause?.(), autoGo: !!S.autoGo, coach: seen < 3 });
+      if (app.save) { app.save.data.touchRaces = seen + 1; app.save.write(); }
       this.huds[0].root.classList.add('hud-touch'); this.race.players[0].autoTrick = true;
+      // a phone screen is small and the thumbs cover its corners: sit the camera further back so there is more road in view
+      for (const c of this.view.cams) c.pullBack = 1.24;
     } else app.input.touch.active = false;
     for (const c of this.view.cams) c.shakeScale = app.shake === false ? 0 : 1;
     // time trial: race your own best run, and record this one
@@ -61,6 +65,8 @@ export class RaceSession {
       const hud = this.hudOf.get(kart);
       if (hud) {
         hud.onKartEvent(e);
+        // a track can have something to say as each lap starts (the reservoir at Datacenter Dash, for one)
+        if (e.type === 'lap' && e.data > 1 && e.data <= this.race.laps && this.def.lapNotes?.[e.data - 2]) hud.feed(this.def.lapNotes[e.data - 2], 4200);
         const p = kart.playerIndex;
         if (e.type === 'hit') app.input.rumble(p, 1, 0.8, 380);
         else if (e.type === 'wall') app.input.rumble(p, Math.min(1, e.data.v / 14), 0.3, 140);
@@ -102,7 +108,7 @@ export class RaceSession {
       }
       for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
       if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
-      this.touch?.sync();
+      this.touch?.sync(dt);
       for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
       if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
     }

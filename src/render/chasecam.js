@@ -52,7 +52,7 @@ export class ChaseCam {
     const boost = k.boostT > 0 || k.bulletT > 0 ? 1 : 0;
     this.kick = damp(this.kick, boost, boost ? 9 : 3, dt);
     // narrow split-screen views sit a bit further back
-    const tall = aspect < 1.2 ? 1.18 : 1;
+    const tall = (aspect < 1.2 ? 1.18 : 1) * (this.pullBack || 1);
     const dist = (this.dist + speedN * 0.7 - this.kick * 0.5) * tall * (k.shrinkT > 0 ? 0.8 : 1);
     const height = (this.height + (k.grounded ? 0 : 0.25)) * tall;
     this.y = damp(this.y, p.y, k.grounded ? 12 : 6, dt);
@@ -85,7 +85,9 @@ export class IntroCam {
   constructor(track, camera) {
     this.track = track; this.camera = camera; this.t = 0; this.done = false;
     const L = track.length;
+    // a track may open with shots of its own: fixed cameras given as { pos, look, pos1?, look1?, fov?, dur }
     this.shots = [
+      ...(track.def?.intro || []),
       { s0: L * 0.42, s1: L * 0.5, lat: 14, h: 16, look: 30, dur: 2.6 },
       { s0: L * 0.72, s1: L * 0.8, lat: -12, h: 9, look: 26, dur: 2.6 },
       { s0: L - 70, s1: L - 22, lat: 0, h: 5, look: 18, dur: 2.4 },
@@ -97,11 +99,14 @@ export class IntroCam {
     let t = this.t, shot = this.shots[this.shots.length - 1];
     for (const s of this.shots) { if (t < s.dur) { shot = s; break; } t -= s.dur; }
     if (this.t >= this.total) { this.done = true; t = shot.dur; }
+    this.shot = shot;
     const f = clamp(t / shot.dur, 0, 1), s = lerp(shot.s0, shot.s1, f);
     const P = this._p || (this._p = new THREE.Vector3()), Q = this._q || (this._q = new THREE.Vector3());
-    this.track.pointAt(s, shot.lat, P, shot.h); this.track.pointAt(s + shot.look, 0, Q, 1);
+    if (shot.pos) { const a = shot.pos, b = shot.pos1 || a, c = shot.look, d = shot.look1 || c; P.set(lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)); Q.set(lerp(c[0], d[0], f), lerp(c[1], d[1], f), lerp(c[2], d[2], f)); }
+    else { this.track.pointAt(s, shot.lat, P, shot.h); this.track.pointAt(s + shot.look, 0, Q, 1); }
     this.camera.position.copy(P); this.camera.lookAt(Q);
-    if (this.camera.fov !== 52) { this.camera.fov = 52; this.camera.updateProjectionMatrix(); }
+    const fov = shot.fov || 52;
+    if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     return Q;
   }
 }

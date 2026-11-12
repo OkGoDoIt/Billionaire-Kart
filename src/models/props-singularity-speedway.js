@@ -5,7 +5,7 @@
    Each builder returns a THREE.Group (or Mesh). Nothing here touches the DOM at
    import time; canvas textures are only made when a builder runs. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, torus, glow, plastic, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, torus, cone, capsule, lathe, glow, plastic, MAT } from './build.js';
 import { canvasTex } from '../render/textures.js';
 import { makeRng, fbm } from '../core/util.js';
 
@@ -327,7 +327,23 @@ export function dataCube(color = 0x35e0ff, size = 0.9) {
 }
 
 /* ---------- obstacle: laser gate ---------- */
-/** Two emitter posts about 5 m apart with a beam between them; userData.setActive toggles the beam. */
+/** A small two-sided label texture (cached by text), for the obstacles' name plates. */
+const plateCache = {};
+function plateTex(lines, bg, fg) {
+  const key = lines.join('|') + bg;
+  return plateCache[key] || (plateCache[key] = canvasTex(256, 96, (g, w, h) => {
+    g.fillStyle = bg; g.fillRect(0, 0, w, h); g.strokeStyle = fg; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
+    g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+    lines.forEach((l, k) => { const s = k ? 26 : 44; g.font = `${s}px "Arial Black", sans-serif`; g.fillText(l, w / 2, lines.length > 1 ? (k ? h * 0.74 : h * 0.36) : h / 2, w - 18); });
+  }, { repeat: false, aniso: 4 }));
+}
+function plate(tex, w, h) {
+  const grp = new THREE.Group(), m = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.6 });
+  for (const s of [1, -1]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); p.rotation.y = s > 0 ? 0 : Math.PI; p.position.z = s * 0.02; grp.add(p); }
+  return grp;
+}
+
+/** Two emitter posts about 5 m apart with a beam between them, each post wearing a GUARDRAIL plate; userData.setActive toggles the beam. */
 export function laserGate() {
   const grp = new THREE.Group(), b = new ModelBuilder(), half = 2.6;
   for (const sx of [-1, 1]) {
@@ -335,6 +351,8 @@ export function laserGate() {
     b.add('post', box(0.9, 0.25, 0.9, 0.08, 2), { p: [sx * half, 0.12, 0] });
     b.add('lens', sphere(0.26, 12, 10), { p: [sx * half, 1.15, 0] });
     b.add('ring', torus(0.32, 0.05, 6, 16), { p: [sx * half, 1.5, 0], r: [Math.PI / 2, 0, 0] });
+    b.add('post', cyl(0.05, 0.05, 0.5, 6), { p: [sx * half, 1.75, 0] });
+    const pl = plate(plateTex(['GUARDRAIL', '(BETA)'], '#ffd23c', '#1a1d29'), 1.7, 0.64); pl.position.set(sx * half, 2.3, 0); grp.add(pl);
   }
   grp.add(b.build({ post: MAT.dark, lens: glow(0xff2a6a, 3), ring: glow(0xff5cc8, 2.5) }));
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xff3a7a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -351,4 +369,217 @@ export function laserGate() {
     beam.scale.set(1, on ? 1 + Math.sin(t * 47) * 0.15 : 0.4, on ? 1 + Math.sin(t * 47) * 0.15 : 0.4);
   };
   return grp;
+}
+
+/* ---------- obstacle: an AI agent drone ---------- */
+/** The sentinel drone, now an AI agent: a white quad with a name plate on a mast that says it is helping. */
+export function agentDrone() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('body', sphere(0.6, 14, 10), { p: [0, 1.5, 0], s: [1, 0.5, 1.2] });
+  b.add('eye', sphere(0.2, 10, 8), { p: [0, 1.45, 0.62] });
+  for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { b.add('arm', cyl(0.06, 0.06, 1.2, 6), { p: [x * 0.55, 1.55, z * 0.55], r: [Math.PI / 2, 0, x * z > 0 ? -Math.PI / 4 : Math.PI / 4] }); b.add('rotor', cyl(0.5, 0.5, 0.04, 14), { p: [x * 0.95, 1.7, z * 0.95] }); }
+  b.add('arm', cyl(0.04, 0.04, 0.9, 5), { p: [0, 2.15, 0] });
+  grp.add(b.build({ body: plastic(0xf4f4f0, 0.35), eye: glow(0x35e0ff, 3), arm: MAT.dark, rotor: new THREE.MeshStandardMaterial({ color: 0x9aa4b8, transparent: true, opacity: 0.45, roughness: 0.4, depthWrite: false }) }));
+  const pl = plate(plateTex(['AI AGENT', "(I'M HELPING)"], '#ffffff', '#7a6bff'), 1.9, 0.72); pl.position.set(0, 2.85, 0); grp.add(pl);
+  return grp;
+}
+
+/* ---------- the paperclip ---------- */
+/** The outline of a gem clip, centred, one unit tall, in the XY plane. */
+export function paperclipPoints(arcSeg = 10) {
+  const pts = [];
+  const line = (x0, y0, x1, y1, n = 4) => { for (let k = 0; k < n; k++) { const t = k / n; pts.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]); } };
+  const arc = (cx, cy, r, a0, a1) => { for (let k = 0; k < arcSeg; k++) { const a = a0 + (a1 - a0) * k / arcSeg; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } };
+  line(0.15, 2.0, 0.15, 0.6);
+  arc(-0.075, 0.6, 0.225, 0, -Math.PI);
+  line(-0.3, 0.6, -0.3, 2.6, 6);
+  arc(0.075, 2.6, 0.375, Math.PI, 0);
+  line(0.45, 2.6, 0.45, 0.45, 6);
+  arc(0, 0.45, 0.45, 0, -Math.PI);
+  line(-0.45, 0.45, -0.45, 2.1); pts.push([-0.45, 2.1]);
+  const H = 2.975;
+  return pts.map(([x, y]) => new THREE.Vector3(x / H, (y - H / 2) / H, 0));
+}
+/** A paperclip `len` metres tall made of wire `radius` thick. */
+export function paperclipGeometry(len = 1, radius = 0.03, tubular = 60, radial = 6) {
+  const curve = new THREE.CatmullRomCurve3(paperclipPoints().map(p => p.multiplyScalar(len)), false, 'centripetal');
+  return new THREE.TubeGeometry(curve, tubular, radius, radial, false);
+}
+export function clipMaterial(glowAmt = 0.35) {
+  return new THREE.MeshStandardMaterial({ color: 0xdfe5f2, metalness: 0.75, roughness: 0.28, emissive: 0x8f9bd0, emissiveIntensity: glowAmt });
+}
+
+/* ---------- the paperclip factory ---------- */
+let factoryTex = null;
+function factoryTextures() {
+  if (factoryTex) return factoryTex;
+  const rng = makeRng(61), lit = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) lit.push(rng() < 0.82 ? (rng() < 0.75 ? '#ffb347' : '#ff5cc8') : null);
+  const draw = emissive => (g, w, h) => {
+    g.fillStyle = emissive ? '#000' : '#2b2742'; g.fillRect(0, 0, w, h);
+    const cw = w / 8, ch = h / 4;
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) {
+      const col = lit[r * 8 + c];
+      g.fillStyle = emissive ? (col || '#000') : (col ? '#5a4a3a' : '#1a1830');
+      g.fillRect(c * cw + cw * 0.18, r * ch + ch * 0.22, cw * 0.64, ch * 0.5);
+    }
+    if (!emissive) { g.fillStyle = '#3a3558'; for (let c = 0; c <= 8; c++) g.fillRect(c * cw - 3, 0, 6, h); }
+  };
+  factoryTex = { map: canvasTex(512, 256, draw(false), { aniso: 4 }), emissive: canvasTex(512, 256, draw(true), { aniso: 4 }) };
+  return factoryTex;
+}
+/** A city-sized paperclip plant on a floating island: a lit hall with a sawtooth roof, three stacks that
+    spew paperclips, an intake funnel on the left that eats everything, and a giant paperclip on the roof.
+    Front faces +Z. userData: { stacks: [[x,y,z]], mouth: [x,y,z], statue, front, hallTop }. */
+export function paperclipFactory() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  const HW = 150, HH = 48, HD = 70, HZ = -5;
+  b.add('rock', cyl(100, 14, 70, 9), { p: [0, -37, HZ], s: [1, 1, 0.55] });
+  b.add('deck', box(205, 5, 115, 1, 2), { p: [0, -2.5, HZ] });
+  for (const s of [-1, 1]) { b.add('neon', box(207, 0.9, 0.9, 0.3, 1), { p: [0, 0.2, HZ + s * 58.5] }); b.add('neon', box(0.9, 0.9, 117, 0.3, 1), { p: [s * 103.5, 0.2, HZ] }); }
+  for (let k = 0; k < 7; k++) b.add('roof', cyl(9, 9, HD - 2, 3), { p: [-63 + k * 21, HH + 4.5, HZ], r: [-Math.PI / 2, 0, 0] });
+  const stacks = [];
+  for (const x of [-58, -34, 56]) {
+    b.add('stack', cyl(5.5, 7, 66, 16), { p: [x, HH + 33, HZ - 24] });
+    for (const y of [HH + 50, HH + 60]) b.add('band', cyl(5.75, 5.75, 3.2, 16, true), { p: [x, y, HZ - 24] });
+    b.add('stack', torus(5.6, 0.8, 6, 18), { p: [x, HH + 66, HZ - 24], r: [Math.PI / 2, 0, 0] });
+    stacks.push([x, HH + 66, HZ - 24]);
+  }
+  b.add('ped', box(30, 6, 18, 1, 2), { p: [0, HH + 3, HZ + HD / 2 - 12] });
+  b.add('neon', box(HW + 1, 0.8, 0.8, 0.2, 1), { p: [0, HH - 0.6, HZ + HD / 2 + 0.3] });
+  // the intake funnel on the left wall, and its glowing mouth
+  b.add('funnel', lathe([[8, 0], [10, 8], [18, 22], [30, 36]], 24), { p: [-HW / 2, 26, HZ], r: [0, 0, Math.PI / 2] });
+  b.add('mouth', torus(30, 1.4, 8, 48), { p: [-HW / 2 - 36, 26, HZ], r: [0, Math.PI / 2, 0] });
+  // pipes and tanks along the right wall
+  for (let k = 0; k < 3; k++) b.add('stack', cyl(7, 7, 30, 16), { p: [HW / 2 + 9, 15, HZ - 20 + k * 18] });
+  grp.add(b.build({
+    rock: plastic(0x3a3150, 0.9), deck: plastic(0x24203a, 0.6, 0.3), neon: glow(0xff5cc8, 2.2), roof: plastic(0x47415e, 0.6, 0.3),
+    stack: plastic(0x6a6680, 0.5, 0.4), band: glow(0xff3a6a, 1.6), ped: plastic(0x1d1a30, 0.4, 0.5),
+    funnel: new THREE.MeshStandardMaterial({ color: 0x55506e, roughness: 0.5, metalness: 0.5, side: THREE.DoubleSide }), mouth: glow(0xffa024, 2.4),
+  }, { cast: false }));
+  const t = factoryTextures();
+  const hallMat = new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emissive, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 0.6, metalness: 0.2 });
+  t.map.repeat.set(5, 2); t.emissive.repeat.set(5, 2);
+  const hall = new THREE.Mesh(new THREE.BoxGeometry(HW, HH, HD), hallMat); hall.position.set(0, HH / 2, HZ); grp.add(hall);
+  const statue = new THREE.Mesh(paperclipGeometry(80, 2.4, 240, 14), clipMaterial(0.55));
+  statue.position.set(0, HH + 6 + 40, HZ + HD / 2 - 12); grp.add(statue);
+  grp.userData = { stacks, mouth: [-HW / 2 - 36, 26, HZ], statue, front: HZ + HD / 2, hallTop: HH, width: HW };
+  return grp;
+}
+
+/* ---------- raw materials for the factory: big, simple, readable at 400 m ---------- */
+export function junkTree() {
+  const b = new ModelBuilder();
+  b.add('bark', cyl(0.5, 0.7, 4, 7), { p: [0, 2, 0] });
+  b.add('leaf', cone(3.2, 6, 9), { p: [0, 6.5, 0] }); b.add('leaf', cone(2.4, 4.5, 9), { p: [0, 9.2, 0] });
+  return b.build({ bark: plastic(0x8a5a3a, 0.9), leaf: new THREE.MeshStandardMaterial({ color: 0x3fae4f, roughness: 0.8, emissive: 0x0f3a18, emissiveIntensity: 0.6 }) }, { cast: false });
+}
+export function junkCar() {
+  const b = new ModelBuilder();
+  b.add('paint', box(4.4, 1.1, 2, 0.3, 1), { p: [0, 0.9, 0] }); b.add('paint', box(2.4, 0.9, 1.8, 0.3, 1), { p: [-0.2, 1.8, 0] });
+  b.add('glass', box(2.2, 0.6, 1.86, 0.2, 1), { p: [-0.2, 1.85, 0] });
+  for (const [x, z] of [[1.4, 1], [-1.4, 1], [1.4, -1], [-1.4, -1]]) b.add('tyre', cyl(0.45, 0.45, 0.35, 10), { p: [x, 0.45, z], r: [Math.PI / 2, 0, 0] });
+  return b.build({ paint: new THREE.MeshStandardMaterial({ color: 0xe23b3b, roughness: 0.4, emissive: 0x501010, emissiveIntensity: 0.6 }), glass: plastic(0x9fd8ff, 0.2, 0.3), tyre: MAT.rubber }, { cast: false });
+}
+export function junkHouse() {
+  const b = new ModelBuilder();
+  b.add('wall', box(5, 3.4, 4, 0.1, 1), { p: [0, 1.7, 0] });
+  b.add('roof', cyl(3.3, 3.3, 5.4, 3), { p: [0, 4.0, 0], r: [-Math.PI / 2, 0, Math.PI / 2], s: [1, 1, 0.6] });
+  b.add('door', box(0.9, 1.8, 0.1, 0.05, 1), { p: [0, 0.9, 2.02] });
+  for (const x of [-1.6, 1.6]) b.add('win', box(0.9, 0.9, 0.1, 0.05, 1), { p: [x, 2.0, 2.02] });
+  return b.build({ wall: new THREE.MeshStandardMaterial({ color: 0xf4ead8, roughness: 0.8, emissive: 0x403828, emissiveIntensity: 0.5 }), roof: plastic(0xb5452f, 0.7), door: plastic(0x5a3a2a, 0.8), win: glow(0xffd27a, 1.2) }, { cast: false });
+}
+export function junkStand() {
+  const b = new ModelBuilder();
+  for (let r = 0; r < 4; r++) b.add(r % 2 ? 'a' : 'b', box(8, 0.6, 1.3, 0.05, 1), { p: [0, 0.4 + r * 0.6, -r * 1.2] });
+  b.add('wall', box(8.2, 3.6, 0.3, 0.05, 1), { p: [0, 1.8, -4.4] });
+  b.add('roof', box(8.6, 0.25, 5.4, 0.05, 1), { p: [0, 4.1, -2.0], r: [0.12, 0, 0] });
+  for (let k = 0; k < 18; k++) b.add('fan', new THREE.BoxGeometry(0.4, 0.4, 0.4), { p: [-3.6 + (k % 6) * 1.4, 1.05 + Math.floor(k / 6) * 0.6, -Math.floor(k / 6) * 1.2] });
+  return b.build({ a: plastic(0xd9dde6, 0.8), b: plastic(0xc6ccd8, 0.8), wall: new THREE.MeshStandardMaterial({ color: 0x2f6bff, roughness: 0.6, emissive: 0x10245a, emissiveIntensity: 0.7 }), roof: plastic(0xf4f4f0, 0.5), fan: glow(0xffd23c, 0.9) }, { cast: false });
+}
+
+/* ---------- the crowd: robots ---------- */
+/** One robot fan, arms up. Instance it over the platform seats with tints. */
+export function robotFan() {
+  const b = new ModelBuilder();
+  const body = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.3 }); body.userData.tintable = true;
+  const bx = (w, h, d) => new THREE.BoxGeometry(w, h, d);   // plain boxes: there are hundreds of these fans
+  b.add('body', bx(0.5, 0.56, 0.34), { p: [0, 0.4, 0] });
+  b.add('metal', bx(0.12, 0.14, 0.12), { p: [0, 0.74, 0] });
+  b.add('head', bx(0.48, 0.34, 0.38), { p: [0, 0.96, 0] });
+  b.add('eye', bx(0.36, 0.08, 0.04), { p: [0, 0.99, 0.19] });
+  b.add('metal', bx(0.03, 0.24, 0.03), { p: [0.12, 1.24, 0] });
+  b.add('eye', bx(0.09, 0.09, 0.09), { p: [0.12, 1.37, 0] });
+  for (const s of [1, -1]) b.add('metal', bx(0.09, 0.55, 0.09), { p: [s * 0.36, 0.86, 0], r: [0, 0, s * 0.45] });
+  return b.build({ body, head: plastic(0xc9cfdc, 0.35, 0.6), metal: MAT.dark, eye: glow(0x35e0ff, 2.4) }, { cast: false });
+}
+
+/* ---------- the benchmark podium: everybody is first ---------- */
+/** n equal podium blocks, each w wide and h tall, with a trophy on top. Front faces +Z; centred on x. */
+export function podium({ n = 5, w = 7, h = 9, d = 7 } = {}) {
+  const b = new ModelBuilder(), cup = lathe([[0, 0], [1.2, 0], [1.2, 0.3], [0.3, 0.5], [0.3, 1.4], [1.6, 2.0], [1.9, 3.6], [1.75, 3.6], [1.45, 2.2], [0, 2.1]], 16);
+  for (let k = 0; k < n; k++) {
+    const x = (k - (n - 1) / 2) * (w + 0.4);
+    b.add('block', box(w, h, d, 0.3, 2), { p: [x, h / 2, 0] });
+    b.add('trim', box(w + 0.3, 0.5, d + 0.3, 0.1, 1), { p: [x, h, 0] });
+    b.add('gold', cup, { p: [x, h + 0.25, 0] });
+    for (const s of [1, -1]) b.add('gold', torus(0.8, 0.18, 6, 12, Math.PI), { p: [x + s * 1.8, h + 3.0, 0], r: [0, 0, s > 0 ? -Math.PI / 2 : Math.PI / 2] });
+  }
+  b.add('base', box(n * (w + 0.4) + 3, 1.2, d + 3, 0.3, 2), { p: [0, -0.6, 0] });
+  b.add('trim', box(n * (w + 0.4) + 3.2, 0.4, d + 3.2, 0.1, 1), { p: [0, -1.3, 0] });
+  return b.build({ block: plastic(0xf4f4f8, 0.5), trim: glow(0x7a6bff, 2.0), gold: new THREE.MeshStandardMaterial({ color: 0xffc83a, metalness: 0.9, roughness: 0.25, emissive: 0x6a4a08, emissiveIntensity: 0.8 }), base: plastic(0x1d2038, 0.5, 0.4) }, { cast: false });
+}
+
+/* ---------- the seven-fingered hand ---------- */
+/** A marble monument of a human hand with seven fingers, palm facing +Z, wrist at y = 0, about 60 m tall. */
+export function sevenFingerHand() {
+  const b = new ModelBuilder();
+  b.add('stone', box(21, 22, 7, 3, 3), { p: [0, 20, 0] });
+  b.add('stone', cyl(7.5, 8.5, 12, 18), { p: [0, 5, 0], s: [1.15, 1, 0.75] });
+  const n = 7;
+  for (let k = 0; k < n; k++) {
+    const t = k / (n - 1), a = (t - 0.5) * 0.9, len = 16 + Math.sin(t * Math.PI) * 7, bx = -8.4 + t * 16.8;
+    const dx = Math.sin(a), dy = Math.cos(a);
+    b.add('stone', capsule(1.55, len, 4, 10), { p: [bx + dx * (len / 2 + 0.5), 30 + dy * (len / 2 + 0.5), 0.3], r: [0, 0, -a] });
+    b.add('nail', box(1.7, 1.9, 0.5, 0.25, 1), { p: [bx + dx * (len + 1.6), 30 + dy * (len + 1.6), 1.3], r: [0, 0, -a] });
+  }
+  b.add('stone', capsule(1.8, 13, 4, 10), { p: [-14.5, 18, 1], r: [0, 0, 0.95] });
+  b.add('plinth', box(30, 10, 22, 0.6, 2), { p: [0, -6, 0] });
+  b.add('trim', box(31, 0.8, 23, 0.2, 1), { p: [0, -0.6, 0] });
+  return b.build({
+    stone: new THREE.MeshStandardMaterial({ color: 0xf1ecf6, roughness: 0.45, emissive: 0x9a94a8, emissiveIntensity: 0.75 }), nail: plastic(0xffc6dc, 0.3),
+    plinth: plastic(0x1d1a30, 0.5, 0.4), trim: glow(0xffd23c, 1.8),
+  }, { cast: false });
+}
+
+/* ---------- capabilities tower and the alignment office ---------- */
+/** The alignment team's office: a bright, empty glass room with one office chair. Front faces +Z; floor at y = 0. */
+export function alignmentOffice({ w = 16, h = 7, d = 10 } = {}) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('slab', box(w + 1, 0.8, d + 1, 0.2, 1), { p: [0, -0.4, 0] });
+  b.add('slab', box(w + 1, 0.6, d + 1, 0.2, 1), { p: [0, h + 0.3, 0] });
+  b.add('floor', box(w, 0.1, d, 0.02, 1), { p: [0, 0.05, 0] });
+  b.add('back', box(w, h, 0.2, 0.02, 1), { p: [0, h / 2, -d / 2 + 0.1] });
+  for (const x of [-w / 2, w / 2]) for (const z of [-d / 2, d / 2]) b.add('frame', box(0.35, h, 0.35, 0.05, 1), { p: [x, h / 2, z] });
+  b.add('light', box(w * 0.6, 0.08, 0.5, 0.02, 1), { p: [0, h - 0.1, 0] });
+  // the chair, a little larger than life so it reads
+  const C = 2.3, cx = 1.5, cz = 0.8;
+  b.add('chair', box(0.9 * C, 0.14 * C, 0.85 * C, 0.05, 1), { p: [cx, 0.62 * C, cz] });
+  b.add('chair', box(0.85 * C, 0.95 * C, 0.12 * C, 0.05, 1), { p: [cx, 1.15 * C, cz - 0.42 * C], r: [-0.12, 0, 0] });
+  b.add('leg', cyl(0.05 * C, 0.05 * C, 0.5 * C, 6), { p: [cx, 0.33 * C, cz] });
+  for (let k = 0; k < 5; k++) { const a = k * 1.2566; b.add('leg', box(0.5 * C, 0.05 * C, 0.07 * C, 0.01, 1), { p: [cx + Math.cos(a) * 0.25 * C, 0.06 * C, cz + Math.sin(a) * 0.25 * C], r: [0, -a, 0] }); }
+  grp.add(b.build({ slab: plastic(0x2a2d4a, 0.5, 0.4), floor: glow(0xd8dcf0, 0.55), back: new THREE.MeshStandardMaterial({ color: 0xe8ebf4, roughness: 0.8, emissive: 0xc8ccdc, emissiveIntensity: 0.45 }), frame: plastic(0x1a1d29, 0.4, 0.6), light: glow(0xffffff, 1.6), chair: plastic(0x16181f, 0.5), leg: plastic(0x5a6070, 0.4, 0.7) }, { cast: false }));
+  const glass = new THREE.MeshStandardMaterial({ color: 0xa8d8ff, transparent: true, opacity: 0.16, roughness: 0.05, metalness: 0.3, depthWrite: false, side: THREE.DoubleSide });
+  for (const [x, z, ry, len] of [[0, d / 2, 0, w], [-w / 2, 0, Math.PI / 2, d], [w / 2, 0, Math.PI / 2, d]]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(len, h), glass); p.position.set(x, h / 2, z); p.rotation.y = ry; grp.add(p); }
+  return grp;
+}
+
+/* ---------- holo board frame (the panel itself comes from the track's sign atlas) ---------- */
+export function holoFrame({ w = 16, h = 4, color = 0x7a6bff } = {}) {
+  const b = new ModelBuilder();
+  b.add('frame', box(w + 0.8, h + 0.8, 0.5, 0.15, 2), { p: [0, 0, -0.3] });
+  for (const y of [h / 2 + 0.42, -h / 2 - 0.42]) b.add('edge', box(w + 0.9, 0.16, 0.6, 0.05, 1), { p: [0, y, -0.25] });
+  b.add('pod', cyl(0.9, 0.5, 1.4, 16), { p: [0, -h / 2 - 1.2, -0.3] });
+  b.add('jet', sphere(0.45, 12, 8), { p: [0, -h / 2 - 2.0, -0.3] });
+  return b.build({ frame: plastic(0x14162a, 0.4, 0.5), edge: glow(color, 3), pod: MAT.dark, jet: glow(0x35e0ff, 4) }, { cast: false });
 }

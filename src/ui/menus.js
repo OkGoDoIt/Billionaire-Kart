@@ -270,7 +270,7 @@ export class Menus {
         time, gp && h('span', { class: 'res-pts' }, `+${r.points}`), gp && h('span', { class: 'res-total' }, String(total)));
     });
     // The payoff strip: each human's race in numbers, from the stats the race already kept (#143).
-    // Top speed uses the HUD speedometer's own scale (hud.js), so it matches what the player saw.
+    // Top speed in honest mph: kart speed is m/s; 2.23694 is MPH_PER_MS in ui/hud.js (PR #160), so the strip matches the speedometer.
     const humans = results.filter(r => r.isPlayer);
     const strips = humans.map(r => {
       const s = r.stats || {}, parts = [];
@@ -278,7 +278,7 @@ export class Menus {
       if (s.hitsTaken) parts.push(`Lawsuits weathered: ${s.hitsTaken}`);
       parts.push(`Drifts: ${s.drifts || 0}`, `Boosts: ${s.boosts || 0}`);
       if (s.overtakes) parts.push(`Overtakes: ${s.overtakes}`);
-      parts.push(`Top speed: ${Math.round((s.topSpeed || 0) * 3.4)} mph`, `Coins banked: ${s.coins || 0}`);
+      parts.push(`Top speed: ${Math.round((s.topSpeed || 0) * 2.23694)} mph`, `Coins banked: ${s.coins || 0}`);
       return h('div', { class: 'res-strip', style: humans.length > 1 ? `--pc:${PLAYER_COLORS[r.playerIndex]}` : '' },
         h('b', {}, humans.length > 1 ? `${r.racer.name} in numbers` : 'Your race in numbers'), h('span', {}, parts.join(' · ')));
     });

@@ -223,3 +223,63 @@ export function clockRim(r = 3) {
   const b = new ModelBuilder(); b.add('rim', torus(r, r * 0.08, 8, 40), {}); b.add('rim', cyl(r * 0.08, r * 0.08, 0.5, 8), { r: [Math.PI / 2, 0, 0] });
   return b.build({ rim: plastic(0x1a1d29, 0.4, 0.3) });
 }
+
+/* ---------- the landmarks (playtest dressing): the bridge, the tower, the garage ---------- */
+/**
+ * A Golden Gate-style suspension bridge, local frame: the bridge runs along X, the kart road passes
+ * under it along Z, and y = 0 is the ROAD surface under the crossing. International orange throughout.
+ * Towers at x = ±27 (54 m main span), deck top at deckY, tower tops at towerTop; legs bury 4 m so the
+ * footings sit happily on sloping ground.
+ */
+export function ggBridge({ deckY = 11.5, towerTop = 35 } = {}) {
+  const b = new ModelBuilder(), OR = 'orange', DK = 'deck', CC = 'conc';
+  for (const sx of [-1, 1]) {
+    const x = sx * 27;
+    for (const sz of [-1, 1]) b.add(OR, bx(1.7, towerTop + 4, 1.7), { p: [x, (towerTop + 4) / 2 - 4, sz * 4.6] });
+    for (const y of [3, deckY - 2.5, deckY + 5.5, deckY + 13.5, deckY + 21.5, towerTop - 1.2]) b.add(OR, bx(1.0, 1.15, 11), { p: [x, y, 0] });
+    b.add(CC, bx(7, 3.4, 13.5), { p: [x, -1.2, 0] });                                   // footing block
+    b.add(CC, bx(11, deckY + 3.5, 14.5), { p: [sx * 47, (deckY + 3.5) / 2 - 3.5, 0] });   // abutment the deck lands on
+  }
+  b.add(DK, bx(100, 1.3, 12.6), { p: [0, deckY - 0.65, 0] });                            // the deck slab
+  b.add(DK, bx(100, 0.16, 9.2), { p: [0, deckY + 0.08, 0] });                            // its roadway
+  for (const sz of [-1, 1]) b.add(OR, bx(100, 1.8, 0.32), { p: [0, deckY - 0.72, sz * 6.3] });   // orange edge girders (the fascia)
+  // the main cables: side spans sagging slightly, the main span a clean parabola down to the deck
+  const topY = towerTop - 0.4, midY = deckY + 2.2;
+  const cableY = x => {
+    const ax = Math.abs(x);
+    if (ax <= 27) return midY + (topY - midY) * (x / 27) ** 2;
+    const t = (ax - 27) / 21; return (deckY + 1.2) * (1 - t) + topY * t - Math.sin(t * Math.PI) * 1.1;
+  };
+  for (const sz of [-1, 1]) {
+    const pts = [];
+    for (let x = -48; x <= 48; x += 3.5) pts.push(new THREE.Vector3(x, cableY(x), sz * 5.6));
+    b.add(OR, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 72, 0.34, 6), {});
+    for (let x = -24; x <= 24; x += 6) { const ty = cableY(x) - 0.3; b.add(OR, bx(0.16, ty - deckY, 0.16), { p: [x, (ty + deckY) / 2, sz * 5.6] }); }
+  }
+  return b.build({ orange: plastic(0xc0362c, 0.42, 0.3), deck: plastic(0x1a1d29, 0.5, 0.2), conc: plastic(0x8b93a6, 0.8, 0) });
+}
+
+/** A Hoover Tower: tapered sandstone shaft, glass observation band, terracotta pyramid cap. y = 0 at the base. */
+export function hooverTower({ H = 27 } = {}) {
+  const b = new ModelBuilder(), SD = 'sand', TC = 'terra', GL = 'glass', CC = 'conc';
+  b.add(CC, bx(13, 1.2, 13), { p: [0, 0.6, 0] });
+  b.add(SD, cyl(2.7, 3.4, H, 4), { p: [0, H / 2 + 1.2, 0], r: [0, Math.PI / 4, 0] });
+  b.add(SD, bx(8.2, 1.0, 8.2), { p: [0, H + 1.7, 0] });
+  b.add(SD, bx(9.0, 2.6, 9.0), { p: [0, H + 3.5, 0] });
+  b.add(GL, bx(9.25, 1.3, 9.25), { p: [0, H + 3.5, 0] });
+  b.add(TC, cone(6.3, 6.5, 4), { p: [0, H + 8.05, 0], r: [0, Math.PI / 4, 0] });
+  b.add(TC, cyl(0.1, 0.28, 3.6, 6), { p: [0, H + 12.9, 0] });
+  return b.build({ sand: plastic(0xe2cfa3, 0.8, 0), terra: plastic(0xa04a34, 0.7, 0), glass: plastic(0x1a1d29, 0.5, 0.2), conc: plastic(0x8b93a6, 0.8, 0) });
+}
+
+/** A suburban garage with a pitched pyramid roof and a paneled door, facing +Z. y = 0 at the slab. */
+export function garage() {
+  const b = new ModelBuilder(), WL = 'wall', RF = 'roof', DR = 'door', CC = 'conc';
+  b.add(WL, bx(9.5, 4.4, 7), { p: [0, 2.2, 0] });
+  b.add(RF, cone(5.9, 2.6, 4), { p: [0, 5.7, 0], r: [0, Math.PI / 4, 0], s: [1.22, 1, 0.9] });
+  b.add(DR, bx(6.6, 3.1, 0.18), { p: [0, 1.65, 3.55] });
+  for (const y of [1.0, 1.9, 2.8]) b.add(CC, bx(6.6, 0.09, 0.06), { p: [0, y, 3.66] });
+  b.add(CC, bx(7.2, 0.12, 8.5), { p: [0, 0.06, 7.6] });                                  // the driveway
+  b.add(DR, bx(1.5, 1.1, 0.12), { p: [-3.4, 2.9, 3.53] });                               // a side window
+  return b.build({ wall: plastic(0xe2cfa3, 0.8, 0), roof: plastic(0xa04a34, 0.7, 0), door: plastic(0xb9bfca, 0.4, 0.7), conc: plastic(0x8b93a6, 0.8, 0) });
+}

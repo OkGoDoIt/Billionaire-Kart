@@ -101,7 +101,7 @@ export class Kart {
     this.speed = 0; this.fwd = 0; this.lat = 0; this.steer = 0; this.assistOut = 0; this._steerAge = 9;
     this.grounded = true; this.airT = 0; this.landed = 0;
     this.pitch = 0; this.roll = 0; this.gy = 0;
-    this.drifting = false; this.driftDir = 0; this.driftCharge = 0; this.driftTier = 0; this.hopping = false; this.driftArmed = false;
+    this.drifting = false; this.driftDir = 0; this.driftCharge = 0; this.driftTier = 0; this.driftPaused = false; this.hopping = false; this.driftArmed = false;
     this.boostT = 0; this.boostMul = 1; this.boostKind = '';
     this.coins = 0; this.item = null; this.itemUses = 0; this.rouletteT = 0; this.nextItem = null;
     this.hitT = 0; this.hitKind = ''; this.hitDur = 1; this.invulnT = 0; this.starT = 0; this.shrinkT = 0; this.ghostT = 0; this.inkT = 0; this.bulletT = 0; this.goldenT = 0;
@@ -172,6 +172,7 @@ export class Kart {
   }
 
   endDrift(release) {
+    this.driftPaused = false;
     if (!this.drifting && !this.driftArmed) { this.driftCharge = 0; this.driftTier = 0; return; }
     const tier = this.driftTier;
     if (release && this.drifting && tier > 0) {
@@ -275,13 +276,20 @@ export class Kart {
       }
     }
     if (this.drifting) {
-      if (spFrac < T.driftMinSpeed * 0.88 || vfPrev <= 0 || (offroad && !boosting)) this.endDrift(false);
-      else if (!airborne) {
+      if (spFrac < T.driftMinSpeed * 0.88 || vfPrev <= 0) this.endDrift(false);
+      else if (!airborne && !offroad) {
         const rel = clamp(this.steer * this.driftDir, -1, 1);
         this.driftCharge += dt * this.mtRate * (1 + this.streak * (this.sp.streak || 0)) * (T.driftChargeBase + (rel > 0 ? Math.min(1, rel / 0.4) * T.driftChargeIn : rel * T.driftChargeOut));
         const tier = this.driftCharge >= T.tierAt[2] ? 3 : this.driftCharge >= T.tierAt[1] * (this.sp.orangeAt || 1) ? 2 : this.driftCharge >= T.tierAt[0] ? 1 : 0;
         if (tier !== this.driftTier) { this.driftTier = tier; this.emit('driftTier', tier); }
       }
+      // Offroad does not kill the drift (Mario Kart behaviour; #147): the surface speed
+      // penalty above still applies in full, but the charge pauses instead of being thrown
+      // away, and charging resumes where it left off back on the road. The drift still
+      // ends on input release, a hard wall hit, a hit, or dropping under the speed floor
+      // (deep surfaces like the wade sit below it, so they still shake a drift loose).
+      // driftPaused drives the spark flicker that tells the player charge is paused.
+      this.driftPaused = this.drifting && offroad;
     }
 
     // ----- turning

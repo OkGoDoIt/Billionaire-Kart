@@ -235,6 +235,8 @@ export function buildTrackMesh(track, look = {}) {
     }
     if (gB.count) {
       mats.banner = new THREE.MeshStandardMaterial({ map: bannerTex, roughness: 0.7, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.4 });
+      // the boards face the road; from behind they are plain, never mirrored lettering
+      mats.banner.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n  if (!gl_FrontFacing) diffuseColor.rgb = vec3(0.05, 0.055, 0.09);'); };
       add('hoardings', gB.build(), mats.banner, { cast: true });
     }
     if (gW.count) {

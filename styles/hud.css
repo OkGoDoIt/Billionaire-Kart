@@ -25,7 +25,7 @@
 .hud-item-info.show { opacity: 1; transform: none; }
 .hud-item-info b { display: block; font-weight: 700; font-size: 3.5cqh; line-height: 1.15; color: var(--gold); white-space: nowrap; }
 .hud-item-info span { display: block; font-weight: 500; font-size: 3cqh; line-height: 1.22; max-height: 12cqh; overflow: hidden; transition: max-height 0.35s, opacity 0.35s; }
-.hud-item-info.brief span { max-height: 0; opacity: 0; }
+.hud-item-info.brief span { display: none; }
 .hud-compact .hud-item-info span { display: none; }
 
 /* coins and lap, bottom-left */
@@ -65,14 +65,14 @@
 .hud-banner.bad.small { font-size: 8cqh; top: 18%; }
 
 /* trash talk: a rival's face and a speech bubble, on the left where it cannot cover the road */
-.hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: 31cqh; display: flex; align-items: center; gap: 2cqh; max-width: 70cqh; opacity: 0; transform: translateX(-8cqh) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }
+.hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: 37cqh; display: flex; align-items: center; gap: 2cqh; max-width: 70cqh; opacity: 0; transform: translateX(-8cqh) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }
 .hud-talk.show { opacity: 1; transform: none; }
 .hud-talk img { flex: none; width: 11cqh; height: 11cqh; border-radius: 50%; object-fit: cover; object-position: 50% 20%; background: var(--rc, #444); box-shadow: 0 0 0 0.6cqh var(--ink), 0 0 0 1.1cqh #fff, 0 1cqh 0 1.1cqh rgba(0,0,0,0.3); }
 .hud-talk div { position: relative; background: #fff; color: var(--ink); border: 0.55cqh solid var(--ink); border-radius: 2.6cqh; padding: 0.9cqh 2cqh 1.2cqh; font-family: var(--body); box-shadow: 0 0.9cqh 0 rgba(0,0,0,0.35); }
 .hud-talk div::before { content: ""; position: absolute; left: -1.9cqh; top: 50%; width: 2.6cqh; height: 2.6cqh; background: #fff; border-left: 0.55cqh solid var(--ink); border-bottom: 0.55cqh solid var(--ink); transform: translateY(-50%) rotate(45deg); border-radius: 0 0 0 0.5cqh; }
 .hud-talk b { display: block; position: relative; font-family: var(--display); font-size: 2.7cqh; letter-spacing: 0.03em; color: var(--hot); line-height: 1.1; padding-top: 0.2cqh; }
 .hud-talk span { display: block; position: relative; font-weight: 700; font-size: 3.3cqh; line-height: 1.16; }
-.hud.hud-touch .hud-talk { top: 40cqh; max-width: 64cqh; }
+.hud.hud-touch .hud-talk { top: 43cqh; max-width: 64cqh; }
 .hud-compact .hud-talk { max-width: 56cqh; }
 
 /* incoming-item warning, bottom-centre */
@@ -89,11 +89,15 @@
 .hud-wrong { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 9cqh; color: var(--hot); opacity: 0; }
 .hud-wrong.show { opacity: 1; animation: hud-blink 0.5s steps(2) infinite; }
 
-/* smear campaign: ink blots */
-.hud-ink { position: absolute; inset: 0; opacity: 0; transition: opacity 0.5s; background:
-  radial-gradient(ellipse 22% 26% at 28% 38%, #0a0a12 0 60%, transparent 62%), radial-gradient(ellipse 18% 20% at 68% 30%, #0a0a12 0 60%, transparent 62%),
-  radial-gradient(ellipse 24% 22% at 55% 62%, #0a0a12 0 60%, transparent 62%), radial-gradient(ellipse 12% 16% at 82% 66%, #0a0a12 0 60%, transparent 62%),
-  radial-gradient(ellipse 13% 13% at 14% 70%, #0a0a12 0 60%, transparent 62%), radial-gradient(ellipse 9% 12% at 42% 18%, #0a0a12 0 60%, transparent 62%); }
+/* smear campaign: tabloid front pages slapped across the screen */
+.hud-ink { position: absolute; inset: 0; opacity: 0; transition: opacity 0.5s; }
+.hud-ink i { position: absolute; width: 34cqh; height: 24cqh; font-style: normal; font-family: var(--display); font-size: 4.6cqh; line-height: 1; color: #14151c; text-align: center; padding: 2.2cqh 1.4cqh 0; border-radius: 0.6cqh; box-shadow: 0 1cqh 2cqh rgba(0,0,0,0.45);
+  background: linear-gradient(#14151c, #14151c) 0 8.6cqh / 100% 0.5cqh no-repeat, repeating-linear-gradient(180deg, transparent 0 1.3cqh, rgba(20,21,28,0.28) 1.3cqh 1.75cqh) 8% 11cqh / 84% 11cqh no-repeat, #f3ecd8; }
+.hud-ink i:nth-child(1) { left: 16%; top: 28%; transform: rotate(-9deg); }
+.hud-ink i:nth-child(2) { left: 56%; top: 22%; transform: rotate(7deg); color: #b3122b; }
+.hud-ink i:nth-child(3) { left: 36%; top: 50%; transform: rotate(4deg); width: 40cqh; }
+.hud-ink i:nth-child(4) { left: 70%; top: 54%; transform: rotate(-12deg); color: #b3122b; }
+.hud-ink i:nth-child(5) { left: 4%; top: 60%; transform: rotate(11deg); font-size: 3.6cqh; }
 .hud-ink.show { opacity: 0.93; transition: opacity 0.12s; }
 
 /* tighter layout for small split-screen panes */

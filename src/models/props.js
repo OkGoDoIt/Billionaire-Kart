@@ -147,8 +147,9 @@ export function gantry(span = 20, title = 'BILLIONAIRE KART', { color = 0xe23b3b
     g.fillStyle = '#1d2030'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 16; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#ffffff' : '#12142b'; g.fillRect(i * 16, j * 16, 16, 16); g.fillRect(w - 256 + i * 16, j * 16 + 96, 16, 16); }
     g.font = '92px "Luckiest Guy", "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.lineWidth = 10; g.strokeStyle = '#12142b'; g.strokeText(title, w / 2, h / 2 + 6, w - 60);
-    g.fillStyle = '#' + new THREE.Color(color2).getHexString(); g.fillText(title, w / 2, h / 2 + 6, w - 60);
+    const fit = w * (span - 0.6) / (span + 4.6) - 30;                 // the towers cover the ends of the board: letter only what shows between them
+    g.lineWidth = 10; g.strokeStyle = '#12142b'; g.strokeText(title, w / 2, h / 2 + 6, fit);
+    g.fillStyle = '#' + new THREE.Color(color2).getHexString(); g.fillText(title, w / 2, h / 2 + 6, fit);
   }, { repeat: false, aniso: 8 });
   for (const s of [1, -1]) {
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(span + 4.6, 2.2), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 }));

@@ -115,6 +115,7 @@ export class RaceSession {
       for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
       if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
       this.touch?.sync(dt);
+      if (this.touch) this.huds[0].quiet = this.touch.root.classList.contains('coaching');   // rivals hold their tongues while the controls are being explained
       for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
       if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
     }

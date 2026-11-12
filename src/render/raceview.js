@@ -77,6 +77,16 @@ export class RaceView {
   _beforeView(v) {
     const h = this.gfx.renderer.domElement.height * v.rect[3];
     this.fx.setViewport(h, v.camera.fov);
+    // a rival close enough to fill the screen (its hat or hair in the lens) is left out of this view
+    const cp = v.camera.position, own = v.cam?.kart;
+    for (const kv of this.karts) kv.rig.root.visible = kv.kart === own || (kv.pos.x - cp.x) ** 2 + (kv.pos.y + 0.9 - cp.y) ** 2 + (kv.pos.z - cp.z) ** 2 > 7.3;
+  }
+  /** The five lights on the start gantry: red in step with the count, green on go. */
+  _startLights(n) {
+    const L = this.startLights; if (!L || !L.length) return;
+    const lit = n === 0 ? L.length : n >= 3 ? 2 : n === 2 ? 4 : 5;
+    L.forEach((m, i) => { m.material.emissive.setHex(n === 0 ? 0x2aff6a : 0xff2a2a); m.material.emissiveIntensity = i < lit ? 3 : 0; });
+    this._lightsOff = n === 0 ? this.time + 2.5 : Infinity;
   }
 
   startIntro() { this.intro = new IntroCam(this.race.track, this.views[0].camera); }
@@ -140,6 +150,8 @@ export class RaceView {
         case 'coinTaken': break;
         case 'explosion': this._explosion(d.x, d.y, d.z, d.r); break;
         case 'shock': fx.ring(d.x, d.y + 0.6, d.z, 40, [1, 0.85, 0.3], 30, 0.9, 0.4); fx.ring(d.x, d.y + 1.2, d.z, 30, [1, 1, 1], 22, 0.6, 0.35); this._shakeNear(d.x, d.z, 0.6, 40); break;
+        case 'count': this._startLights(e.data); break;
+        case 'go': this._startLights(0); break;
         case 'lightning': this.flash = 1; this.gfx.post.flashColor.setRGB(0.85, 0.9, 1); for (const v of this.karts) if (v.kart !== d.by) fx.burst(v.pos.x, v.pos.y + 1.5, v.pos.z, 14, [0.7, 0.85, 1], 10, 0.4, 0.5); for (const c of this.cams) c.addShake(0.5); break;
         case 'shotGone': case 'hazardGone': { const t = this.things.get(d.id); if (t) { fx.burst(d.x, d.y + 0.4, d.z, 10, [1, 1, 1], 6, 0.25, 0.3); this.root.remove(t); this.things.delete(d.id); } break; }
         case 'shotBounce': fx.burst(d.x, d.y, d.z, 6, [1, 0.9, 0.6], 5, 0.2, 0.25, 1); break;
@@ -203,6 +215,7 @@ export class RaceView {
     }
     for (const fn of this.anim) fn(dt, this.time);
     this.fx.update(dt);
+    if (this._lightsOff && this.time > this._lightsOff) { this._lightsOff = 0; for (const m of this.startLights || []) m.material.emissiveIntensity = 0; }
 
     // cameras
     if (this._grade && (!this.intro || this.intro.done)) { Object.assign(gfx.post, this._grade); this._grade = null; }   // intro skipped mid-shot

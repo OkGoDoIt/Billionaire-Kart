@@ -26,7 +26,7 @@ export class Hud {
       <div class="hud-feed"></div>
       <div class="hud-talk"><img alt=""><div><b></b><span></span></div></div>
       <div class="hud-wrong">WRONG WAY</div>
-      <div class="hud-ink"></div>
+      <div class="hud-ink"><i>EXCLUSIVE!</i><i>SOURCES SAY</i><i>SHOCKING!</i><i>SCANDAL</i><i>YOU WON’T BELIEVE</i></div>
       <div class="hud-speed"></div>
       <div class="hud-draft"></div>`;
     parent.appendChild(root);
@@ -88,7 +88,7 @@ export class Hud {
   }
   /** A rival has something to say: their face, their name, and the line in a speech bubble. Returns false if one is already up. */
   talk(racer, line, ms = 3000) {
-    if (!line || this.t < (this._talkUntil || 0)) return false;
+    if (!line || this.quiet || this.t < (this._talkUntil || 0)) return false;
     const $ = this.$; $.talkImg.src = racer.portrait; $.talkName.textContent = racer.name; $.talkLine.textContent = line;
     $.talk.style.setProperty('--rc', hex(racer.color)); $.talk.classList.remove('show'); void $.talk.offsetWidth; $.talk.classList.add('show');
     this._talkUntil = this.t + ms / 1000 + 0.6; clearTimeout(this._kt); this._kt = setTimeout(() => $.talk.classList.remove('show'), ms);

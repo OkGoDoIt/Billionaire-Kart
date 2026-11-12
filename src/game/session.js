@@ -25,7 +25,9 @@ export class RaceSession {
     // rivals: an explicit grid (Grand Prix keeps the same field all cup) or a random draw
     const pool = config.grid ? config.grid.map(id => RACER_BY_ID[id]) : rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, count);
     // humans start at the back, like a first Grand Prix race
-    const entries = [...pool.map(racer => ({ racer, player: -1, level: config.level || 'normal' })), ...humans.map((racer, i) => ({ racer, player: i, autoTrick: config.players[i].autoTrick }))];
+    // steering assist follows the saved option, except that time trials are never assisted
+    // (as in Mario Kart, best times stay the player's own work)
+    const entries = [...pool.map(racer => ({ racer, player: -1, level: config.level || 'normal' })), ...humans.map((racer, i) => ({ racer, player: i, autoTrick: config.players[i].autoTrick, assist: { steer: config.mode !== 'timetrial' && config.players[i].smartSteer ? 1 : 0 } }))];
     if (config.order) entries.sort((a, b) => config.order.indexOf(a.racer.id) - config.order.indexOf(b.racer.id));
     this.race = new Race({ track, cc: config.cc || 150, laps: config.laps, seed: (config.seed ?? 1) + 17, entries, mode: config.mode, countdown: config.countdown });
     this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k), tv: !!config.tv });
@@ -42,6 +44,9 @@ export class RaceSession {
       this.touch = new TouchControls(app.ui, app.input, this.race.players[0], { onPause: () => app.pause?.(), autoGo: !!S.autoGo, coach: seen < 3 });
       if (app.save) { app.save.data.touchRaces = seen + 1; app.save.write(); }
       this.huds[0].root.classList.add('hud-touch'); this.race.players[0].autoTrick = true;
+      // touch play gets the steering assist by default (issue #136), the way automatic
+      // tricks are forced here too; the Options toggle governs the other controls
+      if (config.mode !== 'timetrial') this.race.players[0].assist = { steer: 1 };
       // a phone screen is small and the thumbs cover its corners: sit the camera further back so there is more road in view
       for (const c of this.view.cams) c.pullBack = 1.24;
     } else app.input.touch.active = false;

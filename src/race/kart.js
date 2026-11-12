@@ -2,7 +2,7 @@
    with lateral grip, so drifts slide for real; hop-drift with three mini-turbo
    tiers; boosts; ramp tricks; coins; hit reactions. Runs in the browser and in
    Node (no rendering here). All randomness comes from the race RNG. */
-import { clamp, lerp, damp, approach, smoothstep, wrapAngle, sign } from '../core/util.js';
+import { clamp, lerp, damp, approach, smoothstep, wrapAngle, sign, mod } from '../core/util.js';
 import { EDGE, makeGroundHit, SURFACES } from '../track/track.js';
 
 /** Engine classes. top = top speed in m/s on the road with no coins. */
@@ -20,6 +20,14 @@ export const TUNE = {
   turnRate: 1.62,              // rad/s at mid speed, before handling stat
   turnHighSpeed: 0.78,         // multiplier at top speed
   steerRise: 6.5, steerFall: 9,
+  // steering assist (player karts, via kart.assist — on by default for touch play, issue #136).
+  // A whisper of correction toward the racing line, far weaker than Mario Kart's Smart
+  // Steering: the cap is the whole point, a fraction of what holding a corner takes, so it
+  // can trim a mistake but never drive the kart (tools/assist-check.mjs proves it).
+  assistGain: 2.0,             // heading error -> wanted steer (the AI pursues at 2.4, with full range)
+  assistFade: 0.9,             // share of the wanted correction on offer at full need, before the cap
+  assistCap: 0.18,             // hard cap on the assist's share of the steering range
+  assistIdle: [0.3, 0.9],      // seconds since the player's last real steering input: full help, fading to none
   // grip (1/s decay of sideways velocity)
   grip: 9, gripDrift: 5.2, gripAir: 0.4, gripSpin: 1.3,
   // drift
@@ -90,7 +98,7 @@ export class Kart {
   reset() {
     this.x = 0; this.y = 0; this.z = 0; this.yaw = 0;
     this.vx = 0; this.vz = 0; this.vy = 0;
-    this.speed = 0; this.fwd = 0; this.lat = 0; this.steer = 0;
+    this.speed = 0; this.fwd = 0; this.lat = 0; this.steer = 0; this.assistOut = 0; this._steerAge = 9;
     this.grounded = true; this.airT = 0; this.landed = 0;
     this.pitch = 0; this.roll = 0; this.gy = 0;
     this.drifting = false; this.driftDir = 0; this.driftCharge = 0; this.driftTier = 0; this.hopping = false; this.driftArmed = false;
@@ -216,6 +224,18 @@ export class Kart {
       this._settle(dt);
       return;
     }
+
+    // ----- steering assist: players with it on get a whisper of correction toward the
+    // racing line, blended into their steering before smoothing so it inherits the usual
+    // rise/fall and never lands as a grab. Never while drifting or hopping (drift control
+    // is the player's), never airborne, never reversing, and never for AI karts, which
+    // are given no assist — so headless AI races are untouched by it. (The countdown
+    // returned above, so it can never act there either.) It also only ever assists a
+    // player who is steering: hands off the stick, it fades out entirely (see _assistSteer).
+    if (Math.abs(steerIn) > 0.12) this._steerAge = 0; else this._steerAge += dt;
+    const aStr = this.assist ? this.assist.steer || 0 : 0;
+    if (aStr > 0 && controllable && !driftHeld && !this.drifting && !this.driftArmed && this.airT <= 0.07 && this.fwd > 1) steerIn = this._assistSteer(steerIn, aStr);
+    else this.assistOut = 0;
 
     // ----- steering smoothing
     const rate = Math.abs(steerIn) > Math.abs(this.steer) && sign(steerIn) === sign(this.steer || steerIn) ? T.steerRise : T.steerFall;
@@ -384,6 +404,35 @@ export class Kart {
     // ----- progress, laps, safety
     this._progress(hit, dt, px, pz);
     this._drafting(dt);
+  }
+
+  /** The steering assist proper: blend a correction toward the racing line into the
+      player's steering and return the blend. Scaled by need — pointing the wrong way,
+      or running out of road, is what frustrates; sitting a metre off the line is not.
+      The player keeps the final say: full help only into the room their own steering
+      leaves, and steering against the correction on purpose fades it out twice as
+      fast, so a deliberate cut or dodge is never fought. Capped in TUNE, far below
+      the steering a real corner takes. This step's blend is left in this.assistOut. */
+  _assistSteer(steerIn, strength) {
+    const tr = this.race.track, T = TUNE, hit = this.hit;
+    const look = 7 + this.speed * 0.5;
+    const iA = mod(Math.round((this.s + look) / tr.ds), tr.N);
+    const P = this._ap || (this._ap = { x: 0, y: 0, z: 0 });
+    tr.pointAt(this.s + look, tr.lineLat[iA], P);
+    const err = wrapAngle(Math.atan2(P.x - this.x, P.z - this.z) - this.yaw);   // + = the line is to the left
+    const want = clamp(-err * T.assistGain, -1, 1);                             // the steer that would point us at it
+    const edge = Math.min(hit.hwL - hit.lat, hit.hwR + hit.lat) - this.radius;  // road left on the tighter side, m
+    const need = Math.max(smoothstep(0.02, 0.3, Math.abs(err)), 1 - smoothstep(1.2, 5.5, edge));
+    if (need <= 0.01) { this.assistOut = 0; return steerIn; }
+    // it assists the player's steering, it is not an autopilot: a proportional nudge can
+    // lap a forgiving track on its own given time, so the help is scaled by how recently
+    // the player actually steered — hands off, and it is simply not there
+    const active = 1 - smoothstep(T.assistIdle[0], T.assistIdle[1], this._steerAge);
+    const room = 1 - Math.abs(steerIn);
+    const opposed = steerIn !== 0 && (steerIn > 0) !== (want > 0);
+    const add = clamp(want * T.assistFade * strength * need * active * room * (opposed ? room : 1), -T.assistCap, T.assistCap);
+    this.assistOut = add;
+    return clamp(steerIn + add, -1, 1);
   }
 
   _doTrick(steer) {

@@ -197,6 +197,15 @@ export default {
       taken.push([cx, cz, 30], [cx + (track.px[i1] - cx) * 0.7, cz, 26], [cx - (track.px[i1] - cx) * 0.7, cz, 26]);
     }
 
+    // the ballroom construction zone (#113): a half-demolished wing on the north lawn of the Avenue,
+    // angled toward the start straight so the chase camera faces the crane, the chandelier and the
+    // site board for the whole run from hairpin three onto the Avenue (and down it, past the grid)
+    {
+      const SX = -24, SZ = -40;
+      sc.place(C.ballroomSite(), SX, SZ, { yaw: -0.38, y: sc.y(SX, SZ) - 0.35 });
+      taken.push([SX, SZ, 17]);
+    }
+
     // the obelisk in the middle of the bend; a ring of flags on its plinth
     const obeliskRing = [];
     {

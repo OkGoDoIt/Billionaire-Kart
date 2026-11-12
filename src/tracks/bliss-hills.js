@@ -267,22 +267,49 @@ export default {
     sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY });
     view.startLights = gantry.userData.lights;
     const stand = P.grandstand({ w: 30, rows: 6, color: 0x2f6bff }), stand2 = P.grandstand({ w: 30, rows: 6, color: 0x2fae4a });
-    const seats = [];
+    // one stand on the pit side is the blue screen of death itself (#113): every surface recoloured to the
+    // error blue, an error-screen fascia front and back, and a crowd all in white
+    const BSOD = 0x0a3fb0;
+    const bsodProto = (() => {
+      const pr = P.grandstand({ w: 30, rows: 6, color: BSOD });
+      const recolor = { d9dde6: 0x6ea8f2, c6ccd8: 0x4a86e0, '8b93a6': 0x083a8f, f4f4f0: BSOD, ffd23c: 0xffffff };
+      pr.group.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); const k = o.material.color?.getHexString(); if (k && recolor[k] !== undefined) o.material.color.setHex(recolor[k]); else if (k && k !== '0a3fb0') o.material.color.setHex(0x0a2a5e); } });
+      return pr;
+    })();
+    const drawBsod = (g, w, h) => {
+      g.fillStyle = '#0a3fb0'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#ffffff'; g.textAlign = 'left'; g.textBaseline = 'middle';
+      g.font = `${Math.round(h * 0.66)}px "Trebuchet MS", Arial, sans-serif`;
+      g.fillText(':(', w * 0.03, h * 0.55);
+      S.fitText(g, 'YOUR SEAT RAN INTO A PROBLEM', w * 0.575, h * 0.35, w * 0.8, Math.round(h * 0.3), S.SANS, '#ffffff', { lines: 1 });
+      S.fitText(g, "WE'RE COLLECTING SOME ERROR INFO, THEN THE RACE RESTARTS · 0% COMPLETE", w * 0.575, h * 0.72, w * 0.8, Math.round(h * 0.19), S.SANS, '#cfe1ff', { lines: 1 });
+    };
+    const bsodFront = atlas.add(1024, 132, drawBsod), bsodBack = atlas.add(1024, 176, drawBsod);
+    const seats = [], whiteSeats = [];
     const M = new THREE.Matrix4(), V = new THREE.Vector3();
-    const putStand = (proto, p) => {
+    const putStand = (proto, p, bsod = false) => {
       const g = proto.group.clone(); sc.place(g, p.x, p.z, { yaw: p.yaw, y: p.y });
       g.updateMatrixWorld(true); M.copy(g.matrixWorld);
-      for (const s of proto.seats) if (rng() < 0.82) { V.set(s[0], s[1], s[2]).applyMatrix4(M); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
+      for (const s of proto.seats) if (rng() < 0.82) { V.set(s[0], s[1], s[2]).applyMatrix4(M); (bsod ? whiteSeats : seats).push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
       taken.push([p.x, p.z, 22]);
       bake.add(g);
       // a banner under the roof, and the front row holding up placards
       const k = nStand++;
-      atlas.place(board(STANDS[k % STANDS.length], { bg: k % 2 ? '#0a4fd6' : '#ece9d8', fg: k % 2 ? '#ffffff' : '#12142b', size: 120, lines: 1 }, 1024, 96), local(p, 0, 2.3, p.y + 7.9), p.yaw, 28, 2.6);
+      if (bsod) {
+        atlas.place(bsodFront, local(p, 0, 2.32, p.y + 6.9), p.yaw, 28, 3.0);
+        atlas.place(bsodBack, local(p, 0, -8.95, p.y + 4.2), p.yaw + Math.PI, 26, 4.6);
+      } else {
+        atlas.place(board(STANDS[k % STANDS.length], { bg: k % 2 ? '#0a4fd6' : '#ece9d8', fg: k % 2 ? '#ffffff' : '#12142b', size: 120, lines: 1 }, 1024, 96), local(p, 0, 2.3, p.y + 7.9), p.yaw, 28, 2.6);
+      }
       [-10, 0.5, 10.5].forEach((u, j) => atlas.place(board(PLACARDS[(k * 3 + j) % PLACARDS.length], { bg: ['#ffffff', '#ffffe1', '#7fd0ff', '#ff9ab0'][(k + j) % 4], fg: '#12142b', size: 110, border: '#12142b' }, 384, 224), local(p, u + rng.range(-1.5, 1.5), 0.4, p.y + 3.9), p.yaw + rng.range(-0.15, 0.15), 3.0, 1.75));
     };
-    sc.along({ from: 34.9, to: 0.9, side: 1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
+    const rowA = sc.along({ from: 34.9, to: 0.9, side: 1, offset: 6.5, spacing: 34 });
+    const gi = track.indexAtCp(0.45);
+    let bi = 0; rowA.forEach((p, i) => { if ((p.x - track.px[gi]) ** 2 + (p.z - track.pz[gi]) ** 2 < (rowA[bi].x - track.px[gi]) ** 2 + (rowA[bi].z - track.pz[gi]) ** 2) bi = i; });
+    rowA.forEach((p, i) => putStand(i === bi ? bsodProto : (i % 2 ? stand2 : stand), p, i === bi));
     sc.along({ from: 35.3, to: 0.5, side: -1, offset: 18, spacing: 36, phase: 14 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
     sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
+    sc.instances(partsOf(P.spectator()), whiteSeats, { scale: [0.95, 1.2], tints: [0xffffff], cast: false });
 
     // the paperclip arch over the top of the hill, at the start of the Rolling Hills
     {

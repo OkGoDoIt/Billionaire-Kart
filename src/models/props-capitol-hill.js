@@ -7,7 +7,7 @@
    cleanly in Node. */
 import * as THREE from 'three';
 import { ModelBuilder, box, sphere, cyl, cone, torus, lathe, plastic, paint, glow, MAT } from './build.js';
-import { canvasTex } from '../render/textures.js';
+import { canvasTex, fitText as textFit } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
 // the sign toolkit (world-space quads, a text atlas, a static baker, LED panels) is shared with Crypto Cove
 export { Quads, makeBaker, makeAtlas, fitText, signDraw, ledPanel, SIGN_FONT, SANS } from './props-crypto-cove.js';
@@ -566,3 +566,111 @@ export const billMaterial = () => new THREE.MeshStandardMaterial({ roughness: 0.
   g.fillStyle = '#9fd6a0'; g.fillRect(0, 0, w, h); g.strokeStyle = '#2f6b3a'; g.lineWidth = 4; g.strokeRect(3, 3, w - 6, h - 6);
   g.fillStyle = '#2f6b3a'; g.beginPath(); g.ellipse(w / 2, h / 2, 13, 17, 0, 0, 7); g.fill(); g.fillStyle = '#9fd6a0'; g.font = 'bold 24px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('$', w / 2, h / 2 + 1);
 }, { repeat: false }) });
+
+/* ---------- the ballroom construction zone (#113) ---------- */
+const SITE_FONT = '"Luckiest Guy", "Arial Black", sans-serif';
+const SITE_SANS = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
+
+/** The site board's face: drawn once, used on both sides of the panel so the back reads the right way round. */
+function ballroomBoardTex() {
+  return canvasTex(1024, 364, (g, w, h) => {
+    g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#d4af37'; g.lineWidth = 12; g.strokeRect(10, 10, w - 20, h - 20);
+    g.strokeStyle = '#12142b'; g.lineWidth = 3; g.strokeRect(28, 28, w - 56, h - 56);
+    textFit(g, 'COMING SOON', w / 2, 74, w - 140, 62, 62, SITE_SANS, { fill: '#8a6d1f' });
+    textFit(g, 'A BALLROOM', w / 2, 186, w - 110, 138, 138, SITE_FONT, { fill: '#12142b' });
+    textFit(g, 'PAID FOR BY (REDACTED)', w / 2, 298, w - 140, 56, 56, SITE_SANS, { fill: '#b3122a' });
+  }, { repeat: false, aniso: 8 });
+}
+
+/**
+ * The ballroom construction zone: a marble wing half demolished, hoardings round a gravel slab,
+ * a tower crane lifting a gold chandelier out of the ruins, and one big site board.
+ * Front faces +Z. Built merged per material (marble, marbleD, site, gold, crane) plus the board
+ * panel as a single two-faced mesh: six draw calls in total.
+ */
+export function ballroomSite() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  const BASE = 0.6;   // top of the slab; everything stands on it
+  // the slab the whole site sits on
+  b.add('site', box(30, 1.0, 16.5, 0.05, 1), { p: [0, 0.1, 0] });
+  // --- the wing: the east half still standing ---
+  b.add('marble', box(11.5, 7.6, 0.6, 0.15, 2), { p: [7.75, BASE + 3.8, 3.4] });          // front wall
+  b.add('marble', box(11.5, 7.6, 0.6, 0.15, 2), { p: [7.75, BASE + 3.8, -3.4] });         // back wall
+  b.add('marble', box(0.6, 7.6, 7.4, 0.15, 2), { p: [13.5, BASE + 3.8, 0] });             // east end wall
+  for (const x of [3.6, 7.75, 11.9]) column(b, x, BASE, 7.6, 3.4, 0.55, 'marble', 'marbleD');
+  b.add('gold', box(11.7, 0.35, 0.85, 0.05, 1), { p: [7.75, BASE + 7.15, 3.4] });         // cornice line
+  b.add('marbleD', box(12.1, 0.9, 1.1, 0.1, 1), { p: [7.75, BASE + 8.05, 3.4] });         // entablature
+  b.add('marble', prism(9, 2.4, 1.2), { p: [7.75, BASE + 8.5, 3.4] });                    // pediment
+  b.add('marbleD', box(11, 0.3, 6.4, 0.05, 1), { p: [7.75, BASE + 0.15, 0] });            // ballroom floor
+  // the break: jagged ends where the demolition stopped
+  b.add('marble', prism(3.4, 1.4, 1.1), { p: [3.6, BASE + 8.35, 3.4], r: [0, 0, 0.35] }); // a pediment chunk, slipping
+  b.add('marble', box(0.9, 5.2, 0.7, 0.08, 1), { p: [1.8, BASE + 2.6, 3.4], r: [0, 0, 0.16] });
+  b.add('marbleD', box(0.8, 2.8, 0.7, 0.08, 1), { p: [1.15, BASE + 1.4, 3.4], r: [0, 0, -0.24] });
+  b.add('marble', box(0.9, 6.4, 0.7, 0.08, 1), { p: [1.9, BASE + 3.2, -3.4], r: [0, 0, 0.1] });
+  for (const [rx, rz, ry] of [[0.3, 0.4, 2.9], [-0.2, 0.55, 2.2], [0.45, -0.3, 3.4]])     // rebar poking out of the break
+    b.add('site', cyl(0.05, 0.05, 1.8, 5), { p: [1.45, BASE + ry, 3.4], r: [rx, 0, rz] });
+  // --- the west half: demolished to stubs and rubble ---
+  b.add('marbleD', box(13, 1.7, 0.6, 0.1, 1), { p: [-6, BASE + 0.85, 3.4] });             // front wall stub
+  b.add('marbleD', box(13, 2.6, 0.6, 0.1, 1), { p: [-6, BASE + 1.3, -3.4] });             // back wall stub
+  b.add('marbleD', box(0.6, 3.4, 7.4, 0.1, 1), { p: [-12.8, BASE + 1.7, 0] });            // west end remnant
+  b.add('marble', cyl(0.55, 0.62, 2.3, 12), { p: [-9.5, BASE + 1.15, 3.4] });             // column stumps
+  b.add('marble', cyl(0.55, 0.62, 1.3, 12), { p: [-3.5, BASE + 0.65, -3.4] });
+  b.add('marble', cyl(0.55, 0.55, 3.2, 12), { p: [-5.5, BASE + 0.55, 0.8], r: [Math.PI / 2, 0, 0.15] });   // a fallen column
+  b.add('marbleD', box(4.6, 0.5, 3.2, 0.08, 1), { p: [-0.5, BASE + 0.42, -1.5], r: [0, 0.3, 0.14] });      // a fallen slab
+  b.add('site', sphere(2.6, 10, 7), { p: [-9, BASE, -0.5], s: [1, 0.38, 1] });            // rubble piles
+  b.add('site', sphere(2.0, 10, 7), { p: [-3, BASE, 1.8], s: [1, 0.4, 1] });
+  b.add('site', sphere(1.5, 9, 6), { p: [-11.5, BASE, 2.6], s: [1, 0.42, 1] });
+  b.add('gold', box(2.4, 0.4, 0.55, 0.06, 1), { p: [-7.6, BASE + 0.72, 1.1], r: [0, 0.7, 0.1] });          // a gold cornice chunk in the rubble
+  // --- hoardings round the slab, with a gold stripe on the front ---
+  b.add('site', box(17, 2.6, 0.25, 0.05, 1), { p: [-5.5, BASE + 1.3, 7.6] });
+  b.add('site', box(10, 2.6, 0.25, 0.05, 1), { p: [9, BASE + 1.3, 7.6] });
+  b.add('site', box(28, 2.6, 0.25, 0.05, 1), { p: [0, BASE + 1.3, -7.6] });
+  b.add('site', box(0.25, 2.6, 15, 0.05, 1), { p: [-14, BASE + 1.3, 0] });
+  b.add('site', box(0.25, 2.6, 15, 0.05, 1), { p: [14, BASE + 1.3, 0] });
+  b.add('gold', box(17, 0.45, 0.28, 0.04, 1), { p: [-5.5, BASE + 2.35, 7.6] });
+  b.add('gold', box(10, 0.45, 0.28, 0.04, 1), { p: [9, BASE + 2.35, 7.6] });
+  // --- the tower crane, standing in the ruins ---
+  b.add('site', box(3.6, 1.1, 3.6, 0.08, 1), { p: [-8, BASE + 0.55, 0.8] });              // crane base
+  b.add('crane', box(1.15, 14.5, 1.15, 0.06, 1), { p: [-8, BASE + 1.1 + 7.25, 0.8] });    // mast
+  b.add('crane', box(0.95, 14.5, 0.95, 0.06, 1), { p: [-8, BASE + 1.1 + 7.25, 0.8], r: [0, Math.PI / 4, 0] });
+  b.add('crane', box(1.9, 1.7, 1.9, 0.1, 1), { p: [-8, BASE + 16.45, 0.8] });             // cab
+  b.add('crane', box(0.35, 2.6, 0.35, 0.05, 1), { p: [-8, BASE + 18.6, 0.8] });           // apex post
+  b.add('crane', box(26, 0.85, 0.85, 0.06, 1), { p: [-3.75, BASE + 17.35, 0.8] });        // jib and counter-jib
+  b.add('site', box(1.8, 2.4, 1.6, 0.06, 1), { p: [-15.8, BASE + 15.9, 0.8] });           // counterweight
+  b.add('gold', cyl(0.045, 0.045, 17.1, 5), { p: [0.5, BASE + 18.2, 0.8], r: [0, 0, -1.47] });   // tie bars
+  b.add('gold', cyl(0.045, 0.045, 8.7, 5), { p: [-12.25, BASE + 18.2, 0.8], r: [0, 0, 1.47] });
+  // the load: a gold chandelier, lifted clear of the demolished half
+  b.add('gold', box(0.8, 0.7, 1.1, 0.08, 1), { p: [-2, BASE + 16.65, 0.8] });             // trolley
+  b.add('gold', cyl(0.05, 0.05, 5.6, 5), { p: [-2, BASE + 13.7, 0.8] });                  // cable
+  b.add('gold', box(0.55, 0.65, 0.55, 0.08, 1), { p: [-2, BASE + 10.75, 0.8] });          // hook block
+  b.add('gold', cyl(0.09, 0.09, 0.9, 6), { p: [-2, BASE + 10.0, 0.8] });                  // chandelier stem
+  b.add('gold', torus(1.9, 0.1, 8, 22), { p: [-2, BASE + 9.5, 0.8], r: [Math.PI / 2, 0, 0] });
+  b.add('gold', torus(1.2, 0.08, 8, 18), { p: [-2, BASE + 10.35, 0.8], r: [Math.PI / 2, 0, 0] });
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; b.add('gold', sphere(0.2, 8, 6), { p: [-2 + Math.cos(a) * 1.9, BASE + 9.85, 0.8 + Math.sin(a) * 1.9] }); }
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + 0.4; b.add('gold', sphere(0.17, 8, 6), { p: [-2 + Math.cos(a) * 1.2, BASE + 10.65, 0.8 + Math.sin(a) * 1.2] }); }
+  b.add('gold', sphere(0.26, 9, 7), { p: [-2, BASE + 8.95, 0.8] });                       // finial
+  // the site board's posts and backing board (in the 'site' bucket, so they cost no extra draw call)
+  for (const x of [6.2, 13.8]) b.add('site', box(0.3, 6.6, 0.3, 0.05, 1), { p: [x, BASE + 2.4, 8.6] });
+  b.add('site', box(9.9, 3.7, 0.14, 0.05, 1), { p: [10, BASE + 5.7, 8.6] });
+  grp.add(b.build({ marble: marble(), marbleD: marbleD(), site: plastic(0x9b968a, 0.9), gold: gold(), crane: paint(0xf5a800, { rough: 0.5, clear: 0.25 }) }));
+  const tex = ballroomBoardTex();
+  const face = new THREE.PlaneGeometry(9.6, 3.4), back = new THREE.PlaneGeometry(9.6, 3.4);
+  face.translate(10, BASE + 5.7, 8.68); back.rotateY(Math.PI); back.translate(10, BASE + 5.7, 8.52);
+  const merged = new THREE.BufferGeometry();   // both faces in one mesh, so the board costs one draw call
+  {
+    const pos = [], nor = [], uv = [], idx = []; let o = 0;
+    for (const g of [face, back]) {
+      const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, I = g.index.array;
+      for (let i = 0; i < P.count; i++) { pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(N.getX(i), N.getY(i), N.getZ(i)); uv.push(U.getX(i), U.getY(i)); }
+      for (let i = 0; i < I.length; i++) idx.push(I[i] + o);
+      o += P.count;
+    }
+    merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    merged.setIndex(idx);
+  }
+  grp.add(new THREE.Mesh(merged, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.12 })));
+  return grp;
+}

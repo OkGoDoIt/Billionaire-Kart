@@ -266,7 +266,8 @@ export class Menus {
       h('h1', {}, track.name), gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
-      h('p', { class: 'res-quote' }, h('b', {}, results[0].racer.name + ': '), `“${results[0].isPlayer ? results[0].racer.barks.win : results[0].racer.barks.win}”`),
+      h('p', { class: 'res-quote' }, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`,
+        results.length > 2 && [h('b', {}, '   ' + results[results.length - 1].racer.name + ': '), `“${results[results.length - 1].racer.barks.lose}”`]),
       h('div', { class: 'foot' }, buttons)));
     return { el, onBack: () => false };
   }

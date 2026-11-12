@@ -5,7 +5,7 @@ import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
 import { Hud } from '../ui/hud.js';
 import { TouchControls, isTouchDevice } from '../ui/touch.js';
-import { ITEMS } from '../race/items.js';
+import { ITEMS, HIT_LINES } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
 import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { makeRng } from '../core/util.js';
@@ -60,12 +60,14 @@ export class RaceSession {
   skipIntro() { if (this.phase === 'intro') { this.view.intro.done = true; } }
 
   _onEvent(kind, e, kart) {
-    const app = this.app;
+    const app = this.app, pick = list => list[Math.floor(Math.random() * list.length)];
     if (kind === 'kart') {
       const hud = this.hudOf.get(kart);
       if (hud) {
         hud.onKartEvent(e);
         // a track can have something to say as each lap starts (the reservoir at Datacenter Dash, for one)
+        // overtaken: the one who just went by has a word, now and then
+        if (e.type === 'rankDown' && this.race.time > 6 && !kart.finished && Math.random() < 0.45) { const passer = this.race.order[kart.rank - 2]; if (passer && !passer.isPlayer) hud.talk(passer.racer, pick(passer.racer.barks.pass), 2600); }
         if (e.type === 'lap' && e.data > 1 && e.data <= this.race.laps && this.def.lapNotes?.[e.data - 2]) hud.feed(this.def.lapNotes[e.data - 2], 4200);
         const p = kart.playerIndex;
         if (e.type === 'hit') app.input.rumble(p, 1, 0.8, 380);
@@ -77,14 +79,18 @@ export class RaceSession {
       }
       app.audio?.kartEvent(e, kart, !!hud);
     } else {
-      if (e.type === 'count') for (const h of this.huds) h.countdown(e.data);
+      if (e.type === 'count') {
+        for (const h of this.huds) h.countdown(e.data);
+        // on the first count, whoever starts on pole says their piece
+        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (pole && !pole.isPlayer) for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); }
+      }
       else if (e.type === 'go') for (const h of this.huds) h.countdown(0);
       else if (e.type === 'kartHit') {
         const { by, victim, with: w } = e.data, name = ITEMS[w]?.name || (w === 'star' ? 'Hype Cycle' : w === 'squash' ? 'a full-size kart' : w);
         const hv = this.hudOf.get(victim), hb = by && this.hudOf.get(by);
-        const pick = list => list[Math.floor(Math.random() * list.length)];
-        if (hv && by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer && Math.random() < 0.6) hv.feed(`<b>${by.racer.name}:</b> “${pick(by.racer.barks.boost)}”`, 3200); }
-        if (hb && by !== victim) { hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer && Math.random() < 0.7) hb.feed(`<b>${victim.racer.name}:</b> “${pick(victim.racer.barks.hit)}”`, 3200); }
+        // the one who got hit sees it shouted across the screen, then hears about it from whoever did it
+        if (hv) { hv.banner(ITEMS[w]?.hit || HIT_LINES[w] || 'HIT!', 'bad small', 1300); if (by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer) hv.talk(by.racer, pick(by.racer.barks.taunt)); } }
+        if (hb && by !== victim) { hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer) hb.talk(victim.racer, pick(victim.racer.barks.hit)); }
       } else if (e.type === 'steal') { const h = this.hudOf.get(e.data.by); if (h) h.feed(`You stole ${ITEMS[e.data.id].name} from <b>${e.data.from.racer.name}</b>`); }
       app.audio?.raceEvent(e, this.race);
     }

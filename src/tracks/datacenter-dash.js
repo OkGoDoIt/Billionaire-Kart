@@ -1,9 +1,10 @@
 /* Datacenter Dash: the finale of the first cup. A hyperscale AI campus in a pine
    valley on a hazy afternoon. The main drag runs into Training Hall 9 and you
    drive through the data hall itself, between rows of blinking racks. Out the
-   back, a jump over the coolant pond, a climb onto the dam crest under the fat
-   blue pipes that are drinking the reservoir (a third of it per lap), and a
-   switchback run back down past the transformer yard. Two gas plants belch
+   back, a jump over the coolant pond, then the shore road: a U round the
+   reservoir with the water right beside you, while fat blue pipes drink it
+   (half of it per lap). On the last lap the bed is dry and you can cut straight
+   across it. Then a switchback run back down past the transformer yard. Two gas plants belch
    smoke over the skyline so the whole thing can stay online. */
 import { fbm, smoothstep, clamp, lerp, makeRng } from '../core/util.js';
 import { Scenery, partsOf } from '../render/scenery.js';
@@ -14,9 +15,11 @@ import * as P from '../models/props.js';
 import * as D from '../models/props-datacenter-dash.js';
 
 const POND = { x: 182, z: -208, rx: 62, rz: 78 };
-/* The reservoir: a basin north of the dam. v runs from the dam (0) to the far end (1);
-   the basin is deepest against the dam. Water levels: full on lap 1, nearly a mud flat on the last. */
-const LAKE = { cx: -22, zDam: -342, len: 215, bed: 0.2, rim: 15.9, full: 15.0, low: 1.2 };
+/* The reservoir: a basin north of the dam, ringed by the shore road (a U open toward the dam).
+   Straight sides of half-width RX, a round north end of radius RN beyond zN. The bed is a bowl with a
+   flat floor (the final-lap shortcut) and a crater round the intakes where the last puddle sits.
+   Water levels: full on lap 1, about half on lap 2, a puddle on the last. */
+const LAKE = { cx: -15, zDam: -342, zN: -415, RX: 74, RN: 72, bed: 0.2, rim: 10.9, full: 10.0, low: 0.8, floor: 2.6, crater: { x: 8, z: -420, rx: 34, rz: 26 } };
 const VALLEY = { x: 20, z: -140, rx: 255, rz: 215 };      // flat campus floor
 const YARD = { x0: -112, x1: -22, z0: -224, z1: -180 };      // transformer yard between the switchback legs
 /* Training Hall 9: the box the road drives through (axis aligned), its two doorways, and its floor level. */
@@ -39,13 +42,20 @@ const PLANTS = [
 const WIND = [-1.2, 0, -3.4], PLANT_SCALE = 1.45;
 /** Local (u along the hall, v across it) coordinates of a point relative to a hall. */
 const hallUV = (h, x, z) => { const dx = x - h.x, dz = z - h.z, c = Math.cos(h.yaw), s = Math.sin(h.yaw); return [dx * c - dz * s, dx * s + dz * c]; };
-const lakeRx = v => 72 + 88 * smoothstep(0.02, 0.5, v);
-/** Basin coordinate: 0 at the deepest point, 1 at the rim. */
-function lakeE(x, z) {
-  const v = Math.max(0, (LAKE.zDam - z) / LAKE.len), u = (x - LAKE.cx) / lakeRx(v);
-  return Math.hypot(u, Math.max(0, (v - 0.42) / 0.58));
+/** Basin coordinate: 0 down the middle, 1 at the rim. */
+const lakeE = (x, z) => Math.hypot((x - LAKE.cx) / LAKE.RX, Math.max(0, (LAKE.zN - z) / LAKE.RN));
+/** Bed height: a bowl, with a flat floor in the middle that dips into a crater round the intakes. */
+function lakeBed(x, z, e) {
+  const bowl = LAKE.bed + (LAKE.rim - LAKE.bed) * Math.pow(clamp((e - 0.1) / 0.9, 0, 1), 1.5);
+  const C = LAKE.crater, d = Math.hypot((x - C.x) / C.rx, (z - C.z) / C.rz);
+  return Math.max(bowl, lerp(LAKE.bed, LAKE.floor, smoothstep(0.25, 1.0, d)));
 }
-const lakeBed = e => LAKE.bed + (LAKE.rim - LAKE.bed) * Math.pow(clamp((e - 0.1) / 0.9, 0, 1), 1.5);
+const lakeLevel = (lap, laps) => lap > laps ? LAKE.low - 0.4 : lerp(LAKE.full, LAKE.low, clamp((lap - 1) / Math.max(1, laps - 1), 0, 1));
+const lakePct = y => Math.round(clamp((y - 0.6) / (LAKE.full - 0.6), 0, 1) * 100);
+/* What the bed is like to drive on: wading in the shallows, wet mud while the lake is still draining, hardpan once it is gone. */
+const WADE = { id: 'wade', speed: 0.42, grip: 0.7, dust: 0xbfe8ff, rumble: 0.3, offroad: true, splash: true };
+const MUD = { id: 'mud', speed: 0.5, grip: 0.7, dust: 0x6b5638, rumble: 0.35, offroad: true };
+const HARDPAN = { id: 'hardpan', speed: 0.92, grip: 0.92, dust: 0xc9b48c, rumble: 0.18 };
 const plantLocal = (p, x, z) => { const dx = x - p.x, dz = z - p.z, c = Math.cos(p.yaw), s = Math.sin(p.yaw); return [dx * c - dz * s, dx * s + dz * c]; };
 
 function height(x, z) {
@@ -59,7 +69,7 @@ function height(x, z) {
   const kS = smoothstep(LAKE.zDam + 35, LAKE.zDam, z);
   if (kS > 0) {
     const le = lakeE(x, z);
-    const hl = le < 1 ? lakeBed(le) + (fbm(x * 0.06, z * 0.06, 2, 31) - 0.5) * 0.9 * (1 - smoothstep(0.75, 1, le)) : lerp(LAKE.rim, Math.max(h, LAKE.rim), smoothstep(1, 1.6, le));
+    const hl = le < 1 ? lakeBed(x, z, le) + (fbm(x * 0.06, z * 0.06, 2, 31) - 0.5) * 0.9 * (1 - smoothstep(0.75, 1, le)) : lerp(LAKE.rim, Math.max(h, LAKE.rim), smoothstep(1, 1.6, le));
     h = lerp(h, hl, kS);
   }
   // pads for the gas plants
@@ -78,7 +88,7 @@ export default {
   id: 'datacenter-dash',
   name: 'Datacenter Dash',
   tagline: 'Now training on your lap times.',
-  lapNotes: ['<b>Reservoir at 52%.</b> Thank you for your water.', '<b>Reservoir at 4%.</b> Please enjoy the mud.'],   // shown as laps two and three begin
+  lapNotes: [`<b>Reservoir at ${lakePct(lakeLevel(2, 3))}%.</b> Thank you for your water.`, `<b>Reservoir at ${lakePct(lakeLevel(3, 3))}%.</b> The lake bed is open.`],   // shown as laps two and three begin
   laps: 3,
   width: 17,
   sky: 'day',
@@ -96,67 +106,81 @@ export default {
     { p: [172, 0, -140] },            // 4 out of the hall, onto the pond bridge
     { p: [174, 1.5, -200] },          // 5 ramp and jump over the coolant
     { p: [170, 3, -252] },            // 6
-    { p: [152, 7, -294] },            // 7 climbing left toward the dam
-    { p: [108, 11.5, -318] },         // 8
-    { p: [40, 16, -332] },            // 9 the dam crest
-    { p: [-45, 18.5, -334] },         // 10 high point
-    { p: [-100, 17, -314] },          // 11 off the dam, left
-    { p: [-132, 14.5, -275] },        // 12 heading south
-    { p: [-112, 12, -239] },          // 13 leg A, heading east
-    { p: [-68, 10.8, -238] },         // 14
-    { p: [-26, 10.2, -233], w: 18 },  // 15 hairpin right
-    { p: [-8, 9.5, -202], w: 18 },    // 16
-    { p: [-26, 8.8, -171], w: 18 },   // 17
-    { p: [-68, 8, -166] },            // 18 leg B, heading west
-    { p: [-112, 6.5, -166] },         // 19
-    { p: [-152, 5, -128] },           // 20 left, heading south
-    { p: [-156, 2.5, -62] },          // 21
-    { p: [-136, 0.5, -12] },          // 22 last corner onto the main drag
-    { p: [-80, 0, 0] },               // 23
+    { p: [152, 7, -294] },            // 7 climbing left toward the lake
+    { p: [112, 9.5, -322] },          // 8 past the east end of the dam
+    { p: [71, 11.0, -360] },          // 9 the shore road: north up the east shore, the water on the left
+    { p: [67, 11.2, -415] },          // 10
+    { p: [43, 11.3, -473] },          // 11 left round the bay
+    { p: [-15, 11.4, -497] },         // 12
+    { p: [-73, 11.3, -473] },         // 13
+    { p: [-97, 11.2, -415] },         // 14 south down the west shore
+    { p: [-104, 12.0, -342] },        // 15 past the west end of the dam
+    { p: [-132, 14.5, -275] },        // 16 heading south
+    { p: [-112, 12, -239] },          // 17 leg A, heading east
+    { p: [-68, 10.8, -238] },         // 18
+    { p: [-26, 10.2, -233], w: 18 },  // 19 hairpin right
+    { p: [-8, 9.5, -202], w: 18 },    // 20
+    { p: [-26, 8.8, -171], w: 18 },   // 21
+    { p: [-68, 8, -166] },            // 22 leg B, heading west
+    { p: [-112, 6.5, -166] },         // 23
+    { p: [-152, 5, -128] },           // 24 left, heading south
+    { p: [-156, 2.5, -62] },          // 25
+    { p: [-136, 0.5, -12] },          // 26 last corner onto the main drag
+    { p: [-80, 0, 0] },               // 27
   ],
   sides: [
-    { from: 22.7, to: 1.1, edge: 'wall' },                                     // the main drag between the halls
-    { from: 6.0, to: 11.0, edge: 'wall' },                                     // climb and dam crest are fenced
+    { from: 26.7, to: 1.1, edge: 'wall' },                                     // the main drag between the halls
+    { from: 6.0, to: 8.6, edge: 'wall' },                                      // the climb is fenced
+    { from: 8.6, to: 9.25, side: 'L', edge: 'wall' },                          // ...and so is the dam end
+    { from: 14.75, to: 15.6, side: 'L', edge: 'wall' },
     { from: 4.0, to: 6.0, edge: 'void' },                                      // the pond bridge: nothing but coolant below
+    // the lake: no barrier on the water side, the bank drops straight to it, and the whole bed between the arms is open
+    { from: 9.25, to: 14.75, side: 'L', outer: 104, shoulder: 2, hoarding: false, blend: 6 },
     // the transformer yard between the two switchback legs: cut it with a boost
-    { from: 14.5, to: 17.5, side: 'R', outer: 30, shoulder: 4, hoarding: false },
-    // a low kerb on the lake side of the dam, so the chase camera sees the water (the edge is still a wall)
-    { from: 8.3, to: 11.0, side: 'R', wallHeight: 0.4 },
+    { from: 18.5, to: 21.5, side: 'R', outer: 30, shoulder: 4, hoarding: false },
   ],
+  /* The reservoir, as the race sees it: the level follows the leader's lap, the bed is drivable once exposed. */
+  lake: {
+    inside: (x, z) => z < LAKE.zDam - 1 && lakeE(x, z) < 0.97,
+    levelForLap: lakeLevel,
+    rate: 1.6,
+    surface: (depth, race) => depth > 0 ? WADE : race.lakeLap >= race.laps && depth < -0.35 ? HARDPAN : MUD,
+  },
   // the opening shot: the whole lake, the pipes drinking it, and a gas plant smoking behind
   intro: [{ pos: [168, 62, -292], pos1: [138, 52, -312], look: [-60, 14, -405], look1: [-80, 12, -395], fov: 50, dur: 3 }],
   tunnels: [{ from: 1.15, to: 4.0 }],
-  bridges: [{ from: 4.0, to: 6.0 }, { from: 8.8, to: 10.9 }],
+  bridges: [{ from: 4.0, to: 6.0 }],
   zones: [
     { from: 1.15, to: 4.0, skin: 'hallfloor' },
     { from: 4.0, to: 6.0, skin: 'metal' },
-    { from: 8.8, to: 10.9, skin: 'stone' },
   ],
   ramps: [{ at: 4.62, len: 9, lift: 2.1 }],
   boosts: [
     { at: 0.5, lat: 0, w: 5 },
     { at: 5.12, lat: 0, w: 6 },
-    { at: 11.2, lat: 3, w: 4.5 },
-    { at: 20.6, lat: -3, w: 4.5 },
+    { at: 9.3, lat: 4.5, w: 4.5 },     // on the lake side: the way into the shortcut on the last lap
+    { at: 15.2, lat: 3, w: 4.5 },
+    { at: 24.6, lat: -3, w: 4.5 },
   ],
-  itemRows: [{ at: 1.25 }, { at: 6.4 }, { at: 12.4 }, { at: 21.4, n: 3 }],
+  itemRows: [{ at: 1.25 }, { at: 6.4 }, { at: 12.0 }, { at: 16.4 }, { at: 25.4, n: 3 }],
   coins: [
     { from: 0.2, to: 0.45, n: 4, lat: -4 },
     { from: 2.2, to: 3.0, n: 5, lat: [5, 2] },
     { from: 4.75, to: 4.95, n: 3, lat: 0, air: 2.6 },
-    { from: 9.3, to: 9.9, n: 4, lat: [-3, 3] },
-    { from: 14.66, to: 14.66, n: 4, lat: [-13, -30] },
-    { from: 18.6, to: 19.2, n: 4, lat: [4, -3] },
-    { from: 21.6, to: 22.2, n: 4, lat: [-3, 4] },
+    { from: 10.5, to: 11.5, n: 5, lat: [3, 6] },
+    { from: 12.5, to: 13.5, n: 5, lat: [6, 3] },
+    { from: 18.66, to: 18.66, n: 4, lat: [-13, -30] },
+    { from: 22.6, to: 23.2, n: 4, lat: [4, -3] },
+    { from: 25.6, to: 26.2, n: 4, lat: [-3, 4] },
   ],
   obstacles: [
     // security robots on the straights, each sweeping only part of the road
     { kind: 'patrol', model: 'bot', at: 3.45, lats: [-7, -2.8], speed: 3, effect: 'spin', radius: 1.2 },
-    { kind: 'patrol', model: 'bot', at: 13.75, lats: [-7, -2.6], speed: 3.2, effect: 'spin', radius: 1.2 },
-    { kind: 'patrol', model: 'bot', at: 20.95, lats: [-7, -2.8], speed: 3, effect: 'spin', radius: 1.2 },
-    // steam vents on the dam crest, blowing in turn
-    { kind: 'timed', model: 'vent', at: 9.45, lat: 4, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.4 },
-    { kind: 'timed', model: 'vent', at: 9.75, lat: -4, period: 3, duty: 0.45, phase: 1.5, effect: 'spin', radius: 1.4 },
+    { kind: 'patrol', model: 'bot', at: 17.75, lats: [-7, -2.6], speed: 3.2, effect: 'spin', radius: 1.2 },
+    { kind: 'patrol', model: 'bot', at: 24.95, lats: [-7, -2.8], speed: 3, effect: 'spin', radius: 1.2 },
+    // steam vents round the bay, blowing in turn
+    { kind: 'timed', model: 'vent', at: 11.7, lat: -4, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.4 },
+    { kind: 'timed', model: 'vent', at: 12.4, lat: 4, period: 3, duty: 0.45, phase: 1.5, effect: 'spin', radius: 1.4 },
   ],
   models: { vent: () => D.vent() },
   terrain: {
@@ -201,16 +225,16 @@ export default {
   decorate(ctx) { decorate(ctx); },
 };
 
-const CREST = [8.8, 10.9];
 const TOWERS = [{ x: 252, z: -168 }, { x: 106, z: -262 }];
 const PIPE_X = [2, 8, 14];
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif', SANS = '"Arial Black", "Helvetica Neue", Arial, sans-serif', MONO = '"Courier New", Courier, monospace';
 const BOARDS = [
-  [6.6, -1, 16, 'YOUR LAKE, NOW IN THE CLOUD', '#1f6bff', '#ffffff'], [12.3, -1, 16, 'CARBON NEUTRAL BY 2099', '#16a34a', '#ffffff'],
-  [16.0, 1, 16, 'POWERED BY GAS AND VIBES', '#ffd23c', '#1a1d29'], [19.6, 1, 15, 'ASK US ABOUT OUR LAKE', '#ffffff', '#1f6bff'],
-  [21.2, 1, 15, 'NOW TRAINING ON YOU', '#db2777', '#ffffff'], [7.6, 1, 16, 'THIRSTY? SO ARE WE', '#0ea5e9', '#ffffff'],
-  [1.0, 1, 30, 'GPU GO BRRR', '#1a1d29', '#ffd23c'], [13.2, 1, 16, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
-  [18.9, -1, 16, 'WE ARE OUT OF GPUS', '#ffffff', '#e23b3b'], [22.2, -1, 16, 'SKY STILL MOSTLY BLUE', '#7b5cff', '#ffffff'],
+  [6.6, -1, 16, 'YOUR LAKE, NOW IN THE CLOUD', '#1f6bff', '#ffffff'], [16.3, -1, 16, 'CARBON NEUTRAL BY 2099', '#16a34a', '#ffffff'],
+  [20.0, 1, 16, 'POWERED BY GAS AND VIBES', '#ffd23c', '#1a1d29'], [23.6, 1, 15, 'ASK US ABOUT OUR LAKE', '#ffffff', '#1f6bff'],
+  [25.2, 1, 15, 'NOW TRAINING ON YOU', '#db2777', '#ffffff'], [7.6, 1, 16, 'THIRSTY? SO ARE WE', '#0ea5e9', '#ffffff'],
+  [1.0, 1, 30, 'GPU GO BRRR', '#1a1d29', '#ffd23c'], [17.2, 1, 16, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
+  [22.9, -1, 16, 'WE ARE OUT OF GPUS', '#ffffff', '#e23b3b'], [26.2, -1, 16, 'SKY STILL MOSTLY BLUE', '#7b5cff', '#ffffff'],
+  [10.6, -1, 14, 'LAKEFRONT VIEWS (FOR NOW)', '#0ea5e9', '#ffffff'], [12.0, -1, 14, 'DRINK RESPONSIBLY. WE WILL.', '#ffffff', '#1f6bff'], [13.4, -1, 14, 'SHORTCUT OPENS AT 1%', '#ffd23c', '#1a1d29'],
 ];
 const PROTEST = ['WATER IS NOT A FEATURE', 'MY LAKE ≠ YOUR CACHE', 'BRING BACK THE FISH', "HONK IF YOU'RE THIRSTY", 'THE FISH WERE HERE FIRST', 'LEAVE SOME FOR US', 'UNPLUG IT', 'NOT MY RESERVOIR', 'TOUCH GRASS (WHILE IT LASTS)'];
 
@@ -387,7 +411,7 @@ function decorate(ctx) {
     for (const s of proto.seats) if (rng() < 0.82) { V.set(s[0], s[1], s[2]).applyMatrix4(M); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
     bake.add(g);
   };
-  sc.along({ from: 22.95, to: 0.85, side: -1, offset: 6.5, spacing: 33 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
+  sc.along({ from: 26.95, to: 0.85, side: -1, offset: 6.5, spacing: 33 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
   const hallAt = (h, opts = {}) => {
     const g = D.dataHall({ L: h.L, W: h.W, H: h.H, accent: h.c, ...opts }); sc.place(g, h.x, h.z, { yaw: h.yaw, y: h.y ?? sc.y(h.x, h.z) - 0.4 }); bake.add(g);
@@ -399,20 +423,20 @@ function decorate(ctx) {
     }
   };
   {
-    const n = sc.beside(23.75, 1, 17.5), s = sc.beside(23.85, -1, 37);
+    const n = sc.beside(27.75, 1, 17.5), s = sc.beside(27.85, -1, 37);
     hallAt({ x: n.x, z: n.z, yaw: n.yaw, L: 118, W: 26, H: 15, c: 0x1f6bff, name: 'COGNITRON', y: 0 });
     hallAt({ x: s.x, z: s.z, yaw: s.yaw, L: 128, W: 26, H: 16, c: 0x16a34a, name: 'SYNERGY SILO', y: 0 });
   }
   // light masts behind the stands and lamps along the walls of the main drag
-  sc.instances(partsOf(D.floodMast({ h: 20 })), sc.along({ from: 22.8, to: 0.9, side: -1, offset: 21, spacing: 33, phase: 16 }), {});
+  sc.instances(partsOf(D.floodMast({ h: 20 })), sc.along({ from: 26.8, to: 0.9, side: -1, offset: 21, spacing: 33, phase: 16 }), {});
   const lampParts = partsOf(D.streetLamp());
   const lamps = [
-    ...sc.along({ from: 22.8, to: 1.0, side: 1, offset: 1.0, spacing: 18 }), ...sc.along({ from: 22.8, to: 1.0, side: -1, offset: 1.0, spacing: 18, phase: 9 }),
-    ...sc.along({ from: 6.1, to: 8.8, side: 1, offset: 1.0, spacing: 20 }), ...sc.along({ from: 6.1, to: 8.2, side: -1, offset: 1.0, spacing: 20, phase: 10 }),
-    ...sc.along({ from: 11.0, to: 22.6, side: 1, offset: 12.8, spacing: 22 }).filter(p => clear(p.x, p.z, 0.8)),
-    ...sc.along({ from: 11.0, to: 22.6, side: -1, offset: 12.8, spacing: 22, phase: 11 }).filter(p => clear(p.x, p.z, 0.8)),
+    ...sc.along({ from: 26.8, to: 1.0, side: 1, offset: 1.0, spacing: 18 }), ...sc.along({ from: 26.8, to: 1.0, side: -1, offset: 1.0, spacing: 18, phase: 9 }),
+    ...sc.along({ from: 6.1, to: 9.2, side: 1, offset: 1.0, spacing: 20 }), ...sc.along({ from: 6.1, to: 8.6, side: -1, offset: 1.0, spacing: 20, phase: 10 }),
+    ...sc.along({ from: 9.3, to: 14.7, side: -1, offset: 3.5, spacing: 24, phase: 6 }),
+    ...sc.along({ from: 15.6, to: 26.6, side: 1, offset: 12.8, spacing: 22 }).filter(p => clear(p.x, p.z, 0.8)),
+    ...sc.along({ from: 15.6, to: 26.6, side: -1, offset: 12.8, spacing: 22, phase: 11 }).filter(p => clear(p.x, p.z, 0.8)),
   ];
-  for (const i of samples(CREST[0] + 0.05, CREST[1] - 0.05, 16)) for (const s of [1]) { const hw = s > 0 ? track.hwL[i] : track.hwR[i], p = at(i, s * (hw + 0.9)); lamps.push({ x: p.x, y: track.py[i] - 0.1, z: p.z, yaw: Math.atan2(-s * track.lx[i], -s * track.lz[i]) }); }
   sc.instances(lampParts, lamps.filter(p => !inHallBox(p.x, p.z, 2)), { cast: false });
 
   // ---- Training Hall 9: the road runs through a real data hall ----
@@ -832,25 +856,21 @@ function ledSign(THREE, group, w, h, c, yaw, mw, mh) {
 }
 
 /* ---------- the dam and the reservoir ---------- */
-function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, at, samples, view }) {
-  const group = ctx.group, crest = samples(CREST[0] - 0.15, CREST[1] + 0.15, 3), bottom = -9;
-  const levels = lap => lerp(LAKE.full, LAKE.low, clamp((lap - 1) / Math.max(1, (view.race?.laps ?? 3) - 1), 0, 1));
+const DAM = { x0: -86, x1: 54, zUp: -343, zDn: -333, top: 12.2, bottom: -9 };
+function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
+  const group = ctx.group, bottom = DAM.bottom;
 
-  /* the dam: a sheer upstream face (stained in rings as the water drops) and a sloping downstream face */
-  const ring = [];
-  for (const i of crest) {
-    const top = track.py[i] - 1.05, dn = track.hwL[i] + 0.6, upw = -(track.hwR[i] + 0.6), foot = dn + (top - bottom) * 0.72;
-    ring.push([[upw, top], [upw, bottom], [foot, bottom], [dn + 1.5, top - 2], [dn, top]].map(([l, y]) => { const p = at(i, l); return [p.x, y, p.z]; }));
-  }
-  const face = new Quads(), body = new Quads();
-  let run = 0;
+  /* the dam: a straight wall across the south end of the lake, a walkway on top, a sheer stained face toward the water */
+  const ring = [], foot = DAM.zDn + (DAM.top - bottom) * 0.72;
+  for (let x = DAM.x0; x <= DAM.x1 + 0.01; x += (DAM.x1 - DAM.x0) / 24) ring.push([[x, DAM.top, DAM.zUp], [x, bottom, DAM.zUp], [x, bottom, foot], [x, DAM.top - 2, DAM.zDn + 1.5], [x, DAM.top, DAM.zDn]]);
+  const face = new Quads(), body = new Quads(), vy = y => (y - bottom) / 30;
   for (let r = 0; r < ring.length - 1; r++) {
-    const A = ring[r], B = ring[r + 1], seg = Math.hypot(B[0][0] - A[0][0], B[0][2] - A[0][2]);
-    const vy = y => (y - bottom) / 30;
-    face.quad(A[1], B[1], B[0], A[0], [[run / 10, vy(A[1][1])], [(run + seg) / 10, vy(B[1][1])], [(run + seg) / 10, vy(B[0][1])], [run / 10, vy(A[0][1])]]);
+    const A = ring[r], B = ring[r + 1];
+    face.quad(B[1], A[1], A[0], B[0], [[B[1][0] / 10, vy(bottom)], [A[1][0] / 10, vy(bottom)], [A[0][0] / 10, vy(DAM.top)], [B[0][0] / 10, vy(DAM.top)]]);
     for (const k of [1, 2, 3]) body.quad(A[k + 1], B[k + 1], B[k], A[k]);
-    run += seg;
+    body.quad(A[0], B[0], B[4], A[4]);
   }
+  for (const [R, s] of [[ring[0], -1], [ring[ring.length - 1], 1]]) { const c = R.map(p => p); if (s > 0) { body.quad(c[1], c[2], c[3], c[0]); body.quad(c[0], c[3], c[4], c[4]); } else { body.quad(c[2], c[1], c[0], c[3]); body.quad(c[3], c[0], c[4], c[4]); } }
   const tubTex = canvasTexture(THREE, 256, 1024, (g, w, h) => {
     const Y = y => (1 - (y - bottom) / 30) * h, r = makeRng(9);
     g.fillStyle = '#c9c6bd'; g.fillRect(0, 0, w, h);
@@ -860,28 +880,28 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, at, samples, view 
     for (let k = 0; k < 40; k++) { const x = r() * w, y0 = Y(LAKE.full + 0.2), len = 30 + r() * 220; g.fillStyle = `rgba(60,55,40,${0.15 + r() * 0.2})`; g.fillRect(x, y0, 2 + r() * 4, len); }
     g.fillStyle = '#f2ede0'; g.fillRect(0, Y(LAKE.full + 1.0), w, Y(LAKE.full - 0.2) - Y(LAKE.full + 1.0));
     g.fillStyle = '#5f6b3e'; g.fillRect(0, Y(LAKE.full - 0.2), w, 10);
-    const mid = lerp(LAKE.full, LAKE.low, 0.5);
+    const mid = lakeLevel(2, 3);
     g.fillStyle = '#d9d2bf'; g.fillRect(0, Y(mid + 0.5), w, Y(mid) - Y(mid + 0.5));
     g.fillStyle = '#c8bfa8'; g.fillRect(0, Y(LAKE.low + 0.5), w, Y(LAKE.low) - Y(LAKE.low + 0.5));
   }, { repeat: true });
   tubTex.wrapT = THREE.ClampToEdgeWrapping;
   bake.geo(new THREE.MeshStandardMaterial({ map: tubTex, roughness: 0.92, side: THREE.DoubleSide }), face.geometry(THREE), false);
-  const bg = body.geometry(THREE); bake.geo(new THREE.MeshStandardMaterial({ color: 0xb8b6ae, roughness: 0.92, side: THREE.DoubleSide }), bg, true);
-  // spillway chutes on the downstream face (dry, naturally)
+  bake.geo(new THREE.MeshStandardMaterial({ color: 0xb8b6ae, roughness: 0.92, side: THREE.DoubleSide }), body.geometry(THREE), true);
   {
-    const ch = new ModelBuilder(), n = crest.length;
-    crest.forEach((i, r) => {
-      if (!(r > n * 0.38 && r < n * 0.62 && r % 2 === 0)) return;
-      const top = track.py[i] - 1.05, dn = track.hwL[i] + 0.6, p0 = at(i, dn + 1.6), p1 = at(i, dn + 1.6 + (top - 2) * 0.72);
-      ch.add('c', new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(p0.x, top - 2, p0.z), new THREE.Vector3(p1.x, 0.4, p1.z)]), 4, 0.9, 6));
-    });
-    bake.builder(ch, { c: plastic(0x8f8c84, 0.9) }, false);
+    const ch = new ModelBuilder();
+    for (let x = -40; x <= 10; x += 10) ch.add('c', new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(x, DAM.top - 2, DAM.zDn + 1.6), new THREE.Vector3(x, 0.4, DAM.zDn + 1.6 + (DAM.top - 2) * 0.72)]), 4, 0.9, 6));
+    for (let x = DAM.x0 + 2; x < DAM.x1; x += 4) for (const z of [DAM.zUp + 0.3, DAM.zDn - 0.3]) ch.add('rail', cyl(0.06, 0.06, 1.1, 5), { p: [x, DAM.top + 0.55, z] });
+    for (const z of [DAM.zUp + 0.3, DAM.zDn - 0.3]) ch.add('rail', box(DAM.x1 - DAM.x0, 0.1, 0.1, 0.02, 1), { p: [(DAM.x0 + DAM.x1) / 2, DAM.top + 1.1, z] });
+    bake.builder(ch, { c: plastic(0x8f8c84, 0.9), rail: plastic(0xffc928, 0.5) }, false);
   }
+  // karts on the lake bed stop at the dam face
+  for (let x = DAM.x0; x <= DAM.x1; x += 2.5) track.addCollider(x, DAM.zUp - 1.4, 1.6);
 
-  /* the water: its own surface, shaped to the basin, sinking a third per lap */
-  const shape = new THREE.Shape(), pts = [];
-  for (let v = -0.03; v <= 1.0001; v += 0.02) { const w = Math.max(0, (v - 0.42) / 0.58), um = Math.sqrt(Math.max(0, 0.985 ** 2 - w * w)); pts.push([LAKE.cx - um * lakeRx(Math.max(0, v)), LAKE.zDam - v * LAKE.len]); }
-  for (let v = 1.0; v >= -0.0301; v -= 0.02) { const w = Math.max(0, (v - 0.42) / 0.58), um = Math.sqrt(Math.max(0, 0.985 ** 2 - w * w)); pts.push([LAKE.cx + um * lakeRx(Math.max(0, v)), LAKE.zDam - v * LAKE.len]); }
+  /* the water: its own surface, shaped to the basin, at the level the race says */
+  const shape = new THREE.Shape(), pts = [], K = 0.985;
+  for (let z = DAM.zUp + 4; z >= LAKE.zN; z -= 6) pts.push([LAKE.cx - K * LAKE.RX, z]);
+  for (let a = 0; a <= 32; a++) { const t = Math.PI - (a / 32) * Math.PI; pts.push([LAKE.cx + Math.cos(t) * K * LAKE.RX, LAKE.zN - Math.sin(t) * K * LAKE.RN]); }
+  for (let z = LAKE.zN; z <= DAM.zUp + 4; z += 6) pts.push([LAKE.cx + K * LAKE.RX, z]);
   pts.forEach(([x, z], k) => k ? shape.lineTo(x, -z) : shape.moveTo(x, -z));
   const wg = new THREE.ShapeGeometry(shape, 4); wg.rotateX(-Math.PI / 2);
   const waterMat = new THREE.MeshStandardMaterial({ color: 0x2f86c8, roughness: 0.12, metalness: 0.15, transparent: true, opacity: 0.9, envMapIntensity: 1.3, depthWrite: true });
@@ -889,16 +909,18 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, at, samples, view 
   const cFull = new THREE.Color(0x2f86c8), cLow = new THREE.Color(0x6b6a48);
 
   /* the exposed bed: a crack pattern draped over the terrain, fading out above the old shoreline */
+  let crackMat;
   {
-    const gr = track.grid, q = new Quads(true), ix0 = Math.max(0, Math.floor((-200 - gr.x0) / gr.cell)), ix1 = Math.min(gr.nx - 1, Math.ceil((170 - gr.x0) / gr.cell));
-    const iz0 = Math.max(0, Math.floor((-570 - gr.z0) / gr.cell)), iz1 = Math.min(gr.nz - 1, Math.ceil((LAKE.zDam - gr.z0) / gr.cell));
+    const gr = track.grid, q = new Quads(true);
+    const ix0 = Math.max(0, Math.floor((LAKE.cx - LAKE.RX - 8 - gr.x0) / gr.cell)), ix1 = Math.min(gr.nx - 1, Math.ceil((LAKE.cx + LAKE.RX + 8 - gr.x0) / gr.cell));
+    const iz0 = Math.max(0, Math.floor((LAKE.zN - LAKE.RN - 8 - gr.z0) / gr.cell)), iz1 = Math.min(gr.nz - 1, Math.ceil((LAKE.zDam - gr.z0) / gr.cell));
     const Hh = (ix, iz) => gr.H[iz * gr.nx + ix];
-    const alpha = h => 1 - smoothstep(LAKE.full + 0.2, LAKE.full + 1.2, h);
+    const alpha = h => 1 - smoothstep(LAKE.full + 0.2, LAKE.full + 1.0, h);
     for (let iz = iz0; iz < iz1; iz++) for (let ix = ix0; ix < ix1; ix++) {
       const x = gr.x0 + ix * gr.cell, z = gr.z0 + iz * gr.cell;
-      if (lakeE(x + gr.cell / 2, z + gr.cell / 2) > 1.02) continue;
+      if (lakeE(x + gr.cell / 2, z + gr.cell / 2) > 1.02 || z + gr.cell > DAM.zUp) continue;
       const hs = [Hh(ix, iz + 1), Hh(ix + 1, iz + 1), Hh(ix + 1, iz), Hh(ix, iz)];
-      if (Math.min(...hs) > LAKE.full + 1.2) continue;
+      if (Math.min(...hs) > LAKE.full + 1.0) continue;
       const c = hs.map(h => [1, 1, 1, clamp(alpha(h), 0, 1)]);
       q.quad([x, hs[0] + 0.05, z + gr.cell], [x + gr.cell, hs[1] + 0.05, z + gr.cell], [x + gr.cell, hs[2] + 0.05, z], [x, hs[3] + 0.05, z], [[x / 7, -(z + gr.cell) / 7], [(x + gr.cell) / 7, -(z + gr.cell) / 7], [(x + gr.cell) / 7, -z / 7], [x / 7, -z / 7]], c);
     }
@@ -910,72 +932,80 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, at, samples, view 
         for (const [px, py] of pts) for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) { const dd = (x - px - ox) ** 2 + (y - py - oy) ** 2; if (dd < a) { b = a; a = dd; } else if (dd < b) b = dd; }
         const edge = Math.sqrt(b) - Math.sqrt(a), k = (y * w + x) * 4;
         const cr = edge < 1.8 ? 1 : edge < 3.4 ? 0.35 : 0;
-        d[k] = cr ? 40 : 230; d[k + 1] = cr ? 30 : 205; d[k + 2] = cr ? 20 : 160; d[k + 3] = cr ? Math.round(235 * cr) : Math.round(40 * Math.min(1, Math.sqrt(a) / 30));
+        d[k] = cr ? 40 : 236; d[k + 1] = cr ? 30 : 214; d[k + 2] = cr ? 20 : 170; d[k + 3] = cr ? Math.round(235 * cr) : Math.round(70 * Math.min(1, Math.sqrt(a) / 30));
       }
       g.putImageData(img, 0, 0);
     }, { repeat: true });
-    const m = new THREE.Mesh(q.geometry(THREE), new THREE.MeshStandardMaterial({ map: crack, vertexColors: true, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
-    m.matrixAutoUpdate = false; m.renderOrder = 0; group.add(m);
+    crackMat = new THREE.MeshStandardMaterial({ map: crack, vertexColors: true, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2, color: 0x8a8070 });
+    const m = new THREE.Mesh(q.geometry(THREE), crackMat); m.matrixAutoUpdate = false; m.renderOrder = 0; group.add(m);
   }
 
-  /* the pipes: three fat blue straws from the lake bed, over the crest on a gantry, down the dam, across the campus into the halls */
-  const pipeMat = plastic(0x2f6fc0, 0.42, 0.25), routes = [];
+  /* the pipes: three fat blue straws from intake towers in the lake, high over the bed on stilts, over the dam on a gantry, down to the pumps, across the campus into the halls */
+  const pipeMat = plastic(0x2f6fc0, 0.42, 0.25), routes = [], TOWER = { z: -414, top: 12.6, r: 2.6 };
   const tail = [
     [[14, 3.3, -252], [16, 3.3, -247], [20, 3.3, -245], [27.5, 3.3, -245]],
     [[8, 3.3, -182], [10, 3.3, -177], [14, 3.3, -175], [28.5, 3.3, -175]],
     [[2, 3.3, -125], [4, 3.3, -120], [8, 3.3, -118], [90, 3.3, -118], [96, 5.5, -118], [101, 7.5, -118], [188, 7.5, -118]],
   ];
   PIPE_X.forEach((x, k) => {
-    const head = [[x, 1.7, -414], [x, 2.0, -398], [x, 6, -373], [x, 16, -353], [x, 25.5, -347], [x, 27.6, -340], [x, 27.6, -329], [x, 25.6, -322.5], [x, 16, -316], [x, 6.5, -307], [x, 3.5, -298], [x, 3.3, -285]];
-    const p = [...head, ...tail[2 - k]].map(a => new THREE.Vector3(a[0], a[1], a[2]));
-    routes.push(new THREE.CatmullRomCurve3(p, false, 'centripetal'));
+    const head = [[x, TOWER.top, TOWER.z + 1], [x, 13.2, -398], [x, 14.2, -378], [x, 18.5, -358], [x, 25.5, -347.5], [x, 27.6, -340], [x, 27.6, -329], [x, 25.6, -322.5], [x, 16, -316], [x, 6.5, -307], [x, 3.5, -298], [x, 3.3, -285]];
+    routes.push(new THREE.CatmullRomCurve3([...head, ...tail[2 - k]].map(a => new THREE.Vector3(a[0], a[1], a[2])), false, 'centripetal'));
   });
   const pb = new ModelBuilder(), sup = new ModelBuilder();
-  routes.forEach((curve, k) => {
+  routes.forEach(curve => {
     const len = curve.getLength();
     pb.add('pipe', new THREE.TubeGeometry(curve, Math.round(len / 2.2), 2.0, 14, false));
     for (let s = 6; s < len - 2; s += 12) {
       const t = s / len, p = curve.getPointAt(t), tg = curve.getTangentAt(t);
       const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), tg), e = new THREE.Euler().setFromQuaternion(q);
       pb.add('flange', new THREE.TorusGeometry(2.08, 0.22, 5, 18), { p: [p.x, p.y, p.z], r: [e.x, e.y, e.z] });
-      // concrete saddles where the pipe runs low over the ground
       const gy = sc.y(p.x, p.z);
       if (p.y - 2 - gy < 7 && p.y - 2 - gy > -0.5 && !inBox(p.x, p.z) && p.z > LAKE.zDam + 2) sup.add('s', box(3.4, p.y - 1.6 - gy + 0.5, 2.2, 0.15, 1), { p: [p.x, gy + (p.y - 1.6 - gy + 0.5) / 2 - 0.4, p.z], r: [0, Math.atan2(tg.x, tg.z), 0] });
     }
-    const m = D.intake(2.0); m.position.copy(curve.getPointAt(0)); m.lookAt(curve.getPointAt(0).clone().sub(curve.getTangentAt(0))); group.add(m); bake.add(m, false);
-    void k;
   });
-  bake.builder(pb, { pipe: pipeMat, flange: plastic(0x24569a, 0.45, 0.3) }, true);
-  bake.builder(sup, { s: plastic(0xb4b8bc, 0.9) }, false);
-  // the gantry carrying them over the road: two portal frames, and the reservoir gauge on top
-  const iG = (() => { let best = 0, bd = 1e9; for (const i of crest) { const d = Math.abs(track.px[i] - 8); if (d < bd) { bd = d; best = i; } } return best; })();
+  // intake towers standing in the lake, and stilts carrying the pipes over the bed (karts drive under, round the legs)
+  for (const x of PIPE_X) {
+    const gy = track.terrainHeight(x, TOWER.z);
+    pb.add('tower', cyl(TOWER.r, TOWER.r + 0.4, TOWER.top - gy + 1, 18), { p: [x, (TOWER.top + gy - 1) / 2, TOWER.z] });
+    pb.add('flange', cyl(TOWER.r + 0.5, TOWER.r + 0.5, 0.6, 18), { p: [x, TOWER.top - 0.6, TOWER.z] });
+    for (let k = 0; k < 4; k++) pb.add('flange', new THREE.TorusGeometry(TOWER.r + 0.15, 0.18, 5, 18), { p: [x, gy + 2 + k * 2.6, TOWER.z], r: [Math.PI / 2, 0, 0] });
+    track.addCollider(x, TOWER.z, TOWER.r + 0.6);
+  }
+  for (const z of [-400, -386, -372, -358]) {
+    const py = routes[1].getPointAt(0).y, yy = z < -390 ? 13.2 : z < -375 ? 13.6 : z < -365 ? 15 : 17.6;
+    for (const x of [-2.6, 18.6]) { const gy = track.terrainHeight(x, z); sup.add('leg', box(1.2, yy - 2 - gy + 1, 1.2, 0.15, 1), { p: [x, (yy - 2 + gy - 1) / 2, z] }); track.addCollider(x, z, 1.1); }
+    sup.add('beam', box(22.6, 0.9, 1.4, 0.1, 1), { p: [8, yy - 2.4, z] });
+    void py;
+  }
+  bake.builder(pb, { pipe: pipeMat, flange: plastic(0x24569a, 0.45, 0.3), tower: plastic(0xb9bdc2, 0.8) }, true);
+  bake.builder(sup, { s: plastic(0xb4b8bc, 0.9), leg: plastic(0xd8dbe0, 0.5, 0.4), beam: plastic(0xffc928, 0.5) }, false);
+  // the gantry over the dam: two portal frames, and the reservoir gauge on top, facing the lake
+  const zc = (DAM.zUp + DAM.zDn) / 2;
   {
-    const gb = new ModelBuilder(), zc = track.pz[iG];
+    const gb = new ModelBuilder();
     for (const z of [-347.4, -321.2]) {
-      for (const x of [-3.5, 19.5]) { const gy = Math.min(sc.y(x, z), z < -340 ? 4 : 11); gb.add('leg', box(1.4, 26 - gy, 1.4, 0.15, 1), { p: [x, gy + (26 - gy) / 2 - 0.5, z] }); }
+      for (const x of [-3.5, 19.5]) { const gy = Math.min(sc.y(x, z), z < -340 ? track.terrainHeight(x, z) : 11); gb.add('leg', box(1.4, 26 - gy, 1.4, 0.15, 1), { p: [x, gy + (26 - gy) / 2 - 0.5, z] }); if (z < -340) track.addCollider(x, z, 1.2); }
       gb.add('beam', box(25, 1.4, 1.8, 0.15, 1), { p: [8, 25.1, z] });
     }
     for (const x of [-3.5, 19.5]) gb.add('beam', box(1.0, 1.0, 26.2, 0.1, 1), { p: [x, 25.6, -334.3] });
-    for (const z of [zc - 8.3, zc + 8.3]) gb.add('leg', box(0.6, 6.4, 0.6, 0.1, 1), { p: [8, 32.2, z] });
-    gb.add('beam', box(0.9, 0.6, 17.4, 0.1, 1), { p: [8, 29.3, zc] });
+    for (const x of [-0.5, 16.5]) gb.add('leg', box(0.6, 6.4, 0.6, 0.1, 1), { p: [x, 32.2, zc - 6] });
+    gb.add('beam', box(18, 0.6, 0.9, 0.1, 1), { p: [8, 29.3, zc - 6] });
     bake.builder(gb, { leg: plastic(0xd8dbe0, 0.5, 0.4), beam: plastic(0xffc928, 0.5) }, true);
   }
-  const yawE = Math.atan2(-track.tx[iG], -track.tz[iG]);   // faces drivers coming along the crest
-  const gauge = ledSign(THREE, group, 768, 384, [8 + Math.sin(yawE) * 0.4, 32.6, track.pz[iG] + Math.cos(yawE) * 0.4], yawE, 15, 7.5);
+  const gauge = ledSign(THREE, group, 768, 384, [8, 32.6, zc - 6.4], Math.PI, 15, 7.5);
   {
     const s = atlas.add(768, 120, signDraw('H₂O → GPU', { bg: '#ffc928', fg: '#1a1d29', font: SANS, size: 80, lines: 1 }));
-    atlas.place(s, [16.5, 27.6, track.pz[iG]], yawE, 11, 1.72);
+    atlas.place(s, [8, 25.1, -347.4 - 0.95], Math.PI, 11, 1.72);
   }
 
   /* pumps at the foot of the dam, gulping */
   const pumpParts = partsOf(D.pumpUnit()), pumpAt = PIPE_X.map((x, k) => ({ x, y: 0, z: -294 + k * 13 }));
   pumpAt.forEach(p => { p.y = sc.y(p.x, p.z) - 0.1; });
   const pumps = sc.instances(pumpParts, pumpAt.map(p => ({ ...p, yaw: 0 })), { cast: true });
-  // bulges travelling down each pipe: water on its way to the GPUs
   const bulge = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 16, 10), pipeMat, routes.length * 6); bulge.frustumCulled = false; group.add(bulge);
   const routeLen = routes.map(c => c.getLength());
 
-  /* whirlpools over the intakes, and a foam ring round each: they ride the surface down */
+  /* whirlpools round the intake towers, and a foam ring round each: they ride the surface down */
   const swirlTex = canvasTexture(THREE, 256, 256, (g, w, h) => {
     g.clearRect(0, 0, w, h); g.translate(w / 2, h / 2);
     const gr = g.createRadialGradient(0, 0, 0, 0, 0, w / 2); gr.addColorStop(0, 'rgba(8,30,60,0.95)'); gr.addColorStop(0.18, 'rgba(20,70,120,0.7)'); gr.addColorStop(0.6, 'rgba(60,140,200,0.25)'); gr.addColorStop(1, 'rgba(60,140,200,0)');
@@ -989,35 +1019,36 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, at, samples, view 
   const disc = new THREE.CircleGeometry(1, 32); disc.rotateX(-Math.PI / 2);
   const swirlMat = new THREE.MeshBasicMaterial({ map: swirlTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const foamMat = new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
-  const swirls = new THREE.InstancedMesh(disc, swirlMat, routes.length), foams = new THREE.InstancedMesh(disc, foamMat, routes.length);
+  const swirls = new THREE.InstancedMesh(disc, swirlMat, PIPE_X.length), foams = new THREE.InstancedMesh(disc, foamMat, PIPE_X.length);
   for (const m of [swirls, foams]) { m.frustumCulled = false; m.renderOrder = 3; group.add(m); }
-  const intakes = routes.map(c => { const p = c.getPointAt(0); return { x: p.x, z: p.z - 3, bed: track.terrainHeight(p.x, p.z - 3) }; });
+  const intakes = PIPE_X.map(x => ({ x, z: TOWER.z, bed: track.terrainHeight(x, TOWER.z) }));
 
-  /* the shore: a dock that ends in mid-air, a lifeguard chair, boats that settle on the mud, signs */
-  { const d = D.dock(32, 18); sc.place(d, 61, -371, { yaw: -Math.PI / 2, y: LAKE.full + 0.9 }); bake.add(d, true); }
-  { const c = D.lifeguardChair(); sc.place(c, 92, -392, { yaw: -Math.PI / 2 - 0.3 }); bake.add(c, true); }
+  /* the shore: a jetty off the bay that ends in mid-air, a lifeguard chair, boats that settle on the bed (karts bump them), signs */
+  { const zs = LAKE.zN - LAKE.RN + 2; const d = D.dock(30, 18); sc.place(d, LAKE.cx, zs, { yaw: 0, y: LAKE.full + 0.9 }); bake.add(d, true); for (let z = zs + 2; z <= zs + 30; z += 3) track.addCollider(LAKE.cx, z, 1.8); }
   {
+    const cx = LAKE.cx + 0.86 * LAKE.RX, cz = -415, c = D.lifeguardChair(); sc.place(c, cx, cz, { yaw: -Math.PI / 2 - 0.3 }); bake.add(c, true); track.addCollider(cx, cz, 1.4);
     const s = atlas.add(384, 192, signDraw('LIFEGUARD ON BREAK (FOREVER)', { bg: '#e23b3b', fg: '#ffffff', font: SANS, size: 60 }));
-    atlas.place(s, [91.5, sc.y(91.5, -387.5) + 2.2, -387.5], -Math.PI / 2, 2.4, 1.2);
-    const pb2 = new ModelBuilder(); pb2.add('p', cyl(0.08, 0.08, 2, 5), { p: [91.6, sc.y(91.6, -387.5) + 0.5, -387.5] }); bake.builder(pb2, { p: plastic(0xd9c9a8, 0.8) }, false);
+    atlas.place(s, [cx - 0.5, sc.y(cx, cz + 4.5) + 2.2, cz + 4.5], -Math.PI / 2, 2.4, 1.2);
+    const pb2 = new ModelBuilder(); pb2.add('p', cyl(0.08, 0.08, 2, 5), { p: [cx - 0.4, sc.y(cx, cz + 4.5) + 0.5, cz + 4.5] }); bake.builder(pb2, { p: plastic(0xd9c9a8, 0.8) }, false);
   }
-  const boatSpots = [[-32, -382, 0.7], [22, -412, -2.2], [-62, -432, 2.4], [6, -366, -0.4], [-12, -455, 1.1]];
+  const boatSpots = [[30, -366, 0.7], [-44, -388, -2.2], [-48, -438, 2.4], [30, -458, -0.4], [-20, -470, 1.1]];
   const boats = boatSpots.map(([x, z, yaw]) => ({ x, z, yaw, bed: track.terrainHeight(x, z), tilt: [rng.range(-0.25, 0.25), rng.range(-0.18, 0.18)] }));
+  for (const b of boats) track.addCollider(b.x, b.z, 2.4);
   const boatMeshes = sc.instances(partsOf(D.boat()), boats.map(b => ({ x: b.x, y: LAKE.full, z: b.z, yaw: b.yaw })), { tints: [0xffffff, 0xffd23c, 0xffffff, 0xe23b3b, 0xffffff], cast: false });
   for (const m of boatMeshes) m.frustumCulled = false;
   const E = new THREE.Euler();
-  // NO SWIMMING on the lake side of the crest, facing the drivers
+  // NO SWIMMING on the land side of the east shore, facing the drivers coming up it
   {
-    const i = track.indexAtCp(9.0), p = at(i, -(track.hwR[i] + 1.1)), yaw = Math.atan2(-track.tx[i], -track.tz[i]) - 0.35;
+    const i = track.indexAtCp(9.55), lat = -(track.hwR[i] + 3), p = { x: track.px[i] + track.lx[i] * lat, z: track.pz[i] + track.lz[i] * lat }, yaw = Math.atan2(-track.tx[i], -track.tz[i]) + 0.45, y = sc.y(p.x, p.z);
     const s = atlas.add(512, 320, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.strokeStyle = '#e23b3b'; g.lineWidth = 16; g.strokeRect(8, 8, w - 16, h - 16); fitText(g, 'NO SWIMMING', w / 2, h * 0.36, w - 70, 92, SANS, '#e23b3b', { lines: 1 }); fitText(g, '(SOON: NO WATER)', w / 2, h * 0.7, w - 90, 56, SANS, '#1a1d29', { lines: 1 }); });
-    atlas.place(s, [p.x, track.py[i] + 2.6, p.z], yaw, 4.2, 2.6);
-    const pb3 = new ModelBuilder(); for (const o of [-1.6, 1.6]) pb3.add('p', cyl(0.1, 0.1, 2.4, 6), { p: [p.x + Math.cos(yaw) * o, track.py[i] + 0.6, p.z - Math.sin(yaw) * o] }); bake.builder(pb3, { p: plastic(0x8a929e, 0.5, 0.5) }, false);
+    atlas.place(s, [p.x, y + 3.2, p.z], yaw, 4.2, 2.6);
+    const pb3 = new ModelBuilder(); for (const o of [-1.6, 1.6]) pb3.add('p', cyl(0.1, 0.1, 3.4, 6), { p: [p.x + Math.cos(yaw) * o, y + 1.4, p.z - Math.sin(yaw) * o] }); bake.builder(pb3, { p: plastic(0x8a929e, 0.5, 0.5) }, false);
   }
-  // the protest, on the bank by the east end of the dam
+  // the protest, on the land side of the east shore
   {
     const people = [], q = PROTEST.slice(), sticks = [];
     for (let k = 0; k < 9; k++) {
-      const cp = 8.18 + k * 0.05, i = track.indexAtCp(cp), lat = -(track.hwR[i] + 3.2 + (k % 3) * 1.6 + rng() * 0.6), p = at(i, lat);
+      const cp = 9.75 + k * 0.05, i = track.indexAtCp(cp), lat = -(track.hwR[i] + 3.6 + (k % 3) * 1.6 + rng() * 0.6), p = { x: track.px[i] + track.lx[i] * lat, z: track.pz[i] + track.lz[i] * lat };
       const yaw = Math.atan2(track.lx[i], track.lz[i]) + rng.range(-0.3, 0.3), y = sc.y(p.x, p.z);
       people.push({ x: p.x, y, z: p.z, yaw });
       sticks.push({ x: p.x + Math.cos(yaw) * 0.3 + Math.sin(yaw) * 0.3, y: y + 2.9, z: p.z - Math.sin(yaw) * 0.3 + Math.cos(yaw) * 0.3, yaw, text: q[k % q.length] });
@@ -1029,29 +1060,28 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, at, samples, view 
     });
   }
 
-  // update: level from the leader's lap, eased; boats settle; the gauge and the bulges
+  // update: everything follows the race's lake level
   const st = { level: LAKE.full, lap: 1, pct: 100, shown: -1, t: 0 };
   view.dcLake = st;
-  const Yax = new THREE.Vector3(0, 1, 0), Mx = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), Pp = new THREE.Vector3(), Z = new THREE.Vector3(0, 0, 1), C = new THREE.Color();
+  const Yax = new THREE.Vector3(0, 1, 0), Mx = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), Pp = new THREE.Vector3(), Z = new THREE.Vector3(0, 0, 1);
+  const cWet = new THREE.Color(0x8a8070), cDry = new THREE.Color(0xffffff);
   function update(dt, time) {
-    const race = view.race, laps = race?.laps ?? 3;
-    let lap = 1; if (race?.karts) for (const k of race.karts) if (Number.isFinite(k.lap)) lap = Math.max(lap, Math.min(k.lap, laps + 1));
-    st.lap = Math.min(lap, laps);
-    const target = lap > laps ? LAKE.low - 0.6 : levels(lap);
-    const d = target - st.level; st.level += clamp(d * (1 - Math.exp(-dt * 0.8)), -dt * 3, dt * 3);
-    if (!(st.level > -5 && st.level < 30)) st.level = LAKE.full;
+    const race = view.race;
+    const y = race?.lakeY;
+    st.level = Number.isFinite(y) ? y : LAKE.full;
+    st.lap = race?.lakeLap ? Math.min(race.lakeLap, race.laps) : 1;
     water.position.y = st.level;
     const f = clamp((LAKE.full - st.level) / (LAKE.full - LAKE.low), 0, 1);
     waterMat.color.copy(cFull).lerp(cLow, f * 0.55);
-    st.pct = Math.round(clamp((st.level - 0.6) / (LAKE.full - 0.6), 0, 1) * 100);
+    crackMat.color.copy(cWet).lerp(cDry, race && race.lakeLap >= race.laps ? 1 : 0);
+    st.pct = lakePct(st.level);
     boats.forEach((b, k) => {
-      const grounded = clamp((b.bed + 0.4 - st.level) / 1.2, 0, 1), y = Math.max(st.level, b.bed + 0.4) - 0.35;
+      const grounded = clamp((b.bed + 0.4 - st.level) / 1.2, 0, 1), by = Math.max(st.level, b.bed + 0.4) - 0.35;
       E.set(b.tilt[0] * grounded, b.yaw, b.tilt[1] * grounded + (1 - grounded) * Math.sin(time + b.z) * 0.03); Q.setFromEuler(E);
-      Mx.compose(Pp.set(b.x, y + (1 - grounded) * Math.sin(time * 1.3 + b.x) * 0.08, b.z), Q, S.set(1, 1, 1));
+      Mx.compose(Pp.set(b.x, by + (1 - grounded) * Math.sin(time * 1.3 + b.x) * 0.08, b.z), Q, S.set(1, 1, 1));
       for (const m of boatMeshes) m.setMatrixAt(k, Mx);
     });
     for (const m of boatMeshes) m.instanceMatrix.needsUpdate = true;
-    // gulps: pumps throb, bulges travel faster as the lake runs out
     const beat = 0.5 + 0.5 * Math.sin(time * 5.2);
     pumpAt.forEach((p, k) => { const s = 1 + 0.07 * Math.max(0, Math.sin(time * 5.2 - k * 0.9)); Mx.compose(Pp.set(p.x, p.y, p.z), Q.identity(), S.set(s, 1 + (s - 1) * 1.6, s)); for (const m of pumps) m.setMatrixAt(k, Mx); });
     for (const m of pumps) m.instanceMatrix.needsUpdate = true;
@@ -1063,15 +1093,14 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, at, samples, view 
       }
     });
     bulge.instanceMatrix.needsUpdate = true;
-    // whirlpools spin faster as the lake runs out; spray where the pipes cross the gantry
     intakes.forEach((w, k) => {
-      const show = st.level > w.bed + 0.3 ? 1 : 0.001, spin = time * (1.4 + st.lap * 0.6) + k;
+      const show = st.level > w.bed + 0.3 && st.level < TOWER.top ? 1 : 0.001, spin = time * (1.4 + st.lap * 0.6) + k;
       Mx.compose(Pp.set(w.x, st.level + 0.08, w.z), Q.setFromAxisAngle(Yax, -spin), S.set(10 * show, 1, 10 * show)); swirls.setMatrixAt(k, Mx);
-      const f = (12 + Math.sin(time * 3 + k * 2) * 1.2) * show;
-      Mx.compose(Pp.set(w.x, st.level + 0.12, w.z), Q.setFromAxisAngle(Yax, spin * 0.3), S.set(f, 1, f)); foams.setMatrixAt(k, Mx);
+      const fr = (12 + Math.sin(time * 3 + k * 2) * 1.2) * show;
+      Mx.compose(Pp.set(w.x, st.level + 0.12, w.z), Q.setFromAxisAngle(Yax, spin * 0.3), S.set(fr, 1, fr)); foams.setMatrixAt(k, Mx);
     });
     swirls.instanceMatrix.needsUpdate = true; foams.instanceMatrix.needsUpdate = true;
-    for (let k = 0, n = view.fx.count(10, dt); k < n; k++) {
+    for (let k = 0, m = view.fx.count(10, dt); k < m; k++) {
       const x = PIPE_X[Math.floor(Math.random() * 3)] + (Math.random() - 0.5) * 3, z = -334 + (Math.random() < 0.5 ? -6 : 6) + (Math.random() - 0.5) * 2;
       view.fx.smoke.emit({ x, y: 29.4, z, vx: (Math.random() - 0.5) * 3, vy: 3 + Math.random() * 3, vz: (Math.random() - 0.5) * 3, color: [0.95, 0.97, 1], size: 1.6 + Math.random(), grow: 2.5, drag: 1.5, gravity: 3, life: 1.2, alpha: 0.85 });
     }
@@ -1089,13 +1118,12 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, at, samples, view 
       });
     }
   }
+  const tailSegs = [];
+  PIPE_X.forEach((x, k) => { const p2 = [[x, -414], [x, -285], ...tail[2 - k].map(a => [a[0], a[2]])]; for (let j = 0; j < p2.length - 1; j++) tailSegs.push([p2[j][0], p2[j][1], p2[j + 1][0], p2[j + 1][1]]); });
   const nearPipe = (x, z, m) => {
     for (const c of tailSegs) { const [ax, az, bx, bz] = c, dx = bx - ax, dz = bz - az, t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1), 0, 1); if (Math.hypot(x - ax - dx * t, z - az - dz * t) < m + 2) return true; }
     return false;
   };
-  const tailSegs = [];
-  PIPE_X.forEach((x, k) => { const pts = [[x, -414], [x, -285], ...tail[2 - k].map(a => [a[0], a[2]])]; for (let j = 0; j < pts.length - 1; j++) tailSegs.push([pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1]]); });
-  void C;
   return { update, nearPipe };
 }
 const inBox = (x, z) => x > HB.x0 - 1 && x < HB.x1 + 1 && z > HB.z0 - 1 && z < HB.z1 + 1;

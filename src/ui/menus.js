@@ -258,9 +258,29 @@ export class Menus {
     const A = this.app;
     const rows = results.map((r, i) => {
       const total = gp ? gp.totals[r.racer.id] : null;
-      return h('div', { class: 'res-row' + (r.isPlayer ? ' me' : ''), style: `--d:${i * 70}ms;--rc:${hex(r.racer.color)}` + (r.isPlayer ? `;--pc:${PLAYER_COLORS[r.playerIndex]}` : '') },
+      // A kart classified on an estimate never crossed the line: the cell says DNF and labels the
+      // estimate as one, instead of dressing a guess up as a finish time (#144). A finisher's cell
+      // carries their best lap under the total (#143).
+      const lapsDone = r.kart.lapTimes.length;
+      const time = r.estimated
+        ? h('span', { class: 'res-time dnf' }, h('b', {}, 'DNF'), h('small', { class: 'res-best' }, `${lapsDone ? `${lapsDone} lap${lapsDone > 1 ? 's' : ''} done` : 'on lap 1'} · est. ${fmtTime(r.time)}`))
+        : h('span', { class: 'res-time' }, fmtTime(r.time), isFinite(r.bestLap) && h('small', { class: 'res-best' }, `Best lap ${fmtTime(r.bestLap).slice(0, -2)}`));
+      return h('div', { class: 'res-row' + (r.isPlayer ? ' me' : '') + (r.estimated ? ' dnf' : ''), style: `--d:${i * 70}ms;--rc:${hex(r.racer.color)}` + (r.isPlayer ? `;--pc:${PLAYER_COLORS[r.playerIndex]}` : '') },
         h('b', { class: 'res-rank' }, String(r.rank)), h('img', { src: r.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, r.racer.name, r.isPlayer && h('em', {}, results.filter(x => x.isPlayer).length > 1 ? `P${r.playerIndex + 1}` : 'You')),
-        h('span', { class: 'res-time' }, fmtTime(r.time)), gp && h('span', { class: 'res-pts' }, `+${r.points}`), gp && h('span', { class: 'res-total' }, String(total)));
+        time, gp && h('span', { class: 'res-pts' }, `+${r.points}`), gp && h('span', { class: 'res-total' }, String(total)));
+    });
+    // The payoff strip: each human's race in numbers, from the stats the race already kept (#143).
+    // Top speed in honest mph: kart speed is m/s; 2.23694 is MPH_PER_MS in ui/hud.js (PR #160), so the strip matches the speedometer.
+    const humans = results.filter(r => r.isPlayer);
+    const strips = humans.map(r => {
+      const s = r.stats || {}, parts = [];
+      if (s.hitsGiven) parts.push(`Hostile takeovers: ${s.hitsGiven} served`);
+      if (s.hitsTaken) parts.push(`Lawsuits weathered: ${s.hitsTaken}`);
+      parts.push(`Drifts: ${s.drifts || 0}`, `Boosts: ${s.boosts || 0}`);
+      if (s.overtakes) parts.push(`Overtakes: ${s.overtakes}`);
+      parts.push(`Top speed: ${Math.round((s.topSpeed || 0) * 2.23694)} mph`, `Coins banked: ${s.coins || 0}`);
+      return h('div', { class: 'res-strip', style: humans.length > 1 ? `--pc:${PLAYER_COLORS[r.playerIndex]}` : '' },
+        h('b', {}, humans.length > 1 ? `${r.racer.name} in numbers` : 'Your race in numbers'), h('span', {}, parts.join(' · ')));
     });
     const buttons = gp
       ? [this.btn(gp.last ? 'See final standings' : 'Next race', () => A.gpNext(), { cls: 'go', def: true })]
@@ -269,6 +289,7 @@ export class Menus {
       h('h1', {}, track.name), gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
+      strips.length && h('div', { class: 'res-strips' }, strips),
       // the winner's line and the last finisher's: each stays in one piece, side by side when both fit
       h('p', { class: 'res-quote' }, h('span', {}, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`),
         results.length > 2 && h('span', {}, h('b', {}, results[results.length - 1].racer.name + ': '), `“${results[results.length - 1].racer.barks.lose}”`)),
@@ -386,7 +407,7 @@ export class Menus {
   s_records() {
     const A = this.app, st = A.save.data.stats;
     const rows = TRACKS.map(t => h('tr', {}, h('th', {}, t.name), ...CC_LIST.map(cc => h('td', {}, A.save.bestFor(t.id, cc)?.race ? fmtTime(A.save.bestFor(t.id, cc).race) : '–')), h('td', {}, A.save.bestFor(t.id, 'tt')?.race ? fmtTime(A.save.bestFor(t.id, 'tt').race) : '–')));
-    const el = h('div', {}, this.header('Records', `${st.races} races · ${st.wins} wins`), h('div', { class: 'panel records' },
+    const el = h('div', {}, this.header('Records', `${st.races} races · ${st.wins} wins · ${st.coins} coins banked · ${st.hitsGiven} hostile takeovers`), h('div', { class: 'panel records' },
       h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Track'), ...CC_LIST.map(cc => h('th', {}, CLASSES[cc].label)), h('th', {}, 'Time trial'))), h('tbody', {}, rows))));
     return { el };
   }

@@ -178,6 +178,7 @@ function decorate(ctx) {
   anim.push((dt, time) => { orb.userData.update(time); disc.userData.update(time); });
 
   const atlas = makeAtlas(THREE, ctx.group);
+  neonRoad(THREE, view);
   const yawOf = (nx, nz) => Math.atan2(nx, nz);
   /** Facing for a board beside the road: toward the road, turned `ang` radians toward the karts coming at it. */
   const boardYaw = (i, side, ang = 0.5) => yawOf(-side * tr.lx[i] * Math.cos(ang) - tr.tx[i] * Math.sin(ang), -side * tr.lz[i] * Math.cos(ang) - tr.tz[i] * Math.sin(ang));
@@ -202,7 +203,7 @@ function decorate(ctx) {
     // the banner they hold up, on the edge of the platform nearest the road
     const dx = -side * tr.lx[i], dz = -side * tr.lz[i], yaw = faceRoad(i, side), bw = 13, bh = 2.6;
     const c = [p.x + dx * 6.2, p.y + 1.1 + bh / 2, p.z + dz * 6.2], r = atlas.add(1024, 205, signDraw(FANS[k], { bg: ['#ffffff', '#ffd23c', '#35e0ff', '#ff9ad5'][k], fg: '#12142b', size: 120, border: '#12142b' }));
-    atlas.place(r, c, yaw, bw, bh);
+    atlas.place(r, c, yaw, bw, bh); backer(fixed, c, yaw, bw, bh);
     for (const s of [-1, 1]) fixed.add('pole', cyl(0.07, 0.07, 1.1 + bh + 0.3, 6), { p: [c[0] + Math.cos(yaw) * s * (bw / 2 + 0.1) - dx * 0.05, p.y + (1.1 + bh + 0.3) / 2, c[2] - Math.sin(yaw) * s * (bw / 2 + 0.1) - dz * 0.05] });
   });
   sc.instances(partsOf(S.robotFan()), crowd, { scale: [0.95, 1.15], tints: P.CROWD_TINTS, cast: false });
@@ -405,13 +406,14 @@ const BOARDS = [
   [12.0, 1, 7, 6, 'YOUR JOB IS SAFE (UNTIL FRIDAY)'],
   [15.5, 1, 10, 4, 'THOUGHT FOR 47 SECONDS. STILL WRONG.'],
   [21.0, -1, 7, 5, 'IGNORE PREVIOUS INSTRUCTIONS. HONK.'],
-  [24.4, 1, 7, 5, 'VIBE CODED. VIBE CRASHED.'],
+  [24.4, -1, 7, 5, 'VIBE CODED. VIBE CRASHED.'],
   [27.3, -1, 7, 5, 'TIP: ADD GLUE TO PIZZA'],
   [28.55, 1, 8, 5, 'NEED $7 TRILLION. VENMO OK.'],
   [29.1, -1, 8, 5, 'PAUSE AI (UNTIL WE CATCH UP)'],
   [35.6, 1, 8, 5, 'COPILOT: NOW IN YOUR TOASTER'],
   [40.3, -1, 8, 5, 'RESPONSIBLE SCALING (NO SPEED LIMIT)'],
   [42.7, 1, 8, 5, 'NONPROFIT* (*TERMS APPLY)'],
+  [44.1, -1, 8, 5, 'PIVOT TO SUPERINTELLIGENCE (LEGS PENDING)'],
   [46.6, 1, 8, 6, 'WE HAVE NO MOAT'],
   [49.5, 1, 14, 9, 'BUY MORE GPUS. SAVE MORE.'],
 ];
@@ -456,7 +458,7 @@ function makeAtlas(THREE, group, S = 2048) {
   const pages = [], newPage = () => {
     const c = document.createElement('canvas'); c.width = c.height = S;
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.62, roughness: 0.6, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.62, roughness: 0.6 });   // front faces only: every panel seen from behind has its own back
     const p = { c, g: c.getContext('2d'), tex, mat, q: new Quads(), x: 0, y: 0, row: 0, items: [] }; pages.push(p); return p;
   };
   newPage();
@@ -499,6 +501,34 @@ const signDraw = (text, { bg = '#ffffff', fg = '#12142b', font = FONT, size = 12
   if (border) { g.strokeStyle = border; g.lineWidth = Math.max(4, h * 0.05); g.strokeRect(g.lineWidth / 2, g.lineWidth / 2, w - g.lineWidth, h - g.lineWidth); }
   fitText(g, text, w / 2, h * 0.53, w * (1 - pad * 2), size, font, fg, { lines, maxH: h * 0.86 });
 };
+
+/** A finished dark back for a one-sided panel at c facing yaw (baked with the other fixed parts). */
+function backer(fixed, c, yaw, w, h, depth = 0.12) {
+  const fx = Math.sin(yaw), fz = Math.cos(yaw), o = depth / 2 + 0.04;
+  fixed.add('beam', box(w + 0.3, h + 0.3, depth, Math.min(0.05, depth / 2 - 0.01), 1), { p: [c[0] - fx * o, c[1], c[2] - fz * o], r: [0, yaw, 0] });
+}
+
+/** The neon chicane's road: a lit violet deck with a glowing grid, bright edges, and chevrons, so it reads against the void. */
+function neonRoad(THREE, view) {
+  const mat = view.trackMesh?.userData?.mats?.road_neon;
+  if (!mat) return;
+  const tex = draw => { const c = document.createElement('canvas'); c.width = c.height = 512; draw(c.getContext('2d'), 512, 512); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; return t; };
+  const grid = (g, w, h, col, lw) => { g.strokeStyle = col; g.lineWidth = lw; for (let i = 1; i < 8; i++) { g.beginPath(); g.moveTo(i * w / 8, 0); g.lineTo(i * w / 8, h); g.stroke(); } for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(0, i * h / 4 + 1); g.lineTo(w, i * h / 4 + 1); g.stroke(); } };
+  const chev = (g, w, h, col) => { g.fillStyle = col; for (let i = 0; i < 2; i++) { const y = i * h / 2 + h * 0.12; g.beginPath(); g.moveTo(w * 0.4, y + h * 0.14); g.lineTo(w * 0.5, y); g.lineTo(w * 0.6, y + h * 0.14); g.lineTo(w * 0.555, y + h * 0.14); g.lineTo(w * 0.5, y + h * 0.065); g.lineTo(w * 0.445, y + h * 0.14); g.closePath(); g.fill(); } };
+  const map = tex((g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#3a2a78'); gr.addColorStop(0.5, '#4b3a9a'); gr.addColorStop(1, '#3a2a78'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    grid(g, w, h, '#8fe8ff', 4); chev(g, w, h, '#ffd6f4');
+    g.fillStyle = '#ff5cc8'; g.fillRect(0, 0, w * 0.05, h); g.fillRect(w * 0.95, 0, w * 0.05, h);
+    g.fillStyle = '#ffffff'; g.fillRect(w * 0.05, 0, w * 0.012, h); g.fillRect(w * 0.938, 0, w * 0.012, h);
+  });
+  const emi = tex((g, w, h) => {
+    g.fillStyle = '#1c1240'; g.fillRect(0, 0, w, h);
+    grid(g, w, h, '#2fb8e0', 4); chev(g, w, h, '#ff5cc8');
+    g.fillStyle = '#ff5cc8'; g.fillRect(0, 0, w * 0.05, h); g.fillRect(w * 0.95, 0, w * 0.05, h);
+    g.fillStyle = '#ffd6f4'; g.fillRect(w * 0.05, 0, w * 0.012, h); g.fillRect(w * 0.938, 0, w * 0.012, h);
+  });
+  mat.map = map; mat.emissiveMap = emi; mat.emissive.set(0xffffff); mat.emissiveIntensity = 1.05; mat.roughness = 0.35; mat.metalness = 0.2; mat.needsUpdate = true;
+}
 
 /** A panel with its own canvas, redrawn on demand. Returns { draw(fn) }. */
 function liveSign(THREE, group, w, h, c, yaw, mw, mh, { intensity = 1.0 } = {}) {
@@ -592,10 +622,10 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
     const beam = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: 0x7a5cff, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     const m0 = W(...U.mouth); beam.position.set(m0[0], m0[1], m0[2]); beam.rotation.set(0, F.yaw, -Math.PI / 2); ctx.group.add(beam);
     // raw materials drifting into the intake: trees, cars, houses, a grandstand with its crowd still in it
-    const types = [[S.junkTree(), 2.6], [S.junkCar(), 5.2], [S.junkHouse(), 4.6], [S.junkStand(), 3.6]], PER = 7, LIFE = 24;
+    const types = [[S.junkTree(), 2.0], [S.junkCar(), 4.0], [S.junkHouse(), 3.5], [S.junkStand(), 2.8]], PER = 7, LIFE = 24;
     const junk = types.map(([model, s0], t) => {
       const parts = partsOf(model), list = [];
-      for (let k = 0; k < PER; k++) list.push({ ph: (k + t / types.length) / PER, s0: s0 * rng.range(0.85, 1.15), sx: -270 + rng.range(-25, 25), sy: rng.range(0, 60), sz: rng.range(-30, 110), a: rng.range(-0.6, 0.6), b: rng.range(-0.5, 0.5), sw: rng() * 6.28 });
+      for (let k = 0; k < PER; k++) list.push({ ph: (k + t / types.length) / PER, s0: s0 * rng.range(0.85, 1.15), sx: -270 + rng.range(-25, 25), sy: rng.range(0, 60), sz: rng.range(-70, 40), a: rng.range(-0.6, 0.6), b: rng.range(-0.5, 0.5), sw: rng() * 6.28 });
       const ims = parts.map(pt => { const im = new THREE.InstancedMesh(pt.geometry, pt.material, PER); im.frustumCulled = false; ctx.group.add(im); return im; });
       return { list, ims };
     });
@@ -651,7 +681,7 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
       fitText(g, 'AI BENCHMARK RESULTS', w / 2, 112, w - 80, 140, FONT, '#ffd23c', { lines: 1 });
       fitText(g, '(ALL SCORES SELF-REPORTED)', w / 2, 230, w - 120, 70, SANS, '#ffffff', { lines: 1 });
     });
-    atlas.place(title, W(0, 19.5, 0), yaw, 36, 7.7);
+    atlas.place(title, W(0, 19.5, 0), yaw, 36, 7.7); backer(fixed, W(0, 19.5, 0), yaw, 36, 7.7);
     for (const s of [-1, 1]) { const q = W(s * 17, 13.5, -0.3); fixed.add('pole', cyl(0.35, 0.35, 16, 8), { p: [q[0], q[1] - 2.5, q[2]] }); }
     anchors.push({ x: p.x, z: p.z, r: 40 });
   }
@@ -705,7 +735,17 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
       g.strokeStyle = '#12142b'; g.lineWidth = 8; g.strokeRect(40, 22, 76, 76);
       g.fillStyle = '#12142b'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = `64px ${SANS}`; g.fillText("I'M NOT A ROBOT", 150, 62, w - 190);
     });
-    const c2 = at(i, (hl - hr) / 2, UP - PH / 2 - 1.8); atlas.place(r2, [c2.x, c2.y, c2.z], yaw, 10, 1.17);
+    const c2 = at(i, (hl - hr) / 2, UP - PH / 2 - 1.8); atlas.place(r2, [c2.x, c2.y, c2.z], yaw, 10, 1.17); backer(fixed, [c2.x, c2.y, c2.z], yaw, 10, 1.17);
+    // the back of the gate, for anyone looking back: they passed
+    backer(fixed, [c.x, c.y, c.z], yaw, PW, PW * 440 / 1024, 0.5);
+    const rb = atlas.add(1024, 440, g => {
+      const w = 1024, h = 440; g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.strokeStyle = '#d0d4dc'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
+      g.fillStyle = '#16a34a'; g.beginPath(); g.moveTo(120, 220); g.lineTo(190, 300); g.lineTo(330, 130); g.lineWidth = 34; g.strokeStyle = '#16a34a'; g.stroke();
+      fitText(g, 'VERIFIED:', 660, 150, 600, 120, FONT, '#12142b', { lines: 1 });
+      fitText(g, 'YOU ARE A ROBOT', 660, 290, 640, 110, FONT, '#e2246b', { lines: 1 });
+    });
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    atlas.place(rb, [c.x - fx * 0.62, c.y, c.z - fz * 0.62], yaw + Math.PI, PW, PW * 440 / 1024);
   }
 
   /* --- turn three, dead ahead down the back straight: the capabilities tower and the alignment office --- */
@@ -721,7 +761,7 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
     const off = S.alignmentOffice({ w: 20, h: 8.5, d: 12 }); off.position.set(OX, OY, OZ); off.rotation.y = oyaw; ctx.group.add(off);
     const W = frame(OX, OY, OZ, oyaw);
     const os = atlas.add(1000, 200, signDraw('ALIGNMENT TEAM', { bg: '#ffd23c', fg: '#12142b', size: 150, lines: 1, border: '#12142b' }));
-    atlas.place(os, W(0, 11.2, 5.6), oyaw, 19, 3.8);
+    atlas.place(os, W(0, 11.2, 5.6), oyaw, 19, 3.8); backer(fixed, W(0, 11.2, 5.6), oyaw, 19, 3.8);
     for (const s of [-1, 1]) { const q = W(s * 8, 9.6, 5.4); fixed.add('pole', cyl(0.14, 0.14, 1.8, 6), { p: q }); }
     const note = atlas.add(400, 260, g => { const w = 400, h = 260; g.fillStyle = '#fffbe6'; g.fillRect(0, 0, w, h); fitText(g, 'BACK IN 6 MONTHS', w / 2, h / 2, w - 40, 96, '"Comic Sans MS", "Marker Felt", ' + SANS, '#12142b', { maxH: h - 30 }); });
     atlas.place(note, W(-4.6, 4.2, 6.08), oyaw, 4.2, 2.7);
@@ -730,7 +770,7 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
 
   /* --- the Leap: a monument to human art, with seven fingers --- */
   {
-    const HX = 338, HY = 18, HZ = 198, hyaw = Math.atan2(-1, -0.7);
+    const HX = 338, HY = 18, HZ = 198, hyaw = Math.atan2(-1, -0.25);   // square to the road, so it reads coming and going
     const hand = S.sevenFingerHand(); hand.position.set(HX, HY, HZ); hand.rotation.y = hyaw; ctx.group.add(hand);
     const W = frame(HX, HY, HZ, hyaw);
     const r = atlas.add(1200, 360, g => {

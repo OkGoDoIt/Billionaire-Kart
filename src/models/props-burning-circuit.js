@@ -458,7 +458,7 @@ export function makeAtlas(group, { S = 2048, glow: gi = 0.32 } = {}) {
   const pages = [], newPage = () => {
     const c = document.createElement('canvas'); c.width = c.height = S;
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: gi, roughness: 0.6, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: gi, roughness: 0.6 });   // front faces only: anything seen from behind gets its own back panel
     const p = { c, g: c.getContext('2d'), tex, mat, q: new Quads(), x: 0, y: 0, row: 0, items: [] }; pages.push(p); return p;
   };
   newPage();
@@ -471,6 +471,8 @@ export function makeAtlas(group, { S = 2048, glow: gi = 0.32 } = {}) {
   const api = {
     add(w, h, draw) { const r = alloc(w, h); r.draw = draw; r.p.items.push(r); return r; },
     place(r, c, yaw, w, h, tilt = 0) { r.p.q.panel(c, yaw, w, h, [r.x / S, 1 - (r.y + r.h) / S, (r.x + r.w) / S, 1 - r.y / S], tilt); },
+    /** Lettering on both faces of a board `depth` thick whose front face is at c: the back reads correctly from behind. */
+    both(r, c, yaw, w, h, depth) { api.place(r, c, yaw, w, h); api.place(r, [c[0] - Math.sin(yaw) * depth, c[1], c[2] - Math.cos(yaw) * depth], yaw + Math.PI, w, h); },
     /** Place a region on an arbitrary quad: a, b, c, d are bottom-left, bottom-right, top-right, top-left as seen from the front. */
     quad(r, a, b, c, d) { r.p.q.quad(a, b, c, d, [r.x / S, 1 - (r.y + r.h) / S, (r.x + r.w) / S, 1 - r.y / S]); },
     paint() { for (const p of pages) { p.g.clearRect(0, 0, S, S); for (const r of p.items) { p.g.save(); p.g.translate(r.x, r.y); p.g.beginPath(); p.g.rect(0, 0, r.w, r.h); p.g.clip(); r.draw(p.g, r.w, r.h); p.g.restore(); } p.tex.needsUpdate = true; } },
@@ -646,4 +648,29 @@ export function signFrame(w, h, up, { color = 0x3a2c34, legs = 2 } = {}) {
   for (const x of xs) b.add('f', cyl(0.18 + w * 0.006, 0.24 + w * 0.006, up + h * 0.4, 8), { p: [x, (up + h * 0.4) / 2, -0.32] });
   b.add('f', box(w + 0.5, h + 0.5, 0.3, 0.08, 1), { p: [0, up, -0.2] });
   return b.build({ f: plastic(color, 0.6, 0.3) });
+}
+
+/** A superyacht, about L metres long, bow to +Z, keel at y = 0 (for beaching in a dune).
+    userData.name = { x, y, z, w, h }: where the name goes on each side (local, +x side; mirror x for the other). */
+export function superyacht({ L = 56 } = {}) {
+  const b = new ModelBuilder(), H = L / 2, W = L * 0.1;
+  const hull = (y, h, w) => loft([{ z: -H, w: w * 0.86, h, y, n: 3 }, { z: -H * 0.6, w, h, y, n: 3 }, { z: H * 0.35, w, h, y, n: 3 }, { z: H * 0.8, w: w * 0.55, h: h * 0.95, y: y + 0.2, n: 2.6 }, { z: H, w: 0.3, h: h * 0.7, y: y + 0.6, n: 2 }], 22, 4);
+  b.add('navy', hull(1.6, 1.7, W * 0.92));
+  b.add('white', hull(4.1, 1.4, W));
+  b.add('trim', hull(5.55, 0.12, W * 1.01));
+  // decks, each with a dark window band
+  [[0.66, 7.2, 0.86], [0.48, 10.0, 0.74], [0.3, 12.6, 0.6]].forEach(([f, y, wf], k) => {
+    const len = L * f, z0 = -H * 0.25 + k * L * 0.04;
+    b.add('white', box(W * 2 * wf, 2.6, len, 0.4, 2), { p: [0, y, z0] });
+    b.add('glass', box(W * 2 * wf + 0.1, 1.0, len * 0.94, 0.2, 1), { p: [0, y + 0.2, z0] });
+    b.add('white', box(W * 2 * wf + 0.6, 0.25, len + 0.8, 0.08, 1), { p: [0, y + 1.4, z0] });
+  });
+  b.add('white', cyl(0.25, 0.35, 6, 8), { p: [0, 16.5, -H * 0.05] });
+  b.add('white', sphere(1.3, 14, 10), { p: [0, 18.6, -H * 0.05] });
+  b.add('white', box(4, 0.3, 0.4, 0.05, 1), { p: [0, 17.2, -H * 0.05] });
+  b.add('pad', cyl(W * 0.8, W * 0.8, 0.3, 24), { p: [0, 6.0, -H * 0.82] });
+  b.add('padMark', torus(W * 0.55, 0.18, 4, 24), { p: [0, 6.2, -H * 0.82], r: [Math.PI / 2, 0, 0] });
+  const g = b.build({ navy: paint(0x1f2a44, { rough: 0.35 }), white: JET_WHITE, trim: paint(0xd8b04a, { rough: 0.25, metal: 0.8 }), glass: CHROME_DARK, pad: MAT.dark, padMark: plastic(0xffd23c, 0.5) });   // shares the jets' materials, so it bakes into the same meshes
+  g.userData.name = { x: W * 0.74 + 0.1, y: 10.1, z: -H * 0.25 + L * 0.04, w: L * 0.46, h: 2.6 };   // on the middle deck, where it shows over a dune
+  return g;
 }

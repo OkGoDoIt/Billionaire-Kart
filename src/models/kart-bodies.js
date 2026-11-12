@@ -106,9 +106,19 @@ function wedge({ b, K, M, main }) {
   b.add('main', side([[0.4, 0.235], [1.46, 0.235], [1.46, 0.36], [0.4, 0.36]], 0.37, { bevel: 0.015 }));
   b.add('main', side([[-1.36, 0.235], [0.42, 0.235], [0.42, 0.36], [-1.36, 0.36]], 0.47, { bevel: 0.015 }));
   for (const sx of [1, -1]) {
-    // flares slope down and outward, like folded sheet steel
-    b.add('main', side(shiftZ(arch(K.frontR, 0.16, 0.04), K.frontZ), 0.17, { bevel: 0.012 }), { p: [sx * (0.62 - 0.115), 0.0, 0], r: [0, 0, -sx * 0.2] });
-    b.add('main', side(shiftZ(arch(K.rearR, 0.16, 0.045), K.rearZ), 0.22, { bevel: 0.012 }), { p: [sx * (0.71 - 0.125), 0.0, 0], r: [0, 0, -sx * 0.2] });
+    // trapezoid steel wheel arches, bolted to the body sides, legs down to red running boards between the wheels
+    b.add('body', side(shiftZ(arch(K.frontR, -0.07, 0.05), K.frontZ), 0.235, { bevel: 0.014 }), { p: [sx * 0.575, 0, 0] });
+    b.add('body', side(shiftZ(arch(K.rearR, -0.13, 0.055), K.rearZ), 0.225, { bevel: 0.014 }), { p: [sx * 0.665, 0, 0] });
+    b.add('main', box(0.34, 0.1, 0.84, 0.02, 1), { p: [sx * 0.55, 0.29, 0.06] });
+    b.add('black', box(0.02, 0.06, 0.7, 0.008, 1), { p: [sx * 0.722, 0.29, 0.06] });
+    // arch liners so the wheel wells read dark, not see-through
+    b.add('black', side(shiftZ([[K.frontR + 0.06, K.frontR - 0.07], [K.frontR * 0.55 + 0.03, 2 * K.frontR + 0.05], [-(K.frontR * 0.55 + 0.03), 2 * K.frontR + 0.05], [-(K.frontR + 0.06), K.frontR - 0.07]], K.frontZ), 0.012, { bevel: 0 }), { p: [sx * 0.36, 0, 0] });
+  }
+  // the famous unbreakable rear window, cracked
+  {
+    const cz = -1.0, cy = tailY(cz) + 0.03, sl = Math.atan(0.2 / 0.62);
+    for (let i = 0; i < 7; i++) { const a = i / 7 * PI * 2 + 0.3, l = 0.1 + (i % 3) * 0.04; b.add('white', sbox(l, 0.008, 0.008), { p: [0.1 + Math.cos(a) * l / 2, cy + Math.sin(a) * l / 2 * Math.sin(sl), cz + Math.sin(a) * l / 2 * Math.cos(sl)], r: [-sl, -a, 0] }); }
+    b.add('white', torus(0.07, 0.005, 3, 12), { p: [0.1, cy, cz], r: [PI / 2 - sl, 0, 0] });
   }
   // full-width light bars
   b.add('lamp', box(0.66, 0.035, 0.03, 0.01, 1), { p: [0, 0.445, 1.452] });
@@ -419,6 +429,18 @@ function beige({ b, K, M, main }) {
   for (const sx of [1, -1]) b.add('dark', cyl(0.025, 0.025, 0.18, 6), { p: [sx * 0.2, 0.3, 1.2], r: [PI / 2, 0, 0] });
   // round vents on the back
   for (const sx of [1, -1]) b.add('dark', cyl(0.045, 0.045, 0.02, 14), { p: [sx * 0.38, 0.29, -1.252], r: [PI / 2, 0, 0] });
+  // the wait cursor, life size, bolted to the back: it is still installing
+  M.glass = glass();
+  M.sand = plastic(0xe6c372, 0.8);
+  {
+    const hx = 0.2, hz = -1.0, y0 = 0.62, q = 1.45;
+    for (const yy of [y0 + 0.02 * q, y0 + 0.56 * q]) b.add('beige2', cyl(0.2 * q, 0.2 * q, 0.04 * q, 18), { p: [hx, yy, hz] });
+    for (let i = 0; i < 3; i++) { const a = i / 3 * PI * 2 + 0.5; b.add('beige', cyl(0.016 * q, 0.016 * q, 0.54 * q, 6), { p: [hx + Math.cos(a) * 0.17 * q, y0 + 0.29 * q, hz + Math.sin(a) * 0.17 * q] }); }
+    b.add('glass', lathe([[0.001, 0.04], [0.15, 0.05], [0.14, 0.17], [0.03, 0.29], [0.14, 0.41], [0.15, 0.53], [0.001, 0.54]], 18), { p: [hx, y0, hz], s: q });
+    b.add('sand', cone(0.13 * q, 0.11 * q, 16), { p: [hx, y0 + 0.4 * q, hz], r: [PI, 0, 0] });
+    b.add('sand', cone(0.13 * q, 0.08 * q, 16), { p: [hx, y0 + 0.08 * q, hz] });
+    b.add('sand', cyl(0.008 * q, 0.008 * q, 0.2 * q, 4), { p: [hx, y0 + 0.2 * q, hz] });
+  }
   const S = { x: 0, y: 0.64, z: -0.35 };
   seat(b, S, 'main');
   column(b, S, 'dark', 0.42);
@@ -596,4 +618,110 @@ function press({ b, K, M, main }) {
   return { seat: { x: 0, y: 0.52, z: -0.3 }, plate: { p: [0, 0.48, -1.342], rx: 0, s: 0.78 }, exhausts: [[0.38, 0.2, -1.4], [-0.38, 0.2, -1.4]], wheel: { style: 'wire', rim: plastic(0xece6d6, 0.4), hub: MAT.chrome } };
 }
 
-export const BODIES = { standard, wedge, pod, rocket, gpu, safety, limo, unibody, tandem, beige, stealth, lab, yacht, press };
+/* ---------- headset: a VR headset, strap and all, with a surfboard riding along ---------- */
+function headset({ b, K, M, main, second }) {
+  M.main = paint(main, { rough: 0.3, clear: 0.7 });
+  M.shell = paint(0xf1f3f6, { rough: 0.35, clear: 0.5 });
+  M.visor = plastic(0x0b0c10, 0.08, 0.3);
+  M.foam = plastic(0x3a3e47, 0.95);
+  M.strap = plastic(0x2a2d34, 0.7);
+  M.led = glow(0x5cb8ff, 2.2);
+  M.board = paint(0xf6f4ee, { rough: 0.3, clear: 0.6 });
+  M.stripe = paint(0xd8322a, { rough: 0.3, clear: 0.6 });
+  // the low tub the driver sits in
+  b.add('main', loft([
+    { z: -1.0, w: 0.3, h: 0.12, y: 0.42 }, { z: -0.85, w: 0.44, h: 0.17, y: 0.42 }, { z: -0.2, w: 0.46, h: 0.18, y: 0.41 }, { z: 0.4, w: 0.42, h: 0.17, y: 0.4 }, { z: 0.7, w: 0.38, h: 0.14, y: 0.4 },
+  ].map(s => ({ ...s, n: 3 })), 24, 3));
+  // the visor block is the nose: white shell, black glass front, foam gasket facing the driver
+  b.add('shell', box(0.88, 0.44, 0.66, 0.17, 4), { p: [0, 0.56, 0.98] });
+  b.add('visor', box(0.8, 0.36, 0.06, 0.14, 3), { p: [0, 0.57, 1.3] });
+  b.add('led', box(0.5, 0.02, 0.02, 0.008, 1), { p: [0, 0.4, 1.315] });
+  for (const sx of [1, -1]) {
+    b.add('black', cyl(0.045, 0.045, 0.02, 14), { p: [sx * 0.26, 0.62, 1.335], r: [PI / 2, 0, 0] });
+    b.add('chrome', torus(0.048, 0.008, 5, 16), { p: [sx * 0.26, 0.62, 1.343] });
+  }
+  b.add('foam', torus(0.25, 0.07, 8, 26), { p: [0, 0.58, 0.64], s: [1.45, 0.75, 1] });
+  // the head strap wraps all the way round the cockpit as a rear bumper
+  const band = [];
+  for (let i = 0; i <= 16; i++) { const t = i / 16 * PI; band.push([Math.cos(t) * 0.52, -0.22 - Math.sin(t) * 0.9]); }
+  const inner = band.map(([x, z]) => [x * 0.93, -0.22 + (z + 0.22) * 0.96]).reverse();
+  b.add('strap', plan([[0.52, 0.7], ...band, [-0.52, 0.7], [-0.484, 0.7], ...inner, [0.484, 0.7]], 0.48, 0.15, { bevel: 0.012 }));
+  b.add('shell', box(0.74, 0.28, 0.16, 0.06, 2), { p: [0, 0.58, -1.13] });
+  b.add('led', sphere(0.02, 8, 6), { p: [0.3, 0.68, -1.215] });
+  // the surfboard, stood up beside the driver
+  b.add('board', sphere(1, 18, 12), { p: [-0.62, 1.22, -0.88], r: [-0.12, 0, 0.1], s: [0.17, 0.72, 0.035] });
+  b.add('stripe', box(0.3, 0.07, 0.074, 0.03, 1), { p: [-0.6, 1.36, -0.9], r: [-0.12, 0, 0.1] });
+  b.add('main', sphere(1, 12, 8), { p: [-0.555, 1.83, -0.96], r: [-0.12, 0, 0.1], s: [0.09, 0.14, 0.039] });
+  b.add('strap', box(0.06, 0.4, 0.06, 0.02, 1), { p: [-0.6, 0.58, -0.84] });
+  seat(b, { x: 0, y: 0.5, z: -0.3 });
+  column(b, { x: 0, y: 0.5, z: -0.3 });
+  for (const sx of [1, -1]) b.add('dark', box(0.06, 0.06, 0.4, 0.02, 1), { p: [sx * 0.5, 0.38, 0.8] });
+  axles(b, K);
+  return { plate: { p: [0, 0.58, -1.215], rx: 0, s: 0.74 }, exhausts: [[0.4, 0.4, -1.12], [-0.4, 0.4, -1.12]], wheel: { style: 'disc', rim: plastic(0xf1f3f6, 0.3), hub: M.main } };
+}
+
+/* ---------- cloud: a kart made of cloud ---------- */
+function cloud({ b, K, M, main }) {
+  M.main = paint(main, { rough: 0.3, clear: 0.7 });
+  M.puff = plastic(0xf7f9fc, 0.92);
+  M.puff2 = plastic(0xd6e4f3, 0.92);
+  b.add('main', loft([
+    { z: -1.1, w: 0.3, h: 0.12, y: 0.4 }, { z: -0.9, w: 0.42, h: 0.16, y: 0.4 }, { z: 0.2, w: 0.44, h: 0.17, y: 0.39 }, { z: 0.9, w: 0.3, h: 0.13, y: 0.37 }, { z: 1.2, w: 0.14, h: 0.08, y: 0.36 },
+  ].map(s => ({ ...s, n: 3 })), 24, 3));
+  const puffs = [
+    // nose
+    [0, 0.5, 1.12, 0.22], [0.2, 0.46, 1.0, 0.18], [-0.2, 0.46, 1.0, 0.18], [0, 0.62, 0.86, 0.17],
+    // flanks
+    [0.44, 0.48, 0.42, 0.2], [0.48, 0.5, 0.05, 0.22], [0.45, 0.47, -0.3, 0.19], [-0.44, 0.48, 0.42, 0.2], [-0.48, 0.5, 0.05, 0.22], [-0.45, 0.47, -0.3, 0.19],
+    // the big tail
+    [0, 0.62, -1.02, 0.3], [0.34, 0.58, -0.92, 0.24], [-0.34, 0.58, -0.92, 0.24], [0.18, 0.86, -0.98, 0.2], [-0.2, 0.84, -0.95, 0.19],
+  ];
+  for (const [x, y, z, r] of puffs) {
+    b.add('puff', sphere(r, 14, 10), { p: [x, y, z], s: [1, 0.85, 1] });
+    b.add('puff2', sphere(r * 0.92, 12, 6), { p: [x, y - r * 0.22, z], s: [1, 0.6, 1] });
+  }
+  cockpit(b, 0.58, -0.24, 0.72, 0.9);
+  seat(b, { x: 0, y: 0.5, z: -0.3 });
+  column(b, { x: 0, y: 0.5, z: -0.3 });
+  b.add('main', box(0.7, 0.24, 0.06, 0.03, 2), { p: [0, 0.46, -1.27] });
+  for (const sx of [1, -1]) b.add('lamp', sphere(0.045, 10, 8), { p: [sx * 0.14, 0.4, 1.3], s: [1, 0.8, 0.6] });
+  axles(b, K);
+  return { plate: { p: [0, 0.46, -1.305], rx: 0, s: 0.74 }, exhausts: [[0.3, 0.32, -1.25], [-0.3, 0.32, -1.25]], wheel: { rim: plastic(0xf4f6fa, 0.4), hub: M.main } };
+}
+
+/* ---------- goban: a Go board on wheels, game in progress, with a chess knight for company ---------- */
+function goban({ b, K, M, main }) {
+  M.main = paint(main, { rough: 0.3, clear: 0.7 });
+  M.wood = plastic(0xd9ae62, 0.55);
+  M.wood2 = plastic(0xb68745, 0.6);
+  M.line = plastic(0x2a1c10, 0.8);
+  M.stoneB = plastic(0x15161a, 0.2);
+  M.stoneW = plastic(0xf4f2ec, 0.25);
+  M.knight = paint(0x17181c, { rough: 0.25, clear: 0.8 });
+  // the board: one thick slab, end grain darker
+  b.add('wood', box(0.9, 0.24, 2.5, 0.03, 2), { p: [0, 0.5, 0.05] });
+  for (const z of [1.3, -1.2]) b.add('wood2', box(0.91, 0.245, 0.02, 0.008, 1), { p: [0, 0.5, z] });
+  b.add('main', box(0.8, 0.12, 2.3, 0.04, 2), { p: [0, 0.34, 0.05] });
+  // the grid and a game in progress on the front half
+  const g0 = 0.2, g1 = 1.2, n = 9, dx = 0.8 / (n - 1), dz = (g1 - g0) / (n - 1);
+  for (let i = 0; i < n; i++) {
+    b.add('line', sbox(0.8, 0.004, 0.008), { p: [0, 0.621, g0 + i * dz] });
+    b.add('line', sbox(0.008, 0.004, g1 - g0), { p: [-0.4 + i * dx, 0.621, (g0 + g1) / 2] });
+  }
+  const stones = [[2, 2, 'B'], [6, 2, 'W'], [2, 6, 'W'], [6, 6, 'B'], [4, 4, 'B'], [3, 4, 'W'], [5, 3, 'W'], [3, 5, 'B'], [5, 5, 'W'], [4, 6, 'B'], [1, 3, 'B'], [7, 5, 'W']];
+  for (const [i, j, c] of stones) b.add(c === 'B' ? 'stoneB' : 'stoneW', sphere(0.045, 12, 6), { p: [-0.4 + i * dx, 0.632, g0 + j * dz], s: [1, 0.42, 1] });
+  cockpit(b, 0.625, -0.24, 0.72, 0.9);
+  seat(b, { x: 0, y: 0.5, z: -0.3 });
+  column(b, { x: 0, y: 0.5, z: -0.3 });
+  // a giant knight on the back corner
+  const kx = -0.32, kz = -0.98;
+  b.add('knight', lathe([[0.001, 0], [0.17, 0], [0.17, 0.04], [0.13, 0.07], [0.14, 0.1], [0.1, 0.14], [0.09, 0.2], [0.001, 0.2]], 18), { p: [kx, 0.62, kz] });
+  b.add('knight', side([[0.1, 0], [0.12, 0.16], [0.08, 0.28], [0.2, 0.38], [0.24, 0.46], [0.18, 0.52], [0.06, 0.6], [-0.02, 0.66], [-0.06, 0.58], [-0.12, 0.44], [-0.12, 0]], 0.07, { bevel: 0.03, segs: 2 }), { p: [kx, 0.8, kz] });
+  b.add('wood2', sphere(0.014, 6, 4), { p: [kx + 0.07, 1.23, kz + 0.12] });
+  b.add('wood2', sphere(0.014, 6, 4), { p: [kx - 0.07, 1.23, kz + 0.12] });
+  for (const sx of [1, -1]) b.add('lamp', sphere(0.045, 10, 8), { p: [sx * 0.3, 0.45, 1.3], s: [1, 0.8, 0.5] });
+  axles(b, K);
+  return { plate: { p: [0, 0.49, -1.215], rx: 0, s: 0.8 }, exhausts: [[0.36, 0.34, -1.2], [-0.36, 0.34, -1.2]], wheel: { rim: plastic(0xd9ae62, 0.5), hub: M.main } };
+}
+
+export const BODIES = { standard, wedge, pod, rocket, gpu, safety, limo, unibody, tandem, beige, stealth, lab, yacht, press, headset, cloud, goban };

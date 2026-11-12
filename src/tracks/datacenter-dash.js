@@ -27,12 +27,12 @@ const HB = { x0: 100.5, x1: 196, z0: -141.3, z1: 20, H: 13, ceil: 10.8, door: 8.
 const ENTRY = { z0: -11.5, z1: 11 }, EXIT = { x0: 160.5, x1: 183.5 };
 /* Campus halls (centre, yaw, length, width, height, accent, company sign). The ground around each is paved. */
 const HALLS = [
-  { x: 30, z: -88, yaw: 0, L: 92, W: 26, H: 15, c: 0x1f6bff, name: 'OMNIMIND' },
-  { x: 60, z: -175, yaw: 0, L: 64, W: 24, H: 14, c: 0x16a34a, name: 'THIRSTCOMPUTE' },
-  { x: 55, z: -245, yaw: 0, L: 56, W: 24, H: 13, c: 0xff6a00, name: 'NEURAL ACRES' },
-  { x: 255, z: -55, yaw: Math.PI / 2, L: 84, W: 26, H: 15, c: 0x7b5cff, name: 'HYPERSCALE HOLDINGS' },
-  { x: 232, z: 70, yaw: 0, L: 64, W: 24, H: 13, c: 0x0ea5e9, name: 'CLOUDSINK' },
-  { x: -225, z: 55, yaw: -0.5, L: 64, W: 24, H: 13, c: 0xdb2777, name: 'INFINITE TOKENS' },
+  { x: 30, z: -88, yaw: 0, L: 92, W: 26, H: 15, c: 0x1f6bff, name: 'OMNIMIND', mural: 'LAKE' },
+  { x: 60, z: -175, yaw: 0, L: 64, W: 24, H: 14, c: 0x16a34a, name: 'THIRSTCOMPUTE', mural: 'WATER: 100% RECYCLED (INTO STEAM)' },
+  { x: 55, z: -245, yaw: 0, L: 56, W: 24, H: 13, c: 0xff6a00, name: 'NEURAL ACRES', mural: 'YOUR JOB, NOW AS A SERVICE' },
+  { x: 255, z: -55, yaw: Math.PI / 2, L: 84, W: 26, H: 15, c: 0x7b5cff, name: 'HYPERSCALE HOLDINGS', mural: 'OUR CHATBOT SAYS THE LAKE IS FINE' },
+  { x: 232, z: 70, yaw: 0, L: 64, W: 24, H: 13, c: 0x0ea5e9, name: 'CLOUDSINK', mural: 'PRIVACY POLICY: LOL' },
+  { x: -225, z: 55, yaw: -0.5, L: 64, W: 24, H: 13, c: 0xdb2777, name: 'INFINITE TOKENS', mural: 'HALLUCINATIONS INCLUDED FREE' },
 ];
 /* Gas plants: centre, yaw (front faces the track), pad height, company name. */
 const PLANTS = [
@@ -92,7 +92,7 @@ export default {
   laps: 3,
   width: 17,
   sky: 'day',
-  skyOverrides: { zenith: 0x3f7fd0, horizon: 0xcfcbb8, ground: 0xc8c2ae, cloudCover: 0.36, fog: 0xc4c4b4, fogNear: 240, fogFar: 1250, sunIntensity: 3.2, hemiGround: 0x7d8a5c },
+  skyOverrides: { zenith: 0x1f66e0, horizon: 0x9fd4ff, ground: 0xc4e6ff, cloudCover: 0.5, cloud: 0xffffff, cloudShade: 0xb4cbe8, fog: 0xb3dbf7, fogNear: 320, fogFar: 1500, sunIntensity: 3.4, hemiGround: 0x7d9a5c },
   backdrop: { img: 'assets/backdrops/datacenter-dash.webp', top: 18, bottom: -6, rot: 0.2 },
   offroad: 'grass',
   defaults: { edge: 'open', shoulder: 3.5, outer: 11 },
@@ -187,6 +187,8 @@ export default {
     cell: 3, margin: 230, blend: 30, water: -1.5, fn: height,
     color(x, z, h, slope, over, out) {
       const mix = (r, g, b, a) => { out[0] += (r - out[0]) * a; out[1] += (g - out[1]) * a; out[2] += (b - out[2]) * a; };
+      // cut slopes and cliffs: clean layered rock in two warm tones, not a stretched photo
+      if (slope > 0.3) { const t = smoothstep(0.3, 0.55, slope), k = smoothstep(4, 45, h), b = 1 + 0.07 * Math.sin(h * 0.7); mix(lerp(0.34, 0.5, k) * b, lerp(0.3, 0.44, k) * b, lerp(0.25, 0.35, k) * b, t); }
       // gravel in the transformer yard
       const k = (1 - smoothstep(0, 8, Math.max(YARD.x0 - x, x - YARD.x1, 0))) * (1 - smoothstep(0, 8, Math.max(YARD.z0 - z, z - YARD.z1, 0)));
       if (k > 0) mix(0.2, 0.2, 0.19, k);
@@ -211,6 +213,7 @@ export default {
     },
   },
   look: {
+    groundDetail: 0.05,
     road: { base: 0x575c66, line: 0xffffff, center: 0xffd23c },
     kerb: [0x1f6bff, 0xf4f6f8],
     shoulder: 0xa7aaa6,
@@ -323,7 +326,7 @@ function makeAtlas(THREE, group, S = 2048) {
   const pages = [], newPage = () => {
     const c = document.createElement('canvas'); c.width = c.height = S;
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6 });
     const p = { c, g: c.getContext('2d'), tex, mat, q: new Quads(), x: 0, y: 0, row: 0, items: [] }; pages.push(p); return p;
   };
   newPage();
@@ -335,8 +338,13 @@ function makeAtlas(THREE, group, S = 2048) {
   };
   const api = {
     /** Allocate w x h pixels drawn by draw(g, w, h) (translated); returns a handle to place it with. */
-    add(w, h, draw) { const r = alloc(w, h); r.draw = draw; r.p.items.push(r); return r; },
-    place(r, c, yaw, w, h, tilt = 0) { const { p } = r; p.q.panel(c, yaw, w, h, [r.x / S, 1 - (r.y + r.h) / S, (r.x + r.w) / S, 1 - r.y / S], tilt); },
+    add(w, h, draw) { const r = alloc(w, h); r.draw = draw; r.p.items.push(r); api._last = r; return r; },
+    last() { return api._last; },
+    /** back: also give the panel a plain painted back, so nothing ever shows mirrored lettering. */
+    place(r, c, yaw, w, h, tilt = 0, back = false) {
+      const { p } = r; p.q.panel(c, yaw, w, h, [r.x / S, 1 - (r.y + r.h) / S, (r.x + r.w) / S, 1 - r.y / S], tilt);
+      if (back) { const b = api._back, bp = b.p, o = 0.04; bp.q.panel([c[0] - Math.sin(yaw) * o, c[1], c[2] - Math.cos(yaw) * o], yaw + Math.PI, w, h, [(b.x + 2) / S, 1 - (b.y + 6) / S, (b.x + 6) / S, 1 - (b.y + 2) / S], -tilt); }
+    },
     paint() { for (const p of pages) { p.g.clearRect(0, 0, S, S); for (const r of p.items) { p.g.save(); p.g.translate(r.x, r.y); p.g.beginPath(); p.g.rect(0, 0, r.w, r.h); p.g.clip(); r.draw(p.g, r.w, r.h); p.g.restore(); } p.tex.needsUpdate = true; } },
     flush() {
       api.paint();
@@ -344,6 +352,7 @@ function makeAtlas(THREE, group, S = 2048) {
       if (typeof document !== 'undefined' && document.fonts?.ready) document.fonts.ready.then(() => api.paint());
     },
   };
+  api._back = api.add(8, 8, (g, w, h) => { g.fillStyle = '#5b636f'; g.fillRect(0, 0, w, h); });
   return api;
 }
 
@@ -368,6 +377,26 @@ const signDraw = (text, { bg = '#ffffff', fg = '#1a1d29', font = FONT, size = 12
   if (border) { g.strokeStyle = border; g.lineWidth = Math.max(4, h * 0.05); g.strokeRect(g.lineWidth / 2, g.lineWidth / 2, w - g.lineWidth, h - g.lineWidth); }
   fitText(g, text, w / 2, h * (stripe ? 0.45 : 0.52), w * (1 - pad * 2), size, font, fg, { lines });
 };
+
+/** A giant painted wall joke: huge type, a painted frame, a stripe in the company colour. */
+const muralDraw = (text, col) => (g, w, h) => {
+  g.fillStyle = '#fbfbf7'; g.fillRect(0, 0, w, h);
+  g.fillStyle = col; g.fillRect(0, h - h * 0.1, w, h * 0.1); g.fillRect(0, 0, w, h * 0.05);
+  const two = text.length > 16 && h / w > 0.12;
+  fitText(g, text, w / 2 + 6, h * 0.49 + 8, w * 0.94, Math.round(h * (two ? 0.42 : 0.78)), FONT, 'rgba(0,0,0,0.18)', { lines: two ? 2 : 1 });
+  fitText(g, text, w / 2, h * 0.49, w * 0.94, Math.round(h * (two ? 0.42 : 0.78)), FONT, '#1a1d29', { lines: two ? 2 : 1 });
+};
+/** The happy lake mural, labelled BEFORE. */
+function lakeMural(g, w, h) {
+  const sky = g.createLinearGradient(0, 0, 0, h * 0.6); sky.addColorStop(0, '#5fb8ff'); sky.addColorStop(1, '#bfe6ff'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(w * 0.12, h * 0.3, h * 0.18, 0, 7); g.fill();
+  g.fillStyle = '#3f9a4a'; g.beginPath(); g.moveTo(0, h * 0.62); for (let x = 0; x <= w; x += w / 12) g.lineTo(x, h * (0.42 + 0.12 * Math.sin(x / w * 9))); g.lineTo(w, h * 0.62); g.fill();
+  g.fillStyle = '#2f86e0'; g.fillRect(0, h * 0.6, w, h * 0.4);
+  g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 5; for (let k = 0; k < 14; k++) { const x = (k * 0.137 % 1) * w, y = h * (0.66 + (k % 4) * 0.08); g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 30, y - 10, x + 60, y); g.stroke(); }
+  for (let k = 0; k < 5; k++) { const x = w * (0.25 + k * 0.14), y = h * (0.75 + (k % 2) * 0.1); g.fillStyle = '#ff8a3c'; g.beginPath(); g.ellipse(x, y, h * 0.07, h * 0.04, 0, 0, 7); g.fill(); g.beginPath(); g.moveTo(x - h * 0.06, y); g.lineTo(x - h * 0.11, y - h * 0.04); g.lineTo(x - h * 0.11, y + h * 0.04); g.fill(); g.fillStyle = '#1a1d29'; g.beginPath(); g.arc(x + h * 0.035, y - h * 0.01, h * 0.008, 0, 7); g.fill(); }
+  g.fillStyle = 'rgba(255,255,255,0.92)'; g.fillRect(w * 0.6, h * 0.08, w * 0.36, h * 0.4);
+  fitText(g, 'BEFORE', w * 0.78, h * 0.29, w * 0.33, Math.round(h * 0.34), FONT, '#e23b3b', { lines: 1 });
+}
 
 function canvasTexture(THREE, w, h, draw, { repeat = false } = {}) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
@@ -415,17 +444,25 @@ function decorate(ctx) {
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
   const hallAt = (h, opts = {}) => {
     const g = D.dataHall({ L: h.L, W: h.W, H: h.H, accent: h.c, ...opts }); sc.place(g, h.x, h.z, { yaw: h.yaw, y: h.y ?? sc.y(h.x, h.z) - 0.4 }); bake.add(g);
-    if (h.name) {   // the company sign on the front face, top left
-      const w = Math.min(h.L * 0.55, 34), hh = w / 5.2, c = Math.cos(h.yaw), s = Math.sin(h.yaw), u = -h.L / 2 + w / 2 + 3, v = h.W / 2 + 0.45, y = (h.y ?? sc.y(h.x, h.z) - 0.4) + h.H - 4.6;
-      const col = '#' + new THREE.Color(h.c).getHexString();
+    const base = h.y ?? sc.y(h.x, h.z) - 0.4, c = Math.cos(h.yaw), s = Math.sin(h.yaw), W3 = (u, v, y) => [h.x + u * c + v * s, y, h.z - u * s + v * c];
+    const col = '#' + new THREE.Color(h.c).getHexString();
+    if (h.name) {   // the company name stands on the roof at the front edge, so nothing in front of the hall hides it
+      const w = Math.min(h.L * 0.6, 46), hh = w / 5.2, u = -h.L / 2 + w / 2 + 4, v = h.W / 2 - 1.2, y = base + h.H + 1.4 + hh / 2;
       const r = atlas.add(780, 150, (g, W2, H2) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, W2, H2); g.fillStyle = col; g.beginPath(); g.arc(H2 * 0.5, H2 * 0.5, H2 * 0.34, 0, 7); g.fill(); g.fillStyle = '#ffffff'; g.beginPath(); g.arc(H2 * 0.5 + H2 * 0.1, H2 * 0.5 - H2 * 0.08, H2 * 0.16, 0, 7); g.fill(); fitText(g, h.name, W2 * 0.55, H2 * 0.54, W2 * 0.8, 96, SANS, col, { lines: 1 }); });
-      atlas.place(r, [h.x + u * c + v * s, y, h.z - u * s + v * c], h.yaw, w, hh);
+      atlas.place(r, W3(u, v, y), h.yaw, w, hh, 0, true);
+      const fr = new ModelBuilder(); for (const du of [-w * 0.35, 0, w * 0.35]) { const p = W3(u + du, v - 0.4, base + h.H + 0.8 + hh / 2); fr.add('f', box(0.5, 1.6 + hh, 0.5, 0.1, 1), { p: [p[0], p[1], p[2]] }); }
+      bake.builder(fr, { f: plastic(0x6b7380, 0.5, 0.4) }, false);
+    }
+    if (h.mural) {  // the long front wall is the biggest canvas on the track: a joke you can read at speed
+      const y0 = base + (h.muralLow ?? 1.4), y1 = base + h.H - 3.2, mh = y1 - y0, mw = h.L * 0.9, px = 1600, py = Math.round(clamp(px * mh / mw, 160, 900));
+      const r = atlas.add(px, py, h.mural === 'LAKE' ? lakeMural : muralDraw(h.mural, col));
+      atlas.place(r, W3(0, h.W / 2 + 0.32, (y0 + y1) / 2), h.yaw, mw, mh);
     }
   };
   {
     const n = sc.beside(27.75, 1, 17.5), s = sc.beside(27.85, -1, 37);
-    hallAt({ x: n.x, z: n.z, yaw: n.yaw, L: 118, W: 26, H: 15, c: 0x1f6bff, name: 'COGNITRON', y: 0 });
-    hallAt({ x: s.x, z: s.z, yaw: s.yaw, L: 128, W: 26, H: 16, c: 0x16a34a, name: 'SYNERGY SILO', y: 0 });
+    hallAt({ x: n.x, z: n.z, yaw: n.yaw, L: 118, W: 26, H: 15, c: 0x1f6bff, name: 'COGNITRON', y: 0, mural: 'TRAINING ON YOUR DATA (THANKS)' });
+    hallAt({ x: s.x, z: s.z, yaw: s.yaw, L: 128, W: 26, H: 16, c: 0x16a34a, name: 'SYNERGY SILO', y: 0, mural: '4 JOBS CREATED', muralLow: 9.6 });
   }
   // light masts behind the stands and lamps along the walls of the main drag
   sc.instances(partsOf(D.floodMast({ h: 20 })), sc.along({ from: 26.8, to: 0.9, side: -1, offset: 21, spacing: 33, phase: 16 }), {});
@@ -447,7 +484,7 @@ function decorate(ctx) {
   {
     const p = sc.beside(4.3, 1, 3.5), r = atlas.add(512, 200, signDraw('COOLANT POND · DO NOT DRINK', { bg: '#ffd23c', fg: '#1a1d29', border: '#1a1d29', size: 84 }));
     const post = new ModelBuilder(); post.add('p', cyl(0.12, 0.12, 4.2, 6), { p: [p.x, track.py[p.i] - 1.6, p.z] }); bake.builder(post, { p: plastic(0x8a929e, 0.5, 0.5) });
-    atlas.place(r, [p.x, track.py[p.i] + 1.4, p.z], p.yaw + 0.5, 4, 1.56);
+    atlas.place(r, [p.x, track.py[p.i] + 1.9, p.z], p.yaw + 0.5, 6, 2.34, 0, true);
   }
 
   // ---- the dam, the draining lake, the pipes, and the people who object ----
@@ -527,6 +564,23 @@ function decorate(ctx) {
     bake.add(g, false);
   }
 
+  // ---- the smog: a brown pall hanging over each plant and drifting off across the valley ----
+  const smogTex = canvasTexture(THREE, 256, 256, (g, w, h) => {
+    const r = makeRng(17); g.clearRect(0, 0, w, h);
+    for (let k = 0; k < 70; k++) { const a = r() * 6.28, d = Math.sqrt(r()) * w * 0.36, x = w / 2 + Math.cos(a) * d, y = h / 2 + Math.sin(a) * d, rr = w * (0.08 + r() * 0.12); const gr = g.createRadialGradient(x, y, 0, x, y, rr); gr.addColorStop(0, 'rgba(255,255,255,0.32)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(x - rr, y - rr, rr * 2, rr * 2); }
+  });
+  const smogDisc = new THREE.CircleGeometry(1, 40); smogDisc.rotateX(-Math.PI / 2);
+  const palls = [];
+  const wl = Math.hypot(WIND[0], WIND[2]), wx = WIND[0] / wl, wz = WIND[2] / wl;
+  PLANTS.forEach((pd, k) => {
+    for (const [y, r, op, off, col] of [[118, 240, 0.78, 40, 0x5e4f3e], [150, 200, 0.66, 120, 0x6e5e4a], [96, 160, 0.6, -20, 0x52473a]]) {
+      const m = new THREE.Mesh(smogDisc, new THREE.MeshBasicMaterial({ map: smogTex, color: col, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      m.position.set(pd.x + wx * off, pd.y + y, pd.z + wz * off); m.scale.set(r, 1, r * 0.75); m.renderOrder = 4; ctx.group.add(m);
+      palls.push({ m, x: m.position.x, z: m.position.z, ph: k * 2 + y, drift: off > 100 });
+    }
+  });
+  anim.push((dt, time) => { for (const p of palls) { p.m.rotation.y = time * 0.01 + p.ph; const f = p.drift ? (time * 4) % 260 : 0; p.m.position.x = p.x + wx * f + Math.sin(time * 0.05 + p.ph) * 8; p.m.position.z = p.z + wz * f; p.m.material.opacity = p.m.material.opacity; } });
+
   // ---- pines over every slope, and a few on the campus edges ----
   const keep = (x, z) => !inHall(x, z) && !TOWERS.some(t => near(x, z, t, 22)) && !dishes.some(d => near(x, z, d, 16)) && !chains.flat().some(([px, pz]) => near(x, z, { x: px, z: pz }, 7))
     && !PLANTS.some(p => { const [u, v] = plantLocal(p, x, z); return Math.abs(u - 6) < 132 && Math.abs(v + 6) < 84; }) && !(z < LAKE.zDam + 30 && lakeE(x, z) < 1.45) && !lakeFx.nearPipe(x, z, 6);
@@ -552,9 +606,10 @@ function decorate(ctx) {
     }
   }
   const frame = P.billboard(null, { w: 15, h: 5, legs: 6, frame: 0x3a414c }); frame.remove(frame.children[frame.children.length - 1]);   // keep the frame, drop the blank panel
+  const BS = 1.5;   // billboards half again as big as the stock ones
   BOARDS.forEach(([cp, side, off, text, bg, fg], i) => {
-    const p = sc.beside(cp, side, off); if (!clear(p.x, p.z, 0.5) || inHallBox(p.x, p.z, 3)) return;
-    const yaw = p.yaw + rng.range(-0.12, 0.12), f = frame.clone(); sc.place(f, p.x, p.z, { yaw }); bake.add(f);
+    const p = sc.beside(cp, side, off + 4); if (!clear(p.x, p.z, 0.5) || inHallBox(p.x, p.z, 3)) return;
+    const yaw = p.yaw + rng.range(-0.12, 0.12), f = frame.clone(); sc.place(f, p.x, p.z, { yaw, scale: BS }); bake.add(f);
     const r = atlas.add(768, 256, (g, w, h) => {
       g.fillStyle = bg; g.fillRect(0, 0, w, h);
       const sh = g.createLinearGradient(0, 0, w, h); sh.addColorStop(0, 'rgba(255,255,255,0.16)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.14)'); g.fillStyle = sh; g.fillRect(0, 0, w, h);
@@ -562,7 +617,7 @@ function decorate(ctx) {
       g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 6; g.strokeRect(8, 8, w - 16, h - 16);
     });
     const y = sc.y(p.x, p.z);
-    atlas.place(r, [p.x + Math.sin(yaw) * 0.02, y + 6 + 2.5, p.z + Math.cos(yaw) * 0.02], yaw, 15, 5);
+    atlas.place(r, [p.x + Math.sin(yaw) * 0.03, y + (6 + 2.5) * BS, p.z + Math.cos(yaw) * 0.03], yaw, 15 * BS, 5 * BS);
     void i;
   });
 
@@ -622,6 +677,7 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? '#ffc928' : '#1a1d26'; g.fillRect(0, i * h / 16, w * 0.035, h / 16); g.fillRect(w * 0.965, i * h / 16, w * 0.035, h / 16); }
     g.fillStyle = 'rgba(31,107,255,0.85)'; for (let j = 0; j < 4; j++) g.fillRect(w * 0.494, j * h / 4 + h * 0.05, w * 0.012, h * 0.14);
   }, { repeat: true });
+  { const gm = view.trackMesh?.userData?.mats?.ground; if (gm) { gm.map = null; gm.needsUpdate = true; } }   // clean flat-shaded ground, no stretched blotches on the cuts
   const roadMat = view.trackMesh?.userData?.mats?.road_hallfloor;
   if (roadMat) { roadMat.map = roadTex; roadMat.emissiveMap = roadTex; roadMat.emissive.set(0xffffff); roadMat.emissiveIntensity = 0.22; roadMat.roughness = 0.5; roadMat.needsUpdate = true; }
   const wallTex = canvasTexture(THREE, 256, 256, (g, w, h) => { g.fillStyle = '#eceef1'; g.fillRect(0, 0, w, h); g.fillStyle = '#cfd4da'; g.fillRect(0, 0, 3, h); g.fillRect(w / 2, 0, 3, h); g.fillStyle = '#dde1e6'; g.fillRect(0, h - 3, w, 3); }, { repeat: true });
@@ -772,9 +828,9 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     const one = new Quads(); one.box(p.x - 0.55, p.x + 0.55, FY, FY + HR, p.z - 0.9, p.z + 0.9, (f, a, b, c, d) => f === 'nx' ? [[0, 0.2], [0.5, 0.2], [0.5, 1], [0, 1]] : [[0, 0.04], [0.2, 0.04], [0.2, 0.16], [0, 0.16]]);
     bake.geo(rackMat, one.geometry(THREE), false);
     const s = atlas.add(512, 160, signDraw('YOUR DATA', { bg: '#e23b3b', fg: '#ffffff', font: SANS, size: 92, lines: 1 }));
-    atlas.place(s, [p.x - 0.6, FY + HR + 0.7, p.z], -Math.PI / 2, 2.6, 0.82);
+    atlas.place(s, [p.x - 0.6, FY + HR + 0.95, p.z], -Math.PI / 2, 4.2, 1.31, 0, true);
     const s2 = atlas.add(320, 80, signDraw('(TRAINING IN PROGRESS)', { bg: '#ffffff', fg: '#e23b3b', font: SANS, size: 34, lines: 1 }));
-    atlas.place(s2, [p.x - 0.57, FY + 1.6, p.z], -Math.PI / 2, 1.5, 0.38);
+    atlas.place(s2, [p.x - 0.57, FY + 1.6, p.z], -Math.PI / 2, 1.6, 0.4);
   }
   // the cage round the most important rack
   {
@@ -786,15 +842,15 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     const link = canvasTexture(THREE, 32, 32, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = '#4a525e'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(w, h); g.moveTo(w, 0); g.lineTo(0, h); g.stroke(); }, { repeat: true });
     const m = new THREE.Mesh(q.geometry(THREE), new THREE.MeshStandardMaterial({ map: link, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.5 })); m.matrixAutoUpdate = false; group.add(m);
     const s = atlas.add(512, 150, signDraw('AGI · DO NOT FEED', { bg: '#ffd23c', fg: '#1a1d29', font: SANS, size: 70, lines: 1, border: '#1a1d29' }));
-    atlas.place(s, [(cx0 + cx1) / 2, FY + 2.3, cz0 - 0.05], Math.PI, 3.2, 0.94);
+    atlas.place(s, [(cx0 + cx1) / 2, FY + 2.3, cz0 - 0.05], Math.PI, 5.4, 1.58);
   }
   // hanging signs over the road
   {
     const hang = new ModelBuilder();
     const s1 = atlas.add(1024, 160, signDraw('QUIET PLEASE · MODEL IS THINKING', { bg: '#1a1d29', fg: '#ffffff', font: SANS, size: 76, lines: 1, stripe: '#1f6bff' }));
-    atlas.place(s1, [112, 7.4, -0.3], -Math.PI / 2, 13, 2.03);
+    atlas.place(s1, [112, 7.4, -0.3], -Math.PI / 2, 15, 2.34, 0, true);
     const s2 = atlas.add(1024, 160, signDraw('EXIT → LAKE (WHILE IT LASTS)', { bg: '#16a34a', fg: '#ffffff', font: SANS, size: 76, lines: 1 }));
-    atlas.place(s2, [172, 7.4, -128], 0, 13, 2.03);
+    atlas.place(s2, [172, 7.4, -128], 0, 15, 2.34, 0, true);
     for (const [x, z] of [[112, -5], [112, 4.4], [167, -128], [177, -128]]) hang.add('c', cyl(0.03, 0.03, HB.ceil - 8.4, 4), { p: [x, (HB.ceil + 8.4) / 2, z] });
     const s3 = atlas.add(640, 160, signDraw('HOT AISLE: SPICY', { bg: '#ff6a00', fg: '#ffffff', font: SANS, size: 80, lines: 1 }));
     atlas.place(s3, [HB.x1 - T - 0.05, 6.2, -40], -Math.PI / 2, 9, 2.25);
@@ -807,18 +863,48 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     fr.add('f', box(0.5, 7.6, 34, 0.1, 1), { p: [HB.x0 + 1.9, y0 + 3.9, 0] });
     bake.builder(fr, { f: plastic(0x6b7380, 0.5, 0.4) }, false);
     const s = atlas.add(1024, 220, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#1f6bff'; g.beginPath(); g.arc(h * 0.5, h * 0.5, h * 0.36, 0, 7); g.fill(); g.fillStyle = '#7fd0ff'; g.beginPath(); g.moveTo(h * 0.5, h * 0.22); g.quadraticCurveTo(h * 0.75, h * 0.55, h * 0.5, h * 0.75); g.quadraticCurveTo(h * 0.25, h * 0.55, h * 0.5, h * 0.22); g.fill(); fitText(g, 'DEEPTHIRST', w * 0.58, h * 0.4, w * 0.74, 150, SANS, '#1a1d29', { lines: 1 }); fitText(g, 'TRAINING HALL 9', w * 0.58, h * 0.8, w * 0.7, 52, SANS, '#1f6bff', { lines: 1 }); });
-    atlas.place(s, [HB.x0 + 1.55, y0 + 3.9, 0], -Math.PI / 2, 33, 7.1);
+    atlas.place(s, [HB.x0 + 1.55, y0 + 3.9, 0], -Math.PI / 2, 33, 7.1, 0, true);
+  }
+  const drip = { x: 161.6, y: 5.6, z: -118 };
+  // giant painted jokes on the three plain faces of the building
+  for (const [text, c, yaw, w] of [
+    ['NOW TRAINING ON YOU', [148, 5.8, HB.z1 + 0.36], 0, 88],
+    ['THIS BUILDING USES MORE WATER THAN YOUR TOWN', [130, 5.8, HB.z0 - 0.36], Math.PI, 54],
+    ['NOW HIRING: 0 HUMANS', [HB.x1 + 0.36, 5.8, -17.5], Math.PI / 2, 64],
+  ]) { const hgt = 9.2, r = atlas.add(1600, Math.round(clamp(1600 * hgt / w, 160, 900)), muralDraw(text, '#1f6bff')); atlas.place(r, c, yaw, w, hgt); }
+  // jokes at eye level along the road, and big banners hung over it, all facing the drivers
+  {
+    const hang = new ModelBuilder(), eye = ['THIS RACK IS SMARTER THAN YOU', 'YOUR PROMPT IS IMPORTANT TO US', 'COOLING: ONE LAKE PER HOUR', 'EMPLOYEE OF THE MONTH: RACK 42', 'MODEL WEIGHTS: LIFT WITH YOUR LEGS', 'CAUTION: OVERFITTING', 'NO HUMANS BEYOND THIS POINT', 'BACKUPS OF YOUR SELFIES →', 'WE ARE NOT A BUBBLE', 'PLEASE DO NOT TAP THE GLASS'];
+    const cols = [['#ffd23c', '#1a1d29'], ['#1f6bff', '#ffffff'], ['#e23b3b', '#ffffff'], ['#16a34a', '#ffffff'], ['#ffffff', '#1a1d29']];
+    let k = 0;
+    for (let cp = 1.3; cp < 3.95; cp += 0.27, k++) {
+      const i = track.indexAtCp(cp), side = k % 2 ? -1 : 1, lat = side * (track.hwL[i] + 1.75);
+      if (side < 0 && Math.abs(cp - 3.3) < 0.15) continue;                         // the YOUR DATA rack lives here
+      const x = track.px[i] + track.lx[i] * lat, z = track.pz[i] + track.lz[i] * lat;
+      if (Math.hypot(x - drip.x, z - drip.z) < 6) continue;
+      const yaw = Math.atan2(-side * track.lx[i], -side * track.lz[i]), [bg, fg] = cols[k % cols.length];
+      const r = atlas.add(900, 300, signDraw(eye[k % eye.length], { bg, fg, font: FONT, size: 110, border: fg }));
+      atlas.place(r, [x, FY + 2.2, z], yaw, 6.6, 2.2, 0, true);
+      for (const o of [-2.8, 2.8]) hang.add('c', cyl(0.06, 0.06, 1.2, 5), { p: [x + Math.cos(yaw) * o, FY + 0.55, z - Math.sin(yaw) * o] });
+    }
+    const over = ['SLOW DOWN: GPUs AT WORK', 'NOW ENTERING THE CLOUD', 'THINKING... STILL THINKING...', 'YOU ARE THE PRODUCT (VROOM)'];
+    [1.75, 2.45, 3.05, 3.55].forEach((cp, j) => {
+      const i = track.indexAtCp(cp), yaw = Math.atan2(-track.tx[i], -track.tz[i]), x = track.px[i], z = track.pz[i];
+      const r = atlas.add(1024, 170, signDraw(over[j], { bg: '#1a1d29', fg: ['#ffd23c', '#7fd0ff', '#ffffff', '#ff9ab0'][j], font: FONT, size: 110, lines: 1, stripe: '#1f6bff' }));
+      atlas.place(r, [x, 7.0, z], yaw, 15, 2.5, 0, true);
+      for (const o of [-6.5, 6.5]) hang.add('c', cyl(0.03, 0.03, HB.ceil - 8.2, 4), { p: [x + Math.cos(yaw) * o, (HB.ceil + 8.2) / 2, z - Math.sin(yaw) * o] });
+    });
+    bake.builder(hang, { c: plastic(0x2c323c, 0.5) }, false);
   }
   const counter = ledSign(THREE, group, 1024, 200, [HB.x0 - 0.45, HB.door + 2.4, -0.3], -Math.PI / 2, 20, 3.9);
 
   /* the leaking pipe inside, with a mop and bucket under the drip */
-  const drip = { x: 161.6, y: 5.6, z: -118 };
   { const mb = D.mopBucket(); sc.place(mb, drip.x, drip.z, { y: FY, yaw: Math.PI / 2 }); bake.add(mb, false); }
   {
     const pud = new Quads(); pud.quad([drip.x - 1.2, FY + 0.02, drip.z + 1.0], [drip.x + 0.8, FY + 0.02, drip.z + 1.0], [drip.x + 0.8, FY + 0.02, drip.z - 1.4], [drip.x - 1.2, FY + 0.02, drip.z - 1.4]);
     bake.geo(new THREE.MeshStandardMaterial({ color: 0x9fb4c8, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.55, depthWrite: false }), pud.geometry(THREE), false);
     const s = atlas.add(256, 80, signDraw('WET FLOOR', { bg: '#ffc928', fg: '#1a1d29', font: SANS, size: 50, lines: 1 }));
-    atlas.place(s, [drip.x + 0.75, FY + 0.95, drip.z + 0.4], Math.PI / 2, 1.0, 0.31);
+    atlas.place(s, [drip.x + 0.8, FY + 1.1, drip.z + 0.4], Math.PI / 2, 1.6, 0.5, 0, true);
   }
 
   // the gallons counter ticks, the LEDs blink, the leak drips
@@ -1028,21 +1114,26 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
   {
     const cx = LAKE.cx + 0.86 * LAKE.RX, cz = -415, c = D.lifeguardChair(); sc.place(c, cx, cz, { yaw: -Math.PI / 2 - 0.3 }); bake.add(c, true); track.addCollider(cx, cz, 1.4);
     const s = atlas.add(384, 192, signDraw('LIFEGUARD ON BREAK (FOREVER)', { bg: '#e23b3b', fg: '#ffffff', font: SANS, size: 60 }));
-    atlas.place(s, [cx - 0.5, sc.y(cx, cz + 4.5) + 2.2, cz + 4.5], -Math.PI / 2, 2.4, 1.2);
+    atlas.place(s, [cx - 0.5, sc.y(cx, cz + 4.5) + 2.6, cz + 4.5], -Math.PI / 2, 3.6, 1.8, 0, true);
     const pb2 = new ModelBuilder(); pb2.add('p', cyl(0.08, 0.08, 2, 5), { p: [cx - 0.4, sc.y(cx, cz + 4.5) + 0.5, cz + 4.5] }); bake.builder(pb2, { p: plastic(0xd9c9a8, 0.8) }, false);
   }
   const boatSpots = [[30, -366, 0.7], [-44, -388, -2.2], [-48, -438, 2.4], [30, -458, -0.4], [-20, -470, 1.1]];
   const boats = boatSpots.map(([x, z, yaw]) => ({ x, z, yaw, bed: track.terrainHeight(x, z), tilt: [rng.range(-0.25, 0.25), rng.range(-0.18, 0.18)] }));
   for (const b of boats) track.addCollider(b.x, b.z, 2.4);
-  const boatMeshes = sc.instances(partsOf(D.boat()), boats.map(b => ({ x: b.x, y: LAKE.full, z: b.z, yaw: b.yaw })), { tints: [0xffffff, 0xffd23c, 0xffffff, 0xe23b3b, 0xffffff], cast: false });
-  for (const m of boatMeshes) m.frustumCulled = false;
-  const E = new THREE.Euler();
+  // each with its name on the hull (one shared canvas of names)
+  const NAMES = [['LIQUIDITY', 0xffffff, 0x1f6bff], ['UNSINKABLE II', 0xffd23c, 0x1a1d29], ['SERIES B', 0xffffff, 0xe23b3b], ['EXIT STRATEGY', 0xe23b3b, 0xffffff], ['HODL', 0xffffff, 0x16a34a]];
+  const nameTex = canvasTexture(THREE, 512, 512, (g, w) => { g.fillStyle = '#1a1d29'; g.fillRect(0, 0, w, w); NAMES.forEach(([n], k) => fitText(g, n, w / 2, k * 100 + 52, w - 30, 70, SANS, '#ffffff', { lines: 1 })); });
+  const nameMat = new THREE.MeshStandardMaterial({ map: nameTex, roughness: 0.5 });
+  boats.forEach((b, k) => {
+    const [, hull, stripe] = NAMES[k % NAMES.length], v1 = 1 - (k * 100 + 8) / 512, v0 = 1 - (k * 100 + 92) / 512;
+    b.obj = D.boat({ hull, stripe, nameMat, nameUV: [0.02, v0, 0.98, v1] }); b.obj.position.set(b.x, LAKE.full, b.z); b.obj.rotation.y = b.yaw; group.add(b.obj);
+  });
   // NO SWIMMING on the land side of the east shore, facing the drivers coming up it
   {
     const i = track.indexAtCp(9.55), lat = -(track.hwR[i] + 3), p = { x: track.px[i] + track.lx[i] * lat, z: track.pz[i] + track.lz[i] * lat }, yaw = Math.atan2(-track.tx[i], -track.tz[i]) + 0.45, y = sc.y(p.x, p.z);
     const s = atlas.add(512, 320, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.strokeStyle = '#e23b3b'; g.lineWidth = 16; g.strokeRect(8, 8, w - 16, h - 16); fitText(g, 'NO SWIMMING', w / 2, h * 0.36, w - 70, 92, SANS, '#e23b3b', { lines: 1 }); fitText(g, '(SOON: NO WATER)', w / 2, h * 0.7, w - 90, 56, SANS, '#1a1d29', { lines: 1 }); });
-    atlas.place(s, [p.x, y + 3.2, p.z], yaw, 4.2, 2.6);
-    const pb3 = new ModelBuilder(); for (const o of [-1.6, 1.6]) pb3.add('p', cyl(0.1, 0.1, 3.4, 6), { p: [p.x + Math.cos(yaw) * o, y + 1.4, p.z - Math.sin(yaw) * o] }); bake.builder(pb3, { p: plastic(0x8a929e, 0.5, 0.5) }, false);
+    atlas.place(s, [p.x, y + 4.4, p.z], yaw, 6.4, 4.0, 0, true);
+    const pb3 = new ModelBuilder(); for (const o of [-1.6, 1.6]) pb3.add('p', cyl(0.12, 0.12, 4.6, 6), { p: [p.x + Math.cos(yaw) * o * 1.5, y + 2.0, p.z - Math.sin(yaw) * o * 1.5] }); bake.builder(pb3, { p: plastic(0x8a929e, 0.5, 0.5) }, false);
   }
   // the protest, on the land side of the east shore
   {
@@ -1056,7 +1147,7 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     sc.instances(partsOf(D.protester()), people, { tints: P.CROWD_TINTS, cast: false });
     sticks.forEach((s, k) => {
       const r = atlas.add(320, 200, signDraw(s.text, { bg: ['#ffffff', '#ffd23c', '#7fd0ff', '#ff9ab0'][k % 4], fg: '#1a1d29', size: 64, border: '#1a1d29' }));
-      atlas.place(r, [s.x, s.y + 0.1, s.z], s.yaw, 1.5, 0.94);
+      atlas.place(r, [s.x, s.y + 0.45, s.z], s.yaw, 2.4, 1.5, 0, true);
     });
   }
 
@@ -1075,13 +1166,11 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
     waterMat.color.copy(cFull).lerp(cLow, f * 0.55);
     crackMat.color.copy(cWet).lerp(cDry, race && race.lakeLap >= race.laps ? 1 : 0);
     st.pct = lakePct(st.level);
-    boats.forEach((b, k) => {
+    for (const b of boats) {
       const grounded = clamp((b.bed + 0.4 - st.level) / 1.2, 0, 1), by = Math.max(st.level, b.bed + 0.4) - 0.35;
-      E.set(b.tilt[0] * grounded, b.yaw, b.tilt[1] * grounded + (1 - grounded) * Math.sin(time + b.z) * 0.03); Q.setFromEuler(E);
-      Mx.compose(Pp.set(b.x, by + (1 - grounded) * Math.sin(time * 1.3 + b.x) * 0.08, b.z), Q, S.set(1, 1, 1));
-      for (const m of boatMeshes) m.setMatrixAt(k, Mx);
-    });
-    for (const m of boatMeshes) m.instanceMatrix.needsUpdate = true;
+      b.obj.position.y = by + (1 - grounded) * Math.sin(time * 1.3 + b.x) * 0.08;
+      b.obj.rotation.set(b.tilt[0] * grounded, b.yaw, b.tilt[1] * grounded + (1 - grounded) * Math.sin(time + b.z) * 0.03);
+    }
     const beat = 0.5 + 0.5 * Math.sin(time * 5.2);
     pumpAt.forEach((p, k) => { const s = 1 + 0.07 * Math.max(0, Math.sin(time * 5.2 - k * 0.9)); Mx.compose(Pp.set(p.x, p.y, p.z), Q.identity(), S.set(s, 1 + (s - 1) * 1.6, s)); for (const m of pumps) m.setMatrixAt(k, Mx); });
     for (const m of pumps) m.instanceMatrix.needsUpdate = true;

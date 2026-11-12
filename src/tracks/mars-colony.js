@@ -151,9 +151,9 @@ export default {
     },
   },
   look: {
-    road: { base: 0x5a4a48, line: 0xf2efe6, center: false, skin: 'dirt' },
+    road: { base: 0x34363e, line: 0xf2efe6, center: 0xffb020 },   // cool dark asphalt, so the road reads against the rust
     kerb: [0xf2efe6, 0xc1440e],
-    shoulder: 0xc77a4a,
+    shoulder: 0x7d5a4a,
     terrain: { low: 0xb5532a, high: 0xd2713a, dry: 0xc9824a, rock: 0x7a3b22, sand: 0xe0965a, dirt: 0xa64a26 },
     rail: 0xffb347, tunnelLight: 0xbfe6ff, portal: 0xe8ecf2, deck: 0xb9bcc4, wall: 0xf2efe6, wallStripe: 0xc1440e,
     ads: ['MARS: NOW HIRING', 'OCCUPY THIS', 'PLAN B PLANET', 'OXYGEN SOLD SEPARATELY', 'TERRAFORM AND CONDITIONS', 'NO ATMOSPHERE NO PROBLEM', 'RED PLANET RED TAPE', 'ROCKET FUEL LATTE', 'DOME SWEET DOME', 'ONE WAY TICKETS', 'DUST STORM INSURANCE', 'LOW GRAVITY HIGH RENT'],
@@ -192,14 +192,14 @@ function dress(ctx) {
   take(ROCKET.x, ROCKET.z, 26); take(CRATER.x, CRATER.z, 16);
 
   // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
-  const bake = K.makeBaker(ctx.group, sc.shadows), atlas = K.makeAtlas(ctx.group, { glow: 0.42 });
+  const bake = K.makeBaker(ctx.group, sc.shadows), atlas = K.makeAtlas(ctx.group, { glow: 0.5 });
   /** Yaw that faces the road at sample i from `side`, turned toward oncoming karts by k. */
   const faceIn = (i, side, k = 0.5) => Math.atan2(-side * track.lx[i] - track.tx[i] * k, -side * track.lz[i] - track.tz[i] * k);
   /** A lettered board on legs at (x, z), facing yaw; up is the panel centre above the ground. */
   const signAt = (x, z, yaw, draw, w, h, up, { px = 1024, frame = 0x2a2026, y = null, legs = 2 } = {}) => {
     const y0 = y ?? sc.y(x, z), f = K.signFrame(w, h, up, { color: frame, legs }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f);
     const r = atlas.add(px, Math.max(48, Math.round(px * h / w)), draw);
-    atlas.place(r, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h);
+    atlas.both(r, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h, 0.42);
     take(x, z, w * 0.55);
     return r;
   };
@@ -211,7 +211,7 @@ function dress(ctx) {
   };
   const RUST_HEX = '#c1440e', INK = '#1f1418', CREAM = '#f2efe6';
   // spots the gags will stand on, kept clear of the domes, rocks, and solar panels
-  for (const [at, side, off, r] of [[0.55, 1, 10, 13], [4.3, 1, 32, 10], [7.0, 1, 35, 16], [18.6, -1, 22, 16], [17.6, 1, 20, 12], [24.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [8.3, 1, 35, 11], [11.9, -1, 18, 11], [16.4, 1, 18, 11], [19.9, -1, 20, 11], [23.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
+  for (const [at, side, off, r] of [[0.55, 1, 9, 13], [4.3, 1, 32, 10], [7.0, 1, 36, 20], [18.6, -1, 22, 16], [17.6, 1, 20, 12], [24.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [8.3, 1, 35, 11], [11.9, -1, 18, 11], [16.4, 1, 18, 11], [19.9, -1, 20, 11], [23.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
   // ---- start/finish on Main Street: gantry, grandstands, a pale-suited crowd ----
   const g0 = sc.beside(0, 1, -track.hwL[0]);
@@ -225,7 +225,7 @@ function dress(ctx) {
     const g = mb.build({ m: plastic(0x2a2026, 0.5) }); ctx.group.add(g); bake.add(g);
     const r = atlas.add(1536, 300, K.board('OCCUPY MARS (LEAVE EARTH ON READ)', { bg: CREAM, fg: INK, stripe: RUST_HEX, size: 150, lines: 1, pad: 0.04 }));
     const yaw = g0.along + Math.PI;
-    atlas.place(r, [g0.x + Math.sin(yaw) * 0.18, g0.roadY + 12.7, g0.z + Math.cos(yaw) * 0.18], yaw, span + 4.2, 4.2);
+    atlas.both(r, [g0.x + Math.sin(yaw) * 0.18, g0.roadY + 12.7, g0.z + Math.cos(yaw) * 0.18], yaw, span + 4.2, 4.2, 0.36);
   }
   const stand = P.grandstand({ w: 30, rows: 6, color: 0xc1440e }), stand2 = P.grandstand({ w: 30, rows: 6, color: 0xf2efe6 });
   const seats = [], placards = [];
@@ -235,26 +235,26 @@ function dress(ctx) {
     proto.seats.forEach((s, k) => {
       if (rng() >= 0.82) return;
       V.set(s[0], s[1], s[2]).applyMatrix4(Mx); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) });
-      if (s[2] > -3 && k % 6 === 2) placards.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw });   // the front rows hold up signs
+      if (s[2] > -1 && k % 7 === 3) placards.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw });   // the front row holds up big signs
     });
     bake.add(g);
   };
   sc.along({ from: 25.75, to: 1.2, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: PALE_SUITS, cast: false });
   {
-    const CROWD = ['I SOLD MY HOUSE FOR THIS', 'WHERE IS THE AIR?', 'IS THIS THE BETA?', 'I MISS TREES', 'WHEN DO WE GO HOME?', 'EXTREMELY HARDCORE', 'SEND OXYGEN', 'I PAID FOR THE CHECKMARK'];
+    const CROWD = ['I SOLD MY HOUSE FOR THIS', 'WHERE IS THE AIR?', 'IS THIS THE BETA?', 'I MISS TREES', 'WHEN DO WE GO HOME?', 'SEND OXYGEN'];
     const cols = [CREAM, '#ffd23c', '#7fd0ff', '#ff9ab0'];
-    const regions = CROWD.map((t, k) => atlas.add(384, 240, K.board(t, { bg: cols[k % cols.length], fg: INK, size: 84, border: INK, pad: 0.06 })));
+    const regions = CROWD.map((t, k) => atlas.add(512, 318, K.board(t, { bg: cols[k % cols.length], fg: INK, size: 120, border: INK, pad: 0.05 })));
     const sticks = new ModelBuilder();
     placards.forEach((s, k) => {
-      const y = s.y + 1.75 + (k % 3) * 0.15, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
-      sticks.add('s', cyl(0.04, 0.04, 1.3, 4), { p: [s.x - fx * 0.05, s.y + 0.95, s.z - fz * 0.05] });
-      atlas.place(regions[k % regions.length], [s.x + fx * 0.1, y, s.z + fz * 0.1], s.yaw, 2.3, 1.44);
+      const y = s.y + 2.6 + (k % 2) * 0.3, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
+      for (const o of [-1.1, 1.1]) sticks.add('s', cyl(0.06, 0.06, 2.2, 5), { p: [s.x - fx * 0.05 + Math.cos(s.yaw) * o, s.y + 1.3, s.z - fz * 0.05 - Math.sin(s.yaw) * o] });
+      atlas.place(regions[k % regions.length], [s.x + fx * 0.1, y, s.z + fz * 0.1], s.yaw, 4.2, 2.6);
     });
     const g = sticks.build({ s: MAT_STICK }); ctx.group.add(g); bake.add(g, false);
   }
-  // the countdown board on Main Street
-  sign(0.55, 1, 10, (g, w, h) => {
+  // the countdown board on Main Street, raised clear of the lamps and flags so the punch line reads from the grid
+  sign(0.55, 1, 9, (g, w, h) => {
     g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); g.strokeStyle = RUST_HEX; g.lineWidth = 14; g.strokeRect(7, 7, w - 14, h - 14);
     K.fitText(g, 'COLONISTS ARRIVING:', w / 2, h * 0.14, w * 0.9, 66, K.SANS, '#ffb020', { lines: 1 });
     const years = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
@@ -264,23 +264,25 @@ function dress(ctx) {
       g.strokeStyle = '#ff3b30'; g.lineWidth = 9; g.beginPath(); g.moveTo(cx - w * 0.08, cy + 18); g.lineTo(cx + w * 0.08, cy - 18); g.stroke();
     });
     K.fitText(g, 'NEXT YEAR', w / 2, h * 0.78, w * 0.9, 190, K.FONT, '#38ff74', { lines: 1, maxH: h * 0.3 });
-  }, 22, 10, 10, { turn: 0.55 });
+  }, 22, 10, 12.5, { turn: 0.55 });
   // the big dome sells the air
   {
     const d = { x: 12, z: -46 }, top = track.terrainHeight(d.x, d.z) + 12.6, yaw = -0.5, mb = new ModelBuilder();
     for (const sx of [-6, 6]) mb.add('m', box(0.6, 7, 0.6, 0.1, 1), { p: [d.x + Math.cos(yaw) * sx, top + 2.5, d.z - Math.sin(yaw) * sx] });
+    mb.add('m', box(24.6, 10, 0.3, 0.05, 1), { p: [d.x + Math.sin(yaw) * 0.2, top + 9, d.z + Math.cos(yaw) * 0.2], r: [0, yaw, 0] });
     const g = mb.build({ m: plastic(0x2a2026, 0.5) }); ctx.group.add(g); bake.add(g);
     const r = atlas.add(1280, 500, (gg, w, h) => {
       gg.fillStyle = '#ffffff'; gg.fillRect(0, 0, w, h); gg.fillStyle = '#1f6bff'; gg.fillRect(0, 0, w, h * 0.12); gg.fillRect(0, h * 0.88, w, h * 0.12);
       K.fitText(gg, 'OXYGEN: $9.99/MO', w / 2, h * 0.35, w * 0.9, 190, K.FONT, '#1f6bff', { lines: 1 });
       K.fitText(gg, 'AD-FREE AIR: $19.99', w / 2, h * 0.68, w * 0.9, 130, K.FONT, INK, { lines: 1 });
     });
-    atlas.place(r, [d.x + Math.sin(yaw) * 0.4, top + 9, d.z + Math.cos(yaw) * 0.4], yaw, 24, 9.4);
+    atlas.both(r, [d.x + Math.sin(yaw) * 0.38, top + 9, d.z + Math.cos(yaw) * 0.38], yaw, 24, 9.4, 0.36);
   }
   // lamps and flags down Main Street
-  const lamps = sc.along({ from: 25.7, to: 1.6, side: 1, offset: 1.6, spacing: 16 });
+  const board = sc.beside(0.55, 1, 9), inFront = p => p.x > board.x - 45 && p.x < board.x + 14;   // nothing tall between the grid and the countdown board
+  const lamps = sc.along({ from: 25.7, to: 1.6, side: 1, offset: 1.6, spacing: 16 }).filter(p => !inFront(p));
   sc.instances(partsOf(M.lampPost()), lamps, {});
-  const flags = sc.along({ from: 25.7, to: 1.5, side: 1, offset: 4.5, spacing: 16, phase: 8 });
+  const flags = sc.along({ from: 25.7, to: 1.5, side: 1, offset: 4.5, spacing: 16, phase: 8 }).filter(p => !inFront(p));
   sc.instances(partsOf(M.colonyFlag()), flags.map(p => ({ ...p, yaw: p.along + Math.PI / 2 })), {});
 
   // ---- habitat domes around the colony, linked by glass tubes ----
@@ -366,6 +368,7 @@ function dress(ctx) {
     const q = new K.Quads(); q.panel([x + Math.sin(yaw) * 0.03, y0 + 9, z + Math.cos(yaw) * 0.03], yaw, w, h, [0, 0, 1, 1]);
     const mesh = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ color: 0x000000, map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 0.5 }));
     mesh.matrixAutoUpdate = false; ctx.group.add(mesh);
+    { const r = atlas.add(768, 384, K.board('SAFETY THIRD', { bg: '#ffd23c', fg: INK, size: 170, border: INK, lines: 1 })); atlas.place(r, [x - Math.sin(yaw) * 0.39, y0 + 9, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h); }
     const g = cv.getContext('2d');
     return n => {
       g.fillStyle = '#07090c'; g.fillRect(0, 0, 768, 384);
@@ -433,26 +436,30 @@ function dress(ctx) {
 
   // ---- the rim road: an angular truck nose-down in a crater, and the flag ----
   {
-    const p = sc.beside(7.0, 1, 35);
-    if (clear(p.x, p.z, 3)) {
-      const yaw = faceIn(p.i, 1, -0.4) + 0.5, tr = M.wedgeTruck();
-      tr.rotation.order = 'YXZ'; sc.place(tr, p.x, p.z, { yaw, y: p.y - 1.4, scale: 2.6 }); tr.rotation.x = 0.3; tr.rotation.z = 0.08; tr.updateMatrixWorld(true);
+    // a truck four times life size, nose toward the oncoming karts, as close to the road as the runoff allows
+    const TS = 4, at7 = (off) => { const q = sc.beside(7.0, 1, off), i = q.i, yw = Math.atan2(-track.tx[i] + 0.35 * track.lx[i], -track.tz[i] + 0.35 * track.lz[i]), f = [Math.sin(yw), Math.cos(yw)], r = [Math.cos(yw), -Math.sin(yw)];
+      const pts = [[3, 1.1], [3, -1.1], [-3, 1.1], [-3, -1.1]].map(([u, v]) => [q.x + f[0] * u * TS + r[0] * v * TS, q.z + f[1] * u * TS + r[1] * v * TS]);
+      return pts.every(([x, z]) => clear(x, z, 0.5)) ? { ...q, yaw: yw } : null; };
+    const p = [32, 34, 36, 38, 40].map(at7).find(Boolean), yaw = p?.yaw;
+    if (p) {
+      const tr = M.wedgeTruck();
+      tr.rotation.order = 'YXZ'; sc.place(tr, p.x, p.z, { yaw, y: p.y - 1.8, scale: TS }); tr.rotation.x = 0.3; tr.rotation.z = 0.08; tr.updateMatrixWorld(true);
       const wdw = tr.userData.window, cw = (x, y, z) => { const v = new THREE.Vector3(x, y, z).applyMatrix4(tr.matrixWorld); return [v.x, v.y, v.z]; };
       // the windscreen, cracked, lettered as a quad on the glass
       const glass = atlas.add(256, 128, (g, w, h) => { g.fillStyle = '#20262e'; g.fillRect(0, 0, w, h); g.strokeStyle = '#e8eef6'; g.lineWidth = 3; const cx = w * 0.42, cy = h * 0.55; for (let k = 0; k < 11; k++) { const a = k * 0.57 + 0.2, l = 40 + (k * 37) % 60; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * l * 0.6, cy + Math.sin(a) * l * 0.35); g.lineTo(cx + Math.cos(a + 0.15) * l * 1.6, cy + Math.sin(a + 0.15) * l); g.stroke(); } g.beginPath(); g.arc(cx, cy, 12, 0, 7); g.stroke(); g.beginPath(); g.arc(cx, cy, 26, 0, 7); g.stroke(); });
       const A = [1.2, 2.95], C = [1.95, -0.1], hw2 = wdw.w / 2;
       atlas.quad(glass, cw(-hw2, A[0] + 0.02, A[1] + 0.01), cw(hw2, A[0] + 0.02, A[1] + 0.01), cw(hw2, C[0] + 0.02, C[1] + 0.01), cw(-hw2, C[0] + 0.02, C[1] + 0.01));
-      bake.add(tr); take(p.x, p.z, 13);
-      const ring = []; for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; ring.push({ x: p.x + Math.cos(a) * 10, y: sc.y(p.x + Math.cos(a) * 10, p.z + Math.sin(a) * 10), z: p.z + Math.sin(a) * 10, yaw: a }); }
-      sc.instances(partsOf(M.boulder(4, { r: 1.3 })), ring, { scale: [1.2, 2.0], sink: 0.5, tints: ROCK_TINTS });
-      signAt(p.x + Math.cos(yaw) * 16, p.z - Math.sin(yaw) * 16, faceIn(p.i, 1, 0.5), K.board('FULL SELF-DRIVING', { bg: INK, fg: '#ffffff', size: 150, sub: '(INTO A CRATER)', subFg: '#ff6a2a', subScale: 0.75, lines: 1 }), 16, 6.5, 8.5);
+      bake.add(tr); take(p.x, p.z, 16);
+      const ring = []; for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2, rr = 13; ring.push({ x: p.x + Math.cos(a) * rr, y: sc.y(p.x + Math.cos(a) * rr, p.z + Math.sin(a) * rr), z: p.z + Math.sin(a) * rr, yaw: a }); }
+      sc.instances(partsOf(M.boulder(4, { r: 1.3 })), ring.filter(q => clear(q.x, q.z, 1)), { scale: [1.2, 2.0], sink: 0.5, tints: ROCK_TINTS });
+      for (const d of [20, -20, 26]) { const sx = p.x + Math.cos(yaw) * d, sz = p.z - Math.sin(yaw) * d; if (clear(sx, sz, 6)) { signAt(sx, sz, faceIn(p.i, 1, 0.5), K.board('FULL SELF-DRIVING', { bg: INK, fg: '#ffffff', size: 150, sub: '(INTO A CRATER)', subFg: '#ff6a2a', subScale: 0.75, lines: 1 }), 16, 6.5, 8.5); break; } }
     }
     const f = sc.beside(4.3, 1, 32);
     if (clear(f.x, f.z, 2)) {
       const yaw = faceIn(f.i, 1, 0.6), pole = M.bigFlagPole({ h: 22, fw: 15, fh: 7.5 }); sc.place(pole, f.x, f.z, { yaw }); bake.add(pole); take(f.x, f.z, 9);
       const fl = pole.userData.flag, rx = Math.cos(yaw), rz = -Math.sin(yaw);
       const r = atlas.add(1024, 512, (g, w, h) => { g.fillStyle = RUST_HEX; g.fillRect(0, 0, w, h); g.fillStyle = CREAM; g.fillRect(0, h * 0.78, w, h * 0.22); K.fitText(g, 'TERMS OF SERVICE APPLY', w / 2, h * 0.4, w * 0.9, 170, K.FONT, '#ffffff', { lines: 2, maxH: h * 0.66 }); K.fitText(g, 'BY BREATHING YOU AGREE', w / 2, h * 0.89, w * 0.86, 60, K.SANS, RUST_HEX, { lines: 1 }); });
-      atlas.place(r, [f.x + rx * fl.x, sc.y(f.x, f.z) + fl.y, f.z + rz * fl.x], yaw, fl.w, fl.h);
+      atlas.both(r, [f.x + rx * fl.x, sc.y(f.x, f.z) + fl.y, f.z + rz * fl.x], yaw, fl.w, fl.h, 0.06);
     }
   }
 

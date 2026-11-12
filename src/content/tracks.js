@@ -8,9 +8,10 @@ import marsColony from '../tracks/mars-colony.js';
 import singularitySpeedway from '../tracks/singularity-speedway.js';
 import datacenterDash from '../tracks/datacenter-dash.js';
 import capitolHill from '../tracks/capitol-hill.js';
+import weworkMemorial from '../tracks/wework-memorial.js';
 import lab from '../tracks/_lab.js';
 
-export const TRACKS = [siliconValley, blissHills, cryptoCove, datacenterDash, capitolHill, burningCircuit, marsColony, singularitySpeedway];
+export const TRACKS = [siliconValley, blissHills, cryptoCove, datacenterDash, capitolHill, burningCircuit, marsColony, singularitySpeedway, weworkMemorial];
 // menu thumbnails are captured from the game by tools/track-thumbs.mjs
 for (const t of TRACKS) t.thumb = `assets/tracks/${t.id}.webp`;
 export const TRACK_BY_ID = Object.fromEntries([...TRACKS, lab].map(t => [t.id, t]));   // the lab is reachable by id for testing, but not listed

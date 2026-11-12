@@ -88,7 +88,7 @@ export class Hud {
   }
   /** A rival has something to say: their face, their name, and the line in a speech bubble. Returns false if one is already up. */
   talk(racer, line, ms = 3000) {
-    if (!line || this.quiet || this.t < (this._talkUntil || 0)) return false;
+    if (!line || this.quiet || this.kart.finished || this.t < (this._talkUntil || 0)) return false;   // nothing talks over the finish
     const $ = this.$; $.talkImg.src = racer.portrait; $.talkName.textContent = racer.name; $.talkLine.textContent = line;
     $.talk.style.setProperty('--rc', hex(racer.color)); $.talk.classList.remove('show'); void $.talk.offsetWidth; $.talk.classList.add('show');
     this._talkUntil = this.t + ms / 1000 + 0.6; clearTimeout(this._kt); this._kt = setTimeout(() => $.talk.classList.remove('show'), ms);
@@ -101,7 +101,7 @@ export class Hud {
   onKartEvent(e) {
     switch (e.type) {
       case 'lap': if (e.data > 1 && e.data <= this.race.laps) { if (e.data === this.race.laps) this.banner('FINAL LAP!', 'final', 2200); else this.banner(`LAP ${e.data}`, '', 1300); } break;
-      case 'finish': this.banner(e.data === 1 ? 'WINNER!' : 'FINISH!', 'finish', 3000); break;
+      case 'finish': this.banner(e.data === 1 ? 'WINNER!' : 'FINISH!', 'finish', 3000); this.$.talk.classList.remove('show'); break;
       case 'incoming': this.warn(e.data.type); break;
       case 'itemReady': this.pop(this.$.item); break;
       case 'miniTurbo': break;

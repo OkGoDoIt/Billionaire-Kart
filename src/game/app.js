@@ -43,7 +43,9 @@ export class App {
   run() {
     let last = performance.now();
     const frame = now => {
-      const dt = Math.min(0.1, (now - last) / 1000); last = now;
+      // Clamped both ways. The frame clock can step backwards (a GPU process restart, a tab frozen and restored, and the
+      // very first frame, whose timestamp can predate `last`); a negative step would put the simulation in debt (#103).
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;
       this.inputs = this.input.poll(dt);
       if (this.session) this.session.frame(dt);
       else if (this.showroom) { this.showroom.update(dt); this.gfx.render(dt); }

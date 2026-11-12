@@ -32,11 +32,27 @@ page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.
 const shot = async name => { await page.screenshot({ path: join(out, name + '.jpg'), type: 'jpeg', quality: 85 }); };
 const key = async (k, wait = 260) => { await page.keyboard.press(k); await page.waitForTimeout(wait); };
 const screen = () => page.evaluate('BK.app.menus.screen?.spec.name || null');
+/* Words split across two lines on the current menu screen. A name that wraps as "Subpo / ena" is a layout bug that
+   no overflow check sees, because the text still fits its box. Hyphenated words may break at the hyphen. */
+const brokenWords = () => page.evaluate(() => {
+  const root = document.querySelector('.menu-screen'); if (!root) return [];
+  const out = new Set(), walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n; (n = walk.nextNode());) {
+    if (!n.parentElement?.offsetParent) continue;
+    const re = /[^\s-]+-?/g;
+    for (let m; (m = re.exec(n.textContent));) { const r = document.createRange(); r.setStart(n, m.index); r.setEnd(n, m.index + m[0].length); if (new Set([...r.getClientRects()].filter(q => q.width > 0.5).map(q => Math.round(q.top))).size > 1) out.add(m[0]); }
+  }
+  return [...out];
+});
 const expect = async (name, what) => {
   const s = await screen(); if (s !== name) { fails.push(`${what}: expected screen "${name}", got "${s}"`); if (!opt['keep-going']) throw new Error(fails.at(-1)); }
   // every screen: nothing unrendered in the text, and nothing pushed off the top or bottom
   const bad = await page.evaluate(() => { const e = document.querySelector('.menu-screen'); if (!e) return null; const over = e.scrollHeight - e.clientHeight; return (/\[object |undefined|NaN/.test(e.textContent) ? 'unrendered value in the text; ' : '') + (over > 6 ? `content is ${over}px taller than the screen` : ''); });
   if (bad && !(mobile && s === 'options' && !bad.includes('unrendered'))) fails.push(`${what}: screen "${s}": ${bad}`);   // on a phone the options list scrolls by touch, with rows big enough to tap
+  const split = await brokenWords(); if (split.length) fails.push(`${what}: screen "${s}": words broken across lines: ${split.join(', ')}`);
+  // the turntable karts belong only to screens that place them; anywhere else they end up half hidden behind the cards
+  const stray = await page.evaluate(() => { const A = BK.app; return !!A.showroom && !A.menus.screen?.stage && A.showroom.slots.some(x => x.group.visible); });
+  if (stray) fails.push(`${what}: screen "${s}": a turntable kart is showing behind a screen that has no place for it`);
 };
 /* Average brightness of the game canvas (0 to 1), read in the same frame it was drawn. A NaN anywhere in the
    scene turns the whole picture black after the bloom pass without raising an error, so this is the only way to see it. */
@@ -81,6 +97,16 @@ try {
   await page.evaluate('BK.session.skipIntro()');
   await page.waitForFunction('BK.session.phase !== "intro"', null, { timeout: 10000 });
   await page.waitForTimeout(1200); await shot('09-countdown');
+  if (!mobile) {
+    // the first-race key hint must not sit on any corner of the HUD
+    const clash = await page.evaluate(() => {
+      const h = document.querySelector('.hint-card'); if (!h) return 'did not appear';
+      const a = h.getBoundingClientRect();
+      const hit = ['.hud-rank', '.hud-bl', '.hud-item', '.hud-map', '.hud-time'].filter(sel => { const e = document.querySelector(sel); if (!e) return false; const b = e.getBoundingClientRect(); return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom; });
+      return hit.length ? 'overlaps ' + hit.join(', ') : '';
+    });
+    if (clash) fails.push(`first-race hint ${clash}`);
+  }
   await page.waitForFunction('!BK.race.frozen', null, { timeout: 15000 });
   if (!mobile) { await page.keyboard.down('KeyW'); await page.waitForTimeout(2500); await shot('10-driving'); await page.keyboard.down('KeyD'); await page.keyboard.down('Space'); await page.waitForTimeout(1300); await shot('11-drifting'); await page.keyboard.up('Space'); await page.keyboard.up('KeyD'); await page.keyboard.up('KeyW'); }
   else {
@@ -158,6 +184,7 @@ try {
       await page.evaluate(`${flow} BK.app.menus.reset('main'); ${open}`); await page.waitForTimeout(600);
       const bad = await page.evaluate(() => { const e = document.querySelector('.menu-screen'), w = innerWidth; if (!e) return 'no screen'; const wide = [...e.querySelectorAll('*')].filter(n => n.offsetParent && (n.getBoundingClientRect().right > w + 2 || n.getBoundingClientRect().left < -2)).length; return (/\[object |undefined|NaN/.test(e.textContent) ? 'unrendered value in the text; ' : '') + (wide ? `${wide} elements reach past the sides; ` : '') + (e.scrollWidth > e.clientWidth + 2 ? 'scrolls sideways' : ''); });
       if (bad) fails.push(`upright phone, screen "${name}": ${bad}`);
+      const split = await brokenWords(); if (split.length) fails.push(`upright phone, screen "${name}": words broken across lines: ${split.join(', ')}`);
       await shot('30-upright-' + name);
     }
   }

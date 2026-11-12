@@ -47,6 +47,9 @@ export class Showroom {
     if (Math.abs(v.offsetX - ox) > 1e-4 || Math.abs(v.offsetY - oy) > 1e-4 || !v.enabled) { v.enabled = true; v.offsetX = ox; v.offsetY = oy; this.camera.updateProjectionMatrix(); }
   }
 
+  /** Show or hide the karts and their plinths. A screen that leaves them no room hides them; the studio backdrop stays. */
+  setShown(on) { this.shown = on; for (const s of this.slots) s.group.visible = on; }
+
   /** Show these racers on turntables (one per local player). */
   setRacers(racers, { spin = true } = {}) {
     const offsetX = 0;
@@ -61,6 +64,7 @@ export class Showroom {
       this.setRacer(i, racer);
     });
     this.subject = { y: 1.2, w: (n - 1) * gap + 4.5, h: 2.7 }; this.podium = false;
+    this.setShown(this.shown !== false);
   }
   setRacer(i, racer) {
     const s = this.slots[i]; if (!s || s.racer === racer) return;
@@ -83,6 +87,7 @@ export class Showroom {
       this.slots.push({ group, holder, racer, rig, spin: false, angle: 0.5 - i * 0.5 + (i === 2 ? 0.3 : 0), pop: 0, podium: i });
     });
     this.subject = { y: 2.0, w: 13.5, h: 5.4 }; this.podium = true;
+    this.setShown(this.shown !== false);
   }
 
   update(dt) {

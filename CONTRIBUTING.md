@@ -14,7 +14,7 @@ This repo is built by Roger and a team of AI agents. These are the working rules
 - Work on your own branch and land through a pull request. Reference the issue number in commit messages.
 - New work that is not on the issue list gets an issue first.
 - **Every pull request includes screenshots** of what changed (Roger's rule). Save them under `screenshots/` on your branch and embed them with raw URLs. `node tools/shot.mjs` and `node tools/track-shots.mjs` take them without a visible browser.
-- Parody only: no real logos or trademarks in art, and nothing presented as fact about a real person.
+- Parody only: nothing presented as fact about a real person. Trackside signs, sponsors, and props use parody names, never a real company's logo or trademark. The one exception is the racer portraits, where each character wears their company's mark as a small pin or pendant, by the owner's decision.
 
 ## Before you open a pull request
 

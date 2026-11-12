@@ -116,8 +116,8 @@ export default {
     { kind: 'orbit', model: 'dustdevil', at: 5.6, lat: 11.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
     { kind: 'orbit', model: 'dustdevil', at: 13.3, lat: -10.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
     // cargo waiting at the airlock
-    { kind: 'static', model: 'crate', at: 1.5, lat: 6.6, effect: 'bump' },
-    { kind: 'static', model: 'crate', at: 1.62, lat: -6.6, effect: 'bump' },
+    { kind: 'static', model: 'crate', at: 1.5, lat: 5.6, effect: 'bump' },
+    { kind: 'static', model: 'crate', at: 1.62, lat: -5.6, effect: 'bump' },
   ],
   terrain: {
     cell: 3, margin: 220, blend: 22, water: -50,

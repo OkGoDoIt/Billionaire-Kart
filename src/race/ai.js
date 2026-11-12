@@ -48,7 +48,7 @@ export class AIDriver {
     this.bias = rng.range(-1, 1) * 1.6 * (1 - this.skill * 0.6);       // habitual lateral offset
     this.wanderPhase = rng() * 10; this.wanderRate = rng.range(0.25, 0.6);
     this.input = { steer: 0, throttle: 1, brake: 0, drift: false, item: false };
-    this.driftPlan = null; this.stuckT = 0; this.reverseT = 0; this.itemT = rng.range(...this.lv.itemDelay);
+    this.driftPlan = null; this.stuckT = 0; this.reverseT = 0; this.bestProg = null; this.progT = 0; this.itemT = rng.range(...this.lv.itemDelay);
     this.willRocket = rng() < this.lv.startChance; this.avoid = 0; this.mistakeT = rng.range(6, 20); this.wobble = 0;
     kart.autoTrick = rng() < 0.55 + this.skill * 0.45;
     this.cut = null; this.cutPlan = null; this._cutLap = {};
@@ -69,6 +69,17 @@ export class AIDriver {
     if (k.speed < 2.5 && k.hitT <= 0 && k.rescueT <= 0) this.stuckT += dt; else this.stuckT = Math.max(0, this.stuckT - dt * 2);
     if (this.stuckT > 1.6 && this.reverseT <= 0) { this.reverseT = 1.0; }
     if (this.stuckT > 5) { k.startRescue(); this.stuckT = 0; }
+    // progress rescue: the speed timer above limit-cycles against a bump obstacle (reverse,
+    // roll forward, bump again — stuckT drains while moving and never reaches 5), so also
+    // watch the kart's best distance. No gain of 2 m in 6 s of live racing means it is
+    // wedged somewhere; rescue it outright. A rescue may set the kart back a little, so
+    // bestProg follows it down instead of counting the setback against the kart.
+    const prog = k.lap * tr.length + k.s;
+    if (this.bestProg === null) this.bestProg = prog;
+    if (prog > this.bestProg + 2) { this.bestProg = prog; this.progT = 0; }
+    else if (k.rescueT <= 0) this.progT += dt;
+    else this.bestProg = Math.min(this.bestProg, prog);
+    if (this.progT > 6) { k.startRescue(); this.progT = 0; this.stuckT = 0; }
     if (this.reverseT > 0) {
       this.reverseT -= dt; inp.throttle = 0; inp.brake = 1; inp.drift = false;
       const ang = wrapAngle(tr.yaw[k.hit.i] - k.yaw); inp.steer = clamp(ang * 2, -1, 1); // reversed steering points the nose back

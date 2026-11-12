@@ -7,6 +7,7 @@ import { CLASSES } from '../race/kart.js';
 import { DEVICE_LABEL } from '../core/input.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
+import { installCard, installButton, installPanel, onInstallChange } from './install.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
 
 const h = (tag, attrs = {}, ...kids) => {
@@ -115,14 +116,34 @@ export class Menus {
   s_main() {
     const A = this.app;
     const start = mode => { A.flow = { mode, players: 1 }; this.open('players'); };
+    const row = h('div', { class: 'row' }, this.btn('How to play', () => this.open('howto'), { cls: 'small' }), this.btn('Options', () => this.open('options'), { cls: 'small' }), this.btn('Records', () => this.open('records'), { cls: 'small' }));
+    /* install guidance (src/ui/install.js): a persistent button in the row and a one-time
+       hint card under the nav, each present only where installing is actually possible;
+       both redraw if the browser hands us its install prompt while the menu is up */
+    const slot = h('div', { class: 'install-slot' });
+    let installBtnEl = null;
+    /* short landscape (a phone on its side) has no spare width in the button row or height
+       in the column: there the hint card floats over the scene instead (install.css) and
+       carries the action on its own — Options keeps its Install row at every size */
+    const shortLandscape = matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
+    const drawInstall = () => {
+      const spec = shortLandscape ? null : installButton();
+      if (spec && !installBtnEl) { installBtnEl = this.btn(spec.label, () => spec.act(), { cls: 'small' }); row.appendChild(installBtnEl); row.classList.add('has-install'); }
+      if (!spec && installBtnEl) { installBtnEl.remove(); installBtnEl = null; row.classList.remove('has-install'); }
+      const card = installCard();
+      slot.replaceChildren(...(card ? [card] : []));
+    };
     const el = h('div', {},
       h('div', { class: 'logo small' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c)))),
       h('nav', { class: 'main-nav' },
         this.btn('Grand Prix', () => start('gp'), { cls: 'big c1', def: true, sub: 'Four races, one trophy' }),
         this.btn('Quick Race', () => start('vs'), { cls: 'big c2', sub: 'Any track, your rules' }),
         this.btn('Time Trial', () => { A.flow = { mode: 'timetrial', players: 1, devices: ['any'] }; this.open('racers', { player: 0 }); }, { cls: 'big c3', sub: 'Just you and the clock' }),
-        h('div', { class: 'row' }, this.btn('How to play', () => this.open('howto'), { cls: 'small' }), this.btn('Options', () => this.open('options'), { cls: 'small' }), this.btn('Records', () => this.open('records'), { cls: 'small' }))));
-    return { el, onBack: () => { this.reset('title'); return false; } };
+        row),
+      slot);
+    drawInstall();
+    const offInstall = onInstallChange(drawInstall);
+    return { el, onClose: offInstall, onBack: () => { this.reset('title'); return false; } };
   }
 
   /* ---------- how many players, and who holds what ---------- */
@@ -336,10 +357,18 @@ export class Menus {
       document.addEventListener('fullscreenchange', sync); fsOff = () => document.removeEventListener('fullscreenchange', sync);
       return row;
     };
+    // installing is a row too, wherever the browser allows it; the label says what tapping does here
+    const installRow = () => {
+      const spec = installButton(); if (!spec) return null;
+      const row = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: () => { spec.act(); A.audio?.ui('move'); } }, h('span', {}, 'Install app'), h('div', { class: 'opt-ctl' }, h('b', {}, spec.label === 'Install app' ? 'Install' : 'Guide')));
+      row.addEventListener('adjust', () => { spec.act(); A.audio?.ui('move'); });
+      return row;
+    };
     const el = h('div', {}, this.header('Options'), h('div', { class: 'panel options' },
       stepper('Music', 'music', pct), stepper('Sound effects', 'sfx', pct),
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
-      !touch && document.fullscreenEnabled && fullScreenRow(),
+      document.fullscreenEnabled && fullScreenRow(),
+      installRow(),
       cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff),
       touch && cycle('Automatic accelerate', 'autoGo', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
     return { el, onClose: () => fsOff?.() };
@@ -383,7 +412,8 @@ export class Menus {
     }
     const el = h('div', {}, this.header('How to play'), h('div', { class: 'howto' + (touch ? ' touch' : '') },
       controls,
-      h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1])))))),
+      h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1]))))),
+      installPanel()),
       h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true }), this.btn('See the items', () => this.open('items'))));
     return { el };
   }

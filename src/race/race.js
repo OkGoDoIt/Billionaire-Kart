@@ -1,7 +1,7 @@
 /* A race session: grid, countdown, stepping karts and AI, collisions, pickups,
    ranking, laps, and finishing. Pure simulation, so it also runs headless. */
 import { Kart, CLASSES, TUNE } from './kart.js';
-import { AIDriver, rubberBand } from './ai.js';
+import { AIDriver, rubberBand, assignFieldForm, AI_LEVELS } from './ai.js';
 import { ItemSystem } from './items.js';
 import { makeRng, clamp, loopDelta } from '../core/util.js';
 import { makeGroundHit } from '../track/track.js';
@@ -22,9 +22,19 @@ export class Race {
     this.time = 0; this.countdown = opts.countdown ?? 3.6; this.frozen = true; this.state = 'countdown';
     this.events = []; this.hazards = []; this.finishOrder = []; this.endT = 0;
     this.karts = [];
+    // per-race AI form (issue #138): deal the field its pace spread before anyone is
+    // built — best draw to a randomly chosen designated rival — see assignFieldForm.
+    // A race is a single difficulty in practice; the first AI entry's level sets the range.
+    const formOf = new Map();
+    const aiSlots = opts.entries.map((e, i) => e.player < 0 ? i : -1).filter(i => i >= 0);
+    if (aiSlots.length) {
+      const lv0 = AI_LEVELS[opts.entries[aiSlots[0]].level || 'normal'] || AI_LEVELS.normal;
+      const field = assignFieldForm(aiSlots.length, lv0.form ?? 0.04, this.rng);
+      aiSlots.forEach((entryIdx, j) => formOf.set(entryIdx, { form: field.forms[j], rival: j === field.rival }));
+    }
     opts.entries.forEach((e, slot) => {
       const kart = new Kart(this, { racer: e.racer, slot, isPlayer: e.player >= 0, playerIndex: e.player });
-      if (e.player < 0) kart.ai = new AIDriver(kart, e.level || 'normal', this.rng, e.personality || e.racer.ai || {});
+      if (e.player < 0) kart.ai = new AIDriver(kart, e.level || 'normal', this.rng, { ...(e.personality || e.racer.ai || {}), ...formOf.get(slot) });
       else { kart.autoTrick = !!e.autoTrick; kart.assist = e.assist || {}; }
       const g = this.track.gridSlot(slot);
       kart.place(g.x, g.y, g.z, g.yaw, this.track.N - 4);

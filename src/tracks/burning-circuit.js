@@ -94,6 +94,8 @@ export default {
     // art cars crawling out across the Esplanade and the Bowl exit
     { kind: 'patrol', model: 'artcar', at: 1.75, lats: [-8, -3], speed: 3.5, effect: 'spin', radius: 2.0 },
     { kind: 'patrol', model: 'artcar', at: 8.6, lats: [7.5, 1], speed: 3, effect: 'spin', radius: 2.0 },
+    // an LED bus crawling laterally across the wide dune climb, in no hurry at all
+    { kind: 'patrol', model: 'ledbus', at: 15.9, lats: [5.5, -5.5], speed: 2.2, effect: 'spin', radius: 2.1 },
     // dust devils waiting on the outside of the dune corners
     { kind: 'orbit', model: 'dustdevil', at: 14.05, lat: -6.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
     { kind: 'orbit', model: 'dustdevil', at: 19.4, lat: -6.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
@@ -132,7 +134,7 @@ export default {
     deck: 0x8a5a36, wall: 0xe0b37a, wallStripe: 0x8a5a36, rail: 0xff6a2a,
     ads: ['RADICAL SELF-RELIANCE (CATERED)', 'LEAVE NO TRACE OF TAXES', 'DUST TO DUST', 'GIFTING ECONOMY: $40K', 'TURNKEY CAMP', 'ART CAR VALET', 'DEFAULT WORLD', 'PLAYA PROVIDES', 'HUG DEALER', 'CACHE YOUR WATER', 'BURN RATE', 'MOOP PATROL'],
   },
-  models: { artcar: B.artcar, dustdevil: B.dustdevil },
+  models: { artcar: B.artcar, dustdevil: B.dustdevil, ledbus: B.ledBus },
   // the opening shot: the Man in his fleece vest, banner up, feet already on fire
   intro: [{ pos: [62, 9, 24], pos1: [100, 15, 8], look: [170, 26, -46], look1: [170, 31, -46], fov: 45, dur: 3.2 }],
   FIGURE,
@@ -342,6 +344,91 @@ export default {
     const lanterns = []; for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; lanterns.push({ x: TEMPLE.x + Math.cos(a) * 17, z: TEMPLE.z + Math.sin(a) * 17, yaw: a }); }
     lanterns.forEach(p => { p.y = sc.y(p.x, p.z); });
     sc.instances(partsOf(B.glowCube(0xffb45a, { h: 3, size: 0.8 })), lanterns, {});
+    // the temple circle: eight founders, sitting very still, manifesting
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + 0.4, x = TEMPLE.x + Math.cos(a) * 12.5, z = TEMPLE.z + Math.sin(a) * 12.5;
+      const m = B.person({ seated: true, h: 1.6 }); m.traverse(o => { if (o.isMesh && o.material.userData.tintable) o.material.color.set(k % 2 ? 0xf4f4f0 : 0xd8d3c8); });
+      sc.place(m, x, z, { yaw: Math.atan2(-Math.cos(a), -Math.sin(a)), y: sc.y(x, z) }); bake.add(m);
+    }
+    signAt(TEMPLE.x + 15, TEMPLE.z + 12, 0.65, B.board('THE TEMPLE', { bg: '#ffffff', fg: '#1a1d29', size: 170, sub: 'PLEASE BE QUIET — THE FOUNDERS ARE MEDITATING', subFg: '#7b5cff', subScale: 0.5, lines: 1 }), 15, 5, 6, { frame: 0x8a7a5a });
+
+    // ---- the content round: the Orgy Dome, the art cars, the camp row, the gate ----
+    {
+      // THE ORGY DOME: the camp everyone pretends they only walked past. Door faces
+      // west, up at the boardwalk; the queue is orderly, the signage is earnest.
+      const OD = { x: -88, z: -214 };
+      const od = B.dome(13, { door: 0xff4fa8 });
+      sc.place(od, OD.x, OD.z, { yaw: -Math.PI / 2, y: sc.y(OD.x, OD.z) - 0.3 }); bake.add(od); take(OD.x, OD.z, 21);
+      signAt(OD.x - 19, OD.z - 2, -Math.PI / 2, B.board('THE ORGY DOME', { bg: '#ff4fa8', fg: '#ffffff', size: 170, lines: 1, stripe: '#ffffff' }), 23, 7, 8.5, { frame: 0x1a1d29, legs: 3 });
+      signAt(OD.x - 16.5, OD.z + 13, -Math.PI / 2 + 0.35, B.board('CONSENT IS SEXY', { bg: '#fff6e6', fg: '#c2410c', size: 130, sub: 'ASK FIRST. ALWAYS.', subFg: '#1a1d29', subScale: 0.7, lines: 1 }), 11, 4, 3.4, { frame: 0x1a1d29 });
+      const ropePts = [];
+      for (let k = 0; k < 5; k++) { const x = OD.x - 15 - k * 2.6, z = OD.z - 7 + k * 1.1; ropePts.push([x, sc.y(x, z), z]); }
+      const rope = B.velvetRope(ropePts); ctx.group.add(rope); bake.add(rope, false);
+      for (let k = 0; k < 3; k++) {   // the queue itself: founders, being very patient
+        const x = OD.x - 16.2 - k * 2.6, z = OD.z - 6 + k * 1.1, p = B.person({ h: 1.7 + k * 0.06 });
+        p.traverse(o => { if (o.isMesh && o.material.userData.tintable) o.material.color.set([0x35424e, 0x7a4a2d, 0x5b3a6e][k]); });
+        sc.place(p, x, z, { yaw: Math.PI / 2 + (k - 1) * 0.15, y: sc.y(x, z) }); bake.add(p);
+      }
+      const chairs = [];
+      for (let k = 0; k < 10; k++) { const th = Math.PI - 0.75 + (k % 5) * 0.375, r = 17.5 + Math.floor(k / 5) * 2.3, x = OD.x + Math.cos(th) * r, z = OD.z + Math.sin(th) * r; chairs.push({ x, z, y: sc.y(x, z), yaw: Math.atan2(-Math.cos(th), -Math.sin(th)) + (rng() - 0.5) * 0.3 }); }
+      sc.instances(partsOf(B.foldingChair()), chairs, { tints: [0xff8a3c, 0xff4fa8, 0x46d6ff, 0xffd23c, 0x7dff6a] });
+      const odRing = []; for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2 + 0.5, x = OD.x + Math.cos(a) * 16.5, z = OD.z + Math.sin(a) * 16.5; odRing.push({ x, z, y: sc.y(x, z), yaw: a }); }
+      sc.instances(partsOf(B.glowCube(0xff4fa8, { h: 2.6, size: 0.7 })), odRing, {});
+
+      // EL PULPO MECÁNICO: breathes fire on the hour, insurance pending. Parked past
+      // the landing so the ring jump aims you straight at it.
+      const PU = { x: 44, z: -288 };
+      const pu = B.pulpo(); sc.place(pu, PU.x, PU.z, { yaw: 0.85, y: sc.y(PU.x, PU.z) });
+      pu.updateMatrixWorld(true);
+      const nozzles = pu.userData.flames.map(p => {
+        const tip = new THREE.Vector3(p[0], p[1], p[2]).applyMatrix4(pu.matrixWorld);
+        const out = new THREE.Vector3(p[0] + p[3], p[1], p[2] + p[4]).applyMatrix4(pu.matrixWorld).sub(tip);
+        return { x: tip.x, y: tip.y, z: tip.z, dx: out.x, dz: out.z };
+      });
+      bake.add(pu); take(PU.x, PU.z, 13);
+      signAt(63, -282, 0.8, B.board('EL PULPO MECÁNICO', { bg: '#1a1d29', fg: '#ffb020', size: 130, sub: 'BREATHES FIRE. STAND BACK.', subFg: '#ff6a2a', subScale: 0.6, lines: 1 }), 15, 5.4, 6.5, { frame: 0x1a1d29 });
+      anim.push((dt, time) => {
+        const live = nozzles.filter((nz, k) => (time * 0.22 + k * 0.17) % 1 < 0.3);
+        if (!live.length) return;
+        let n = view.fx.count(90, dt);
+        for (const nz of live) { const m = Math.ceil(n / live.length); for (let j = 0; j < m; j++) view.fx.flame(nz.x, nz.y, nz.z, nz.dx * (2.5 + rng() * 2), 6.5 + rng() * 3.5, nz.dz * (2.5 + rng() * 2), [1, 0.58, 0.16], 1.6 + rng() * 1.1, 0.5); }
+      });
+
+      // ROBOT HEART: a bus that plays one song at one tempo, all week
+      const RB = { x: -66, z: -34 };
+      if (clear(RB.x, RB.z, 6)) { const hb = B.heartBus(); sc.place(hb, RB.x, RB.z, { yaw: 0.35, y: sc.y(RB.x, RB.z) }); bake.add(hb); take(RB.x, RB.z, 11); }
+      signAt(RB.x - 3, RB.z + 12, 0.35, B.board('ROBOT HEART', { bg: '#1a1d29', fg: '#ff3b5c', size: 150, sub: '128 BPM. NO REQUESTS.', subFg: '#ffd23c', subScale: 0.65, lines: 1 }), 13, 4.6, 5.5, { frame: 0x1a1d29 });
+
+      // the LAND SHARK, valet-parked by the jets along the flame slalom
+      const SH = { x: 104, z: -150 };
+      if (clear(SH.x, SH.z, 5)) { bake.add(sc.place(B.sharkCar(), SH.x, SH.z, { yaw: -1.37, y: sc.y(SH.x, SH.z) })); take(SH.x, SH.z, 10); }
+      signAt(SH.x - 7, SH.z + 12, -1.1, B.board('LAND SHARK', { bg: '#46d6ff', fg: '#1a1d29', size: 160, sub: 'MUTANT VEHICLE — DO NOT FEED', subFg: '#b0102c', subScale: 0.55, lines: 1 }), 12, 4.4, 5, { frame: 0x1a1d29 });
+
+      // the camp row: named camps along the run home, and one out in the dunes
+      sign(26.55, -1, 17, B.board('CAMP CRYPTO', { ...STYLE.ink, size: 130, sub: 'KEYS LOST. VIBES IMMUTABLE.', subFg: '#7dff6a', subScale: 0.55 }), 17, 5.8, 8.5, { turn: 0.5 });
+      sign(26.85, -1, 17, B.board('OPULENT TEMPLE OF NOISE', { ...STYLE.hot, size: 120, sub: 'DECIBELS: ALL OF THEM', subScale: 0.55 }), 18, 5.8, 8.5, { turn: 0.5 });
+      sign(27.15, -1, 18, B.board('CAMP QUESTIONMARK', { ...STYLE.sky, size: 130, sub: 'ASK US ANYTHING. NO ANSWERS.', subFg: '#b0102c', subScale: 0.55 }), 17, 5.8, 8.5, { turn: 0.5 });
+      sign(16.8, -1, 34, B.board('CAMP BURNING FUNDS', { ...STYLE.fire, size: 130, sub: "S'MORES & DILUTION", subFg: '#ffd23c', subScale: 0.6 }), 17, 5.8, 9, { turn: 0.6 });
+
+      // the Gate: an arch over the Esplanade just past the start line, and the
+      // greeters who staff it. You are now entering Black Rock City.
+      const gg = sc.beside(0.55, 1, 0), gspan = track.hwL[gg.i] + track.hwR[gg.i] + 1.5;
+      {
+        const cx = Math.cos(gg.along), cz = -Math.sin(gg.along), mb = new ModelBuilder();
+        for (const sx of [-1, 1]) mb.add('m', cyl(0.24, 0.28, 10.6, 8), { p: [gg.x + cx * sx * (gspan / 2 + 1.2), gg.roadY + 5.1, gg.z + cz * sx * (gspan / 2 + 1.2)] });
+        mb.add('m', box(gspan + 4, 4.2, 0.3, 0.05, 1), { p: [gg.x, gg.roadY + 9.8, gg.z], r: [0, gg.along, 0] });
+        const g = mb.build({ m: plastic(0x3a2c34, 0.6) }); ctx.group.add(g); bake.add(g);
+        const front = atlas.add(1536, 260, B.board('WELCOME TO BLACK ROCK CITY', { bg: '#fff6e6', fg: '#1a1d29', stripe: '#ff6a2a', size: 175, lines: 1, pad: 0.03 }));
+        const back = atlas.add(1024, 260, B.board('DUST THOU ART', { bg: '#1a1d29', fg: '#ffd23c', size: 200, lines: 1, pad: 0.03 }));
+        const yawF = gg.along + Math.PI;
+        atlas.place(front, [gg.x + Math.sin(yawF) * 0.19, gg.roadY + 9.8, gg.z + Math.cos(yawF) * 0.19], yawF, gspan + 3.6, 3.9);
+        atlas.place(back, [gg.x - Math.sin(yawF) * 0.19, gg.roadY + 9.8, gg.z - Math.cos(yawF) * 0.19], gg.along, gspan + 3.6, 3.9);
+      }
+      for (const side of [-1, 1]) {
+        const bp = sc.beside(0.55, side, (side < 0 ? track.hwL[gg.i] : track.hwR[gg.i]) + (side < 0 ? 4.5 : 3.5));
+        const booth = B.greeterBooth(); sc.place(booth, bp.x, bp.z, { yaw: bp.yaw, y: bp.y }); bake.add(booth);
+      }
+    }
 
     // ---- the camp: a grid of tents and yurts with streets, inside the loop ----
     const tentSpots = [], yurtSpots = [], domeSpots = [];

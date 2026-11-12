@@ -34,7 +34,7 @@ export default {
   id: 'silicon-valley',
   name: 'Silicon Valley Circuit',
   tagline: 'Move fast. Break things. Pivot to AI.',
-  lapNotes: ['<b>Lap 2.</b> Pivot complete. You are now an AI company.', '<b>Final lap.</b> Runway left: one lap.'],
+  lapNotes: ['<b>Lap 2.</b> Pivot complete. You are now an AI company.', '<b>Final lap.</b> Market correction: layoffs, a down round, and one last pivot — to KARTS.'],
   // the opening shot: rising past the grandstands toward the pivot tower
   intro: [{ pos: [-6, 21, -10], look: [PIVOT.x, 30, PIVOT.z], pos1: [38, 23, 2], look1: [PIVOT.x, 32, PIVOT.z], fov: 45, dur: 3 }],
   laps: 3,
@@ -147,9 +147,17 @@ export default {
     };
     sc.along({ from: 12.75, to: 1.3, side: 1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
     sc.along({ from: 13.3, to: 0.9, side: -1, offset: 17, spacing: 34, phase: 12 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
-    sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
+    const crowd = sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
+    const crowdFull = crowd.map(m => m.count);
+    // the correction (#121): on the final lap the layoffs land and the grandstands empty out
+    let crowdFill = 1, crowdShown = -1;
+    anim.push(dt => {
+      crowdFill += ((view.finalLap ? 0.3 : 1) - crowdFill) * Math.min(1, dt * 0.7);
+      const n = Math.round(crowdFill * 200);
+      if (n !== crowdShown) { crowdShown = n; crowd.forEach((m, k) => { m.count = Math.floor(crowdFull[k] * crowdFill); }); }
+    });
 
-    gags({ THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, local, sign, board, legs, anim });
+    gags({ THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, local, sign, board, legs, anim, view });
 
     // The Ring: glass doughnut HQ around the pond, the landmark you can see from most of the lap
     const ring = P.ringHQ({ R: RING.r, band: RING.band, H: 13 });
@@ -240,31 +248,55 @@ export default {
 };
 
 /* ---------- the gags ---------- */
-function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, board, legs, anim }) {
+function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, board, legs, anim, view }) {
   const { FONT, SANS, fitText, strike } = S;
   const M4 = new THREE.Matrix4(), plasticDark = new THREE.MeshStandardMaterial({ color: 0x3a414c, roughness: 0.5, metalness: 0.3 });
   const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; if (document.fonts?.ready) document.fonts.ready.then(() => { draw(c.getContext('2d'), w, h); t.needsUpdate = true; }); return t; };
   const facing = (p, x, z) => Math.atan2(x - p.x, z - p.z);
 
-  // ---- the centerpiece: WE'RE PIVOTING TO ~~CRYPTO~~ ~~METAVERSE~~ ~~WEB3~~ ~~BLOCKCHAIN~~ AI ----
+  // ---- lap-by-lap (#121): signs with a canvas of their own, redrawn only when the lap changes ----
+  const lapFns = [];
+  let lapDrawn = 0;
+  anim.push(() => { const lap = view.showLap || 1; if (lap !== lapDrawn) { lapDrawn = lap; for (const f of lapFns) f(lap, view); } });
+  /** A sign texture of its own (not packed into the atlas), so it can be redrawn mid-race. draw(g, w, h). */
+  const dynSign = (cw, ch, draw) => {
+    const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6, side: THREE.DoubleSide });
+    const s = { mat, redraw() { draw(c.getContext('2d'), cw, ch); tex.needsUpdate = true; } };
+    s.redraw();
+    if (document.fonts?.ready) document.fonts.ready.then(() => s.redraw());
+    return s;
+  };
+  /** A flat panel (w by h) in a dynSign's material, centred at [x, y, z], facing yaw. */
+  const dynPanel = (s, w, h, c, yaw) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), s.mat); m.position.set(c[0], c[1], c[2]); m.rotation.y = yaw; group.add(m); return m; };
+
+  // ---- the centerpiece: WE'RE PIVOTING TO ~~PETS~~ ~~SCOOTERS~~ ~~JUICE~~ ~~AI~~ KARTS ----
   {
     const { w: W, h: H } = PIVOT, p = { x: PIVOT.x, z: PIVOT.z, yaw: PIVOT.yaw, y: sc.y(PIVOT.x, PIVOT.z) - 0.5 };
     const t = S.pivotTower({ w: W, h: H, legs: PIVOT.legs }); sc.place(t, p.x, p.z, { yaw: p.yaw, y: p.y }); const by = p.y + t.userData.boardY; bake.add(t);
     taken.push([p.x, p.z, 34]);
-    const r = sign('pivot', 1024, 1024, (g, w, h) => {
+    // the list is alive (#121): one more fad is crossed out each lap, and the last one standing is KARTS
+    const FADS = ['PETS', 'SCOOTERS', 'JUICE', 'AI', 'KARTS'];
+    let fadLap = 1, fadFinal = false;
+    const pivotSign = dynSign(1024, 1024, (g, w, h) => {
+      const cur = fadFinal ? 4 : Math.min(1 + fadLap, 3);   // lap 1: JUICE, lap 2: AI, final lap: KARTS
       g.fillStyle = '#fffdf6'; g.fillRect(0, 0, w, h);
       g.strokeStyle = '#1a1d29'; g.lineWidth = 26; g.strokeRect(13, 13, w - 26, h - 26);
-      fitText(g, "WE'RE PIVOTING TO", w / 2, h * 0.09, w * 0.86, 104, FONT, '#1a1d29', { lines: 1 });
-      ['CRYPTO', 'METAVERSE', 'WEB3', 'BLOCKCHAIN'].forEach((s, k) => {
-        const y = h * (0.215 + k * 0.1), sz = fitText(g, s, w / 2, y, w * 0.8, 100, FONT, '#4d5463', { lines: 1 }), tw = g.measureText(s).width;
-        strike(g, w / 2 - tw / 2 - 26, w / 2 + tw / 2 + 26, y - sz * 0.06, sz);
+      fitText(g, "WE'RE PIVOTING TO", w / 2, h * 0.085, w * 0.86, 100, FONT, '#1a1d29', { lines: 1 });
+      FADS.forEach((s, k) => {
+        const y = h * (0.178 + k * 0.096);
+        if (k === cur) { g.fillStyle = '#12142b'; g.fillRect(w * 0.07, y - h * 0.05, w * 0.86, h * 0.1); }
+        const sz = fitText(g, s, w / 2, y, w * 0.8, k === cur ? 106 : 94, FONT, k < cur ? '#4d5463' : k === cur ? '#ffd23c' : '#b6bcc7', { lines: 1 });
+        if (k < cur) { const tw = g.measureText(s).width; strike(g, w / 2 - tw / 2 - 26, w / 2 + tw / 2 + 26, y - sz * 0.06, sz); }
       });
-      g.fillStyle = '#12142b'; g.fillRect(w * 0.1, h * 0.61, w * 0.8, h * 0.27);
-      fitText(g, '(NEXT PIVOT: TBD)', w / 2, h * 0.935, w * 0.8, 56, SANS, '#e0202a', { lines: 1 });
+      g.fillStyle = '#12142b'; g.fillRect(w * 0.1, h * 0.63, w * 0.8, h * 0.25);
+      fitText(g, fadFinal ? '(ABSOLUTELY FINAL PIVOT)' : '(NEXT PIVOT: TBD)', w / 2, h * 0.935, w * 0.82, 56, SANS, '#e0202a', { lines: 1 });
     });
+    lapFns.push((lap, vw) => { fadLap = lap; fadFinal = !!vw.finalLap; pivotSign.redraw(); });
     const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
-    atlas.place(r, [p.x + fx * 0.05, by, p.z + fz * 0.05], p.yaw, W, H);
-    atlas.place(r, [p.x - fx * 1.55, by, p.z - fz * 1.55], p.yaw + Math.PI, W, H);
+    dynPanel(pivotSign, W, H, [p.x + fx * 0.05, by, p.z + fz * 0.05], p.yaw);
+    dynPanel(pivotSign, W, H, [p.x - fx * 1.55, by, p.z - fz * 1.55], p.yaw + Math.PI);
     // the AI is neon, and it is never quite stable
     const ai = canvasTex(512, 172, (g, w, h) => {
       g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h);
@@ -279,7 +311,17 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
       const off = s > 0 ? 0.12 : -1.62;
       m.position.set(p.x + fx * off, by - H * 0.245, p.z + fz * off); m.rotation.y = p.yaw + (s > 0 ? 0 : Math.PI); group.add(m);
     }
-    anim.push((dt, time) => { const flick = Math.sin(time * 23) > 0.93 ? 0.25 : 1; aiMat.emissiveIntensity = (0.45 + 0.3 * (0.5 + 0.5 * Math.sin(time * 3.1))) * flick; });
+    // on the final lap the pivot moves on: the neon AI sign sputters, sparks, and dies
+    let aiGlow = 1, aiDied = false;
+    anim.push((dt, time) => {
+      aiGlow += ((view.finalLap ? 0 : 1) - aiGlow) * Math.min(1, dt * 1.6);
+      const flick = Math.sin(time * 23) > 0.93 ? 0.25 : 1;
+      aiMat.emissiveIntensity = (0.45 + 0.3 * (0.5 + 0.5 * Math.sin(time * 3.1))) * flick * (0.03 + 0.97 * aiGlow);
+      if (view.finalLap && !aiDied) {
+        aiDied = true;
+        for (let k = 0; k < 16; k++) view.fx.spark(p.x + fx * 1.2 + rng.range(-9, 9), by - H * 0.245 + rng.range(-3, 3), p.z + fz * 1.2 + rng.range(-9, 9), rng.range(-3, 3), rng.range(-4, 1), rng.range(-3, 3), [1, 0.36, 0.77], 0.5 + rng() * 0.5, 1.4 + rng());
+      }
+    });
   }
 
   // ---- turn one: robotaxis frozen in a ring around one traffic cone ----
@@ -311,7 +353,14 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     sc.place(hq, p.x, p.z, { yaw: p.yaw, y: p.y - 0.4 }); bake.add(hq);
     const roof = p.y - 0.4 + 3 * 3.4 + 0.6;
     legs({ ...p, y: roof }, 20, 6, 0xff7eb6);
-    atlas.place(board('VALUATION: PENDING', { bg: '#ff7eb6', fg: '#ffffff', kicker: 'UNICORNLY INC.', kfg: '#1a1d29', size: 130 }, 768, 300), local(p, 0, 0, roof + 4.5), p.yaw, 20, 7.8);
+    // the valuation doubles every lap (#121) — until the final-lap correction takes it to zero
+    let valLap = 1, valFinal = false;
+    const valSign = dynSign(768, 300, (g, w, h) => {
+      if (valFinal) S.signDraw('VALUATION: $0', { bg: '#e23b3b', fg: '#ffffff', kicker: 'DOWN ROUND', kfg: '#ffd23c', size: 118 })(g, w, h);
+      else S.signDraw(`VALUATION: $${2 ** (valLap - 1)}B`, { bg: '#ff7eb6', fg: '#ffffff', kicker: 'UNICORNLY INC.', kfg: '#1a1d29', size: 118 })(g, w, h);
+    });
+    lapFns.push((lap, vw) => { valLap = lap; valFinal = !!vw.finalLap; valSign.redraw(); });
+    dynPanel(valSign, 20, 7.8, local(p, 0, 0, roof + 4.5), p.yaw);
     const u = S.unicorn({ L: 32 }), uy = track.py[p.i] + 24, uyaw = facing(p, 196, 105) + Math.PI / 2;
     const ux = p.x, uz = p.z; u.position.set(ux, uy, uz); u.rotation.y = uyaw; group.add(u);
     // the tether, with a banner on it
@@ -321,11 +370,16 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     const banGrp = new THREE.Group(); ban.position.x = 7.8; banGrp.add(ban); banGrp.position.set(ux, roof + 9, uz); banGrp.rotation.y = bp.yaw; group.add(banGrp);
     taken.push([p.x, p.z, 26]);
     const head = u.userData.head;
+    banGrp.visible = false;   // the DOWN ROUND banner only unfurls when it happens (#121)
+    let slump = 0;
     anim.push((dt, time) => {
-      const t = time % 20, k = t < 14 ? Math.sin((t / 14) * Math.PI / 2) : t < 16 ? 1 : Math.max(0, 1 - (t - 16) / 1.2);
-      u.scale.set(1 - 0.18 * k, 1 - 0.42 * k, 1 - 0.1 * k); u.position.y = uy - 7 * k + Math.sin(time * 0.7) * 0.6; u.rotation.z = 0.12 * k * Math.sin(time * 0.5);
+      // inflated and proud for two laps; on the final lap the down round lets the air out
+      slump += ((view.finalLap ? 1 : 0) - slump) * Math.min(1, dt * 0.55);
+      const k = slump * slump * (3 - 2 * slump);
+      u.scale.set(1 - 0.18 * k, 1 - 0.42 * k, 1 - 0.1 * k); u.position.y = uy - 7 * k + Math.sin(time * 0.7) * 0.6 * (1 - k); u.rotation.z = 0.3 * k + 0.03 * Math.sin(time * 0.5) * (1 - k);
       head.rotation.x = 0.85 * k;
       teth.scale.y = Math.max(1, u.position.y - 4.5 * u.scale.y - roof);
+      banGrp.visible = k > 0.25;
     });
   }
 
@@ -396,6 +450,66 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     const backing = new THREE.Mesh(new THREE.BoxGeometry(26.6, 8.4, 0.1), plasticDark); flip.add(backing);
     anim.push((dt, time) => { const t = time % 8, a = t < 3.4 ? 0 : t < 4 ? (t - 3.4) / 0.6 : t < 7.4 ? 1 : 1 - (t - 7.4) / 0.6; flip.rotation.y = fyaw + Math.PI * (a * a * (3 - 2 * a)); });
     taken.push([p.x, p.z, 28]);
+  }
+
+  // ---- the infield: NOW HIRING until the correction — then the sign flips and the layoff cones come out ----
+  {
+    const sp = { x: 92, z: 46 }; sp.y = sc.y(sp.x, sp.z); sp.yaw = facing(sp, 30, -6);
+    legs(sp, 16, 9.5);
+    let layFinal = false;
+    const laySign = dynSign(768, 300, (g, w, h) => {
+      if (layFinal) S.signDraw('LAYOFFS AT 3PM', { bg: '#e23b3b', fg: '#ffffff', kicker: 'ALL HANDS', kfg: '#ffd23c', size: 118 })(g, w, h);
+      else S.signDraw('NOW HIRING!', { bg: '#16a34a', fg: '#ffffff', kicker: 'ALL HANDS', kfg: '#1a1d29', size: 130, lines: 1 })(g, w, h);
+    });
+    lapFns.push((lap, vw) => { layFinal = !!vw.finalLap; laySign.redraw(); });
+    dynPanel(laySign, 17, 6.6, local(sp, 0, 0, sp.y + 12.5), sp.yaw);
+    // the cones come out with the pink slips: a cordon in front of the sign, hidden until the final lap
+    const coneSpots = [];
+    for (let k = 0; k < 9; k++) { const [x, , z] = local(sp, -9 + k * 2.25, 3.4, 0); coneSpots.push({ x, z, y: sc.y(x, z), yaw: rng.range(-0.4, 0.4) }); }
+    const cones = sc.instances(partsOf(P.cone3d()), coneSpots, { scale: 1.5, cast: false });
+    cones.forEach(m => { m.visible = false; });
+    lapFns.push((lap, vw) => cones.forEach(m => { m.visible = !!vw.finalLap; }));
+    taken.push([sp.x, sp.z, 13]);
+  }
+
+  // ---- the landmarks (playtest dressing): a Golden Gate over the run to turn one ----
+  {
+    // The road dips through a saddle here (ground rises on both sides), so the bridge lands on real
+    // hillsides: towers at ±27 m on the slopes, the deck clearing the road by ~10 m, the pivot tower
+    // standing behind it. Pure dressing — like the start gantry, it carries no collider.
+    const i = track.indexAtCp(1.45);
+    const hx = Math.hypot(track.lx[i], track.lz[i]) || 1, ux = track.lx[i] / hx, uz = track.lz[i] / hx;
+    const ht = Math.hypot(track.tx[i], track.tz[i]) || 1, tx = track.tx[i] / ht, tz = track.tz[i] / ht;
+    const C = { x: track.px[i], z: track.pz[i] }, roadY = track.py[i];
+    const br = S.ggBridge({});
+    sc.place(br, C.x, C.z, { yaw: Math.atan2(-uz, ux), y: roadY });
+    bake.add(br);
+    // the toll sign on both fascias, so it reads coming and going — each with a back-to-back twin,
+    // like every other board on the track, so the text never mirrors from behind
+    const toll = board('BRIDGE TOLL: YOUR EQUITY', { bg: '#c0362c', fg: '#ffffff', kicker: 'THE GOLDEN GATE', kfg: '#ffd23c', size: 118 }, 1024, 256);
+    for (const s of [-1, 1]) {
+      atlas.place(toll, [C.x + tx * s * 6.55, roadY + 10.8, C.z + tz * s * 6.55], Math.atan2(tx * s, tz * s), 22, 4.4);
+      atlas.place(toll, [C.x + tx * s * 6.3, roadY + 10.8, C.z + tz * s * 6.3], Math.atan2(tx * s, tz * s) + Math.PI, 22, 4.4);
+    }
+    taken.push([C.x, C.z, 26], [C.x + ux * 47, C.z + uz * 47, 11], [C.x - ux * 47, C.z - uz * 47, 11]);
+  }
+
+  // ---- the landmarks: a Hoover Tower on the climb meadow, watching the esses ----
+  {
+    const tp = sc.beside(3.0, 1, 34);
+    const tw = S.hooverTower({}); sc.place(tw, tp.x, tp.z, { yaw: tp.yaw }); bake.add(tw);
+    const sp = sc.beside(3.0, 1, 21);
+    legs(sp, 15, 8);
+    atlas.place(board('HOOVER TOWER', { bg: '#d9c096', fg: '#7a2d1e', kicker: 'THE FARM · PARKING $47', kfg: '#1a1d29', size: 118 }, 768, 300), local(sp, 0, 0, sp.y + 10.5), sp.yaw, 16, 6);
+    taken.push([tp.x, tp.z, 15], [sp.x, sp.z, 10]);
+  }
+
+  // ---- the landmarks: the garage where it all started, outside the chicane ----
+  {
+    const p = sc.beside(10.55, 1, 25);
+    const gr = S.garage(); sc.place(gr, p.x, p.z, { yaw: p.yaw }); bake.add(gr);
+    atlas.place(board('IT STARTED IN A GARAGE', { bg: '#ffffff', fg: '#1a1d29', kicker: 'NOW VALUED AT $3B', kfg: '#e23b3b', size: 110 }, 1024, 200), local(p, 0, 3.62, p.y + 3.6), p.yaw, 9.6, 1.9);
+    taken.push([p.x, p.z, 12]);
   }
 
   // ---- extras: the rocket's schedule, and the Ring's rooftop ----

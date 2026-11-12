@@ -93,5 +93,35 @@ export const RACERS = [
     { hit: ['That story will not run.', 'My editors will bury this.'], boost: ['Extra! Extra! Overtake all about it!', 'Tabloid turbo!'], taunt: ['That’s tomorrow’s front page.', 'Fair and balanced!'], pass: ['Breaking news: I passed you.', 'We report. You lose.'], win: 'Lachlan inherits this trophy in 2050.', lose: 'Retraction on page forty.' }),
 ];
 
+/* Specials: one per racer, and it applies to whoever drives them, you or a rival. `text` is what the racer card
+   says, written for the player. Everything else is a number the race code reads (src/race/kart.js and items.js);
+   a number is a multiplier unless noted. Each is modest and most carry a cost. The slate is the one Roger
+   reviewed for v1 (#51), carried onto v2's numbers (#84). */
+const SPECIALS = {
+  elon:        { name: 'Launch Window', text: 'Rev early and still get a longer blast-off. Miss the window badly and the stall is worse.', startWindow: 2.6, startBoost: 1.17, burnoutAt: 2.9, burnoutT: 1.3 },
+  sam:         { name: 'Scaling Laws', text: 'Every drift boost you land charges the next 5% faster, up to 25%. A hit resets the curve.', streak: 0.05, streakMax: 5 },
+  zuck:        { name: 'Platform Bulk', text: 'You shove rivals aside in a collision, but that data profile makes you a bigger target.', mass: 1.3, targetR: 1.2 },
+  bezos:       { name: 'Prime Delivery', text: 'Your orange drift boost arrives early, but the package is smaller.', orangeAt: 0.82, orangeDur: 0.89 },
+  jensen:      { name: 'The Jacket Stays On', text: 'Orange drift boosts last longer. The leather jacket stays on during questioning.', orangeDur: 1.26 },
+  satya:       { name: 'Elastic Cloud', text: 'Boosts last 20% longer, drift charges 10% slower. Burst capacity is billed by the second.', boostDur: 1.2, mtRate: 0.9 },
+  dario:       { name: 'Safety First', text: 'Charges drift boosts faster. Safety first, speed second.', mtRate: 1.26 },
+  demis:       { name: 'AlphaKart Bailout', text: 'Your Government Bailout runs 20% longer. The last move is yours.', bailout: 1.2 },
+  trump:       { name: 'HUGE Boosts', text: 'Faster boosts than anyone, but drift charges 15% slower. He does not do technical corners.', boostMul: 1.05, mtRate: 0.85 },
+  cook:        { name: 'Operational Excellence', text: 'Your Series F stays open 30% longer. Every boost arrives on margin.', golden: 1.3 },
+  larrysergey: { name: 'Pre-Mapped Shoulders', text: 'They mapped every shoulder, so leaving the road barely slows you. Traffic shoves you around.', offroad: 0.45, mass: 0.75 },
+  bill:        { name: 'The Foundation Covers It', text: 'Your first spin-out of each race is covered. Even philanthropy has a cap.', absorb: 1 },
+  thiel:       { name: 'Total Awareness', text: 'Your map shows the item every rival is holding. What you do with that is your business.', seeItems: true },
+  holmes:      { name: 'Vaporware', text: 'Now and then the drivetrain loses power. But 30% of Viral Tweets aimed at you lose the thread.', sputter: { every: [6, 14], chance: 0.15, t: 1.2 }, dodgeTweet: 0.3 },
+  ellison:     { name: 'Owns the Media', text: 'Your Smear Campaigns stick 40% longer. So do the ones that hit you: you read your own press.', inkGive: 1.4, inkTake: 1.4 },
+  murdoch:     { name: 'Unflappable', text: 'You recover from a spin-out in half the time, and crashes and smears wear off twice as fast.', stun: 0.52, inkTake: 0.5, shrinkTake: 0.5 },
+};
+/* How each one drives as a rival: added to the level's skill, and to a middling 0.5 aggression. */
+const RIVAL = {
+  elon: { aggression: 0.3 }, sam: {}, zuck: { aggression: 0.1 }, bezos: { aggression: 0.2 }, jensen: {}, satya: { aggression: -0.1 }, dario: { aggression: -0.2 }, demis: {},
+  trump: { aggression: 0.4 }, cook: { aggression: -0.2 }, larrysergey: {}, bill: { skill: 0.05, aggression: -0.1 }, thiel: { skill: 0.04, aggression: 0.1 }, holmes: { aggression: -0.1 },
+  ellison: { aggression: 0.3 }, murdoch: { skill: 0.06 },
+};
+for (const r of RACERS) { r.special = SPECIALS[r.id] || null; r.ai = RIVAL[r.id] || {}; }
+
 export const RACER_BY_ID = Object.fromEntries(RACERS.map(r => [r.id, r]));
 export const STARTERS = RACERS.map(r => r.id);

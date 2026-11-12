@@ -68,6 +68,11 @@ export class Hud {
       const [x, y] = this.mapXY(k.x, k.z);
       g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill();
       g.fillStyle = hex(k.racer.color); g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill();
+      // Total Awareness (Thiel's special): what each rival is holding, beside their dot
+      if (this.kart.sp.seeItems && k.item) {
+        const icons = this._icons || (this._icons = {}), img = icons[k.item] || (icons[k.item] = Object.assign(new Image(), { src: itemIcon(k.item) }));
+        if (img.complete && img.naturalWidth) { g.save(); g.beginPath(); g.arc(x + 15, y - 15, 13, 0, 7); g.fillStyle = '#12142b'; g.fill(); g.clip(); g.drawImage(img, x + 3, y - 27, 24, 24); g.restore(); }
+      }
     }
     const k = this.kart, [x, y] = this.mapXY(k.x, k.z);
     g.save(); g.translate(x, y); g.rotate(Math.PI - k.yaw);   // the arrow is drawn pointing up; heading is measured from +z toward +x
@@ -108,6 +113,8 @@ export class Hud {
       case 'rocketStart': this.banner(e.data >= 1 ? 'ROCKET START!' : 'NICE START!', 'good', 1100); break;
       case 'trickLand': this.banner('TRICK!', 'good small', 700); break;
       case 'draft': this.banner('SLIPSTREAM!', 'good small', 800); break;
+      case 'absorbed': this.banner('COVERED!', 'good small', 1100); break;        // Bill's special took the hit
+      case 'sputter': this.banner('POWER LOSS!', 'bad small', 900); break;       // Holmes's special
       case 'robbed': this.banner(ITEMS.insider.hit, 'bad small', 1300); this.feed(`<b>${e.data.racer.name}</b> stole your item`); break;
       case 'itemUse': { const line = ITEMS[e.data]?.use; if (line) this.banner(line, 'good small', 1000); break; }
       case 'inked': this.banner(ITEMS.smear.hit, 'bad small', 1200); break;

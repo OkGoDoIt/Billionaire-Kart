@@ -98,6 +98,7 @@
   /* four rows of whole, square portraits, as big as the height allows; the name sits on a plate under each one */
   --vh: 100vh; --plate: calc(var(--u) * 2.15); --side: clamp(calc(var(--u) * 6), calc((var(--vh) - var(--safe-t) - var(--safe-b) - var(--u) * 18) / 4 - var(--plate)), calc(var(--u) * 13)); }
 @supports (height: 100dvh) { .racer-layout { --vh: 100dvh; } }
+.racer-grid-box { display: contents; }   /* upright, it becomes the box the portraits are sized to fit */
 .racer-grid { grid-row: 1 / 3; display: grid; grid-template-columns: repeat(4, var(--side)); grid-auto-rows: calc(var(--side) + var(--plate)); gap: calc(var(--u) * 1.05) calc(var(--u) * 1.3); align-content: start; }
 .racer-tile { font: inherit; position: relative; display: flex; flex-direction: column; border: calc(var(--u) * 0.4) solid var(--ink); border-radius: calc(var(--u) * 1.8); background: var(--ink); padding: 0; cursor: pointer; overflow: hidden; min-height: 0; box-shadow: 0 calc(var(--u) * 0.6) 0 rgba(0,0,0,0.42); transition: transform 0.1s; }
 .racer-tile img { flex: 1; min-height: 0; width: 100%; object-fit: cover; object-position: 50% 30%; display: block; background: var(--rc); }
@@ -120,6 +121,9 @@
 .r-title { font-weight: 700; color: var(--gold); font-size: calc(var(--u) * 2); }
 .r-quote { font-style: italic; font-weight: 500; font-size: calc(var(--u) * 1.8); line-height: 1.25; margin-top: calc(var(--u) * 0.3) !important; }
 .r-bio { font-size: calc(var(--u) * 1.65); line-height: 1.28; opacity: 0.88; margin-top: calc(var(--u) * 0.9) !important; }
+/* the racer's special: what is different about driving them, under the stats it explains */
+.r-special { font-size: calc(var(--u) * 1.55); line-height: 1.24; margin-top: calc(var(--u) * 0.8) !important; padding-left: calc(var(--u) * 1); border-left: calc(var(--u) * 0.4) solid var(--gold); }
+.r-special b { color: var(--gold); font-weight: 700; margin-right: 0.2em; }
 .r-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(var(--u) * 1.4); margin-top: calc(var(--u) * 1.1); }
 .stat { display: flex; flex-direction: column; gap: calc(var(--u) * 0.35); font-weight: 600; font-size: calc(var(--u) * 1.5); min-width: 0; }
 .stat i { display: grid; grid-template-columns: repeat(5, 1fr); gap: calc(var(--u) * 0.3); }

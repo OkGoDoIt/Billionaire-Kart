@@ -182,6 +182,28 @@ Pass criteria:
 
 For a cut between two legs of the track, set `outer` on the facing side of **both** legs to a little more than half the distance between them, so the two drivable areas overlap, and add `hoarding: false` to those `sides` entries so no sponsor wall is drawn across the gap. A kart far off the road re-attaches to whichever stretch of track is nearest, so progress and lap counting keep working. Static obstacles placed off the road stand on the real ground.
 
+### Shortcuts for computer rivals: `shortcuts`
+
+Rivals follow the racing line unless the track tells them about a shortcut. Each entry is one cut:
+
+```js
+shortcuts: [
+  { name: 'meadow',                 // shows in the sim's "shortcuts taken" line
+    from: 22.2, to: 27.9,           // control-point units: where they leave the road, and where they are back on it
+    path: [[-30, 166], [-16, 151], [-13, 132], [-19, 112]],   // [x, z] waypoints between the two, in driving order
+    boost: false,                   // true: only take it holding a boost item (fired on the way in)
+    skill: 0.6,                     // lowest driver skill that ever takes it (default 0.6)
+    chance: 1,                      // scales the per-lap chance (default 1)
+    when: (race, kart) => true },   // optional extra gate, e.g. the drained lake: race => race.lakeLap >= race.laps
+],
+```
+
+- Each lap, a rival decides once, about 160 m before `from`, whether to take each shortcut. Relaxed rivals never do; Competitive ones about half the laps, Ruthless ones most laps (`cuts` in `AI_LEVELS`, `src/race/ai.js`). At the entry they check again: not spun out, up to speed, holding a boost item if `boost` is set, `when` passes, and, on a track with a `lake`, no water anywhere along the path. Any boost item in hand is saved for the cut and fired on it once the kart points down the path.
+- On the cut they chase a point a little way along the path, steer round obstacles, karts, and solid scenery, and slow down if a bend in the path is too tight for their speed. They rejoin at `to` on the racing line.
+- `boost`: decide it from measured time, not from the look of the ground. Grass, sand, dust, and snow cut top speed to 52 to 60% unless the kart is boosting. Time a lone rival through the stretch on the road, on the cut without a boost, and on the cut with one; set `boost: true` only if the cut loses without one, and drop the shortcut if the cut with a boost is no faster than using the boost on the road.
+- Lay the path out for a kart arriving at 30 to 40 m/s (boost pads and mini-turbos at the entry): it turns on a radius of about 25 to 30 m, so put the first waypoint well beyond the road edge and keep each change of direction under about 35 degrees. Keep at least 6 m from obstacle and solid-scenery centres (8 m on the outside of a bend), every point inside the drivable area (`outer`), and every point nearer an open edge than a walled one: a kart whose nearest stretch of road is walled is put back on that road.
+- Check it with `node tools/sim.mjs --track <id> --races 10 --level hard`: the "shortcuts taken" line counts how often rivals used each one (and how many of those on a boost). Rescues and unfinished races must not go up.
+
 ## Road skins
 
 `skin` sets how a stretch of road looks; `surface` sets how it drives. They are independent. Set a default for the whole track with `look.road.skin`, and change it over a range with a `zones` entry.

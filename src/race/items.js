@@ -141,7 +141,7 @@ export class ItemSystem {
     switch (base) {
       case 'boost': kart.boost('mushroom'); break;
       case 'golden':
-        if (!kart.goldenActive) { kart.goldenActive = true; kart.goldenT = 5.5; }
+        if (!kart.goldenActive) { kart.goldenActive = true; kart.goldenT = 5.5 * (kart.sp.golden || 1); }
         kart.boost('mushroom', 1.0, TUNE.mushroom.mul); consume = false; break;
       case 'leak': this._drop(kart, 'leak', back ? -1 : -1); break;
       case 'subpoena': this._fire(kart, 'subpoena', back); break;
@@ -153,7 +153,7 @@ export class ItemSystem {
       case 'pr': this._shock(kart); break;
       case 'smear': this._smear(kart); break;
       case 'insider': this._insider(kart); break;
-      case 'bailout': kart.bulletT = [3.2, 3.2, 3.4, 3.8, 4.4, 5, 5.6, 6.2][clamp(Math.round(((kart.rank - 1) / Math.max(1, race.karts.length - 1)) * 7), 0, 7)]; kart.endDrift(false); kart.hitT = 0; kart.shrinkT = 0; break;
+      case 'bailout': kart.bulletT = [3.2, 3.2, 3.4, 3.8, 4.4, 5, 5.6, 6.2][clamp(Math.round(((kart.rank - 1) / Math.max(1, race.karts.length - 1)) * 7), 0, 7)] * (kart.sp.bailout || 1); kart.endDrift(false); kart.hitT = 0; kart.shrinkT = 0; break;
       case 'dividend': kart.addCoins(2); break;
     }
     kart.stats.items++;
@@ -180,7 +180,7 @@ export class ItemSystem {
       x: kart.x + sy * 2.2, y: kart.y + 0.6, z: kart.z + cy * 2.2, vx: sy * speed, vz: cy * speed, speed,
       yaw: Math.atan2(sy, cy), hint: kart.hint, bounces: 0, target: null, phase: 'fly', t: 0, s: kart.s, lat: kart.hit.lat,
     };
-    if (type === 'tweet' && !back) s.target = this._aheadOf(kart);
+    if (type === 'tweet' && !back) { s.target = this._aheadOf(kart); if (s.target?.sp.dodgeTweet && this.race.rng.chance(s.target.sp.dodgeTweet)) s.target = null; }   // special: it loses the thread
     if (type === 'antitrust') { s.target = this.race.order[0] === kart ? null : this.race.order[0]; s.y = kart.y + 3; s.s = kart.s; s.lat = 0; }
     this.shots.push(s); this.race.emit('shotSpawn', s);
     return s;
@@ -201,7 +201,7 @@ export class ItemSystem {
       if (k === user || k.finished || k.rescueT > 0) continue;
       if (k.invincible || k.ghostT > 0) { k.emit('dodged', 'crash'); continue; }
       const front = 1 - (k.rank - 1) / Math.max(1, n - 1);
-      k.shrinkT = lerp(3.4, 6.5, front);
+      k.shrinkT = lerp(3.4, 6.5, front) * (k.sp.shrinkTake || 1);
       k.hitKind = 'zap'; k.hitDur = k.hitT = 0.55; k.endDrift(false); k.boostT = 0; k.boostMul = 1;
       k.vx *= 0.6; k.vz *= 0.6;
       if (k.item) { k.item = null; k.itemUses = 0; k.goldenActive = false; k.goldenT = 0; k.emit('itemGone'); }
@@ -232,7 +232,7 @@ export class ItemSystem {
     for (const k of race.karts) {
       if (k === user || k.rank >= user.rank || k.finished) continue;
       if (k.invincible || k.ghostT > 0) continue;
-      k.inkT = 4.8; k.emit('inked', user);
+      k.inkT = 4.8 * (user.sp.inkGive || 1) * (k.sp.inkTake || 1); k.emit('inked', user);
     }
   }
 
@@ -341,7 +341,7 @@ export class ItemSystem {
       if (!s.dead && s.type !== 'antitrust' && s.phase !== 'arc') for (const k of race.karts) {
         if (k.rescueT > 0 || k.ghostT > 0) continue;
         if (k === s.owner && s.age < 0.45) continue;
-        const dx = k.x - s.x, dz = k.z - s.z, rr = k.radius + SHOT_R;
+        const dx = k.x - s.x, dz = k.z - s.z, rr = k.radius * (k.sp.targetR || 1) + SHOT_R;
         if (dx * dx + dz * dz > rr * rr || Math.abs(k.y + 0.5 - s.y) > 1.7) continue;
         if (s.type === 'pinkslip') { this._explode(s.x, s.y, s.z, s.owner); s.dead = true; break; }
         if (k.invincible) { s.dead = true; race.emit('shotBlocked', { shot: s, by: k }); break; }

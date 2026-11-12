@@ -146,6 +146,11 @@ export default {
     rate: 1.6,
     surface: (depth, race) => depth > 0 ? WADE : race.lakeLap >= race.laps && depth < -0.35 ? HARDPAN : MUD,
   },
+  // rivals cut the dry lake bed on the final lap, between the intake pipe piers (the transformer yard is not worth it for them:
+  // the hairpin is fast, so a boost item buys as much on the road; see docs/track-authoring.md)
+  shortcuts: [
+    { name: 'lake bed', from: 9.35, to: 14.55, path: [[52, -400], [30, -393], [-12, -393], [-40, -398], [-70, -385], [-86, -378]], when: race => race.lakeLap >= race.laps },
+  ],
   // the opening shot: the whole lake, the pipes drinking it, and a gas plant smoking behind
   intro: [{ pos: [168, 62, -292], pos1: [138, 52, -312], look: [-60, 14, -405], look1: [-80, 12, -395], fov: 50, dur: 3 }],
   tunnels: [{ from: 1.15, to: 4.0 }],

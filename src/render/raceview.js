@@ -174,11 +174,28 @@ export class RaceView {
   }
   _shakeNear(x, z, amount, range) { for (const c of this.cams) { const d = Math.hypot(c.kart.x - x, c.kart.z - z); if (d < range) c.addShake(amount * (1 - d / range)); } }
 
+  /**
+   * What the scenery plays to: showLap is the lap the leading player is on (the leading kart when nobody is
+   * playing), 1..laps; showProgress is how far through the whole race they are, 0..1, and never goes back.
+   * Tracks use these to change over a race (a lake that drains, a sky that fills with smoke, a fire that spreads).
+   */
+  _show() {
+    const r = this.race, ks = r.players.length ? r.players : r.karts, len = r.track.length || 1;
+    let lap = 1, prog = 0;
+    for (const k of ks) {
+      const l = Math.min(Math.max(k.lap || 0, 0), r.laps + 1);
+      lap = Math.max(lap, Math.min(Math.max(l, 1), r.laps));
+      prog = Math.max(prog, k.finished || l > r.laps ? 1 : l < 1 ? 0 : (l - 1 + Math.min(Math.max(k.s / len, 0), 1)) / r.laps);
+    }
+    this.showLap = lap; this.showProgress = Math.max(this.showProgress || 0, Math.min(1, prog)); this.finalLap = lap >= r.laps;
+  }
+
   /** Per rendered frame. alpha: interpolation between the last two sim steps. */
   update(dt, alpha) {
     const race = this.race, gfx = this.gfx;
     this.time += dt;
     trackUniforms.uTime.value = this.time;
+    this._show();
     this.events();
     const cam0 = this.views[0].camera.position;
     for (const v of this.karts) v.update(dt, alpha, this.time, cam0);

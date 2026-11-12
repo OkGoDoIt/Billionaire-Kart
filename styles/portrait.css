@@ -37,17 +37,22 @@
   .cards.four { grid-template-columns: repeat(2, 1fr); margin-top: calc(var(--u) * 3); }
   .pcount { padding: calc(var(--u) * 6) 0; }
 
-  /* racer select: header, the turntable, who this is, then everyone */
+  /* racer select: header, the turntable, who this is, then everyone. All of it fits the visible height, Safari's toolbars
+     included: the portraits get first claim on the room under the card (up to 10u square, or the width allows), the
+     turntable takes what is left, and on a short screen it has none and steps aside (menus.js). */
   .screen-racers { background: linear-gradient(0deg, rgba(11,13,32,0.85), rgba(11,13,32,0.5) 45%, rgba(11,13,32,0) 70%); }
-  /* --side: four square portraits across the row, held small enough that the stage keeps about 20u above the card (78u is everything but the four rows) */
-  .racer-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(calc(var(--u) * 20), 1fr) auto auto; row-gap: calc(var(--u) * 1.6);
-    --plate: calc(var(--u) * 2.7);
-    --side: clamp(calc(var(--u) * 7), min((100vw - var(--safe-l) - var(--safe-r) - var(--u) * 9.6) / 4, calc(var(--u) * 13), (var(--vh) - var(--safe-t) - var(--safe-b) - var(--u) * 78) / 4 - var(--plate)), calc(var(--u) * 13)); }
+  .racer-layout { grid-template-columns: minmax(0, 1fr); row-gap: calc(var(--u) * 1.6);
+    --plate: calc(var(--u) * 2.7); --gap-r: calc(var(--u) * 1.1); --gap-c: calc(var(--u) * 1.2);
+    --wide: calc((min(100vw - var(--safe-l) - var(--safe-r) - var(--u) * 6, var(--u) * 64) - var(--gap-c) * 3) / 4);
+    --side: min(var(--wide), calc(var(--u) * 9.2));   /* a little under a quarter of the width: the card above now carries the racer's special, and the kart keeps its room */
+    grid-template-rows: minmax(0, 1fr) auto minmax(0, calc((var(--side) + var(--plate)) * 4 + var(--gap-r) * 3)); }
+  .racer-grid-box { display: block; grid-row: 3; min-height: 0; container-type: size; }
+  .racer-grid { grid-row: auto; height: 100%; justify-content: center; align-content: center; gap: var(--gap-r) var(--gap-c);
+    --side: max(calc(var(--u) * 5), min(var(--wide), calc(var(--u) * 9.2), (100cqh - var(--gap-r) * 3) / 4 - var(--plate))); }
   .r-stage { grid-row: 1; margin-top: 0; }
   .racer-card { grid-row: 2; width: 100%; padding: calc(var(--u) * 1.3) calc(var(--u) * 2) calc(var(--u) * 1.6); }
   .r-portrait { width: calc(var(--u) * 8.5); height: calc(var(--u) * 8.5); }
   .r-top { gap: calc(var(--u) * 1.6); }
-  .racer-grid { grid-row: 3; justify-content: center; gap: calc(var(--u) * 1.1) calc(var(--u) * 1.2); }
   .racer-tile span { font-size: min(calc(var(--u) * 1.8), calc(var(--side) * 0.19)); }
   .racer-tile.long span { font-size: min(calc(var(--u) * 1.35), calc(var(--side) * 0.14)); }
   .r-bio { font-size: calc(var(--u) * 1.75); }

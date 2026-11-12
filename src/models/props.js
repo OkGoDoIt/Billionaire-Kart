@@ -3,7 +3,9 @@
    the small ones. Keep everything chunky, rounded, and readable at speed. */
 import * as THREE from 'three';
 import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, loft, plastic, glow, paint, MAT } from './build.js';
-import { canvasTex } from '../render/textures.js';
+import { canvasTex, fitText } from '../render/textures.js';
+
+const SIGN_FONT = '"Luckiest Guy", "Arial Black", sans-serif';
 import { makeRng } from '../core/util.js';
 
 const tintable = (color, rough = 0.85) => { const m = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, envMapIntensity: 0.5 }); m.userData.tintable = true; return m; };
@@ -143,15 +145,16 @@ export function gantry(span = 20, title = 'BILLIONAIRE KART', { color = 0xe23b3b
   // start light pod
   b.add('dark', box(5.2, 1.0, 0.7, 0.2, 2), { p: [0, H - 2.9, 0.1] });
   grp.add(b.build({ tower: paint(color, { rough: 0.45, clear: 0.3 }), trim: plastic(0xf4f4f0, 0.5), cap: paint(color2, { rough: 0.3, clear: 0.5 }), beam: plastic(0x1d2030, 0.5), dark: MAT.dark }));
-  const tex = canvasTex(1024, 128, (g, w, h) => {
+  // The sign fills the gap between the towers and no more: any wider and its ends are buried in them, which cut the
+  // first and last letters off a long name. The canvas has the sign's own shape, so the letters are not stretched.
+  const signW = span + 0.9, signH = 2.2, th = 128, tw = Math.round(th * signW / signH);
+  const tex = canvasTex(tw, th, (g, w, h) => {
     g.fillStyle = '#1d2030'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 16; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#ffffff' : '#12142b'; g.fillRect(i * 16, j * 16, 16, 16); g.fillRect(w - 256 + i * 16, j * 16 + 96, 16, 16); }
-    g.font = '92px "Luckiest Guy", "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.lineWidth = 10; g.strokeStyle = '#12142b'; g.strokeText(title, w / 2, h / 2 + 6, w - 60);
-    g.fillStyle = '#' + new THREE.Color(color2).getHexString(); g.fillText(title, w / 2, h / 2 + 6, w - 60);
+    fitText(g, title, w / 2, h / 2 + 6, w - 70, h, 92, SIGN_FONT, { fill: '#' + new THREE.Color(color2).getHexString(), stroke: '#12142b', lw: 10 });
   }, { repeat: false, aniso: 8 });
   for (const s of [1, -1]) {
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(span + 4.6, 2.2), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 }));
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(signW, signH), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 }));
     sign.position.set(0, H - 0.6, s * 0.67); sign.rotation.y = s > 0 ? 0 : Math.PI; grp.add(sign);
   }
   // five start lights facing the grid (-Z side is where karts line up, looking +Z)
@@ -284,8 +287,7 @@ export function blimp(text = 'BILLIONAIRE KART', { color = 0xf4f4f0, accent = 0x
   const tex = canvasTex(1024, 256, (g, w, h) => {
     g.fillStyle = '#' + new THREE.Color(color).getHexString(); g.fillRect(0, 0, w, h);
     g.fillStyle = '#' + new THREE.Color(accent).getHexString(); g.fillRect(0, h * 0.78, w, h * 0.22); g.fillRect(0, 0, w, h * 0.1);
-    g.font = '120px "Luckiest Guy", "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#12142b';
-    g.fillText(text, w * 0.25, h * 0.46, w * 0.44); g.fillText(text, w * 0.75, h * 0.46, w * 0.44);
+    for (const side of [0.25, 0.75]) fitText(g, text, w * side, h * 0.45, w * 0.42, h * 0.62, 120, SIGN_FONT, { lines: 2, fill: '#12142b', gap: 0.98 });
   }, { aniso: 8 });
   const body = new THREE.Mesh(sphere(1, 28, 18), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45 }));
   body.scale.set(22, 7, 7); body.rotation.y = Math.PI / 2; grp.add(body);

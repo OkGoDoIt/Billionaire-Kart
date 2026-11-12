@@ -33,6 +33,8 @@ export class Race {
     });
     this.players = this.karts.filter(k => k.isPlayer).sort((a, b) => a.playerIndex - b.playerIndex);
     this.items = new ItemSystem(this, { items: opts.items !== false && this.mode !== 'timetrial', coins: opts.coins !== false });
+    const lake = this.track.def.lake;   // a body of water whose level the race drives (opt-in)
+    if (lake) { this.lakeLap = 1; this.lakeY = lake.levelForLap(1, this.laps); }
     this.obstacles = this.track.obstacleDefs.map(d => ({ ...d, x: 0, y: 0, z: 0, yaw: 0, active: true, t: d.phase }));
     this._obstacles(0);
     if (this.mode === 'timetrial') for (const k of this.players) { k.item = 'boost'; k.itemUses = 3; }
@@ -54,6 +56,12 @@ export class Race {
       }
     } else if (this.state !== 'done') this.time += dt;
 
+    if (this.lakeY != null) {   // the lake eases toward the level for the leader's lap
+      let lap = 1; for (const k of this.karts) lap = Math.max(lap, Math.min(k.lap, this.laps + 1));
+      this.lakeLap = lap;
+      const want = this.track.def.lake.levelForLap(lap, this.laps), d = want - this.lakeY, r = (this.track.def.lake.rate ?? 1.5) * dt;
+      this.lakeY += clamp(d, -r, r);
+    }
     rubberBand(this);
     for (const k of this.karts) {
       const inp = k.ai ? k.ai.think(dt) : (inputs[k.playerIndex] || NO_INPUT);

@@ -330,6 +330,13 @@ export class Kart {
     }
     this.lastRamp = hit.ramp;
     this.gy = gy;
+    // a draining lake (opt-in, track.def.lake): deep water is a rescue, the track decides the surface of shallows and bed
+    const lake = tr.def.lake;
+    if (lake && this.race.lakeY != null && !hit.onRoad && lake.inside(this.x, this.z)) {
+      const depth = this.race.lakeY - hit.y;
+      if (depth > 0.5 && this.grounded && this.bulletT <= 0) this.startRescue();
+      hit.surface = lake.surface(depth, this.race) || hit.surface;
+    }
     this.surface = this.grounded || this.airT < 0.1 ? hit.surface : this.surface;
     if (this.grounded && hit.boost) { if (this.boostKind !== 'pad' || this.boostT < T.pad.t - 0.2) { this.boost('pad'); } }
     if (this.trick) this.trickSpin += dt;
@@ -421,7 +428,8 @@ export class Kart {
     // fell off the world, or into deep water
     if (this.bulletT > 0) return;                        // the bailout rocket flies over gaps
     const ref = tr.py[hit.i];
-    if (this.y < ref - 9 || (tr.water != null && this.y < tr.water - 0.9 && this.grounded) || (this.grounded && hit.surface === SURFACES.void)) this.startRescue();
+    const inLake = tr.def.lake && !hit.onRoad && tr.def.lake.inside(this.x, this.z);   // a drained lake bed may lie far below the road
+    if ((this.y < ref - 9 && !inLake) || (tr.water != null && this.y < tr.water - 0.9 && this.grounded) || (this.grounded && hit.surface === SURFACES.void)) this.startRescue();
   }
 
   startRescue() {

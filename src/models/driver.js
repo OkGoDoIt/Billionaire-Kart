@@ -98,12 +98,105 @@ function ribs(g, n, amp) {
   return g;
 }
 
-let tagTex = null;
-const priceTag = () => tagTex ??= canvasTex(128, 64, (g, w, h) => {
-  g.fillStyle = '#fbfaf4'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#bdb8a8'; g.beginPath(); g.arc(16, h / 2, 6, 0, PI * 2); g.fill();
-  g.fillStyle = '#15161c'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '40px "Luckiest Guy", "Arial Black", sans-serif'; g.fillText('$999', w / 2 + 9, h / 2 + 3, w - 30);
+/* ---------- worn logos, hand-drawn in code (#153) ---------- */
+const rr = (g, x, y, w, h, r) => {
+  g.beginPath();
+  g.moveTo(x + r, y); g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+  g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+  g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y); g.closePath();
+};
+
+let t31 = null;
+/** The 1992 flag: a black-framed window in perspective, waving, its four panes
+    (red, green, blue, yellow) trailing motion streaks. Drawn as a warped grid of
+    cells so the wave is in the drawing, not faked with a skew. */
+const win31Flag = () => t31 ??= canvasTex(256, 192, (g, w, h) => {
+  g.fillStyle = '#f2ede0'; rr(g, 4, 4, w - 8, h - 8, 20); g.fill();          // the woven patch
+  g.strokeStyle = '#b3a888'; g.lineWidth = 2; g.setLineDash([6, 5]);
+  rr(g, 13, 13, w - 26, h - 26, 14); g.stroke(); g.setLineDash([]);          // stitching
+  const P = (u, v) => [92 + u * 140 - (v - 0.5) * 10 * u,
+    94 + Math.sin(u * 3.2 + 0.4) * 9 + (v - 0.5) * 2 * (30 + 14 * u)];
+  const quad = (u0, v0, u1, v1, inset) => {
+    const c = P((u0 + u1) / 2, (v0 + v1) / 2);
+    const pts = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => {
+      const [x, y] = P(u, v); return [x + (c[0] - x) * inset, y + (c[1] - y) * inset];
+    });
+    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < 4; i++) g.lineTo(pts[i][0], pts[i][1]);
+    g.closePath(); g.fill();
+  };
+  const COLS = 12, ROWS = 8, panes = [['#ee3224', '#00a651'], ['#0072bc', '#ffd200']];
+  g.fillStyle = '#101014';
+  for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) quad(i / COLS, j / ROWS, (i + 1) / COLS, (j + 1) / ROWS, 0);
+  for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) {
+    const u = (i + 0.5) / COLS, v = (j + 0.5) / ROWS;
+    g.fillStyle = panes[v < 0.5 ? 0 : 1][u < 0.5 ? 0 : 1];
+    quad(i / COLS, j / ROWS, (i + 1) / COLS, (j + 1) / ROWS, 0.16);
+  }
+  g.fillStyle = '#101014';                                                    // motion streaks off the left edge
+  for (let k = 0; k < 4; k++) {
+    const [fx, fy] = P(0, (k + 0.5) / 4), len = 52 - k * 6, th = 5.5 - k * 0.7;
+    g.beginPath();
+    g.moveTo(fx - 2, fy - th / 2);
+    g.lineTo(fx - len, fy - th / 2 + Math.sin(k * 1.3) * 2 + 1);
+    g.lineTo(fx - len - 6, fy + 1);
+    g.lineTo(fx - len, fy + th / 2 - 1);
+    g.lineTo(fx - 2, fy + th / 2);
+    g.closePath(); g.fill();
+  }
+}, { repeat: false, aniso: 4 });
+
+let t11 = null;
+/** The modern mark: four flat squares in Azure blues, dead level, no wave at
+    all — the whole joke is that it is everything the 1992 flag is not. */
+const win11Grid = () => t11 ??= canvasTex(256, 256, (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+  const m = 26, gap = 20, s = (w - m * 2 - gap) / 2, cols = ['#00a4ef', '#0078d4'];
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    g.fillStyle = cols[i];
+    rr(g, m + i * (s + gap), m + j * (s + gap), s, s, 12); g.fill();
+  }
+}, { repeat: false, aniso: 4 });
+
+let tAp = null;
+/** The apple: two lobes, a dimpled top, a leaf, and the bite out of the right side. */
+const appleLogo = () => tAp ??= canvasTex(256, 256, (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = '#ffffff';
+  g.beginPath();                                                              // the leaf
+  g.moveTo(134, 62);
+  g.bezierCurveTo(138, 30, 162, 14, 190, 12);
+  g.bezierCurveTo(189, 40, 170, 60, 138, 66);
+  g.closePath(); g.fill();
+  g.beginPath();                                                              // the body
+  g.moveTo(128, 70);
+  g.bezierCurveTo(112, 52, 74, 48, 60, 84);
+  g.bezierCurveTo(46, 118, 62, 172, 86, 202);
+  g.bezierCurveTo(100, 220, 114, 214, 128, 212);
+  g.bezierCurveTo(142, 214, 156, 220, 170, 202);
+  g.bezierCurveTo(188, 180, 198, 152, 196, 124);
+  g.bezierCurveTo(202, 92, 188, 56, 158, 50);
+  g.bezierCurveTo(142, 47, 134, 58, 128, 70);
+  g.closePath(); g.fill();
+  g.globalCompositeOperation = 'destination-out';                             // the bite
+  g.beginPath(); g.arc(200, 116, 27, 0, PI * 2); g.fill();
+  g.globalCompositeOperation = 'source-over';
+}, { repeat: false, aniso: 4 });
+
+let tMe = null;
+/** The loop: a lemniscate stroked fat in platform blue. */
+const metaLoop = () => tMe ??= canvasTex(256, 128, (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+  g.strokeStyle = '#1877f2'; g.lineWidth = 20; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath();
+  const a = 92, cx = 128, cy = 64;
+  for (let i = 0; i <= 72; i++) {
+    const t = i / 72 * PI * 2, d = 1 + Math.sin(t) ** 2;
+    const x = cx + a * Math.cos(t) / d, y = cy + a * Math.sin(t) * Math.cos(t) / d * 1.05;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.closePath(); g.stroke();
 }, { repeat: false, aniso: 4 });
 
 /* ---------- body ---------- */
@@ -269,14 +362,23 @@ const PROPS = {
     b.add('eye', sphere(0.022, 8, 6), { p: [x, y + 0.29, z] });
     for (const sx of [1, -1]) b.add('bot', sphere(0.024, 8, 6), { p: [x + sx * 0.085, y + 0.13, z] });
   },
-  /** the price tag nobody took off, flapping behind */
-  pricetag(ctx) {
-    const { b, Bk } = ctx, z0 = Bk(0.76);
-    b.add('twine', tube([[0, 0.77, z0], [0.03, 0.86, z0 - 0.14], [0.12, 0.95, z0 - 0.36], [0.21, 0.96, z0 - 0.54]], 0.008, 10, 4));
-    const tg = new THREE.BoxGeometry(0.5, 0.25, 0.014);
-    b.add('tag', tg, { p: [0.32, 0.86, z0 - 0.62], r: [0.35, 0.2, -0.12] });
-  },
 };
+
+/** A logo worn on the back of the outfit (#153): a woven patch or a print,
+    bent to follow the shell and tilted with the back's lean, so it reads as
+    part of the clothes from the chase camera rather than a sticker. */
+function backPrint(ctx, y, w, h, mat, lift = 0.012) {
+  const { b, Bk } = ctx;
+  const geo = new THREE.PlaneGeometry(w, h, 8, 1);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    p.setZ(i, -0.028 * (x / (w / 2)) ** 2);   // the back wraps away at the sides; the print follows it forward
+  }
+  geo.computeVertexNormals();
+  const slope = (Bk(y + h / 2) - Bk(y - h / 2)) / h;
+  b.add(mat, geo, { p: [0, y, Bk(y) - lift], r: [Math.atan(slope), PI, 0] });
+}
 
 /* ---------- outfits ---------- */
 const KITS = {
@@ -503,6 +605,21 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     b.add('white', torus(0.03, 0.006, 4, 16, PI * 1.4), { p: [0, 0.545, c.F(0.545) + 0.04], r: [-0.2, 0, 0] });
   }
   PROPS[look.prop]?.(c);
+  if (racer.id === 'cook') {
+    // the price tag is gone (#153): his seat back is a closed laptop lid now —
+    // space-grey aluminium with the apple glowing on it, parked exactly where
+    // the chase camera lives. The unibody's seat cushion sits at driver-space
+    // z -0.44..-0.26, y 0.06..0.66; the lid caps its rear face.
+    b.add('lid', box(0.62, 0.6, 0.032, 0.014, 2), { p: [0, 0.37, -0.456] });
+    b.add('apple', new THREE.PlaneGeometry(0.32, 0.32), { p: [0, 0.38, -0.474], r: [0, PI, 0] });
+  }
+  // the Microsoft men wear their eras on their backs (#153): Bill's is the
+  // waving 1992 flag on a stitched woven patch, Satya's the flat modern grid
+  // printed straight on the suit — same placement, different decade. Zuck's
+  // grey tee gets the loop printed across the back.
+  if (racer.id === 'bill') backPrint(c, 0.59, 0.42, 0.315, 'win31');
+  if (racer.id === 'satya') backPrint(c, 0.58, 0.31, 0.31, 'win11');
+  if (racer.id === 'zuck') backPrint(c, 0.6, 0.42, 0.21, 'meta');
   if (racer.id === 'thiel') {
     // the seeing stone, held up on a short staff behind his shoulder, glowing —
     // so he reads from the chase camera by more than the kart's pedestal orb
@@ -532,7 +649,11 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     gold: plastic(0xffcf4a, 0.25, 1), silver: plastic(0xc9ced6, 0.25, 1), steel: MAT.chrome, white: MAT.white, black: MAT.black,
     pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), flame: glow(0xff8a1e, 3.2), flame2: glow(0x9fd4ff, 3.4), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
     bot: plastic(0xf2f4f7, 0.3), eye: glow(0x5ce1ff, 2.2), orb: glow(0x7b6cff, 3.2),
-    tag: cached('tagmat', () => new THREE.MeshStandardMaterial({ map: priceTag(), roughness: 0.7 })),
+    lid: plastic(0x33363c, 0.32, 0.85),
+    apple: cached('applemat', () => new THREE.MeshStandardMaterial({ map: appleLogo(), emissiveMap: appleLogo(), emissive: 0xffffff, emissiveIntensity: 1.35, transparent: true, alphaTest: 0.35, roughness: 0.4 })),
+    win31: cached('win31mat', () => new THREE.MeshStandardMaterial({ map: win31Flag(), roughness: 0.85 })),
+    win11: cached('win11mat', () => new THREE.MeshStandardMaterial({ map: win11Grid(), emissiveMap: win11Grid(), emissive: 0xffffff, emissiveIntensity: 0.3, transparent: true, alphaTest: 0.35, roughness: 0.45 })),
+    meta: cached('metamat', () => new THREE.MeshStandardMaterial({ map: metaLoop(), emissiveMap: metaLoop(), emissive: 0xffffff, emissiveIntensity: 0.3, transparent: true, alphaTest: 0.35, roughness: 0.45 })),
     default: MAT.dark,
   };
   torso.add(b.build(mats));

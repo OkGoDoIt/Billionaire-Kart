@@ -13,6 +13,14 @@ export const CLASSES = {
   200: { id: 200, label: '200cc', name: 'Hypergrowth',    top: 36,   accel: 1.2,  ai: 1.0 },
 };
 
+/** Rocket-start timing, in seconds-to-GO at the moment the throttle is first pressed
+ *  (and then held to GO): press with `window` or less to go and the start boosts —
+ *  inside `perfect` the boost is full strength — while pressing earlier than
+ *  `burnoutAt` floods the engine and the start stalls. A racer's special
+ *  (sp.startWindow / sp.burnoutAt) can widen both. The HUD rev meter reads these
+ *  same numbers, so the window it draws is the window launch() judges. */
+export const START_TIMING = { window: 2.05, perfect: 1.25, floor: 0.05, burnoutAt: 2.6 };
+
 export const TUNE = {
   gravity: 30,
   radius: 1.0,                 // collision radius
@@ -583,12 +591,12 @@ export class Kart {
     if (at != null && this.startCharge > 0) {
       // pressed after the "2" lights (about 2.0s to go) and held: rocket. Too early: stall.
       const sp = this.sp;   // special: a wider window and a longer launch, with a worse stall past it
-      if (at <= (sp.startWindow || 2.05) && at >= 0.05) {
-        const quality = at <= 1.25 ? 1 : 0.7;
+      if (at <= (sp.startWindow || START_TIMING.window) && at >= START_TIMING.floor) {
+        const quality = at <= START_TIMING.perfect ? 1 : 0.7;
         this.boost('start', TUNE.start.t * quality * (sp.startBoost || 1), TUNE.start.mul);
         this.vx = Math.sin(this.yaw) * 9; this.vz = Math.cos(this.yaw) * 9;
         this.emit('rocketStart', quality);
-      } else if (at > (sp.burnoutAt || 2.6)) { this.hitKind = 'burnout'; this.hitDur = this.hitT = sp.burnoutT || 0.9; this.emit('burnout'); }
+      } else if (at > (sp.burnoutAt || START_TIMING.burnoutAt)) { this.hitKind = 'burnout'; this.hitDur = this.hitT = sp.burnoutT || 0.9; this.emit('burnout'); }
     }
     this.startCharge = 0; this.startPressAt = null; this.revving = false;
   }

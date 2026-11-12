@@ -19,7 +19,7 @@ export class Race {
     this.laps = opts.laps ?? this.track.laps;
     this.mode = opts.mode || 'race';           // race | timetrial
     this.rng = makeRng(opts.seed ?? 12345);
-    this.time = 0; this.countdown = opts.countdown ?? 3.6; this.frozen = true; this.state = 'countdown';
+    this.time = 0; this.countdown = opts.countdown ?? 3.6; this.countdownFrom = this.countdown; this.frozen = true; this.state = 'countdown';
     this.events = []; this.hazards = []; this.finishOrder = []; this.endT = 0;
     this.karts = [];
     // per-race AI form (issue #138): deal the field its pace spread before anyone is

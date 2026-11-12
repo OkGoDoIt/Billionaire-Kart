@@ -180,7 +180,7 @@ export function puffTexture(size = 128, seed = 5) {
 export const AD_IMAGES = 24;
 const adImageCache = new Map();
 /** Tracks with their own set of boards in assets/ads/<track id>/ (ad-1.webp ...), and how many each has. */
-export const AD_SETS = { 'silicon-valley': 8, 'bliss-hills': 8, 'crypto-cove': 8, 'datacenter-dash': 8, 'capitol-hill': 8, 'burning-circuit': 8, 'mars-colony': 8, 'singularity-speedway': 8 };
+export const AD_SETS = { 'silicon-valley': 8, 'bliss-hills': 8, 'crypto-cove': 8, 'datacenter-dash': 8, 'capitol-hill': 8, 'burning-circuit': 8, 'mars-colony': 8, 'singularity-speedway': 8, 'boring-tunnel': 8 };
 function adImage(n, set = '') {
   const src = set ? `assets/ads/${set}/ad-${n}.webp` : `assets/ads/ad-${String(n).padStart(2, '0')}.webp`;
   if (!adImageCache.has(src)) adImageCache.set(src, new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; }));

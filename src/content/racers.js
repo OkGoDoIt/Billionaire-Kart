@@ -12,7 +12,7 @@ const R = (id, name, title, stats, colors, look, quote, bio, barks, extra = {}) 
 
 export const RACERS = [
   R('elon', 'Elon', 'Rocket Man', [5, 2, 2, 4], [0xd8322a, 0x1c1d22],
-    { skin: 0xf0c6a0, hair: 'short', hairColor: 0x3a2a20, outfit: 'jacket', top: 0x1b1c20, accent: 0xd8322a, kart: 'wedge', kit: 'puffer', prop: 'chainsaw' },
+    { skin: 0xf0c6a0, hair: 'short', hairColor: 0x3a2a20, outfit: 'jacket', top: 0x1b1c20, accent: 0xd8322a, kart: 'wedge', kit: 'puffer', prop: 'flamethrower' },
     'Funding secured. Also, this is a rocket now.',
     'Fastest thing on the grid in a straight line. Cornering ships next year, like the robotaxis, the Roadster, and Mars.',
     { hit: ['My other kart is on Mars!', 'That dent cost $44 billion!'], boost: ['To Mars!', 'Full self-driving. Supervised.'], taunt: ['Concerning.', 'Looking into it.', 'You’re fired. Everyone is fired.'], pass: ['Autopilot engaged!', 'This lane is called X now.'], win: 'Mars is mine. Obviously.', lose: 'The simulation is rigged.' }),

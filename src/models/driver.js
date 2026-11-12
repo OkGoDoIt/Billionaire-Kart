@@ -218,19 +218,21 @@ function arms(ctx, { mat = 'top', len = 'long', cuff = null, puff = false, glove
 
 /* ---------- signature props, worn on the back where the chase camera sees them ---------- */
 const PROPS = {
-  /** a chainsaw slung across the back, bar up over the shoulder */
-  chainsaw(ctx) {
-    const { b, Bk } = ctx, zb = Bk(0.62) - 0.15, c = [-0.2, 0.66, zb];
-    b.add('saw', box(0.34, 0.25, 0.2, 0.05, 1), { p: c });
-    b.add('saw', box(0.13, 0.15, 0.21, 0.04, 1), { p: [c[0] - 0.19, c[1] - 0.04, c[2]] });
-    b.add('black', box(0.2, 0.06, 0.22, 0.02, 1), { p: [c[0], c[1] - 0.1, c[2]] });
-    b.add('black', tube([[c[0] - 0.16, c[1] + 0.1, c[2]], [c[0] - 0.13, c[1] + 0.26, c[2]], [c[0] + 0.08, c[1] + 0.26, c[2]], [c[0] + 0.13, c[1] + 0.12, c[2]]], 0.028, 10, 6));
-    const ang = 0.78, dir = [Math.sin(ang), Math.cos(ang)], s0 = [c[0] + dir[0] * 0.14, c[1] + dir[1] * 0.14], Lb = 1.05;
-    const mid = [s0[0] + dir[0] * Lb / 2, s0[1] + dir[1] * Lb / 2, zb], tip = [s0[0] + dir[0] * Lb, s0[1] + dir[1] * Lb, zb];
-    b.add('steel', box(0.12, Lb, 0.03, 0.012, 1), { p: mid, r: [0, 0, -ang] });
-    b.add('black', box(0.15, Lb, 0.016, 0.006, 1), { p: mid, r: [0, 0, -ang] });
-    b.add('black', cyl(0.075, 0.075, 0.016, 16), { p: tip, r: [PI / 2, 0, 0] });
-    b.add('steel', cyl(0.06, 0.06, 0.03, 14), { p: tip, r: [PI / 2, 0, 0] });
+  /** the flamethrower that is legally not a flamethrower, slung across the back with the pilot light on */
+  flamethrower(ctx) {
+    const { b, Bk } = ctx, zb = Bk(0.62) - 0.16, ang = 0.74, d = [Math.sin(ang), Math.cos(ang)], n = [Math.cos(ang), -Math.sin(ang)];
+    const o = [-0.25, 0.5], at = (t, u = 0) => [o[0] + d[0] * t + n[0] * u, o[1] + d[1] * t + n[1] * u, zb], r = [0, 0, -ang];
+    b.add('white', box(0.13, 0.26, 0.085, 0.03, 1), { p: at(0.1, 0.02), r });          // stock
+    b.add('white', box(0.115, 0.52, 0.095, 0.035, 1), { p: at(0.46), r });             // body
+    b.add('black', box(0.05, 0.4, 0.1, 0.012, 1), { p: at(0.5, -0.02), r });           // the stripe down the side
+    b.add('black', box(0.07, 0.15, 0.06, 0.02, 1), { p: at(0.3, 0.1), r: [0, 0, -ang + 0.35] });   // grip
+    b.add('steel', cyl(0.06, 0.06, 0.24, 14), { p: at(0.56, 0.115), r });              // the gas bottle underneath
+    b.add('saw', cyl(0.03, 0.045, 0.05, 12), { p: at(0.7, 0.115), r });
+    b.add('black', cyl(0.042, 0.048, 0.5, 12), { p: at(0.95), r });                     // barrel
+    b.add('saw', cyl(0.078, 0.058, 0.15, 14), { p: at(1.25), r });                      // nozzle
+    b.add('flame', cyl(0.004, 0.1, 0.5, 14), { p: at(1.57), r });
+    b.add('flame2', cyl(0.004, 0.05, 0.22, 10), { p: [at(1.44)[0], at(1.44)[1], zb - 0.07], r });
+    b.add('flame', sphere(0.085, 12, 8), { p: at(1.34) });
     ctx.straps('black', 0.56);
   },
   /** a sack of money on the back: the seven-trillion ask */
@@ -511,7 +513,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     skin: plastic(skinHex, 0.62), glove: plastic(0xf4f1ea, 0.6), glove2: plastic(look.top ?? 0xc8222a, 0.5),
     tie: plastic(look.tie ?? 0xd8232a, 0.45), vest: fluoro(0xd8f23a),
     gold: plastic(0xffcf4a, 0.25, 1), silver: plastic(0xc9ced6, 0.25, 1), steel: MAT.chrome, white: MAT.white, black: MAT.black,
-    pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
+    pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), flame: glow(0xff8a1e, 3.2), flame2: glow(0x9fd4ff, 3.4), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
     bot: plastic(0xf2f4f7, 0.3), eye: glow(0x5ce1ff, 2.2),
     tag: cached('tagmat', () => new THREE.MeshStandardMaterial({ map: priceTag(), roughness: 0.7 })),
     default: MAT.dark,

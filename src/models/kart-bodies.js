@@ -166,7 +166,8 @@ function rocket({ b, K, M, main, second }) {
   M.card = plastic(0xc69a62, 0.85);
   M.tape = plastic(0xe6cd98, 0.6);
   M.nozzle = new THREE.MeshStandardMaterial({ color: 0x3b3f47, roughness: 0.35, metalness: 0.85, side: THREE.DoubleSide });
-  M.fire = glow(0xff6a10, 1.6);
+  M.fire = glow(0xff6a10, 1.6); M.fire.transparent = true; M.fire.opacity = 0.82; M.fire.depthWrite = false;
+  M.core = glow(0xfff2c0, 2.6);
   M.port = glow(0x9fd8ff, 0.9);
   const ay = 0.5;
   b.add('main', lathe([[0, -1.1], [0.27, -1.1], [0.34, -1.04], [0.37, -0.9], [0.38, -0.5], [0.38, 0.3], [0.355, 0.6]], 28), { p: [0, ay, 0], r: [PI / 2, 0, 0] });
@@ -182,8 +183,10 @@ function rocket({ b, K, M, main, second }) {
   const fin = side([[-0.46, 0.3], [-0.96, 0.6], [-1.2, 0.62], [-1.13, 0.3]], 0.028, { bevel: 0.012 });
   for (const a of [-PI / 4, PI / 4, -3 * PI / 4, 3 * PI / 4]) b.add('second', fin, { p: [0, ay, 0], r: [0, 0, a] });
   // engine bell with fire inside
-  b.add('nozzle', lathe([[0.2, 0], [0.235, -0.07], [0.29, -0.2], [0.32, -0.3]], 24), { p: [0, ay, -1.08], r: [-PI / 2, 0, 0] });
-  b.add('fire', sphere(0.19, 18, 10), { p: [0, ay, -1.1], s: [1, 1, 0.35] });
+  b.add('nozzle', lathe([[0.2, 0], [0.235, -0.07], [0.29, -0.2], [0.32, -0.3]], 24), { p: [0, ay, -1.08], r: [PI / 2, 0, 0] });   // opens to the rear
+  // a plume with a hot core, not a flat disc: it tapers out of the bell
+  b.add('fire', lathe([[0.19, 0.02], [0.2, -0.1], [0.15, -0.3], [0.07, -0.5], [0, -0.62]], 20), { p: [0, ay, -1.08], r: [PI / 2, 0, 0] });
+  b.add('core', lathe([[0.1, 0.02], [0.1, -0.08], [0.06, -0.24], [0, -0.38]], 14), { p: [0, ay, -1.08], r: [PI / 2, 0, 0] });
   // cockpit sunk into the top
   cockpit(b, 0.86, -0.14, 0.62, 1.0);
   seat(b, { x: 0, y: 0.58, z: -0.3 }, 'second');

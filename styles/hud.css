@@ -16,7 +16,7 @@
 .hud b { font-weight: normal; }
 
 /* chunky outlined lettering */
-.hud-rank, .hud-banner, .hud-rev-label, .hud-pill, .hud-time, .hud-item-count, .hud-wrong, .hud-speed { paint-order: stroke fill; -webkit-text-stroke: 0.16em var(--ink); letter-spacing: 0.01em; }
+.hud-rank, .hud-banner, .hud-rev-label, .hud-pill, .hud-time, .hud-item-count, .hud-wrong, .hud-speed, .hud-coin-pop { paint-order: stroke fill; -webkit-text-stroke: 0.16em var(--ink); letter-spacing: 0.01em; }
 
 /* item slot, top-left */
 .hud-item { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 17); height: calc(var(--u) * 17); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3a4170 0%, #171a36 55%, #0b0d20 100%); box-shadow: 0 0 0 calc(var(--u) * 0.7) #0b0d20, 0 0 0 calc(var(--u) * 1.1) rgba(255,255,255,0.85), 0 calc(var(--u) * 1.2) calc(var(--u) * 2.4) rgba(0,0,0,0.45); display: grid; place-items: center; opacity: 0.55; transition: opacity 0.2s; }
@@ -49,8 +49,20 @@
 .hud-pill { display: flex; align-items: center; gap: calc(var(--u) * 1); font-size: calc(var(--u) * 6); line-height: 1; background: rgba(11,13,32,0.6); border-radius: calc(var(--u) * 5); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.2) calc(var(--u) * 0.5) calc(var(--u) * 1.3); }
 .hud-pill span { font-size: calc(var(--u) * 4); opacity: 0.85; margin-left: calc(var(--u) * -0.6); }
 .hud-pill.pop { animation: hud-pop 0.28s cubic-bezier(.2,1.6,.4,1); }
+.hud-coins { position: relative; }
 .hud-coins b { color: var(--gold); min-width: 1.1em; }
 .hud-coins.max b { color: #fff; text-shadow: 0 0 calc(var(--u) * 1.5) var(--gold); }
+.hud-coins.glow { animation: hud-coin-glow 0.5s ease-out; }
+/* what the last coin change did to top speed, told at the pill itself: left-aligned to the pill
+   (centred, the wider MAX text would run off the left edge of the pane), it floats up out of the
+   pill on desktop; on touch the pills live at the top of the screen, so it drops down instead */
+.hud-coin-pop { position: absolute; left: calc(var(--u) * -0.4); bottom: calc(100% + calc(var(--u) * 1)); transform: translate(0, calc(var(--u) * 1.6)) scale(0.7); font-size: calc(var(--u) * 4.4); line-height: 1; color: var(--gold); white-space: nowrap; opacity: 0; }
+.hud-coin-pop.show { animation: hud-coin-pop 1.1s ease-out forwards; }
+.hud-coin-pop.max { font-size: calc(var(--u) * 6.2); text-shadow: 0 0 calc(var(--u) * 2.2) rgba(255, 210, 60, 0.85); }
+.hud-coin-pop.max.show { animation-duration: 1.7s; }
+.hud-coin-pop.down { color: var(--hot); }
+.hud.hud-touch .hud-coin-pop { bottom: auto; top: calc(100% + calc(var(--u) * 1)); }
+.hud.hud-touch .hud-coin-pop.show { animation-name: hud-coin-pop-down; }
 .ico-coin { width: calc(var(--u) * 5.2); height: calc(var(--u) * 5.2); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff2a8, #ffc928 55%, #d98a00); box-shadow: inset 0 0 0 calc(var(--u) * 0.45) #b36f00, 0 0 0 calc(var(--u) * 0.35) var(--ink); margin-bottom: calc(var(--u) * 0.4); }
 .ico-flag { width: calc(var(--u) * 5.4); height: calc(var(--u) * 4.4); border-radius: calc(var(--u) * 0.5); margin-bottom: calc(var(--u) * 0.4); box-shadow: 0 0 0 calc(var(--u) * 0.35) var(--ink); background: conic-gradient(#fff 25%, #12142b 0 50%, #fff 0 75%, #12142b 0) 0 0 / calc(var(--u) * 2.7) calc(var(--u) * 2.2); }
 
@@ -66,7 +78,11 @@
 /* timer, top-right; minimap below it */
 .hud-time { position: absolute; right: calc(var(--edge) + var(--safe-r)); top: calc(var(--edge) + var(--safe-t)); font-size: calc(var(--u) * 4.4); opacity: 0.95; }
 .hud-map { position: absolute; right: calc(var(--edge) + var(--safe-r) - calc(var(--u) * 1)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 6.5)); width: calc(var(--u) * 30); height: calc(var(--u) * 30); opacity: 0.92; }
-.hud-speed { display: none; }
+/* speed readout, in the right-hand lane under the minimap: honest mph (kart speed is m/s in the sim) */
+.hud-speed { position: absolute; right: calc(var(--edge) + var(--safe-r) - calc(var(--u) * 1)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 38)); font-size: calc(var(--u) * 6); line-height: 1; color: #fff; text-align: right; filter: drop-shadow(0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.35)); }
+.hud-speed span { font-size: calc(var(--u) * 3.4); opacity: 0.85; margin-left: calc(var(--u) * 0.9); }
+.hud-compact .hud-speed { top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 27.5)); }
+.hud.hud-touch .hud-speed { top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 28.5)); }
 
 /* banners (countdown, final lap, finish): brief, upper-centre */
 .hud-banner { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%) scale(0.6); font-size: calc(var(--u) * 11); width: max-content; max-width: calc(100cqw - calc(var(--u) * 102)); line-height: 1.02; text-wrap: balance; opacity: 0; color: #fff; text-align: center; filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)); }
@@ -155,5 +171,8 @@
 @keyframes hud-warn { from { transform: translateX(-50%) scale(0.92); } to { transform: translateX(-50%) scale(1.08); } }
 @keyframes hud-feed { from { opacity: 0; transform: translateY(calc(var(--u) * -1)); } to { opacity: 1; transform: none; } }
 @keyframes hud-blink { 50% { opacity: 0.25; } }
+@keyframes hud-coin-glow { 0% { box-shadow: 0 0 0 0 rgba(255, 210, 60, 0); } 30% { box-shadow: 0 0 0 calc(var(--u) * 0.4) var(--gold), 0 0 calc(var(--u) * 2.6) calc(var(--u) * 0.7) rgba(255, 210, 60, 0.55); } 100% { box-shadow: 0 0 0 0 rgba(255, 210, 60, 0); } }
+@keyframes hud-coin-pop { 0% { opacity: 0; transform: translate(0, calc(var(--u) * 1.6)) scale(0.7); } 14% { opacity: 1; transform: translate(0, 0) scale(1.08); } 26% { transform: translate(0, calc(var(--u) * -0.6)) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(0, calc(var(--u) * -3.4)) scale(1); } }
+@keyframes hud-coin-pop-down { 0% { opacity: 0; transform: translate(0, calc(var(--u) * -1.6)) scale(0.7); } 14% { opacity: 1; transform: translate(0, 0) scale(1.08); } 26% { transform: translate(0, calc(var(--u) * 0.6)) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(0, calc(var(--u) * 3.4)) scale(1); } }
 
-@media (prefers-reduced-motion: reduce) { .hud-item.pop, .hud-rank.pop, .hud-pill.pop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .hud-item.pop, .hud-rank.pop, .hud-pill.pop, .hud-coins.glow, .hud-coin-pop.show { animation: none; } }

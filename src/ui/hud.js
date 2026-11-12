@@ -2,8 +2,11 @@
    lap bottom-left, rank bottom-right, minimap right) and keeps the centre clear.
    Sized in container units so it scales to split-screen panes. */
 import { ITEMS } from '../race/items.js';
-import { START_TIMING } from '../race/kart.js';
+import { TUNE, START_TIMING } from '../race/kart.js';
 import { fmtTime, ordinalSuffix, clamp } from '../core/util.js';
+
+/* kart.speed is metres per second (the class table in race/kart.js says so); the readout shows honest mph. */
+const MPH_PER_MS = 2.23694;
 
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const hex = n => '#' + n.toString(16).padStart(6, '0');
@@ -19,7 +22,7 @@ export class Hud {
     root.innerHTML = `
       <div class="hud-item"><div class="hud-item-ring"></div><img class="hud-item-img" alt=""><div class="hud-item-coin">$</div><div class="hud-item-count"></div></div>
       <div class="hud-item-info"><b></b><span></span></div>
-      <div class="hud-bl"><div class="hud-pill hud-coins"><i class="ico-coin"></i><b>0</b></div><div class="hud-pill hud-lap"><i class="ico-flag"></i><b>1</b><span>/${race.laps}</span></div></div>
+      <div class="hud-bl"><div class="hud-pill hud-coins"><i class="ico-coin"></i><b>0</b><div class="hud-coin-pop"></div></div><div class="hud-pill hud-lap"><i class="ico-flag"></i><b>1</b><span>/${race.laps}</span></div></div>
       <div class="hud-rank"><b>1</b><span>st</span></div>
       <div class="hud-time"></div>
       <div class="hud-banner"></div>
@@ -29,12 +32,12 @@ export class Hud {
       <div class="hud-talk"><img alt=""><div><b></b><span></span></div></div>
       <div class="hud-wrong">WRONG WAY</div>
       <div class="hud-ink"><i>EXCLUSIVE!</i><i>SOURCES SAY</i><i>SHOCKING!</i><i>SCANDAL</i><i>YOU WON’T BELIEVE</i></div>
-      <div class="hud-speed"></div>
+      <div class="hud-speed"><b>0</b><span>mph</span></div>
       <div class="hud-draft"></div>`;
     parent.appendChild(root);
     const q = s => root.querySelector(s);
     this.$ = { item: q('.hud-item'), img: q('.hud-item-img'), coinFallback: q('.hud-item-coin'), count: q('.hud-item-count'), info: q('.hud-item-info'), itemName: q('.hud-item-info b'), itemDesc: q('.hud-item-info span'), coins: q('.hud-coins b'), coinsPill: q('.hud-coins'), lap: q('.hud-lap b'), lapPill: q('.hud-lap'),
-      rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed'),
+      rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed'), speedN: q('.hud-speed b'), coinPop: q('.hud-coin-pop'),
       rev: q('.hud-rev'), revLabel: q('.hud-rev-label'), revBurn: q('.z-burn'), revDead: q('.z-dead'), revGood: q('.z-good'), revPerfect: q('.z-perfect'), revLock: q('.hud-rev-lock'), revNeedle: q('.hud-rev-needle') };
     if (showMap) this._buildMap();
     for (const id of ROULETTE) { const i = new Image(); i.src = itemIcon(id); }
@@ -104,6 +107,13 @@ export class Hud {
   }
   warn(id) { const w = this.$.warn; w.innerHTML = `<img src="${itemIcon(id)}" alt="">`; w.classList.add('show'); clearTimeout(this._wt); this._wt = setTimeout(() => w.classList.remove('show'), 1800); }
   pop(node) { node.classList.remove('pop'); void node.offsetWidth; node.classList.add('pop'); }
+  /** A one-line tick at the coin pill saying what the last coin change did to top speed:
+      gold and bigger for the coin that maxes the bonus, red for coins a hit shook loose. */
+  coinPop(text, cls, ms) {
+    const p = this.$.coinPop; p.textContent = text; p.className = 'hud-coin-pop ' + cls;
+    void p.offsetWidth; p.classList.add('show');
+    clearTimeout(this._ct); this._ct = setTimeout(() => p.classList.remove('show'), ms);
+  }
 
   /** Kart events the HUD reacts to. */
   onKartEvent(e) {
@@ -177,7 +187,17 @@ export class Hud {
       this.lastRank = k.rank; $.rankN.textContent = k.rank; $.rankS.textContent = ordinalSuffix(k.rank);
       $.rank.dataset.r = Math.min(k.rank, 4); this.pop($.rank);
     }
-    if (k.coins !== this.lastCoins) { if (this.lastCoins >= 0) this.pop($.coinsPill); this.lastCoins = k.coins; $.coins.textContent = k.coins; $.coinsPill.classList.toggle('max', k.coins >= 10); }
+    if (k.coins !== this.lastCoins) {
+      const prev = this.lastCoins;
+      if (prev >= 0) {
+        if (k.coins > prev) {
+          this.pop($.coinsPill);
+          $.coinsPill.classList.remove('glow'); void $.coinsPill.offsetWidth; $.coinsPill.classList.add('glow');
+          if (k.coins >= TUNE.coinMax && prev < TUNE.coinMax) this.coinPop('+SPEED MAX', 'max', 1700);   // the coin that caps the bonus, taught in the moment it lands
+        } else this.coinPop('-SPEED', 'down', 1100);   // a hit or a rescue just shook coins loose, and top speed with them
+      }
+      this.lastCoins = k.coins; $.coins.textContent = k.coins; $.coinsPill.classList.toggle('max', k.coins >= TUNE.coinMax);
+    }
     const lap = clamp(k.lap, 1, race.laps);
     if (lap !== this.lastLap) { if (this.lastLap >= 0) this.pop($.lapPill); this.lastLap = lap; $.lap.textContent = lap; }
     // item slot
@@ -210,11 +230,11 @@ export class Hud {
     if (Math.floor(race.time * 10) !== this._tt) { this._tt = Math.floor(race.time * 10); $.time.textContent = fmtTime(k.finished ? k.finishTime : race.time).slice(0, -2); }
     $.wrong.classList.toggle('show', k.wrongWayT > 1 && !k.finished);
     $.ink.classList.toggle('show', k.inkT > 0);
-    $.speed.textContent = Math.round(k.speed * 3.4);
+    $.speedN.textContent = Math.round(k.speed * MPH_PER_MS);
     this.mapT -= dt; if (this.mapT <= 0) { this.mapT = 0.05; this._drawMap(); }
     this._updateRev();
   }
 
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
-  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._nt); clearTimeout(this._kt); }
+  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._nt); clearTimeout(this._kt); clearTimeout(this._ct); }
 }

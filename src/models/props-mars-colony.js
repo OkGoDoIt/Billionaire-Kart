@@ -4,7 +4,7 @@
    devils. Each builder returns a THREE.Group on y = 0, facing +Z, made of a few
    merged meshes. Nothing here touches the DOM at import time. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, torus, tube, lathe, plastic, glow, paint, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, loft, plastic, glow, paint, MAT } from './build.js';
 import { canvasTex } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
 
@@ -288,4 +288,151 @@ export function dustdevil() {
   grp.add(swirl, ring);
   swirl.children[0].onBeforeRender = () => { swirl.rotation.y = performance.now() * -0.006; };
   return grp;
+}
+
+/* ---------- the gags ---------- */
+const STEEL = plastic(0xc9ced6, 0.22, 0.95), STEEL_DARK = plastic(0x8d96a6, 0.3, 0.9), BRONZE = plastic(0x8a6a44, 0.45, 0.7);
+
+/** A roof placard, lettered both sides (canvas made when called). */
+function placard(text, bg, fg, w, h, y) {
+  const tex = canvasTex(512, 176, (g, cw, ch) => {
+    g.fillStyle = bg; g.fillRect(0, 0, cw, ch); g.strokeStyle = fg; g.lineWidth = 10; g.strokeRect(8, 8, cw - 16, ch - 16);
+    let s = 110; g.font = `${s}px "Luckiest Guy", "Arial Black", sans-serif`; while (g.measureText(text).width > cw - 50 && s > 30) { s -= 4; g.font = `${s}px "Luckiest Guy", "Arial Black", sans-serif`; }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = fg; g.fillText(text, cw / 2, ch / 2 + 6);
+  }, { repeat: false, aniso: 4 });
+  const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.6 });
+  const grp = new THREE.Group();
+  for (const r of [Math.PI / 2, -Math.PI / 2]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(r > 0 ? 0.07 : -0.07, y, 0); m.rotation.y = r; grp.add(m); }
+  return grp;
+}
+
+/** The rover, now a robotaxi: same body, a lit roof sign. */
+export function robotaxi(o) {
+  const g = rover(o);
+  const b = new ModelBuilder(); b.add('p', cyl(0.06, 0.06, 1.0, 5), { p: [0, 2.7, -0.2] }); g.add(b.build({ p: MAT.steel }));
+  g.add(placard('ROBOTAXI', '#1a1d29', '#46d6ff', 3.0, 1.0, 3.6));
+  return g;
+}
+
+/** Cargo crate (same size as the stock crate), stencilled as premium oxygen. */
+export function oxyCrate() {
+  const b = new ModelBuilder();
+  b.add('w', box(1.9, 1.9, 1.9, 0.12, 2), { p: [0, 0.95, 0] });
+  for (const s of [1, -1]) b.add('t', box(2.0, 0.22, 2.0, 0.05, 1), { p: [0, 0.95 + s * 0.78, 0] });
+  const g = b.build({ w: plastic(0xf2efe6, 0.6), t: RUST });
+  const tex = canvasTex(256, 160, (c, w, h) => { c.fillStyle = '#f2efe6'; c.fillRect(0, 0, w, h); c.fillStyle = '#1f6bff'; c.font = '86px "Arial Black", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('O2', w / 2, h * 0.38); c.fillStyle = '#c1440e'; c.font = '32px "Arial Black", sans-serif'; c.fillText('PREMIUM', w / 2, h * 0.8); }, { repeat: false, aniso: 4 });
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
+  for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.94), mat); const a = k * Math.PI / 2; m.position.set(Math.sin(a) * 0.96, 0.95, Math.cos(a) * 0.96); m.rotation.y = a; g.add(m); }
+  return g;
+}
+
+/** A stainless steel megarocket, about h metres tall (booster and ship), on y = 0.
+    userData.chunks: debris pieces as [geometry, material] for the explosion. */
+export function megaRocket({ h = 72 } = {}) {
+  const b = new ModelBuilder(), s = h / 72, R = 4.5 * s;
+  // booster
+  b.add('steel', cyl(R, R, 38 * s, 28), { p: [0, 19 * s, 0] });
+  for (let k = 1; k < 8; k++) b.add('seam', cyl(R * 1.004, R * 1.004, 0.18 * s, 28, true), { p: [0, k * 4.8 * s, 0] });
+  b.add('dark', cyl(R * 0.92, R * 0.8, 1.6 * s, 20), { p: [0, -0.8 * s, 0] });
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; b.add('dark', box(2.2 * s, 2.6 * s, 0.3 * s, 0.05, 1), { p: [Math.cos(a) * (R + 0.4 * s), 36 * s, Math.sin(a) * (R + 0.4 * s)], r: [0, -a + Math.PI / 2, 0] }); }
+  // interstage and ship
+  b.add('dark', cyl(R, R, 1.2 * s, 28), { p: [0, 38.6 * s, 0] });
+  b.add('steel', lathe([[R, 0], [R, 22 * s], [R * 0.96, 25 * s], [R * 0.78, 28.5 * s], [R * 0.46, 31.5 * s], [R * 0.12, 33.2 * s], [0, 33.5 * s]], 28), { p: [0, 39.2 * s, 0] });
+  for (const sx of [-1, 1]) { b.add('flap', box(0.3 * s, 5.5 * s, 3.2 * s, 0.1, 1), { p: [sx * (R + 0.2 * s), 42.5 * s, 0] }); b.add('flap', box(0.3 * s, 3.6 * s, 2.0 * s, 0.1, 1), { p: [sx * (R * 0.7 + 0.2 * s), 66 * s, 0], r: [0, 0, sx * 0.35] }); }
+  b.add('tiles', lathe2([[R * 1.006, 0], [R * 1.006, 22 * s], [R * 0.97, 25 * s], [R * 0.8, 28.5 * s], [R * 0.48, 31.5 * s], [R * 0.14, 33.1 * s]], 28, 0, Math.PI), { p: [0, 39.2 * s, 0], r: [0, Math.PI / 2, 0] });
+  const g = b.build({ steel: STEEL, seam: STEEL_DARK, dark: MAT.dark, flap: STEEL_DARK, tiles: plastic(0x1b1c20, 0.7) });
+  const chunks = [
+    [new THREE.CylinderGeometry(R, R, 6 * s, 14, 1, true, 0, 2.2), STEEL], [new THREE.CylinderGeometry(R, R, 4 * s, 14, 1, true, 0, 1.6), STEEL],
+    [new THREE.BoxGeometry(0.3 * s, 5 * s, 3 * s), STEEL_DARK], [new THREE.ConeGeometry(R * 0.6, 5 * s, 14), STEEL], [new THREE.CylinderGeometry(R, R, 3 * s, 14, 1, true, 0, 2.8), STEEL],
+  ];
+  g.userData.chunks = chunks; g.userData.h = 72.7 * s; g.userData.R = R;
+  return g;
+}
+/** The lathe helper in build.js turns a full circle; the heat-tile half-shell needs phi limits. */
+function lathe2(profile, seg, phiStart, phiLen) { return new THREE.LatheGeometry(profile.map(p => new THREE.Vector2(p[0], p[1])), seg, phiStart, phiLen); }
+
+/** The launch tower: a square lattice with two arms ("chopsticks") reaching toward +Z. About h tall. */
+export function launchTower({ h = 92 } = {}) {
+  const b = new ModelBuilder(), w = 9;
+  for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) b.add('steel', box(0.9, h, 0.9, 0.05, 1), { p: [x * w / 2, h / 2, z * w / 2] });
+  for (let y = 4; y < h; y += 7) {
+    for (const [x0, z0, x1, z1] of [[-1, 1, 1, 1], [1, 1, 1, -1], [1, -1, -1, -1], [-1, -1, -1, 1]]) {
+      b.add('steel', box(Math.abs(x1 - x0) * w / 2 + 0.5 || 0.5, 0.4, Math.abs(z1 - z0) * w / 2 + 0.5 || 0.5, 0.05, 1), { p: [(x0 + x1) * w / 4, y, (z0 + z1) * w / 4] });
+    }
+    const d = new THREE.BoxGeometry(0.3, Math.hypot(w, 7), 0.3); d.rotateZ(Math.atan2(w, 7)); b.add('steel', d, { p: [0, y + 3.5, w / 2] }); b.add('steel', d, { p: [0, y + 3.5, -w / 2] });
+  }
+  for (const sx of [-1, 1]) b.add('arm', box(1.4, 2.6, 16, 0.2, 1), { p: [sx * 5.5, h * 0.72, 10], r: [0, sx * -0.18, 0] });
+  b.add('arm', box(w + 2, 3, 3, 0.2, 1), { p: [0, h * 0.72, w / 2 + 1] });
+  b.add('lamp', sphere(0.6, 10, 8), { p: [0, h + 1.2, 0] });
+  b.add('base', box(w + 4, 2, w + 4, 0.2, 1), { p: [0, 1, 0] });
+  return b.build({ steel: plastic(0x4a4f5a, 0.5, 0.6), arm: plastic(0x2a2d36, 0.5, 0.5), lamp: glow(0xff2a1a, 3.5), base: PANEL });
+}
+
+/** The founder in bronze on a plinth, crowned and caped, his right arm raised along +Z and up by `pitch`.
+    About h tall including the plinth. userData.plinth = { y, z, w, h } for the lettering on its front. */
+export function founderStatue({ h = 44, pitch = 0.75 } = {}) {
+  const b = new ModelBuilder(), P = h * 0.16, s = (h - P) / 8.2, Y = v => P + v * s;
+  b.add('stone', box(2.8 * s, P - 1.2, 2.8 * s, 0.2, 2), { p: [0, (P - 1.2) / 2, 0] });
+  b.add('trim', box(3.1 * s, 1.2, 3.1 * s, 0.2, 2), { p: [0, P - 0.6, 0] });
+  b.add('stone', box(3.5 * s, 1.0, 3.5 * s, 0.2, 2), { p: [0, 0.5, 0] });
+  // legs, coat, torso
+  for (const sx of [-1, 1]) { b.add('bronze', cyl(0.42 * s, 0.36 * s, 3.4 * s, 10), { p: [sx * 0.55 * s, Y(1.8), 0] }); b.add('bronze', box(0.8 * s, 0.4 * s, 1.4 * s, 0.15, 2), { p: [sx * 0.55 * s, Y(0.2), 0.25 * s] }); }
+  b.add('bronze', loft([{ z: 0, w: 1.15 * s, h: 0.72 * s, y: 0, n: 2.6 }, { z: 2.0 * s, w: 1.25 * s, h: 0.8 * s, y: 0, n: 2.6 }, { z: 3.6 * s, w: 1.45 * s, h: 0.85 * s, y: 0, n: 2.8 }], 18, 3), { p: [0, Y(3.3), 0], r: [-Math.PI / 2, 0, 0] });
+  b.add('bronze', sphere(0.62 * s, 16, 12), { p: [0, Y(7.55), 0.05 * s] });
+  b.add('bronze', cyl(0.3 * s, 0.36 * s, 0.6 * s, 10), { p: [0, Y(7.0), 0] });
+  // the crown
+  b.add('gold', cyl(0.62 * s, 0.58 * s, 0.45 * s, 16, true), { p: [0, Y(8.2), 0] });
+  for (let k = 0; k < 7; k++) { const a = (k / 7) * Math.PI * 2; b.add('gold', cone(0.14 * s, 0.5 * s, 6), { p: [Math.sin(a) * 0.6 * s, Y(8.6), Math.cos(a) * 0.6 * s] }); }
+  // the cape: a curved sheet behind the shoulders
+  b.add('cape', new THREE.CylinderGeometry(1.05 * s, 1.5 * s, 3.8 * s, 14, 1, true, Math.PI * 0.75, Math.PI * 0.5), { p: [0, Y(5.0), 0.1 * s] });
+  // the left arm on the hip, the right arm pointing at the sky (at Earth)
+  b.add('bronze', tube([[-1.35 * s, Y(6.6), 0], [-1.9 * s, Y(5.4), 0.2 * s], [-1.2 * s, Y(4.5), 0.5 * s]], 0.3 * s, 10, 8));
+  const sh = [1.35 * s, Y(6.6), 0], L = 3.4 * s, ex = sh[0] + 0.15 * s, ey = sh[1] + Math.sin(pitch) * L, ez = Math.cos(pitch) * L;
+  b.add('bronze', tube([sh, [sh[0] + 0.1 * s, sh[1] + Math.sin(pitch) * L * 0.5, Math.cos(pitch) * L * 0.5], [ex, ey, ez]], 0.32 * s, 10, 8));
+  b.add('bronze', sphere(0.36 * s, 10, 8), { p: [ex, ey, ez] });
+  const fl = 1.0 * s; b.add('bronze', cyl(0.11 * s, 0.13 * s, fl, 6), { p: [ex, ey + Math.sin(pitch) * fl * 0.5, ez + Math.cos(pitch) * fl * 0.5], r: [Math.PI / 2 - pitch, 0, 0] });
+  const g = b.build({ stone: plastic(0xe8e2d6, 0.7), trim: RUST, bronze: BRONZE, gold: paint(0xe8b923, { rough: 0.25, metal: 0.9 }), cape: new THREE.MeshStandardMaterial({ color: 0xb01828, roughness: 0.7, side: THREE.DoubleSide }) });
+  g.userData.plinth = { y: (P - 1.2) / 2, z: 1.4 * s + 0.06, w: 2.6 * s, h: P - 2.2 };
+  return g;
+}
+
+/** An angular stainless pickup, about 5.9 m long, nose to +Z (window panel at userData.window, local). */
+export function wedgeTruck() {
+  const b = new ModelBuilder();
+  // the body as a few flat-sided slabs: a wedge in profile
+  const prof = [[-2.95, 0.55], [-2.95, 1.35], [-0.1, 1.95], [2.95, 1.2], [2.95, 0.55]];
+  const shape = new THREE.Shape(); prof.forEach(([z, y], k) => k ? shape.lineTo(z, y) : shape.moveTo(z, y));
+  const g0 = new THREE.ExtrudeGeometry(shape, { depth: 2.1, bevelEnabled: false }); g0.translate(0, 0, -1.05); g0.rotateY(Math.PI / 2);
+  b.add('steel', g0);
+  for (const sx of [-1, 1]) for (const z of [-1.9, 1.9]) { b.add('tyre', cyl(0.48, 0.48, 0.4, 14), { p: [sx * 0.95, 0.48, z], r: [0, 0, Math.PI / 2] }); b.add('dark', box(0.12, 0.3, 1.5, 0.04, 1), { p: [sx * 1.06, 1.0, z] }); }
+  b.add('lamp', box(1.9, 0.08, 0.06, 0.02, 1), { p: [0, 1.22, 2.98] });
+  b.add('red', box(1.9, 0.08, 0.06, 0.02, 1), { p: [0, 1.3, -2.98] });
+  const g = b.build({ steel: plastic(0xb8bec8, 0.3, 0.9), tyre: MAT.rubber, dark: MAT.dark, lamp: glow(0xffffff, 3), red: glow(0xff2a2a, 2) });
+  // the windscreen: from (z 2.95, y 1.2) up to (z -0.1, y 1.95), lettered by the track
+  const a = [0, 1.2, 2.95], c = [0, 1.95, -0.1];
+  g.userData.window = { c: [0, (a[1] + c[1]) / 2 + 0.03, (a[2] + c[2]) / 2 + 0.01], w: 1.7, h: Math.hypot(a[1] - c[1], a[2] - c[2]) * 0.62, tilt: Math.atan2(a[2] - c[2], a[1] - c[1]) };
+  return g;
+}
+
+/** A company store: a pressurised shed with a tall false front facing +Z (lettered by the track). */
+export function companyStore({ w = 16, d = 10 } = {}) {
+  const b = new ModelBuilder();
+  b.add('white', cyl(d / 2, d / 2, w, 20, false, 0, Math.PI), { p: [0, 0.4, -d / 2 - 0.4], r: [0, 0, Math.PI / 2] });
+  b.add('front', box(w + 1, 9, 0.6, 0.1, 1), { p: [0, 4.5, 0] });
+  b.add('rust', box(w + 1.6, 0.8, 1.0, 0.1, 1), { p: [0, 9.1, 0.1] });
+  b.add('door', box(3.2, 3.6, 0.3, 0.1, 1), { p: [0, 1.8, 0.35] });
+  for (const sx of [-1, 1]) b.add('win', box(3.6, 2.2, 0.2, 0.1, 1), { p: [sx * 5, 2.4, 0.35] });
+  b.add('rust', box(w + 1, 0.4, 2.6, 0.08, 1), { p: [0, 4.0, 1.4] });
+  return b.build({ white: WHITE, front: plastic(0xe9e4d8, 0.7), rust: RUST, door: glow(0x9fe0ff, 1.2), win: glow(0xffd9a0, 1.4) });
+}
+
+/** A tall flag pole with a rigid banner panel (the track letters it). Banner centre at userData.flag (local). */
+export function bigFlagPole({ h = 20, fw = 13, fh = 6.5 } = {}) {
+  const b = new ModelBuilder();
+  b.add('pole', cyl(0.22, 0.32, h, 10), { p: [0, h / 2, 0] });
+  b.add('pole', sphere(0.45, 10, 8), { p: [0, h + 0.2, 0] });
+  b.add('pole', cyl(1.2, 1.4, 0.6, 12), { p: [0, 0.3, 0] });
+  const g = b.build({ pole: MAT.steel });
+  g.userData.flag = { x: fw / 2 + 0.3, y: h - fh / 2 - 0.4, w: fw, h: fh };
+  return g;
 }

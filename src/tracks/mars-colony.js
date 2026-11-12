@@ -8,7 +8,8 @@ import { Scenery, partsOf } from '../render/scenery.js';
 import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
 import * as M from '../models/props-mars-colony.js';
-import { bannerTexture } from '../render/textures.js';
+import * as K from '../models/props-burning-circuit.js';   // the sign kit (atlas, baker, boards) lives there
+import { ModelBuilder, cyl, box, plastic } from '../models/build.js';
 
 /* The canyon the jump crosses: a winding cut along the east side of the rim road. */
 const CANYON = [[330, -10], [270, -100], [242, -165], [240, -215], [258, -262], [260, -320], [216, -371], [176, -392], [148, -386]];
@@ -33,7 +34,8 @@ function canyonDist(x, z) {
 export default {
   id: 'mars-colony',
   name: 'Mars Colony',
-  tagline: 'The commute is murder. The jumps are worth it.',
+  tagline: 'The commute is murder. The oxygen is extra.',
+  lapNotes: ['<b>Oxygen renewed.</b> $9.99 has been charged.', '<b>Final lap.</b> Return tickets are sold out.'],
   laps: 3,
   width: 18,
   sky: 'mars',
@@ -157,7 +159,9 @@ export default {
     ads: ['MARS: NOW HIRING', 'OCCUPY THIS', 'PLAN B PLANET', 'OXYGEN SOLD SEPARATELY', 'TERRAFORM AND CONDITIONS', 'NO ATMOSPHERE NO PROBLEM', 'RED PLANET RED TAPE', 'ROCKET FUEL LATTE', 'DOME SWEET DOME', 'ONE WAY TICKETS', 'DUST STORM INSURANCE', 'LOW GRAVITY HIGH RENT'],
   },
   CRATER, COLONY,
-  models: { rover: M.rover, dustdevil: M.dustdevil },
+  models: { rover: M.robotaxi, dustdevil: M.dustdevil, crate: M.oxyCrate },
+  // the opening shot: the rocket on the pad, lifting off, and then not
+  intro: [{ pos: [262, 46, -196], pos1: [252, 52, -212], look: [158, 72, -300], look1: [158, 76, -300], fov: 48, dur: 3.6 }],
 
   /** Dress the course. ctx: { THREE, track, group, gfx, anim, view } */
   decorate(ctx) { dress(ctx); },
@@ -167,7 +171,7 @@ export default {
 /* ---------- scenery ---------- */
 const PALE_SUITS = [0xf2efe6, 0xe9e4d8, 0xdfe3ea, 0xf6f1e4, 0xe6dccb, 0xffffff, 0xd8dde6, 0xf2d9c4];
 const ROCK_TINTS = [0xa64a26, 0x9a4424, 0xb5532a, 0x8e3d20, 0xc0602e];
-const BILLBOARDS = ['PLAN B PLANET', 'OXYGEN SOLD SEPARATELY', 'TERRAFORM AND CONDITIONS', 'ONE WAY TICKETS', 'LOW GRAVITY HIGH RENT', 'DOME SWEET DOME', 'RED PLANET RED TAPE'];
+const MAT_STICK = plastic(0x6b6f78, 0.6);
 
 function dress(ctx) {
   const { THREE, track, anim, view } = ctx, sc = new Scenery(ctx), rng = sc.rng;
@@ -187,20 +191,92 @@ function dress(ctx) {
   const take = (x, z, r) => taken.push({ x, z, r });
   take(ROCKET.x, ROCKET.z, 26); take(CRATER.x, CRATER.z, 16);
 
+  // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
+  const bake = K.makeBaker(ctx.group, sc.shadows), atlas = K.makeAtlas(ctx.group, { glow: 0.42 });
+  /** Yaw that faces the road at sample i from `side`, turned toward oncoming karts by k. */
+  const faceIn = (i, side, k = 0.5) => Math.atan2(-side * track.lx[i] - track.tx[i] * k, -side * track.lz[i] - track.tz[i] * k);
+  /** A lettered board on legs at (x, z), facing yaw; up is the panel centre above the ground. */
+  const signAt = (x, z, yaw, draw, w, h, up, { px = 1024, frame = 0x2a2026, y = null, legs = 2 } = {}) => {
+    const y0 = y ?? sc.y(x, z), f = K.signFrame(w, h, up, { color: frame, legs }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f);
+    const r = atlas.add(px, Math.max(48, Math.round(px * h / w)), draw);
+    atlas.place(r, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h);
+    take(x, z, w * 0.55);
+    return r;
+  };
+  /** The same, beside the road at control point `at`, if the spot is clear for its full width. */
+  const sign = (at, side, off, draw, w, h, up, opts = {}) => {
+    const p = sc.beside(at, side, off), yaw = opts.yaw ?? faceIn(p.i, side, opts.turn ?? 0.5), rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
+    if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return null;
+    signAt(p.x, p.z, yaw, draw, w, h, up, opts); return p;
+  };
+  const RUST_HEX = '#c1440e', INK = '#1f1418', CREAM = '#f2efe6';
+  // spots the gags will stand on, kept clear of the domes, rocks, and solar panels
+  for (const [at, side, off, r] of [[0.55, 1, 10, 13], [4.3, 1, 32, 10], [7.0, 1, 35, 16], [18.6, -1, 22, 16], [17.6, 1, 20, 12], [24.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [8.3, 1, 35, 11], [11.9, -1, 18, 11], [16.4, 1, 18, 11], [19.9, -1, 20, 11], [23.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
+
   // ---- start/finish on Main Street: gantry, grandstands, a pale-suited crowd ----
   const g0 = sc.beside(0, 1, -track.hwL[0]);
   const gantry = P.gantry(track.hwL[0] + track.hwR[0] + 1.5, 'MARS COLONY', { color: 0xc1440e, color2: 0xf2efe6 });
   sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY });
   view.startLights = gantry.userData.lights;
+  {
+    const span = track.hwL[0] + track.hwR[0] + 1.5, cx = Math.cos(g0.along), cz = -Math.sin(g0.along), mb = new ModelBuilder();
+    for (const sx of [-1, 1]) { const x = sx * (span / 2 + 1.4); mb.add('m', cyl(0.25, 0.25, 5.2, 8), { p: [g0.x + cx * x, g0.roadY + 12.4, g0.z + cz * x] }); }
+    mb.add('m', box(span + 4.6, 4.6, 0.3, 0.05, 1), { p: [g0.x, g0.roadY + 12.7, g0.z], r: [0, g0.along, 0] });
+    const g = mb.build({ m: plastic(0x2a2026, 0.5) }); ctx.group.add(g); bake.add(g);
+    const r = atlas.add(1536, 300, K.board('OCCUPY MARS (LEAVE EARTH ON READ)', { bg: CREAM, fg: INK, stripe: RUST_HEX, size: 150, lines: 1, pad: 0.04 }));
+    const yaw = g0.along + Math.PI;
+    atlas.place(r, [g0.x + Math.sin(yaw) * 0.18, g0.roadY + 12.7, g0.z + Math.cos(yaw) * 0.18], yaw, span + 4.2, 4.2);
+  }
   const stand = P.grandstand({ w: 30, rows: 6, color: 0xc1440e }), stand2 = P.grandstand({ w: 30, rows: 6, color: 0xf2efe6 });
-  const seats = [];
+  const seats = [], placards = [];
   const putStand = (proto, p) => {
     const g = proto.group.clone(); sc.place(g, p.x, p.z, { yaw: p.yaw, y: p.y }); take(p.x, p.z, 20);
     g.updateMatrixWorld(true); Mx.copy(g.matrixWorld);
-    for (const s of proto.seats) if (rng() < 0.82) { V.set(s[0], s[1], s[2]).applyMatrix4(Mx); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
+    proto.seats.forEach((s, k) => {
+      if (rng() >= 0.82) return;
+      V.set(s[0], s[1], s[2]).applyMatrix4(Mx); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) });
+      if (s[2] > -3 && k % 6 === 2) placards.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw });   // the front rows hold up signs
+    });
+    bake.add(g);
   };
   sc.along({ from: 25.75, to: 1.2, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: PALE_SUITS, cast: false });
+  {
+    const CROWD = ['I SOLD MY HOUSE FOR THIS', 'WHERE IS THE AIR?', 'IS THIS THE BETA?', 'I MISS TREES', 'WHEN DO WE GO HOME?', 'EXTREMELY HARDCORE', 'SEND OXYGEN', 'I PAID FOR THE CHECKMARK'];
+    const cols = [CREAM, '#ffd23c', '#7fd0ff', '#ff9ab0'];
+    const regions = CROWD.map((t, k) => atlas.add(384, 240, K.board(t, { bg: cols[k % cols.length], fg: INK, size: 84, border: INK, pad: 0.06 })));
+    const sticks = new ModelBuilder();
+    placards.forEach((s, k) => {
+      const y = s.y + 1.75 + (k % 3) * 0.15, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
+      sticks.add('s', cyl(0.04, 0.04, 1.3, 4), { p: [s.x - fx * 0.05, s.y + 0.95, s.z - fz * 0.05] });
+      atlas.place(regions[k % regions.length], [s.x + fx * 0.1, y, s.z + fz * 0.1], s.yaw, 2.3, 1.44);
+    });
+    const g = sticks.build({ s: MAT_STICK }); ctx.group.add(g); bake.add(g, false);
+  }
+  // the countdown board on Main Street
+  sign(0.55, 1, 10, (g, w, h) => {
+    g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); g.strokeStyle = RUST_HEX; g.lineWidth = 14; g.strokeRect(7, 7, w - 14, h - 14);
+    K.fitText(g, 'COLONISTS ARRIVING:', w / 2, h * 0.14, w * 0.9, 66, K.SANS, '#ffb020', { lines: 1 });
+    const years = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
+    years.forEach((y, k) => {
+      const cx = w * (0.1 + (k % 5) * 0.2), cy = h * (k < 5 ? 0.33 : 0.5);
+      K.fitText(g, String(y), cx, cy, w * 0.17, 56, K.SANS, '#9aa3ad', { lines: 1 });
+      g.strokeStyle = '#ff3b30'; g.lineWidth = 9; g.beginPath(); g.moveTo(cx - w * 0.08, cy + 18); g.lineTo(cx + w * 0.08, cy - 18); g.stroke();
+    });
+    K.fitText(g, 'NEXT YEAR', w / 2, h * 0.78, w * 0.9, 190, K.FONT, '#38ff74', { lines: 1, maxH: h * 0.3 });
+  }, 22, 10, 10, { turn: 0.55 });
+  // the big dome sells the air
+  {
+    const d = { x: 12, z: -46 }, top = track.terrainHeight(d.x, d.z) + 12.6, yaw = -0.5, mb = new ModelBuilder();
+    for (const sx of [-6, 6]) mb.add('m', box(0.6, 7, 0.6, 0.1, 1), { p: [d.x + Math.cos(yaw) * sx, top + 2.5, d.z - Math.sin(yaw) * sx] });
+    const g = mb.build({ m: plastic(0x2a2026, 0.5) }); ctx.group.add(g); bake.add(g);
+    const r = atlas.add(1280, 500, (gg, w, h) => {
+      gg.fillStyle = '#ffffff'; gg.fillRect(0, 0, w, h); gg.fillStyle = '#1f6bff'; gg.fillRect(0, 0, w, h * 0.12); gg.fillRect(0, h * 0.88, w, h * 0.12);
+      K.fitText(gg, 'OXYGEN: $9.99/MO', w / 2, h * 0.35, w * 0.9, 190, K.FONT, '#1f6bff', { lines: 1 });
+      K.fitText(gg, 'AD-FREE AIR: $19.99', w / 2, h * 0.68, w * 0.9, 130, K.FONT, INK, { lines: 1 });
+    });
+    atlas.place(r, [d.x + Math.sin(yaw) * 0.4, top + 9, d.z + Math.cos(yaw) * 0.4], yaw, 24, 9.4);
+  }
   // lamps and flags down Main Street
   const lamps = sc.along({ from: 25.7, to: 1.6, side: 1, offset: 1.6, spacing: 16 });
   sc.instances(partsOf(M.lampPost()), lamps, {});
@@ -265,22 +341,74 @@ function dress(ctx) {
   sc.instances(spireA, spires.filter((_, i) => i % 2 === 0), { scale: [0.8, 1.2], tints: ROCK_TINTS, sink: 0.5 });
   sc.instances(spireB, spires.filter((_, i) => i % 2 === 1), { scale: [0.8, 1.2], tints: ROCK_TINTS, sink: 0.5 });
 
-  const pad = P.rocketPad({ h: 40 });
-  sc.place(pad, ROCKET.x, ROCKET.z, { yaw: 0.9, y: track.terrainHeight(ROCKET.x, ROCKET.z) - 0.1 });
-  const rk = pad.userData.rocket; let rt = 18;
-  const wp = new THREE.Vector3();
+  // ---- the centrepiece: a megarocket on the pad that lifts off and blows up, every few seconds, on purpose ----
+  const padY = track.terrainHeight(ROCKET.x, ROCKET.z) - 0.1, MOUNT = 9;
+  {
+    const tw = M.launchTower({ h: 96 }); sc.place(tw, ROCKET.x - 13, ROCKET.z, { yaw: Math.PI / 2, y: padY }); bake.add(tw);
+    const mb = new ModelBuilder();   // the launch mount: a ring table on six legs, with a blast deflector
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; mb.add('leg', box(1.6, MOUNT, 1.6, 0.2, 1), { p: [ROCKET.x + Math.cos(a) * 7, padY + MOUNT / 2, ROCKET.z + Math.sin(a) * 7] }); }
+    mb.add('ring', cyl(8.4, 8.4, 1.6, 24), { p: [ROCKET.x, padY + MOUNT - 0.6, ROCKET.z] });
+    mb.add('scorch', cyl(13, 15, 0.2, 24), { p: [ROCKET.x, padY + 0.12, ROCKET.z] });
+    const g = mb.build({ leg: plastic(0xb8bcc6, 0.7), ring: plastic(0x6b6f78, 0.5, 0.5), scorch: plastic(0x2a1c18, 0.95) }); ctx.group.add(g); bake.add(g);
+  }
+  const rocket = M.megaRocket({ h: 74 }); sc.place(rocket, ROCKET.x, ROCKET.z, { y: padY + MOUNT, yaw: 0.6 });
+  const rocketY = rocket.position.y;
+  // debris: a few chunk shapes, three of each, hidden until the bang
+  const debris = rocket.userData.chunks.map(([geo, mat]) => { const m = new THREE.InstancedMesh(geo, mat, 3); m.frustumCulled = false; m.visible = false; ctx.group.add(m); return m; });
+  const bits = []; debris.forEach((m, k) => { for (let j = 0; j < 3; j++) bits.push({ m, j, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3() }); });
+  // the banner, and a counter that never gets far
+  signAt(173, -276, 0.85, K.board('RAPID UNSCHEDULED DISASSEMBLY', { bg: CREAM, fg: INK, size: 150, stripe: RUST_HEX, sub: '(A SUCCESS)', subFg: '#16a34a', subScale: 0.75 }), 30, 11, 17, { frame: 0x2a2026, legs: 3 });
+  const counter = (() => {
+    const cv = document.createElement('canvas'); cv.width = 768; cv.height = 384;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const x = 176, z = -314, yaw = 1.05, y0 = sc.y(x, z), w = 15, h = 7.5;
+    const f = K.signFrame(w, h, 9, { color: 0x2a2026 }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f); take(x, z, 9);
+    const q = new K.Quads(); q.panel([x + Math.sin(yaw) * 0.03, y0 + 9, z + Math.cos(yaw) * 0.03], yaw, w, h, [0, 0, 1, 1]);
+    const mesh = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ color: 0x000000, map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 0.5 }));
+    mesh.matrixAutoUpdate = false; ctx.group.add(mesh);
+    const g = cv.getContext('2d');
+    return n => {
+      g.fillStyle = '#07090c'; g.fillRect(0, 0, 768, 384);
+      g.fillStyle = '#ffb020'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = 'bold 54px "Arial Black", sans-serif'; g.fillText('DAYS WITHOUT', 384, 62, 720); g.fillText('AN EXPLOSION', 384, 122, 720);
+      g.fillStyle = n < 1 ? '#ff3b30' : '#38ff74'; g.font = 'bold 220px "Courier New", monospace'; g.fillText(String(n), 384, 270, 720);
+      tex.needsUpdate = true;
+    };
+  })();
+  let rt = 2.1, shown = -1, boomed = false;
+  const CYCLE = 17, wp = new THREE.Vector3(), Mq = new THREE.Matrix4(), Qq = new THREE.Quaternion(), S1 = new THREE.Vector3(1, 1, 1), G = 9.8 * 0.55;
   anim.push((dt) => {
-    rt += dt; const cycle = 52, t = rt % cycle;
-    if (t < 5) {                                                   // ignition and lift-off
-      const up = t < 1.2 ? 0 : Math.pow(t - 1.2, 2.2) * 9;
-      rk.position.y = pad.userData.rocketBase + up; rk.visible = true;
-      rk.getWorldPosition(wp);
-      for (let i = 0; i < view.fx.count(t < 1.2 ? 40 : 90, dt); i++) {
-        view.fx.flame(wp.x + rng.range(-1.5, 1.5), wp.y - 1, wp.z + rng.range(-1.5, 1.5), rng.range(-4, 4), -14 - rng() * 10, rng.range(-4, 4), [1, 0.7, 0.25], 4 + rng() * 3, 0.5);
-        if (i % 2 === 0) view.fx.dust(wp.x + rng.range(-3, 3), Math.max(31, wp.y - 6), wp.z + rng.range(-3, 3), rng.range(-9, 9), rng.range(-2, 5), rng.range(-9, 9), [0.93, 0.62, 0.42], 7 + rng() * 6, 3.5, 0.55);
+    rt += dt; const t = rt % CYCLE, fx = view.fx;
+    if (t < 4) {                                                   // ignition, lift-off
+      boomed = false; debris.forEach(m => { m.visible = false; });
+      const up = t < 1.6 ? 0 : Math.pow(t - 1.6, 2.1) * 3.2;
+      rocket.position.y = rocketY + up; rocket.visible = true; rocket.rotation.z = t > 3 ? Math.sin(t * 9) * 0.03 * (t - 3) : 0;
+      wp.set(ROCKET.x, rocket.position.y, ROCKET.z);
+      for (let i = 0, n = fx.count(t < 1.6 ? 60 : 120, dt); i < n; i++) {
+        fx.flame(wp.x + rng.range(-3, 3), wp.y - 1, wp.z + rng.range(-3, 3), rng.range(-5, 5), -16 - rng() * 10, rng.range(-5, 5), [1, 0.72, 0.3], 5 + rng() * 4, 0.55);
+        if (i % 3 === 0) fx.dust(wp.x + rng.range(-6, 6), padY + 2, wp.z + rng.range(-6, 6), rng.range(-12, 12), rng.range(0, 5), rng.range(-12, 12), [0.93, 0.62, 0.42], 9 + rng() * 6, 3.5, 0.55);
       }
-    } else if (t < 22) { rk.visible = false; }                    // away
-    else { rk.visible = true; rk.position.y = pad.userData.rocketBase; } // rolled back out
+    } else {
+      if (!boomed) {                                               // the bang
+        boomed = true; rocket.visible = false;
+        const cy = rocket.position.y + 32;
+        bits.forEach(b => { b.p.set(ROCKET.x + rng.range(-4, 4), cy + rng.range(-25, 25), ROCKET.z + rng.range(-4, 4)); b.v.set(rng.range(-22, 22), rng.range(8, 30), rng.range(-22, 22)); b.r.set(rng() * 6, rng() * 6, rng() * 6); b.w.set(rng.range(-3, 3), rng.range(-3, 3), rng.range(-3, 3)); });
+        debris.forEach(m => { m.visible = true; });
+        for (let i = 0; i < 140; i++) { const a = rng() * 6.28, e = rng.range(-1, 1), sp = 8 + rng() * 26, yy = cy + rng.range(-30, 30); fx.flame(ROCKET.x, yy, ROCKET.z, Math.cos(a) * sp * Math.sqrt(1 - e * e), e * sp, Math.sin(a) * sp * Math.sqrt(1 - e * e), [1, 0.55 + rng() * 0.3, 0.2], 8 + rng() * 7, 0.9 + rng() * 0.6); }
+        if (fx.smoke) for (let i = 0; i < 40; i++) fx.smoke.emit({ x: ROCKET.x + rng.range(-10, 10), y: cy + rng.range(-25, 25), z: ROCKET.z + rng.range(-10, 10), vx: rng.range(-6, 6), vy: rng.range(-1, 5), vz: rng.range(-6, 6), color: [0.12, 0.09, 0.08], color2: [0.45, 0.32, 0.26], size: 14 + rng() * 10, grow: 3, drag: 0.4, gravity: -0.2, life: 6 + rng() * 3, alpha: 0.85, fadeIn: 0.03, spin: rng.range(-0.4, 0.4), rot: rng() * 6.28 });
+      }
+      if (t < 11) {                                                // the bits come down
+        for (const b of bits) {
+          b.v.y -= G * dt; b.p.addScaledVector(b.v, dt);
+          if (b.p.y < padY + 0.5) { b.p.y = padY + 0.5; b.v.set(b.v.x * 0.3, 0, b.v.z * 0.3); b.w.multiplyScalar(0.9); }
+          b.r.x += b.w.x * dt; b.r.y += b.w.y * dt; b.r.z += b.w.z * dt;
+          Mq.compose(b.p, Qq.setFromEuler(b.r), S1); b.m.setMatrixAt(b.j, Mq);
+          if (t < 7 && fx.count(3, dt)) fx.flame(b.p.x, b.p.y, b.p.z, 0, 2, 0, [1, 0.6, 0.2], 2.5, 0.5);
+        }
+        debris.forEach(m => { m.instanceMatrix.needsUpdate = true; });
+      } else { debris.forEach(m => { m.visible = false; }); rocket.visible = true; rocket.position.y = rocketY; rocket.rotation.z = 0; }   // a fresh one, rolled out
+    }
+    const days = t < 4 ? Math.floor(t + CYCLE - 4) : Math.floor(t - 4);
+    if (days !== shown) { shown = days; counter(days); }
   });
 
   // ---- Earth, small and blue, hanging ahead of the jump ----
@@ -289,12 +417,65 @@ function dress(ctx) {
   anim.push(dt => { planet.rotation.y += dt * 0.02; });
 
   // ---- the crater: a lander on the floor, the hiring sign on the rim ----
-  sc.place(M.lander({ h: 10 }), CRATER.x + 4, CRATER.z + 2, { yaw: 2.2, y: track.terrainHeight(CRATER.x + 4, CRATER.z + 2) - 0.2 });
+  // the founder in the middle of the crater, crowned, pointing at the planet he left
+  {
+    const yaw = Math.atan2(EARTH.x - CRATER.x, EARTH.z - CRATER.z), st = M.founderStatue({ h: 46, pitch: 0.8 });
+    sc.place(st, CRATER.x, CRATER.z, { yaw, y: track.terrainHeight(CRATER.x, CRATER.z) - 0.3 }); st.updateMatrixWorld(true);
+    const pl = st.userData.plinth, r = atlas.add(1024, 440, K.board('SELF-APPOINTED EMPEROR OF MARS', { bg: CREAM, fg: INK, size: 150, border: '#e8b923' }));
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, c = new THREE.Vector3(Math.sin(a) * pl.z, pl.y, Math.cos(a) * pl.z).applyMatrix4(st.matrixWorld); atlas.place(r, [c.x, c.y, c.z], yaw + a, pl.w, pl.h); }
+    bake.add(st);
+  }
   const signP = sc.beside(10.75, -1, 26);
-  sc.place(M.hiringSign('MARS: NOW HIRING', { w: 30, h: 7, legs: 7 }), signP.x, signP.z, { yaw: signP.yaw + 0.35, y: signP.y - 0.3 });
+  sc.place(M.hiringSign('NOW HIRING: EXTREMELY HARDCORE', { w: 30, h: 7, legs: 7 }), signP.x, signP.z, { yaw: signP.yaw + 0.35, y: signP.y - 0.3 });
   take(signP.x, signP.z, 18);
   const lander2 = sc.beside(19.6, 1, 46);
   if (clear(lander2.x, lander2.z, 8)) { sc.place(M.lander({ h: 8 }), lander2.x, lander2.z, { yaw: 0.6 }); take(lander2.x, lander2.z, 12); }
+
+  // ---- the rim road: an angular truck nose-down in a crater, and the flag ----
+  {
+    const p = sc.beside(7.0, 1, 35);
+    if (clear(p.x, p.z, 3)) {
+      const yaw = faceIn(p.i, 1, -0.4) + 0.5, tr = M.wedgeTruck();
+      tr.rotation.order = 'YXZ'; sc.place(tr, p.x, p.z, { yaw, y: p.y - 1.4, scale: 2.6 }); tr.rotation.x = 0.3; tr.rotation.z = 0.08; tr.updateMatrixWorld(true);
+      const wdw = tr.userData.window, cw = (x, y, z) => { const v = new THREE.Vector3(x, y, z).applyMatrix4(tr.matrixWorld); return [v.x, v.y, v.z]; };
+      // the windscreen, cracked, lettered as a quad on the glass
+      const glass = atlas.add(256, 128, (g, w, h) => { g.fillStyle = '#20262e'; g.fillRect(0, 0, w, h); g.strokeStyle = '#e8eef6'; g.lineWidth = 3; const cx = w * 0.42, cy = h * 0.55; for (let k = 0; k < 11; k++) { const a = k * 0.57 + 0.2, l = 40 + (k * 37) % 60; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * l * 0.6, cy + Math.sin(a) * l * 0.35); g.lineTo(cx + Math.cos(a + 0.15) * l * 1.6, cy + Math.sin(a + 0.15) * l); g.stroke(); } g.beginPath(); g.arc(cx, cy, 12, 0, 7); g.stroke(); g.beginPath(); g.arc(cx, cy, 26, 0, 7); g.stroke(); });
+      const A = [1.2, 2.95], C = [1.95, -0.1], hw2 = wdw.w / 2;
+      atlas.quad(glass, cw(-hw2, A[0] + 0.02, A[1] + 0.01), cw(hw2, A[0] + 0.02, A[1] + 0.01), cw(hw2, C[0] + 0.02, C[1] + 0.01), cw(-hw2, C[0] + 0.02, C[1] + 0.01));
+      bake.add(tr); take(p.x, p.z, 13);
+      const ring = []; for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; ring.push({ x: p.x + Math.cos(a) * 10, y: sc.y(p.x + Math.cos(a) * 10, p.z + Math.sin(a) * 10), z: p.z + Math.sin(a) * 10, yaw: a }); }
+      sc.instances(partsOf(M.boulder(4, { r: 1.3 })), ring, { scale: [1.2, 2.0], sink: 0.5, tints: ROCK_TINTS });
+      signAt(p.x + Math.cos(yaw) * 16, p.z - Math.sin(yaw) * 16, faceIn(p.i, 1, 0.5), K.board('FULL SELF-DRIVING', { bg: INK, fg: '#ffffff', size: 150, sub: '(INTO A CRATER)', subFg: '#ff6a2a', subScale: 0.75, lines: 1 }), 16, 6.5, 8.5);
+    }
+    const f = sc.beside(4.3, 1, 32);
+    if (clear(f.x, f.z, 2)) {
+      const yaw = faceIn(f.i, 1, 0.6), pole = M.bigFlagPole({ h: 22, fw: 15, fh: 7.5 }); sc.place(pole, f.x, f.z, { yaw }); bake.add(pole); take(f.x, f.z, 9);
+      const fl = pole.userData.flag, rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      const r = atlas.add(1024, 512, (g, w, h) => { g.fillStyle = RUST_HEX; g.fillRect(0, 0, w, h); g.fillStyle = CREAM; g.fillRect(0, h * 0.78, w, h * 0.22); K.fitText(g, 'TERMS OF SERVICE APPLY', w / 2, h * 0.4, w * 0.9, 170, K.FONT, '#ffffff', { lines: 2, maxH: h * 0.66 }); K.fitText(g, 'BY BREATHING YOU AGREE', w / 2, h * 0.89, w * 0.86, 60, K.SANS, RUST_HEX, { lines: 1 }); });
+      atlas.place(r, [f.x + rx * fl.x, sc.y(f.x, f.z) + fl.y, f.z + rz * fl.x], yaw, fl.w, fl.h);
+    }
+  }
+
+  // ---- the solar field: the company store, and a recruitment poster ----
+  {
+    const p = sc.beside(18.6, -1, 22);
+    if (clear(p.x, p.z, 8)) {
+      const yaw = faceIn(p.i, -1, 0.35), st = M.companyStore({ w: 18, d: 10 }); sc.place(st, p.x, p.z, { yaw, y: p.y - 0.2 }); bake.add(st); take(p.x, p.z, 15);
+      const fx = Math.sin(yaw), fz = Math.cos(yaw), r = atlas.add(1024, 400, K.board('COMPANY STORE', { bg: '#e9e4d8', fg: RUST_HEX, size: 170, sub: 'PAID IN COMPANY SCRIP ONLY', subFg: INK, subScale: 0.5, lines: 1 }));
+      atlas.place(r, [p.x + fx * 0.34, p.y + 6.7, p.z + fz * 0.34], yaw, 17.4, 6.8);
+      const pr = atlas.add(512, 360, (g, w, h) => { g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); const rows = [['AIR', '40 SCRIP'], ['WATER', '90 SCRIP'], ['RIDE HOME', 'N/A']]; rows.forEach(([a, b2], k) => { K.fitText(g, a, w * 0.3, h * (0.2 + k * 0.3), w * 0.5, 64, K.SANS, '#ffffff', { lines: 1 }); K.fitText(g, b2, w * 0.74, h * (0.2 + k * 0.3), w * 0.44, 64, K.SANS, k === 2 ? '#ff3b30' : '#38ff74', { lines: 1 }); }); });
+      atlas.place(pr, [p.x + fx * 0.36 + Math.cos(yaw) * 5, p.y + 2.4, p.z + fz * 0.36 - Math.sin(yaw) * 5], yaw, 3.4, 2.4);
+    }
+    sign(17.6, 1, 20, K.board('NO UNIONS ON MARS', { bg: RUST_HEX, fg: '#ffffff', size: 150, sub: '(NO AIR EITHER)', subFg: '#ffd23c', subScale: 0.75, lines: 1 }), 20, 8, 10, { turn: 0.5 });
+  }
+
+  // ---- the way back into town: the population sign ----
+  sign(24.3, -1, 18, (g, w, h) => {
+    g.fillStyle = '#1d5a3a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffffff'; g.lineWidth = 12; g.strokeRect(14, 14, w - 28, h - 28);
+    K.fitText(g, 'WELCOME TO MARS COLONY', w / 2, h * 0.2, w * 0.86, 90, K.SANS, '#ffffff', { lines: 1 });
+    K.fitText(g, 'POPULATION: 1 MILLION (PROJECTED)', w / 2, h * 0.47, w * 0.86, 76, K.SANS, '#ffffff', { lines: 1 });
+    K.fitText(g, '0 (ACTUAL)', w / 2, h * 0.75, w * 0.8, 150, K.FONT, '#ffd23c', { lines: 1 });
+  }, 22, 9.5, 9.5, { turn: 0.5 });
 
   // ---- antenna masts with blinking red lights ----
   const mastSpots = [sc.beside(25.0, -1, 28), sc.beside(6.6, 1, 40), sc.beside(14.0, -1, 30), sc.beside(18.2, -1, 36), sc.beside(3.0, 1, 30)].filter(p => clear(p.x, p.z, 3) && free(p.x, p.z, 4));
@@ -345,10 +526,15 @@ function dress(ctx) {
   }
 
   // ---- billboards where you are looking anyway ----
-  [[1.35, 1, 18], [4.2, -1, 18], [8.3, 1, 30], [11.9, -1, 18], [16.4, 1, 16], [19.9, -1, 18], [23.6, -1, 18]].forEach(([at, side, off], i) => {
-    const p = sc.beside(at, side, off), tex = bannerTexture([BILLBOARDS[i]], i + 9);
-    tex.repeat.set(0.25, 1);
-    sc.place(P.billboard(tex, { w: 15, h: 5, legs: 6, frame: 0x2a2026 }), p.x, p.z, { yaw: p.yaw + rng.range(-0.12, 0.12) });
-  });
+  const BOARDS = [
+    [1.35, 1, 18, 'FUNDING SECURED', INK, '#38ff74'], [4.2, -1, 18, 'FULL SELF-LANDING: NEXT YEAR', CREAM, RUST_HEX],
+    [8.3, 1, 35, 'TICKET TO MARS: $500K', '#1f6bff', '#ffffff', 'RETURN TRIP: SOLD OUT'], [11.9, -1, 18, 'EARTH: HAD ITS CHANCE', '#2f7fe0', '#ffffff'],
+    [16.4, 1, 18, 'BREATHING IS NOW A SUBSCRIPTION', '#ffd23c', INK], [19.9, -1, 20, 'WORK FROM DOME: MANDATORY', '#ffffff', '#1f6bff'],
+    [23.6, -1, 18, 'MARS: NO REGULATORS', RUST_HEX, '#ffffff', '(OR ATMOSPHERE)'],
+  ];
+  for (const [at, side, off, text, bg, fg, sub] of BOARDS) sign(at, side, off, K.board(text, { bg, fg, size: 130, sub, subFg: fg, subScale: 0.6 }), 20, 6.6, 10, { turn: 0.45 });
+
+  bake.flush();
+  atlas.flush();
 }
 

@@ -106,7 +106,9 @@
   .item-card h2 { font-size: calc(var(--u) * 3); }
   .i-desc { font-size: calc(var(--u) * 1.9); }
   .item-grid { grid-row: 2; grid-template-columns: repeat(2, 1fr); gap: calc(var(--u) * 1) calc(var(--u) * 1.2); }
-  .item-tile { padding-top: calc(var(--u) * 0.35); padding-bottom: calc(var(--u) * 0.35); }
+  .item-tile { flex-direction: row; text-align: left; gap: calc(var(--u) * 0.9); border-radius: calc(var(--u) * 4); padding: calc(var(--u) * 0.35) calc(var(--u) * 1.2) calc(var(--u) * 0.35) calc(var(--u) * 0.5); }
+  .item-tile span { min-height: 0; display: block; }
+  .item-tile em { left: calc(var(--u) * 4); top: calc(var(--u) * 3.6); }
   .item-tile span { font-size: calc(var(--u) * 1.75); }
 
   /* records */

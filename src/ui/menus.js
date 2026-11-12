@@ -99,7 +99,7 @@ export class Menus {
   btn(label, onClick, { cls = '', def = false, sub = null, icon = null } = {}) {
     return h('button', { class: 'btn ' + cls, 'data-f': true, 'data-default': def, onclick: () => onClick() }, icon && h('span', { class: 'btn-ico' }, icon), h('span', { class: 'btn-label' }, label), sub && h('span', { class: 'btn-sub' }, sub));
   }
-  header(title, sub) { return h('header', { class: 'menu-head' }, h('button', { class: 'back', 'aria-label': 'Back', onclick: () => this.back() }, '‹'), h('div', {}, h('h1', {}, title), sub && h('p', {}, sub))); }
+  header(title, sub) { return h('header', { class: 'menu-head' }, h('button', { class: 'back', 'aria-label': 'Back', onclick: () => this.back(), html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4.5 7.5 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>' }), h('div', {}, h('h1', {}, title), sub && h('p', {}, sub))); }
 
   /* ---------- title ---------- */
   s_title() {

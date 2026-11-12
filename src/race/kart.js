@@ -48,16 +48,16 @@ export const TUNE = {
 /* What the 1-5 racer stats are worth. Every line is centred on 3, so a middle-stat racer drives
    the same whatever the spread. Per point away from 3: */
 export const STATS = {
-  top: 0.024,        // top speed, fraction of the class top (1.024 at 3)
+  top: 0.012,        // top speed, fraction of the class top (1.024 at 3)
   accel: 1.9,        // pull from standstill, m/s^2 before the class factor (13.9 at 3)
-  accelHold: 0,      // how much of that pull survives near top speed (the falloff is 0.82 at 3)
-  offroad: 0,        // off-road top speed, fraction of the surface's own factor
-  recover: 0,        // shorter stun after a hit, fraction of the stun
+  accelHold: 0.045,      // how much of that pull survives near top speed (the falloff is 0.82 at 3)
+  offroad: 0.03,        // off-road top speed, fraction of the surface's own factor
+  recover: 0.07,        // shorter stun after a hit, fraction of the stun
   turn: 0.05,        // turn and drift rate (1.05 at 3)
-  mtCharge: 0.02,    // mini-turbo charge rate (1.07 at 3; weight takes mtWeight per point)
-  mtWeight: 0.05,
-  mtBoost: 0,        // mini-turbo boost duration, fraction of the tier's duration
-  mass: 0.15,        // bump mass (1.15 at 3)
+  mtCharge: 0.05,    // mini-turbo charge rate (1.07 at 3; weight takes mtWeight per point)
+  mtWeight: 0.03,
+  mtBoost: 0.08,        // mini-turbo boost duration, fraction of the tier's duration
+  mass: 0.2,        // bump mass (1.15 at 3)
 };
 
 let nextId = 1;
@@ -78,6 +78,9 @@ export class Kart {
     this.mass = 1.15 + S.mass * d('weight');                         // for bumping
     this.mtRate = 1.07 + S.mtCharge * d('handling') - S.mtWeight * d('weight');   // mini-turbo charge multiplier
     this.mtDur = 1 + S.mtBoost * d('handling');                      // mini-turbo duration multiplier
+    // the racer's special (src/content/racers.js): numbers this kart reads at the hooks marked "special" below
+    const sp = this.sp = racer.special || {};
+    this.mtRate *= sp.mtRate || 1; this.mass *= sp.mass || 1; this.stunMul *= sp.stun || 1;
     this.radius = TUNE.radius;
     this.hit = makeGroundHit(); this.probe = makeGroundHit();
     this.events = [];
@@ -102,6 +105,7 @@ export class Kart {
     this.lapTimes = []; this.lapStart = 0; this.bestLap = Infinity;
     this.surface = SURFACES.road; this.wallT = 9; this.prevDrift = false; this.prevItem = false;
     this.startCharge = 0; this.startBurn = false; this.time = 0;
+    this.streak = 0; this.absorbs = this.sp?.absorb || 0; this.sputterT = 0; this.sputterNext = this.sp?.sputter ? this.sp.sputter.every[1] : 0;
     this.stats = { hitsGiven: 0, hitsTaken: 0, drifts: 0, boosts: 0, coins: 0, items: 0, topSpeed: 0, overtakes: 0, airtime: 0 };
     this.events.length = 0;
   }
@@ -124,8 +128,9 @@ export class Kart {
   get vulnerable() { return this.invulnT <= 0 && this.starT <= 0 && this.bulletT <= 0 && this.ghostT <= 0 && this.rescueT <= 0 && !this.finished; }
 
   boost(kind, t, mul) {
-    const b = t == null ? TUNE[kind] : { t, mul };
-    if (!b) return;
+    const base = t == null ? TUNE[kind] : { t, mul };
+    if (!base) return;
+    const b = { t: base.t * (this.sp.boostDur || 1), mul: base.mul * (this.sp.boostMul || 1) };   // special: longer or faster boosts
     // a stronger boost replaces a weaker one; otherwise extend
     if (b.mul >= this.boostMul || this.boostT <= 0) this.boostMul = Math.max(b.mul, this.boostT > 0 ? this.boostMul : 0);
     this.boostT = Math.max(this.boostT, b.t);
@@ -142,6 +147,8 @@ export class Kart {
   /** Apply a hit. kinds: spin | tumble | squash. Returns true if it landed. */
   hurt(kind, from = null) {
     if (!this.vulnerable || this.hitT > 0) return false;
+    if (this.absorbs > 0) { this.absorbs--; this.invulnT = TUNE.invuln; this.emit('absorbed', { kind, from }); return false; }   // special: the first hit of the race is covered
+    this.streak = 0;                                                                                                          // special: a hit resets a charging streak
     this.hitKind = kind;
     this.hitDur = this.hitT = (kind === 'tumble' ? TUNE.tumbleT : kind === 'squash' ? TUNE.squashT : TUNE.spinT) * this.stunMul;
     if (kind === 'tumble') { this.vy = 11; this.grounded = false; this.airT = 0.2; }
@@ -160,8 +167,9 @@ export class Kart {
     if (!this.drifting && !this.driftArmed) { this.driftCharge = 0; this.driftTier = 0; return; }
     const tier = this.driftTier;
     if (release && this.drifting && tier > 0) {
-      this.boost('mini', TUNE.tierBoost[tier - 1] * this.mtDur, TUNE.tierMul[tier - 1]);
+      this.boost('mini', TUNE.tierBoost[tier - 1] * this.mtDur * (tier === 2 ? this.sp.orangeDur || 1 : 1), TUNE.tierMul[tier - 1]);   // special: a longer or shorter orange boost
       this.emit('miniTurbo', tier); this.stats.drifts++;
+      if (this.sp.streak) this.streak = Math.min(this.sp.streakMax, this.streak + 1);
     }
     this.drifting = false; this.driftArmed = false; this.driftCharge = 0; this.driftTier = 0; this.driftDir = 0;
   }
@@ -193,6 +201,13 @@ export class Kart {
     const driftPressed = driftHeld && !this.prevDrift;
     this.prevDrift = !!input.drift;
     if (this.finished) { throttle = 0.5; brake = 0; }
+    // special: a drivetrain that now and then loses power for a moment
+    const spt = this.sp.sputter;
+    if (spt && controllable && !this.finished) {
+      this.sputterNext -= dt;
+      if (this.sputterNext <= 0) { this.sputterNext = race.rng.range(spt.every[0], spt.every[1]); if (race.rng.chance(spt.chance)) { this.sputterT = spt.t; this.emit('sputter'); } }
+    }
+    if (this.sputterT > 0) { this.sputterT -= dt; throttle = 0; }
     if (this.bulletT > 0) { this._bullet(dt); return; }
 
     // countdown: karts are held on the grid, but revving charges a rocket start
@@ -213,7 +228,7 @@ export class Kart {
     const surf = this.surface;
     const boosting = this.boostT > 0;
     const offroad = surf.offroad && !boosting && this.starT <= 0;
-    let top = this.top * (offroad ? Math.min(1, surf.speed * this.offroadMul) : surf.offroad ? 1 : surf.speed);
+    let top = this.top * (offroad ? Math.min(1, 1 - (1 - surf.speed * this.offroadMul) * (this.sp.offroad || 1)) : surf.offroad ? 1 : surf.speed);
     if (this.starT > 0) top *= 1.12;
     if (this.squashT > 0) top *= 0.6;
     const topBoost = top * (boosting ? this.boostMul : 1);
@@ -243,8 +258,8 @@ export class Kart {
       if (spFrac < T.driftMinSpeed * 0.88 || vfPrev <= 0 || (offroad && !boosting)) this.endDrift(false);
       else if (!airborne) {
         const rel = clamp(this.steer * this.driftDir, -1, 1);
-        this.driftCharge += dt * this.mtRate * (T.driftChargeBase + (rel > 0 ? Math.min(1, rel / 0.4) * T.driftChargeIn : rel * T.driftChargeOut));
-        const tier = this.driftCharge >= T.tierAt[2] ? 3 : this.driftCharge >= T.tierAt[1] ? 2 : this.driftCharge >= T.tierAt[0] ? 1 : 0;
+        this.driftCharge += dt * this.mtRate * (1 + this.streak * (this.sp.streak || 0)) * (T.driftChargeBase + (rel > 0 ? Math.min(1, rel / 0.4) * T.driftChargeIn : rel * T.driftChargeOut));
+        const tier = this.driftCharge >= T.tierAt[2] ? 3 : this.driftCharge >= T.tierAt[1] * (this.sp.orangeAt || 1) ? 2 : this.driftCharge >= T.tierAt[0] ? 1 : 0;
         if (tier !== this.driftTier) { this.driftTier = tier; this.emit('driftTier', tier); }
       }
     }
@@ -518,12 +533,13 @@ export class Kart {
     const at = this.startPressAt;
     if (at != null && this.startCharge > 0) {
       // pressed after the "2" lights (about 2.0s to go) and held: rocket. Too early: stall.
-      if (at <= 2.05 && at >= 0.05) {
+      const sp = this.sp;   // special: a wider window and a longer launch, with a worse stall past it
+      if (at <= (sp.startWindow || 2.05) && at >= 0.05) {
         const quality = at <= 1.25 ? 1 : 0.7;
-        this.boost('start', TUNE.start.t * quality, TUNE.start.mul);
+        this.boost('start', TUNE.start.t * quality * (sp.startBoost || 1), TUNE.start.mul);
         this.vx = Math.sin(this.yaw) * 9; this.vz = Math.cos(this.yaw) * 9;
         this.emit('rocketStart', quality);
-      } else if (at > 2.6) { this.hitKind = 'burnout'; this.hitDur = this.hitT = 0.9; this.emit('burnout'); }
+      } else if (at > (sp.burnoutAt || 2.6)) { this.hitKind = 'burnout'; this.hitDur = this.hitT = sp.burnoutT || 0.9; this.emit('burnout'); }
     }
     this.startCharge = 0; this.startPressAt = null; this.revving = false;
   }

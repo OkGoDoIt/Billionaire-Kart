@@ -108,7 +108,7 @@ export class RaceSession {
       const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
       // hit pause: the world holds still for a few frames when a hit lands, so it feels heavy
       if (this.hitStopT > 0) { this.hitStopT -= dt; dt = 0; }
-      this.acc = Math.min(this.acc + dt, STEP * 5);
+      this.acc = Math.max(0, Math.min(this.acc + dt, STEP * 5));   // never in debt: a race that owes time would sit frozen until it had paid it back (#103)
       while (this.acc >= STEP) {
         view.snapshot();
         let inp = inputs;

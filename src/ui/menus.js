@@ -267,8 +267,9 @@ export class Menus {
       h('h1', {}, track.name), gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
-      h('p', { class: 'res-quote' }, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`,
-        results.length > 2 && [h('b', {}, '   ' + results[results.length - 1].racer.name + ': '), `“${results[results.length - 1].racer.barks.lose}”`]),
+      // the winner's line and the last finisher's: each stays in one piece, side by side when both fit
+      h('p', { class: 'res-quote' }, h('span', {}, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`),
+        results.length > 2 && h('span', {}, h('b', {}, results[results.length - 1].racer.name + ': '), `“${results[results.length - 1].racer.barks.lose}”`)),
       h('div', { class: 'foot' }, buttons)));
     return { el, onBack: () => false };
   }
@@ -301,13 +302,24 @@ export class Menus {
     };
     const onoff = [[true, 'On'], [false, 'Off']], touch = matchMedia('(pointer: coarse)').matches;   // touch settings only where there is a touch screen
     const pct = v => Math.round(v * 100) + '%';
+    // full screen is a row like the others; it follows the browser's own state, since Esc and F11 change it too
+    let fsOff = null;
+    const fullScreenRow = () => {
+      const val = h('b', {}, document.fullscreenElement ? 'On' : 'Off');
+      const set = () => { A.fullscreen(!document.fullscreenElement); A.audio?.ui('move'); };
+      const row = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: set }, h('span', {}, 'Full screen'), h('div', { class: 'opt-ctl' }, val));
+      row.addEventListener('adjust', set);
+      const sync = () => { val.textContent = document.fullscreenElement ? 'On' : 'Off'; };
+      document.addEventListener('fullscreenchange', sync); fsOff = () => document.removeEventListener('fullscreenchange', sync);
+      return row;
+    };
     const el = h('div', {}, this.header('Options'), h('div', { class: 'panel options' },
       stepper('Music', 'music', pct), stepper('Sound effects', 'sfx', pct),
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
-      !touch && document.fullscreenEnabled && this.btn(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => { A.fullscreen(!document.fullscreenElement); this.back(); }, { cls: 'small' }),
+      !touch && document.fullscreenEnabled && fullScreenRow(),
       cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff),
       touch && cycle('Automatic accelerate', 'autoGo', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
-    return { el };
+    return { el, onClose: () => fsOff?.() };
   }
 
   /* ---------- how to play ---------- */

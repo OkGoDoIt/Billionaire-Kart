@@ -205,7 +205,14 @@ export class RaceView {
     this.fx.update(dt);
 
     // cameras
-    if (this.intro && !this.intro.done) { const q = this.intro.update(dt); this.views[0].focus.copy(q); }
+    if (this._grade && (!this.intro || this.intro.done)) { Object.assign(gfx.post, this._grade); this._grade = null; }   // intro skipped mid-shot
+    if (this.intro && !this.intro.done) {
+      const q = this.intro.update(dt); this.views[0].focus.copy(q);
+      // a shot may ask for its own color grade (the Bliss Hills opening is shown ungraded); everything after it gets the usual one back
+      const want = this.intro.done ? null : this.intro.shot?.grade;
+      if (want && !this._grade) { this._grade = { sat: gfx.post.sat, contrast: gfx.post.contrast, vignette: gfx.post.vignette }; Object.assign(gfx.post, want); }
+      else if (!want && this._grade) { Object.assign(gfx.post, this._grade); this._grade = null; }
+    }
     else {
       if (this.spectate) { this._specT = (this._specT || 0) + dt; if (this._specT > 7) { this._specT = 0; const pick = race.order[Math.floor(Math.random() * Math.min(4, race.order.length))]; if (pick && !pick.finished) { this.cams[0].kart = pick; this.cams[0].snap(); } } }
       const w = gfx.renderer.domElement.width, h = gfx.renderer.domElement.height;
@@ -248,9 +255,9 @@ export class RaceView {
   dispose() {
     const scene = this.gfx.scene;
     scene.remove(this.root);
-    this.root.traverse(o => { if (o.isMesh || o.isPoints || o.isSprite) { o.geometry?.dispose?.(); } });
+    this.root.traverse(o => { if (o.userData?.dispose) o.userData.dispose(); else if (o.isMesh || o.isPoints || o.isSprite) { o.geometry?.dispose?.(); } });
     this.gfx.setViews([]);
-    this.gfx.post.blur = 0; this.gfx.post.flash = 0;
+    this.gfx.post.blur = 0; this.gfx.post.flash = 0; if (this._grade) { Object.assign(this.gfx.post, this._grade); this._grade = null; }
     this.gfx.sun.castShadow = this.gfx.q.shadow > 0; this.gfx.renderer.shadowMap.enabled = this.gfx.sun.castShadow;
   }
 }

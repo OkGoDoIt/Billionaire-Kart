@@ -87,10 +87,41 @@ export function detailTexture(seed = 3, contrast = 0.22) {
       const d = rng() < 0.5;
       gr.addColorStop(0, d ? `rgba(0,0,0,${contrast})` : `rgba(255,255,255,${contrast * 1.4})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = gr;
-      for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) g.fillRect(x - r + ox, y - r + oy, r * 2, r * 2);
+      // drawn nine times so the blobs wrap across the tile's edges (the gradient has to move with each copy, or the copies come out empty and the tile shows a seam)
+      for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) { g.save(); g.translate(ox, oy); g.fillRect(x - r, y - r, r * 2, r * 2); g.restore(); }
     }
     speckle(g, w, h, rng, 2400, ['#ffffff', '#9a9a9a'], 1, 2, contrast * 1.2);
   }, { aniso: 4 });
+}
+
+/** Mown meadow for the ground map: long soft bands running one way (the mower's rows), finer streaks along them, gentle
+    mottling, and grain. Mid-grey on average, so it only modulates the ground's own color. One tile covers a lot of
+    ground (set look.groundScale to match), which is what lets the bands read on a hill hundreds of meters away. */
+export function meadowTexture(seed = 7, size = 1024) {
+  return canvasTex(size, size, (g, w, h) => {
+    const rng = makeRng(seed), k = size / 1024;
+    g.fillStyle = '#e4e4e4'; g.fillRect(0, 0, w, h);
+    // every mark is drawn nine times, shifted by a whole tile each way, so the tile wraps without a seam
+    const wrapped = draw => { for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) { g.save(); g.translate(ox, oy); draw(); g.restore(); } };
+    const band = (x, y, bw, len, dark, a) => {
+      const gr = g.createLinearGradient(x - bw / 2, 0, x + bw / 2, 0), c = dark ? '0,0,0' : '255,255,235';
+      gr.addColorStop(0, `rgba(${c},0)`); gr.addColorStop(0.5, `rgba(${c},${a})`); gr.addColorStop(1, `rgba(${c},0)`);
+      wrapped(() => { g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, bw / 2, len / 2, 0, 0, 6.2832); g.fill(); });
+    };
+    const blob = (r0, r1, a0, a1) => {
+      const x = rng() * w, y = rng() * h, r = (r0 + rng() * (r1 - r0)) * k, c = rng() < 0.5 ? '0,0,0' : '255,255,235', gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, `rgba(${c},${a0 + rng() * (a1 - a0)})`); gr.addColorStop(1, `rgba(${c},0)`);
+      wrapped(() => { g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2); });
+    };
+    for (let i = 0; i < 70; i++) band(rng() * w, rng() * h, (26 + rng() * 54) * k, (200 + rng() * 500) * k, rng() < 0.5, 0.02 + rng() * 0.025);   // the rows, faint
+    for (let i = 0; i < 500; i++) band(rng() * w, rng() * h, (3 + rng() * 6) * k, (30 + rng() * 100) * k, rng() < 0.55, 0.035 + rng() * 0.05);   // short streaks along them
+    for (let i = 0; i < 180; i++) blob(40, 120, 0.025, 0.05);                                                                                    // broad, soft variation
+    for (let i = 0; i < 3600; i++) blob(5, 20, 0.07, 0.16);                                                                                     // tufts: on a far hill these flatten into short dashes
+    for (let i = 0; i < 26000 * k * k; i++) {                                                                                                   // grain: short flecks lying along the rows
+      g.fillStyle = rng() < 0.5 ? `rgba(0,0,0,${0.08 + rng() * 0.14})` : `rgba(255,255,220,${0.1 + rng() * 0.16})`;
+      g.fillRect(rng() * w, rng() * h, 1 + rng() * 1.2, 1.5 + rng() * 4.5);
+    }
+  }, { aniso: 16 });
 }
 
 export function checkerTexture(n = 8, a = '#111318', b = '#f5f5f0') {

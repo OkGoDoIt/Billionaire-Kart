@@ -198,3 +198,13 @@ Pass `solid: <radius in metres>` to `sc.place` or `sc.instances` to make karts b
 - A lap needs contrast: bright open sections, an enclosed section, a high point with a view, a surface change.
 - The aerial view should not look like a rectangle of land ending in fog: push `terrain.margin` to 200 or more, or surround the land with water.
 - `tools/shot.mjs` and the other tools pick free ports, so several can run at once.
+
+## Options added for Bliss Hills and Datacenter Dash
+
+- `intro: [{ pos, look, pos1?, look1?, fov?, dur, grade? }]`: opening shots from fixed cameras, played before the usual flyover. `grade` (`{ sat, contrast, vignette }`) replaces the color grade for that shot.
+- `terrain.marginX` / `terrain.marginZ`: `[low side, high side]`, for scenery that reaches further one way than the others.
+- `look.groundTexture: 'meadow'` with `look.groundScale`: mown-grass ground map. `look.groundMatte: true`: ground with no shine, for saturated colors that must come out pure.
+- `skyOverrides.clearSky: [bearing, halfWidth]` in degrees: a wedge of sky the procedural clouds keep out of, for a track that hangs its own (see `src/render/cloudcard.js`).
+- `tunnelShell: false`: no arched shell over tunnel sections, for a track that builds its own interior.
+
+Bliss Hills opens on a view matched to a reference photograph. The match is data in `src/content/bliss-wallpaper.js` (hill shape, ground colors, sky colors, cloud cover), measured from the photograph and calibrated against renders; the photograph itself is not part of the game.

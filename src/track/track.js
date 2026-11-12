@@ -417,8 +417,10 @@ export class Track {
     const cell = t?.cell ?? 3, margin = t?.margin ?? 120, blend = t?.blend ?? 32;
     const fn = t?.fn || ((x, z) => (fbm(x * 0.006, z * 0.006, 4, 7) - 0.45) * 26);
     const b = this.bounds;
-    const x0 = Math.floor((b.minX - margin) / cell) * cell, z0 = Math.floor((b.minZ - margin) / cell) * cell;
-    const nx = Math.ceil((b.maxX + margin - x0) / cell) + 1, nz = Math.ceil((b.maxZ + margin - z0) / cell) + 1;
+    // marginX / marginZ: [low side, high side], for a track whose scenery reaches further one way than the others
+    const mX = t?.marginX || [margin, margin], mZ = t?.marginZ || [margin, margin];
+    const x0 = Math.floor((b.minX - mX[0]) / cell) * cell, z0 = Math.floor((b.minZ - mZ[0]) / cell) * cell;
+    const nx = Math.ceil((b.maxX + mX[1] - x0) / cell) + 1, nz = Math.ceil((b.maxZ + mZ[1] - z0) / cell) + 1;
     const H = new Float32Array(nx * nz), D = new Float32Array(nx * nz), S = new Float32Array(nx * nz), NI = new Int32Array(nx * nz);
     const { px, pz, N } = this;
     const stride = 2, pl = [0, 0, 0];

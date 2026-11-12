@@ -103,7 +103,7 @@ export class RaceSession {
       if (view.intro.done) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) h.setVisible(true); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
     } else {
       const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
-      this.acc = Math.min(this.acc + dt, STEP * 5);
+      this.acc = Math.max(0, Math.min(this.acc + dt, STEP * 5));   // never in debt: a race that owes time would sit frozen until it had paid it back (#103)
       while (this.acc >= STEP) {
         view.snapshot();
         let inp = inputs;

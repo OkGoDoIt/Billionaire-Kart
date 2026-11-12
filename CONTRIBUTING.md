@@ -14,7 +14,7 @@ This repo is built by Roger and a team of AI agents. These are the working rules
 - Work on your own branch and land through a pull request. Reference the issue number in commit messages.
 - New work that is not on the issue list gets an issue first.
 - **Every pull request includes screenshots** of what changed (Roger's rule). Save them under `screenshots/` on your branch and embed them with raw URLs. `node tools/shot.mjs` and `node tools/track-shots.mjs` take them without a visible browser.
-- Parody only: no real logos or trademarks in art, and nothing presented as fact about a real person.
+- Parody only. Brands in track art, sponsor boards, and karts are invented, never real logos or trademarks. The racer portraits are the one exception: each racer wears their own company's logo as a pin, patch, or pendant, which Roger asked for. Do not add real logos anywhere else, and present nothing as fact about a real person.
 
 ## Before you open a pull request
 
@@ -25,3 +25,12 @@ node tools/bot.mjs --mobile     # the same at phone size with touch
 ```
 
 All three must pass, and the screenshots must have been looked at by whoever made the change.
+
+If you touched the HUD or the touch controls, or any text painted onto a sign, also run:
+
+```bash
+node tools/hud-check.mjs        # the HUD at fourteen screen shapes with the longest text it can show: prints "hud-check: ok"
+node tools/text-check.mjs       # sign text on every track: nothing squashed or cut off
+```
+
+Sign text goes through `fitText` in `src/render/textures.js`, not `fillText` with a `maxWidth`, which squashes the letters.

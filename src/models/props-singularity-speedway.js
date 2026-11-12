@@ -334,7 +334,11 @@ function plateTex(lines, bg, fg) {
   return plateCache[key] || (plateCache[key] = canvasTex(256, 96, (g, w, h) => {
     g.fillStyle = bg; g.fillRect(0, 0, w, h); g.strokeStyle = fg; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
     g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
-    lines.forEach((l, k) => { const s = k ? 26 : 44; g.font = `${s}px "Arial Black", sans-serif`; g.fillText(l, w / 2, lines.length > 1 ? (k ? h * 0.74 : h * 0.36) : h / 2, w - 18); });
+    lines.forEach((l, k) => {
+      let s = k ? 26 : 44; g.font = `${s}px "Arial Black", sans-serif`;
+      const wide = g.measureText(l).width; if (wide > w - 22) { s = Math.floor(s * (w - 22) / wide); g.font = `${s}px "Arial Black", sans-serif`; }   // shrink to fit, never squash
+      g.fillText(l, w / 2, lines.length > 1 ? (k ? h * 0.74 : h * 0.36) : h / 2);
+    });
   }, { repeat: false, aniso: 4 }));
 }
 function plate(tex, w, h) {

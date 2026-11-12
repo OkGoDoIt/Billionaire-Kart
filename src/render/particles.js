@@ -10,7 +10,9 @@ const VERT = /* glsl */`
     vColor = aColor; vRot = aRot;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = aSize * uScale / max(0.1, -mv.z);
+    // a particle that flies at the lens would fill the screen: fade it out before it gets there
+    vColor.a *= smoothstep(1.2, 3.6, -mv.z);
+    gl_PointSize = aSize * uScale / max(1.2, -mv.z);
   }`;
 const FRAG = /* glsl */`
   uniform sampler2D uMap; varying vec4 vColor; varying float vRot;

@@ -73,7 +73,7 @@ export function buildKart(racer, { shadow = true } = {}) {
   const tilt = new THREE.Group(); tilt.name = 'tilt'; root.add(tilt);
   const body = new THREE.Group(); body.name = 'body'; tilt.add(body);
   const K = KART;
-  const style = BODIES[racer.look.kart] ? racer.look.kart : 'standard';
+  const style = BODIES[racer.look.ride] ? racer.look.ride : BODIES[racer.look.kart] ? racer.look.kart : 'standard';
 
   /* --- body: built by the signature style into one mesh per material --- */
   const b = new ModelBuilder();

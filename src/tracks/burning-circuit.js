@@ -160,7 +160,7 @@ export default {
     const taken = [];                                    // footprints of the gags, so the camps keep off them
     const take = (x, z, r) => taken.push({ x, z, r });
     // spots the gags will stand on, kept clear of the camps up front
-    for (const [at, side, off, r] of [[5.6, -1, 26, 14], [4.9, -1, 15, 10], [14.6, -1, 35, 14], [18.1, -1, 34, 10], [19.0, -1, 46, 22], [19.75, -1, 33, 8], [22.85, -1, 13, 14], [23.6, -1, 18, 10], [25.45, -1, 15, 10], [25.15, -1, 15, 9], [26.15, -1, 16, 12], [25.75, -1, 26, 12], [2.3, -1, 19, 12], [7.2, -1, 20, 12], [10.7, -1, 19, 12], [15.6, 1, 38, 12], [17.1, 1, 38, 12], [21.2, 1, 37, 12], [24.6, -1, 19, 12], [14.35, -1, 39, 12], [18.1, -1, 40, 12], [19.75, -1, 39, 10]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
+    for (const [at, side, off, r] of [[5.6, -1, 26, 14], [4.9, -1, 15, 10], [14.6, -1, 35, 14], [18.1, -1, 34, 10], [20.45, -1, 46, 22], [19.75, -1, 33, 8], [22.85, -1, 13, 14], [23.6, -1, 18, 10], [25.45, -1, 15, 10], [25.15, -1, 15, 9], [26.15, -1, 16, 12], [25.75, -1, 26, 12], [2.3, -1, 19, 12], [7.2, -1, 20, 12], [10.7, -1, 19, 12], [15.6, 1, 38, 12], [17.1, 1, 38, 12], [21.2, 1, 37, 12], [24.6, -1, 19, 12], [14.35, -1, 39, 12], [19.85, -1, 38, 12], [21.0, -1, 36, 10]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
     // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
     const bake = B.makeBaker(ctx.group, sc.shadows), atlas = B.makeAtlas(ctx.group, { glow: 0.4 });
@@ -170,7 +170,7 @@ export default {
     const signAt = (x, z, yaw, draw, w, h, up, { px = 1024, frame = 0x3a2c34, y = null, legs = 2 } = {}) => {
       const y0 = y ?? sc.y(x, z), f = B.signFrame(w, h, up, { color: frame, legs }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f);
       const r = atlas.add(px, Math.max(48, Math.round(px * h / w)), typeof draw === 'string' ? B.board(draw) : draw);
-      atlas.place(r, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h);
+      atlas.both(r, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h, 0.42);
       take(x, z, w * 0.55);
       return r;
     };
@@ -197,7 +197,7 @@ export default {
       const g = mb.build({ m: plastic(0x1d2030, 0.5) }); ctx.group.add(g); bake.add(g);
       const r = atlas.add(1536, 300, B.board('DECOMMODIFICATION, PRESENTED BY OUR SPONSORS', { bg: '#fff6e6', fg: '#1a1d29', stripe: '#ff6a2a', size: 150, lines: 1, pad: 0.04 }));
       const yaw = g0.along + Math.PI;
-      atlas.place(r, [g0.x + Math.sin(yaw) * 0.18, g0.roadY + 12.7, g0.z + Math.cos(yaw) * 0.18], yaw, span + 4.2, 4.2);
+      atlas.both(r, [g0.x + Math.sin(yaw) * 0.18, g0.roadY + 12.7, g0.z + Math.cos(yaw) * 0.18], yaw, span + 4.2, 4.2, 0.36);
     }
     const stand = P.grandstand({ w: 30, rows: 6, color: 0xff6a2a }), stand2 = P.grandstand({ w: 30, rows: 6, color: 0x7b5cff });
     const seats = [], standSpots = [], placards = [];
@@ -207,7 +207,7 @@ export default {
       proto.seats.forEach((s, k) => {
         if (rng() >= 0.82) return;
         V.set(s[0], s[1], s[2]).applyMatrix4(M); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) });
-        if (s[2] > -3 && k % 6 === 2) placards.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw });   // the front rows hold up signs
+        if (s[2] > -1 && k % 7 === 3) placards.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw });   // the front row holds up big signs
       });
       bake.add(g);
     };
@@ -215,14 +215,14 @@ export default {
     sc.along({ from: 27.3, to: 0.7, side: 1, offset: 17, spacing: 34, phase: 12 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
     sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
     {
-      const CROWD = ['HUG ME, I\'M A FOUNDER', 'PLUR (PREFERRED STOCK)', 'DAD\'S JET IS HERE', 'BURN IT DOWN (TAX WRITE-OFF)', 'NAMASTE, SERIES C', 'I CAME FOR THE NETWORKING', 'MY SHAMAN IS ON RETAINER', 'GIFTED: ONE NFT', 'PAID $80K TO BE HERE', 'EGO: DEAD (FOR NOW)'];
+      const CROWD = ['HUG ME, I\'M A FOUNDER', 'DAD\'S JET IS HERE', 'BURN IT DOWN (TAX WRITE-OFF)', 'PAID $80K TO BE HERE', 'MY SHAMAN IS ON RETAINER', 'PLUR (PREFERRED STOCK)'];
       const cols = ['#ffd23c', '#ffffff', '#46d6ff', '#ff9ad0', '#7dff6a'];
-      const regions = CROWD.map((t, k) => atlas.add(384, 240, B.board(t, { bg: cols[k % cols.length], fg: '#1a1d29', size: 84, border: '#1a1d29', pad: 0.06 })));
+      const regions = CROWD.map((t, k) => atlas.add(512, 318, B.board(t, { bg: cols[k % cols.length], fg: '#1a1d29', size: 120, border: '#1a1d29', pad: 0.05 })));
       const sticks = new ModelBuilder();
       placards.forEach((s, k) => {
-        const y = s.y + 1.75 + (k % 3) * 0.15, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
-        sticks.add('s', cyl(0.04, 0.04, 1.3, 4), { p: [s.x - fx * 0.05, s.y + 0.95, s.z - fz * 0.05] });
-        atlas.place(regions[k % regions.length], [s.x + fx * 0.1, y, s.z + fz * 0.1], s.yaw, 2.3, 1.44);
+        const y = s.y + 2.6 + (k % 2) * 0.3, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
+        for (const o of [-1.1, 1.1]) sticks.add('s', cyl(0.06, 0.06, 2.2, 5), { p: [s.x - fx * 0.05 + Math.cos(s.yaw) * o, s.y + 1.3, s.z - fz * 0.05 - Math.sin(s.yaw) * o] });
+        atlas.place(regions[k % regions.length], [s.x + fx * 0.1, y, s.z + fz * 0.1], s.yaw, 4.2, 2.6);
       });
       const g = sticks.build({ s: plastic(0x8a5a36, 0.8) }); ctx.group.add(g); bake.add(g, false);
     }
@@ -265,6 +265,8 @@ export default {
       signAt(base.x, base.z, FIG_YAW, B.board('BURN RATE: 100%', { bg: '#1a1d29', fg: '#ffb020', size: 150, lines: 1, border: '#ff6a2a' }), 15, 3.2, 2.6, { frame: 0x1a1d29 });
     }
 
+    bake.add(fig);
+
     // ---- the ring of fire, just past the ramp lip ----
     const ramp = track.ramps[0], sHoop = ramp.s1 + 5, hp = { x: 0, y: 0, z: 0 };
     track.pointAt(sHoop, 0, hp);
@@ -273,6 +275,7 @@ export default {
     sc.place(hoop, hp.x, hp.z, { yaw: track.yawAt(sHoop), y: hp.y });
     hoop.updateMatrixWorld(true);
     const rim = hoop.userData.rim.map(p => new THREE.Vector3(...p).applyMatrix4(hoop.matrixWorld));
+    bake.add(hoop, false);
     {   // a sign over the hoop, for the karts lining up the jump
       const yaw = track.yawAt(sHoop) + Math.PI, top = hp.y + hoop.userData.cy + hoop.userData.R, fx = Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
       const mb = new ModelBuilder();
@@ -280,7 +283,7 @@ export default {
       mb.add('m', box(15, 3.6, 0.3, 0.05, 1), { p: [hp.x - fx * 0.2, top + 3.6, hp.z - fz * 0.2], r: [0, yaw, 0] });
       const g = mb.build({ m: plastic(0x3a3440, 0.45, 0.6) }); ctx.group.add(g); bake.add(g, false);
       const r = atlas.add(1280, 300, B.board('JUMP THROUGH HOOPS (SERIES A)', { bg: '#ff6a2a', fg: '#ffffff', size: 130, lines: 1, pad: 0.04 }));
-      atlas.place(r, [hp.x + fx * 0.02, top + 3.6, hp.z + fz * 0.02], yaw, 14.4, 3.3);
+      atlas.both(r, [hp.x + fx * 0.02, top + 3.6, hp.z + fz * 0.02], yaw, 14.4, 3.3, 0.44);
     }
     // the Man burns a little more every lap: feet on lap 1, legs on lap 2, all of him on the last
     const smoke = view.fx.smoke;
@@ -295,7 +298,7 @@ export default {
     });
 
     // ---- the temple, across the playa ----
-    sc.place(B.temple({ h: 16 }), TEMPLE.x, TEMPLE.z, { yaw: 0.35 });
+    bake.add(sc.place(B.temple({ h: 16 }), TEMPLE.x, TEMPLE.z, { yaw: 0.35 }));
     const lanterns = []; for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; lanterns.push({ x: TEMPLE.x + Math.cos(a) * 17, z: TEMPLE.z + Math.sin(a) * 17, yaw: a }); }
     lanterns.forEach(p => { p.y = sc.y(p.x, p.z); });
     sc.instances(partsOf(B.glowCube(0xffb45a, { h: 3, size: 0.8 })), lanterns, {});
@@ -346,7 +349,7 @@ export default {
 
     // ---- the luxury camp: big domes, silver trailers in rows, palms in planters ----
     const luxDomes = [[30, -128, 10], [34, -178, 8], [28, -226, 11.5], [48, -262, 7]];
-    luxDomes.forEach(([x, z, r], k) => { if (clear(x, z, r + 1)) sc.place(B.dome(r, { door: k % 2 ? 0x46d6ff : 0xffb45a }), x, z, { yaw: Math.PI / 2 + rng.range(-0.3, 0.3), y: sc.y(x, z) - 0.3 }); });
+    luxDomes.forEach(([x, z, r], k) => { if (clear(x, z, r + 1)) bake.add(sc.place(B.dome(r, { door: k % 2 ? 0x46d6ff : 0xffb45a }), x, z, { yaw: Math.PI / 2 + rng.range(-0.3, 0.3), y: sc.y(x, z) - 0.3 })); });
     const trailers = [];
     // the luxury yurts behind a velvet rope, each with its own air conditioner
     const luxYurts = [], acs = [];
@@ -360,9 +363,10 @@ export default {
       // the way in: an arch, a bouncer, a clipboard
       const ax = 55.5, az = -200, yaw = Math.PI / 2 + 0.25, mb = new ModelBuilder();
       for (const dz of [-4.6, 4.6]) mb.add('m', box(0.7, 7.6, 0.7, 0.1, 1), { p: [ax, sc.y(ax, az + dz) + 3.8, az + dz] });
+      mb.add('m', box(11, 3.4, 0.3, 0.05, 1), { p: [ax + 0.25, sc.y(ax, az) + 7.4, az], r: [0, yaw, 0] });
       const g = mb.build({ m: plastic(0x1a1d29, 0.5) }); ctx.group.add(g); bake.add(g);
       const r = atlas.add(1024, 300, B.board('EGO DEATH (VIP ENTRANCE)', { bg: '#1a1d29', fg: '#ffd23c', size: 120, border: '#d8b04a' }));
-      atlas.place(r, [ax + 0.4, sc.y(ax, az) + 7.4, az], yaw, 10.6, 3.1);
+      atlas.both(r, [ax + 0.25 + Math.sin(yaw) * 0.17, sc.y(ax, az) + 7.4, az + Math.cos(yaw) * 0.17], yaw, 10.6, 3.1, 0.34);
       const guard = B.person({ h: 2.3 }); sc.place(guard, ax - 1.4, az - 6.4, { yaw: Math.PI / 2 }); guard.traverse(o => { if (o.isMesh && o.material.userData.tintable) { o.material = o.material.clone(); o.material.color.set(0x15161a); } }); bake.add(guard);
       signAt(37, -152, Math.PI / 2 + 0.45, B.board('RADICAL INCLUSION', { bg: '#b0102c', fg: '#ffffff', size: 150, sub: 'INVITE ONLY', subFg: '#ffd23c', subScale: 0.8, lines: 1 }), 20, 8, 10, { frame: 0x1a1d29 });
       signAt(37, -244, Math.PI / 2 + 0.45, B.board('YURTS WITH DUAL-ZONE AC', { bg: '#ffffff', fg: '#0e7490', size: 130, border: '#0e7490' }), 13, 4.6, 7, { frame: 0x1a1d29 });
@@ -399,17 +403,32 @@ export default {
       sign(4.9, -1, 17, B.board('CONSCIOUS CAPITALISM CAMP', { bg: '#16a34a', fg: '#ffffff', size: 130, sub: 'NO REFUNDS', subFg: '#ffd23c', subScale: 0.75 }), 18, 8, 9.5, { turn: 0.6 });
     }
 
-    // ---- the dunes: ice at a price, and a camp that has given up the internet ----
+    // ---- the dunes: a superyacht beached on the crest, ice at a price, and a camp that has given up the internet ----
     {
+      const Y = { x: -50, z: -446.5, yaw: -Math.PI / 2 }, y0 = track.terrainHeight(Y.x, Y.z);
+      const ends = [[Y.x - 37, Y.z], [Y.x + 37, Y.z], [Y.x, Y.z + 8], [Y.x - 32, Y.z + 7], [Y.x + 32, Y.z + 7]];
+      if (ends.every(([x, z]) => clear(x, z, 2))) {
+        const yacht = B.superyacht({ L: 58 }); yacht.rotation.order = 'YXZ';
+        sc.place(yacht, Y.x, Y.z, { yaw: Y.yaw, y: Math.max(y0, track.terrainHeight(Y.x - 20, Y.z), track.terrainHeight(Y.x + 20, Y.z)) + 2.2, scale: 1.3 });
+        yacht.rotation.z = 0.06; yacht.rotation.x = -0.09; yacht.updateMatrixWorld(true);
+        const nm = yacht.userData.name, W = (x, y, z) => { const v = new THREE.Vector3(x, y, z).applyMatrix4(yacht.matrixWorld); return [v.x, v.y, v.z]; };
+        const r = atlas.add(1600, 130, (g, w, h) => { g.fillStyle = '#f8f8f4'; g.fillRect(0, 0, w, h); B.fitText(g, 'M/Y LOW PROFILE', w / 2, h * 0.56, w * 0.96, 124, B.FONT, '#14213d', { lines: 1 }); });
+        // the hull is rolled a little: letter each side along the hull's own frame
+        for (const sx of [1, -1]) {
+          const c = (dz, dy) => W(sx * nm.x, nm.y + dy, nm.z + dz), hw = nm.w / 2, hh = nm.h / 2;
+          if (sx > 0) atlas.quad(r, c(hw, -hh), c(-hw, -hh), c(-hw, hh), c(hw, hh)); else atlas.quad(r, c(-hw, -hh), c(hw, -hh), c(hw, hh), c(-hw, hh));
+        }
+        bake.add(yacht); take(Y.x, Y.z, 40);
+      }
       const p = sc.beside(14.75, -1, 36);
       if (clear(p.x, p.z, 4)) { const yaw = faceIn(p.i, -1, 0.6); bake.add(sc.place(B.iceShack(), p.x, p.z, { yaw })); take(p.x, p.z, 8); }
       sign(14.35, -1, 39, B.board('DUST IS FREE.', { bg: '#46d6ff', fg: '#1a1d29', size: 150, sub: 'ICE IS $40.', subFg: '#b0102c', subScale: 0.8, lines: 1 }), 18, 7, 9, { turn: 0.6 });
-      const dishes = sc.along({ from: 18.35, to: 19.55, side: -1, offset: 40, spacing: 8 }).filter(q => clear(q.x, q.z, 3)).map(q => ({ ...q, yaw: q.yaw + Math.PI + rng.range(-0.3, 0.3) }));
+      const dishes = sc.along({ from: 20.0, to: 20.9, side: -1, offset: 38, spacing: 8 }).filter(q => clear(q.x, q.z, 3)).map(q => ({ ...q, yaw: q.yaw + Math.PI + rng.range(-0.3, 0.3) }));
       sc.instances(partsOf(B.satDish()), dishes, { scale: [1.2, 1.6] });
       dishes.forEach(q => take(q.x, q.z, 5));
-      const d = sc.beside(19.0, -1, 54); if (clear(d.x, d.z, 8)) sc.place(B.dome(6, { door: 0x46d6ff }), d.x, d.z, { yaw: d.yaw, y: d.y - 0.3 });
-      sign(18.1, -1, 40, B.board('DIGITAL DETOX CAMP', { bg: '#ffffff', fg: '#7b5cff', size: 150, border: '#7b5cff' }), 20, 6.5, 11, { turn: 0.6 });
-      sign(19.75, -1, 39, B.board('WIFI PASSWORD: NAMASTE123', { bg: '#7b5cff', fg: '#ffffff', size: 120 }), 16, 5.2, 8, { turn: 0.6 });
+      const d = sc.beside(20.45, -1, 52); if (clear(d.x, d.z, 8)) sc.place(B.dome(6, { door: 0x46d6ff }), d.x, d.z, { yaw: d.yaw, y: d.y - 0.3 });
+      sign(19.85, -1, 38, B.board('DIGITAL DETOX CAMP', { bg: '#ffffff', fg: '#7b5cff', size: 150, border: '#7b5cff' }), 20, 6.5, 11, { turn: 0.6 });
+      sign(21.0, -1, 36, B.board('WIFI PASSWORD: NAMASTE123', { bg: '#7b5cff', fg: '#ffffff', size: 120 }), 16, 5.2, 8, { turn: 0.6 });
     }
 
     // ---- under the boardwalk: a spiritual journey, with a term sheet ----
@@ -450,10 +469,10 @@ export default {
     }
 
     // ---- neon art ----
-    const word = sc.beside(12.0, -1, 17); sc.place(B.neonWord('DUSTY', { h: 5 }), word.x, word.z, { yaw: word.yaw });
-    const heart = sc.beside(18.6, -1, 38); sc.place(B.neonHeart({ size: 9 }), heart.x, heart.z, { yaw: heart.yaw, y: heart.y - 0.3 });
-    const heart2 = sc.beside(3.6, -1, 26); sc.place(B.neonHeart({ size: 7, color: 0xff3b5c }), heart2.x, heart2.z, { yaw: heart2.yaw });
-    const word2 = sc.beside(9.8, 1, 16); sc.place(B.neonWord('DUSTY', { h: 3.2, colors: [0x46d6ff, 0xff4fa8] }), word2.x, word2.z, { yaw: word2.yaw });
+    const word = sc.beside(12.0, -1, 17); bake.add(sc.place(B.neonWord('DUSTY', { h: 5 }), word.x, word.z, { yaw: word.yaw }));
+    const heart = sc.beside(13.9, 1, 34); bake.add(sc.place(B.neonHeart({ size: 9 }), heart.x, heart.z, { yaw: heart.yaw, y: heart.y - 0.3 }));
+    const heart2 = sc.beside(3.6, -1, 26); bake.add(sc.place(B.neonHeart({ size: 7, color: 0xff3b5c }), heart2.x, heart2.z, { yaw: heart2.yaw }));
+    const word2 = sc.beside(9.8, 1, 16); bake.add(sc.place(B.neonWord('DUSTY', { h: 3.2, colors: [0x46d6ff, 0xff4fa8] }), word2.x, word2.z, { yaw: word2.yaw }));
     const cubeCols = [0x46d6ff, 0xff4fa8, 0xffd23c, 0x7dff6a];
     const cubeRows = [
       ...sc.along({ from: 11.2, to: 12.3, side: -1, offset: 13.5, spacing: 16 }),

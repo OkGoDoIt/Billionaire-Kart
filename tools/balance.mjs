@@ -9,6 +9,9 @@ import { AIDriver, AI_LEVELS } from '../src/race/ai.js';
 import { RACERS } from '../src/content/racers.js';
 import { TRACKS } from '../src/content/tracks.js';
 import { makeRng } from '../src/core/util.js';
+import { takeSlot } from './slot.mjs';
+
+await takeSlot('balance');   // two heavy jobs at a time on this machine: see slot.mjs
 
 const args = process.argv.slice(2), opt = {};
 for (let i = 0; i < args.length; i++) if (args[i].startsWith('--')) { const k = args[i].slice(2); opt[k] = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : true; }

@@ -10,6 +10,9 @@ import { extname, join, normalize, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { TRACKS } from '../src/content/tracks.js';
+import { takeSlot } from './slot.mjs';
+
+await takeSlot('track-thumbs');   // two heavy jobs at a time on this machine: see slot.mjs
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ids = process.argv.slice(2).length ? process.argv.slice(2) : TRACKS.map(t => t.id);

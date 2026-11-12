@@ -178,7 +178,7 @@ export class Menus {
     const show = r => {
       current = r; big.src = r.portrait; big.style.setProperty('--rc', hex(r.color)); name.textContent = r.name; title.textContent = r.title; quote.textContent = `“${r.quote}”`; bio.textContent = r.bio;
       special.replaceChildren(...(r.special ? [h('b', {}, r.special.name), ' ', r.special.text] : [])); special.hidden = !r.special;
-      stats.replaceChildren(...STAT_LABELS.map(([k, label]) => h('div', { class: 'stat', role: 'img', 'aria-label': `${label}: ${r.stats[k]} of 5` }, h('span', {}, label), h('i', {}, ...Array.from({ length: 5 }, (_, i) => h('b', { class: i < r.stats[k] ? 'on' : '' }))))));
+      stats.replaceChildren(...STAT_LABELS.map(([k, label]) => h('div', { class: 'stat stat-' + k, role: 'img', 'aria-label': `${label}: ${r.stats[k]} of 5` }, h('span', {}, label), h('i', {}, ...Array.from({ length: 5 }, (_, i) => h('b', { class: i < r.stats[k] ? 'on' : '' }))))));
       goLabel.textContent = `Choose ${r.name}`;
       for (const [id, t] of tiles) t.classList.toggle('sel', id === r.id);
       A.showroom?.setRacer(player, r);

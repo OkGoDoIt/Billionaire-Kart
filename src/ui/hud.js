@@ -17,7 +17,7 @@ export class Hud {
     root.style.left = rect[0] * 100 + '%'; root.style.bottom = rect[1] * 100 + '%'; root.style.width = rect[2] * 100 + '%'; root.style.height = rect[3] * 100 + '%';
     root.innerHTML = `
       <div class="hud-item"><div class="hud-item-ring"></div><img class="hud-item-img" alt=""><div class="hud-item-coin">$</div><div class="hud-item-count"></div></div>
-      <div class="hud-item-name"></div>
+      <div class="hud-item-info"><b></b><span></span></div>
       <div class="hud-bl"><div class="hud-pill hud-coins"><i class="ico-coin"></i><b>0</b></div><div class="hud-pill hud-lap"><i class="ico-flag"></i><b>1</b><span>/${race.laps}</span></div></div>
       <div class="hud-rank"><b>1</b><span>st</span></div>
       <div class="hud-time"></div>
@@ -30,7 +30,7 @@ export class Hud {
       <div class="hud-draft"></div>`;
     parent.appendChild(root);
     const q = s => root.querySelector(s);
-    this.$ = { item: q('.hud-item'), img: q('.hud-item-img'), coinFallback: q('.hud-item-coin'), count: q('.hud-item-count'), itemName: q('.hud-item-name'), coins: q('.hud-coins b'), coinsPill: q('.hud-coins'), lap: q('.hud-lap b'), lapPill: q('.hud-lap'),
+    this.$ = { item: q('.hud-item'), img: q('.hud-item-img'), coinFallback: q('.hud-item-coin'), count: q('.hud-item-count'), info: q('.hud-item-info'), itemName: q('.hud-item-info b'), itemDesc: q('.hud-item-info span'), coins: q('.hud-coins b'), coinsPill: q('.hud-coins'), lap: q('.hud-lap b'), lapPill: q('.hud-lap'),
       rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed') };
     if (showMap) this._buildMap();
     for (const id of ROULETTE) { const i = new Image(); i.src = itemIcon(id); }
@@ -132,9 +132,14 @@ export class Hud {
         $.img.style.display = isCoin ? 'none' : ''; $.coinFallback.style.display = isCoin ? '' : 'none';
         if (!isCoin) $.img.src = itemIcon(shown);
         $.count.textContent = k.item && k.itemUses > 1 ? '×' + k.itemUses : '';
-        $.itemName.textContent = k.item ? def.name : ''; $.itemName.classList.toggle('show', !!k.item);
-        if (k.item) { clearTimeout(this._nt); this._nt = setTimeout(() => $.itemName.classList.remove('show'), 2200); }
-      } else { $.count.textContent = ''; $.itemName.classList.remove('show'); }
+        // what you are holding, by name, for as long as you hold it; what it does shows for the first few seconds
+        if (k.item && def.id !== this._infoId) {
+          this._infoId = def.id; $.itemName.textContent = def.name; $.itemDesc.textContent = def.desc || '';
+          $.info.classList.remove('brief'); clearTimeout(this._nt); this._nt = setTimeout(() => $.info.classList.add('brief'), 6000);
+        }
+        if (!k.item) this._infoId = null;
+        $.info.classList.toggle('show', !!k.item);
+      } else { $.count.textContent = ''; $.info.classList.remove('show'); this._infoId = null; }
     }
     $.item.classList.toggle('golden', k.goldenActive === true && k.goldenT > 0);
     // timer

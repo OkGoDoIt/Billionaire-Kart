@@ -1,0 +1,156 @@
+/* Menus on a screen that is taller than it is wide. Everything here is inside one media query, so landscape is untouched. */
+@media (orientation: portrait) {
+  /* the short side is 56.25u, as in landscape; a phone is about 56u by 122u */
+  .menu-layer { --u: min(1.78vw, 1vh); }
+  .track-card, .hint-card { --u: min(1.78vw, 1vh); }
+
+  .menu-screen { padding: calc(var(--u) * 3 + var(--safe-t)) calc(var(--u) * 3 + var(--safe-r)) calc(var(--u) * 3 + var(--safe-b)) calc(var(--u) * 3 + var(--safe-l)); background: linear-gradient(180deg, rgba(11,13,32,0.6), rgba(11,13,32,0.2) 25%, rgba(11,13,32,0.2) 60%, rgba(11,13,32,0.7)); }
+  /* a tablet is wider: the content keeps a phone's proportions, centered */
+  .menu-screen > * { width: 100%; max-width: calc(var(--u) * 64); align-self: center; }
+  .menu-head { margin-bottom: calc(var(--u) * 2); gap: calc(var(--u) * 1.6); }
+  .menu-head h1 { font-size: calc(var(--u) * 4.4); }
+  .menu-head p { font-size: calc(var(--u) * 1.9); }
+
+  /* buttons: every one at least a thumb tall */
+  .btn.small { padding: calc(var(--u) * 2.3) calc(var(--u) * 1) calc(var(--u) * 2); }
+  .foot { margin-top: calc(var(--u) * 2.4); }
+
+  /* title */
+  .screen-title > * { width: auto; max-width: none; }
+  .logo-top { font-size: calc(var(--u) * 5.4); }
+  .logo-main { font-size: calc(var(--u) * 17); }
+  .logo-tag { font-size: calc(var(--u) * 2.5); }
+  .press { margin-top: calc(var(--u) * 9); }
+  .fine { left: calc(var(--u) * 4 + var(--safe-l)); right: calc(var(--u) * 4 + var(--safe-r)); text-align: center; font-size: calc(var(--u) * 1.75); bottom: calc(var(--u) * 3 + var(--safe-b)); }
+
+  /* main menu: the logo on top, the three modes under it */
+  .screen-main { align-items: center; padding-left: calc(var(--u) * 3 + var(--safe-l)); background: linear-gradient(180deg, rgba(11,13,32,0.3), rgba(11,13,32,0.72) 45%, rgba(11,13,32,0.8)); }
+  .screen-main > * { max-width: calc(var(--u) * 50); }
+  .logo.small { text-align: center; }
+  .logo.small .logo-top { font-size: calc(var(--u) * 4.4); }
+  .logo.small .logo-main { font-size: calc(var(--u) * 11); }
+  .main-nav { width: 100%; margin-top: calc(var(--u) * 5); gap: calc(var(--u) * 1.8); }
+  .main-nav .btn.big { padding: calc(var(--u) * 1.6) calc(var(--u) * 3) calc(var(--u) * 1.3); }
+  .main-nav .row { gap: calc(var(--u) * 1.2); margin-top: calc(var(--u) * 0.6); }
+
+  /* players: two by two */
+  .cards.four { grid-template-columns: repeat(2, 1fr); margin-top: calc(var(--u) * 3); }
+  .pcount { padding: calc(var(--u) * 6) 0; }
+
+  /* racer select: header, the turntable, who this is, then everyone */
+  .screen-racers { background: linear-gradient(0deg, rgba(11,13,32,0.85), rgba(11,13,32,0.5) 45%, rgba(11,13,32,0) 70%); }
+  /* --side: four square portraits across the row, held small enough that the stage keeps about 20u above the card (78u is everything but the four rows) */
+  .racer-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(calc(var(--u) * 20), 1fr) auto auto; row-gap: calc(var(--u) * 1.6);
+    --plate: calc(var(--u) * 2.7);
+    --side: clamp(calc(var(--u) * 7), min((100vw - var(--safe-l) - var(--safe-r) - var(--u) * 9.6) / 4, calc(var(--u) * 13), (var(--vh) - var(--safe-t) - var(--safe-b) - var(--u) * 78) / 4 - var(--plate)), calc(var(--u) * 13)); }
+  .r-stage { grid-row: 1; margin-top: 0; }
+  .racer-card { grid-row: 2; width: 100%; padding: calc(var(--u) * 1.3) calc(var(--u) * 2) calc(var(--u) * 1.6); }
+  .r-portrait { width: calc(var(--u) * 8.5); height: calc(var(--u) * 8.5); }
+  .r-top { gap: calc(var(--u) * 1.6); }
+  .racer-grid { grid-row: 3; justify-content: center; gap: calc(var(--u) * 1.1) calc(var(--u) * 1.2); }
+  .racer-tile span { font-size: min(calc(var(--u) * 1.8), calc(var(--side) * 0.19)); }
+  .racer-tile.long span { font-size: min(calc(var(--u) * 1.35), calc(var(--side) * 0.14)); }
+  .r-bio { font-size: calc(var(--u) * 1.75); }
+  .r-stats { grid-template-columns: repeat(2, 1fr); column-gap: calc(var(--u) * 2.4); row-gap: calc(var(--u) * 0.9); }
+  .stat { font-size: calc(var(--u) * 1.75); }
+  .btn.r-go { padding: calc(var(--u) * 1.4) calc(var(--u) * 2) calc(var(--u) * 1.1); }
+
+  /* engine class: one per row */
+  .cards.three { grid-template-columns: 1fr; gap: calc(var(--u) * 1.6); }
+  .card.cc { display: grid; grid-template-columns: calc(var(--u) * 19) 1fr; grid-template-rows: auto auto; align-items: center; column-gap: calc(var(--u) * 1.6); text-align: left; padding: calc(var(--u) * 3) calc(var(--u) * 2.4); }
+  .cc-n { grid-row: 1 / 3; font-size: calc(var(--u) * 5.6); text-align: center; }
+  /* the choices sit in the middle of the screen, the action at the bottom under the thumb */
+  .screen-setup .cards.three { margin-top: auto; }
+  .screen-setup .foot { margin-top: auto; padding-top: calc(var(--u) * 2.4); }
+  .screen-setup .foot .btn { width: 100%; }
+  .cc-l { margin-top: 0; align-self: end; }
+  .cc-d { align-self: start; }
+  .sub-h { margin-top: calc(var(--u) * 3.4) !important; text-align: center; }
+  .chips { gap: calc(var(--u) * 1.2); }
+  .screen-setup .chips .chip { flex: 1; padding: calc(var(--u) * 1.6) calc(var(--u) * 0.8); font-size: calc(var(--u) * 2.1); }
+
+  /* cups: one per row */
+  .cards.two { grid-template-columns: 1fr; gap: calc(var(--u) * 2.4); flex: 1; grid-auto-rows: minmax(0, calc(var(--u) * 36)); align-content: center; padding-bottom: calc(var(--u) * 4); }
+  .cup { min-height: 0; padding: calc(var(--u) * 2) calc(var(--u) * 2.4); }
+  .cup > p { max-width: calc(100% - var(--u) * 14); }
+  .cup ol { margin-top: calc(var(--u) * 1.2); font-size: calc(var(--u) * 2); }
+  .cup-emblem { width: calc(var(--u) * 16); height: calc(var(--u) * 16); margin-top: calc(var(--u) * -8); right: calc(var(--u) * 1); }
+  .cup { display: flex; flex-direction: column; justify-content: center; }
+
+  /* tracks: two across, a cup per two rows */
+  .cards.tracks { grid-template-columns: repeat(2, 1fr); gap: calc(var(--u) * 1.6); }
+  .track-thumb { height: calc(var(--u) * 13); }
+  .card.track h2 { font-size: calc(var(--u) * 2.4); }
+  .screen-tracks .menu-head p { min-height: 2.6em; }
+
+  /* options */
+  .panel.options { width: 100%; padding: calc(var(--u) * 2) calc(var(--u) * 2); }
+  .opt { min-height: calc(var(--u) * 6.8); padding: calc(var(--u) * 0.8) calc(var(--u) * 1.6); gap: calc(var(--u) * 1); }
+  .opt > span { min-width: 0; }
+  .opt-ctl { gap: calc(var(--u) * 1); }
+  .opt-ctl b { min-width: 4.6em; }
+  .opt-ctl button { width: calc(var(--u) * 6.8); height: calc(var(--u) * 6.8); }
+
+  /* how to play: controls, then tips */
+  .howto, .howto.touch { grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 1.8); }
+  .howto .panel { padding: calc(var(--u) * 1.8) calc(var(--u) * 2.2); }
+  .pd-half { min-height: calc(var(--u) * 15); }
+  .ctl { min-width: 0; width: 100%; }
+  .ctl th, .ctl td { white-space: normal; padding-right: calc(var(--u) * 1.4); }
+  .screen-howto .foot .btn { padding: calc(var(--u) * 1.6) calc(var(--u) * 3) calc(var(--u) * 1.2); }
+
+  /* items: the one in focus explained on top, every item under it */
+  .item-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; align-content: start; gap: calc(var(--u) * 2.4); }
+  .item-card { grid-row: 1; flex-direction: row; text-align: left; align-items: center; gap: calc(var(--u) * 2); padding: calc(var(--u) * 1.8) calc(var(--u) * 2.2); min-height: calc(var(--u) * 15); }
+  .i-icon { width: calc(var(--u) * 10); height: calc(var(--u) * 10); flex: none; }
+  .item-card h2 { font-size: calc(var(--u) * 3); }
+  .i-desc { font-size: calc(var(--u) * 1.9); }
+  .item-grid { grid-row: 2; grid-template-columns: repeat(2, 1fr); gap: calc(var(--u) * 1) calc(var(--u) * 1.2); }
+  .item-tile { padding-top: calc(var(--u) * 0.35); padding-bottom: calc(var(--u) * 0.35); }
+  .item-tile span { font-size: calc(var(--u) * 1.75); }
+
+  /* records */
+  .panel.records { width: 100%; padding: calc(var(--u) * 1.8) calc(var(--u) * 1.6); }
+  .records table { font-size: calc(var(--u) * 1.75); }
+  .records th, .records td { padding: calc(var(--u) * 1.1) calc(var(--u) * 0.6); }
+
+  /* join */
+  .join-list { grid-template-columns: 1fr; }
+
+  /* pause */
+  .panel.narrow { width: 100%; max-width: calc(var(--u) * 46); padding: calc(var(--u) * 2.6) calc(var(--u) * 3); }
+  .panel.narrow .btn { min-width: 0; padding: calc(var(--u) * 1.7) calc(var(--u) * 3) calc(var(--u) * 1.3); }
+
+  /* results: the panel at the bottom, the race shows above */
+  .screen-results, .screen-cupResults { align-items: center; justify-content: flex-end; background: linear-gradient(180deg, rgba(11,13,32,0), rgba(11,13,32,0.3) 40%, rgba(11,13,32,0.6)); padding-left: calc(var(--u) * 2 + var(--safe-l)); padding-right: calc(var(--u) * 2 + var(--safe-r)); }
+  .panel.results, .panel.cupres { width: 100%; margin: auto 0 0; }
+  .panel.results { padding: calc(var(--u) * 1.8) calc(var(--u) * 1.8); }
+  .panel.results .badge { position: static; display: table; margin-top: calc(var(--u) * 0.8); }
+  .panel.results .res-sub { display: block; margin-left: 0; }
+  .res-row { gap: calc(var(--u) * 1); padding-right: calc(var(--u) * 1.2); grid-template-columns: calc(var(--u) * 3.4) calc(var(--u) * 3.6) minmax(0, 1fr) auto; }
+  .res-table.gp .res-row { grid-template-columns: calc(var(--u) * 3.4) calc(var(--u) * 3.6) minmax(0, 1fr) auto calc(var(--u) * 4) calc(var(--u) * 4); }
+  .res-name { min-width: 0; line-height: 1.15; }
+  .res-name em { margin-left: 0.4em; white-space: nowrap; }
+  .panel.results .res-row { font-size: calc(var(--u) * 1.9); padding-top: calc(var(--u) * 0.3); padding-bottom: calc(var(--u) * 0.3); }
+  .panel.results .foot { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: calc(var(--u) * 1.2); }
+  .panel.results .foot .btn { font-size: calc(var(--u) * 2.4); padding: calc(var(--u) * 1.5) calc(var(--u) * 2) calc(var(--u) * 1.1); }
+  .res-quote { font-size: calc(var(--u) * 1.85); }
+
+  /* cup standings: the panel at the bottom, the podium above it */
+  .panel.cupres { padding: calc(var(--u) * 1.6) calc(var(--u) * 2); }
+  .cupres-head .trophy { width: calc(var(--u) * 7.5); height: calc(var(--u) * 7.5); }
+  .panel.cupres .res-row { font-size: calc(var(--u) * 1.9); grid-template-columns: calc(var(--u) * 3.4) calc(var(--u) * 3.4) minmax(0, 1fr) calc(var(--u) * 5); }
+  .panel.cupres .foot .btn { width: 100%; padding: calc(var(--u) * 1.5) calc(var(--u) * 2) calc(var(--u) * 1.1); }
+
+  /* track intro card and first-race hint */
+  .track-card { left: calc(var(--u) * 4 + var(--safe-l)); right: calc(var(--u) * 4 + var(--safe-r)); bottom: calc(var(--u) * 15 + var(--safe-b)); }
+  .track-card h1 { font-size: calc(var(--u) * 7); }
+  .track-card p { font-size: calc(var(--u) * 2.4); }
+  /* centered with margins, not a transform: the entry animation's transform replaces the base rule's translateX(-50%) */
+  .hint-card { left: 0; right: 0; margin: 0 auto; transform: none; bottom: calc(var(--u) * 6 + var(--safe-b)); white-space: normal; width: max-content; max-width: calc(100% - var(--u) * 6); text-align: center; line-height: 1.6; }
+
+  /* an upright tablet: the same layouts, sized by height so they keep a phone's proportions */
+  @media (min-aspect-ratio: 5/8) {
+    .menu-layer, .track-card, .hint-card { --u: min(1.78vw, 0.82vh); }
+  }
+}

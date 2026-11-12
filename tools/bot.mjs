@@ -54,7 +54,7 @@ try {
   if (mobile) await page.locator('.screen-title').tap(); else await key('Enter');
   await page.waitForTimeout(500); await expect('main', 'after title'); await shot('02-main');
   // the screens off the main menu that are not on the way to a race
-  for (const name of ['howto', 'options', 'records']) {
+  for (const name of ['howto', 'items', 'options', 'records']) {
     await page.evaluate(`BK.app.menus.open('${name}')`); await page.waitForTimeout(500); await expect(name, name); await shot('02-' + name);
     await page.evaluate('BK.app.menus.back()'); await page.waitForTimeout(350); await expect('main', 'back from ' + name);
   }
@@ -64,7 +64,13 @@ try {
   await tapOrKey('.pcount', 'Enter');
   await page.waitForTimeout(900); await expect('racers', 'one player'); await shot('04-racers');
   if (!mobile) { await key('ArrowRight'); await key('ArrowDown'); await page.waitForTimeout(700); await shot('05-racers-moved'); }
-  await tapOrKey('.racer-tile.focus, .racer-tile', 'Enter');
+  if (mobile) {
+    // looking and choosing are separate: a tap on a tile shows that racer and stays put; the button under the card picks them
+    await page.locator('.racer-tile').nth(6).tap(); await page.waitForTimeout(500); await expect('racers', 'tapped a racer tile');
+    const card = await page.evaluate(() => ({ name: document.querySelector('.racer-card h2')?.textContent, quote: document.querySelector('.r-quote')?.textContent, bio: document.querySelector('.r-bio')?.textContent, go: document.querySelector('.r-go')?.textContent, quoteShown: !!document.querySelector('.r-quote')?.offsetHeight }));
+    if (card.name !== 'Dario' || !card.quoteShown || !(card.bio || '').length || card.go !== 'Choose Dario') fails.push('racer card does not show the tapped racer with quote, description, and a Choose button: ' + JSON.stringify(card));
+    await shot('05-racers-moved'); await page.locator('.r-go').tap(); await page.waitForTimeout(350);
+  } else await key('Enter');
   await page.waitForTimeout(500); await expect('setup', 'racer chosen'); await shot('06-setup');
   if (mobile) await page.locator('.foot .btn.go').tap(); else { await key('Enter'); await key('Enter'); }
   await page.waitForTimeout(500); await expect('tracks', 'setup done'); await shot('07-tracks');
@@ -77,7 +83,34 @@ try {
   await page.waitForTimeout(1200); await shot('09-countdown');
   await page.waitForFunction('!BK.race.frozen', null, { timeout: 15000 });
   if (!mobile) { await page.keyboard.down('KeyW'); await page.waitForTimeout(2500); await shot('10-driving'); await page.keyboard.down('KeyD'); await page.keyboard.down('Space'); await page.waitForTimeout(1300); await shot('11-drifting'); await page.keyboard.up('Space'); await page.keyboard.up('KeyD'); await page.keyboard.up('KeyW'); }
-  else { await page.waitForTimeout(3000); await shot('10-driving'); }
+  else {
+    // touch: the right half is the pedal and the left half steers; nothing moves until the pedal is held
+    const touch = (sel, type, id, x, y) => page.dispatchEvent(sel, type, { pointerId: id, pointerType: 'touch', isPrimary: id === 1, clientX: x, clientY: y, bubbles: true, cancelable: true });
+    const vw = page.viewportSize(), T = 'BK.app.input.touch';
+    await page.waitForTimeout(700);
+    if (await page.evaluate('BK.race.players[0].speed') > 1) fails.push('touch: the kart drove off without the pedal being held');
+    await touch('.tc-right', 'pointerdown', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(2600); await shot('10-driving');
+    if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: holding the right side does not accelerate');
+    await touch('.tc-left', 'pointerdown', 2, vw.width * 0.2, vw.height * 0.7); await touch('.tc-left', 'pointermove', 2, vw.width * 0.2 + 40, vw.height * 0.7); await page.waitForTimeout(150);
+    if (!(await page.evaluate(`${T}.steer`) > 0.3)) fails.push('touch: sliding the left thumb does not steer');
+    await touch('.tc-left', 'pointerup', 2, vw.width * 0.2 + 40, vw.height * 0.7);
+    await page.evaluate("BK.race.items.give(BK.race.players[0], 'boost')"); await page.waitForTimeout(200);
+    await touch('.tc-left', 'pointerdown', 2, vw.width * 0.25, vw.height * 0.5); await page.waitForTimeout(60); await touch('.tc-left', 'pointerup', 2, vw.width * 0.25, vw.height * 0.5); await page.waitForTimeout(400);
+    if (await page.evaluate('BK.race.players[0].item')) fails.push('touch: a tap on the left side did not use the item');
+    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 + 60); await page.waitForTimeout(150);
+    if (await page.evaluate(`${T}.brake`) !== 1) fails.push('touch: pulling the right thumb down does not brake');
+    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(900);
+    // an upright phone pauses the race and asks for a turn; back on its side, Resume returns
+    await page.setViewportSize({ width: vw.height, height: vw.width }); await page.waitForTimeout(700); await expect('pause', 'phone turned upright mid-race');
+    if (!(await page.evaluate("!!document.querySelector('.panel.turn')"))) fails.push('upright phone: the pause panel does not ask for a turn');
+    await shot('10c-upright');
+    await page.setViewportSize(vw); await page.waitForTimeout(700);
+    if (await page.evaluate("!!document.querySelector('.panel.turn')")) fails.push('phone back on its side: the pause panel still asks for a turn');
+    await page.locator('.panel.narrow .btn').first().tap(); await page.waitForTimeout(400);
+    if (await screen()) fails.push('pause menu did not close on Resume after turning the phone back');
+    await touch('.tc-right', 'pointerup', 1, vw.width * 0.8, vw.height * 0.6);
+    await touch('.tc-right', 'pointerdown', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(1500);
+  }
   const moved = await page.evaluate('BK.race.players[0].speed');
   if (!(moved > 3)) fails.push(`player kart is not moving (speed ${moved})`);
   // every kart boosts at once: flames, speed lines, and bloom all on screen, and the picture must still be there
@@ -115,6 +148,18 @@ try {
     await page.waitForTimeout(2500); await shot('22-podium');
     console.log('cup totals:', await page.evaluate('JSON.stringify(BK.app.gp.totals)'));
     await key('Enter', 1200); await expect('main', 'after the podium');
+  }
+  if (mobile && !opt.gp) {
+    // every menu screen with the phone upright: nothing may spill off the sides, and nothing may be left unrendered
+    await page.evaluate('BK.app.quitToMenu()'); await page.waitForFunction('BK.app.menus.screen?.spec.name === "main"', null, { timeout: 15000 });
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(800);
+    const flow = "BK.app.flow = { mode: 'vs', players: 1, devices: ['any'], racers: ['zuck'], cc: 100, level: 'normal' };";
+    for (const [name, open] of [['main', "BK.app.menus.reset('main')"], ['players', "BK.app.menus.open('players')"], ['racers', "BK.app.flow.racers = []; BK.app.menus.open('racers', { player: 0 })"], ['setup', "BK.app.menus.open('setup')"], ['cups', "BK.app.menus.open('cups')"], ['tracks', "BK.app.menus.open('tracks')"], ['options', "BK.app.menus.open('options')"], ['howto', "BK.app.menus.open('howto')"], ['items', "BK.app.menus.open('items')"], ['records', "BK.app.menus.open('records')"]]) {
+      await page.evaluate(`${flow} BK.app.menus.reset('main'); ${open}`); await page.waitForTimeout(600);
+      const bad = await page.evaluate(() => { const e = document.querySelector('.menu-screen'), w = innerWidth; if (!e) return 'no screen'; const wide = [...e.querySelectorAll('*')].filter(n => n.offsetParent && (n.getBoundingClientRect().right > w + 2 || n.getBoundingClientRect().left < -2)).length; return (/\[object |undefined|NaN/.test(e.textContent) ? 'unrendered value in the text; ' : '') + (wide ? `${wide} elements reach past the sides; ` : '') + (e.scrollWidth > e.clientWidth + 2 ? 'scrolls sideways' : ''); });
+      if (bad) fails.push(`upright phone, screen "${name}": ${bad}`);
+      await shot('30-upright-' + name);
+    }
   }
 } catch (e) { fails.push('aborted: ' + e.message); await shot('99-failure').catch(() => {}); }
 await browser.close(); server.close();

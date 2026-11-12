@@ -2,7 +2,8 @@
    to a race or a model viewer for development and automated screenshots:
      ?track=<id>&r=<racer,...>&cc=150&level=hard&laps=1&seed=5&auto=1&intro=0&q=high
      ?fly=1 (with the above) parks the camera on the track; ?fly=top is an aerial view
-     ?view=kart&r=elon,sam is a turntable of kart models */
+     ?view=kart&r=elon,sam is a turntable of kart models
+     ?debug=audio shows the state of the sound engine in a corner (for checking phones) */
 import * as THREE from 'three';
 import { App } from './game/app.js';
 import { RaceSession } from './game/session.js';
@@ -18,6 +19,11 @@ const q = new URLSearchParams(location.search);
 const app = new App(document.getElementById('game'), document.getElementById('ui'), { quality: q.get('q') });
 const gfx = app.gfx;
 window.BK = { app, gfx, THREE, RACERS };
+if (q.get('debug') === 'audio') {
+  const tag = Object.assign(document.createElement('div'), { style: 'position:fixed;left:50%;bottom:4px;transform:translateX(-50%);z-index:99;font:600 12px system-ui;color:#fff;background:#000a;padding:2px 8px;border-radius:8px;pointer-events:none' });
+  document.body.appendChild(tag);
+  setInterval(() => { const a = app.audio; tag.textContent = `audio: ${a.ctx ? a.ctx.state : 'no context'} · session ${navigator.audioSession ? navigator.audioSession.type : (a.silent ? (a.silent.paused ? 'silent element paused' : 'silent element playing') : 'n/a')} · ${a.buffers.size} sounds · music ${a.musicId || 'none'}`; }, 300);
+}
 Object.defineProperty(BK, 'session', { get: () => app.session }); Object.defineProperty(BK, 'race', { get: () => app.session?.race });
 
 if (q.get('view') === 'kart') {

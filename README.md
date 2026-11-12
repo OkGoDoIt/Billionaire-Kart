@@ -40,15 +40,15 @@ Thirteen racers drive a kart of their own: a steel wedge, a rocket with a parcel
 
 | | Keyboard | Controller | Touch |
 |---|---|---|---|
-| Steer | A D or ← → | Left stick | Slide the left pad |
-| Accelerate | W or ↑ | A or right trigger | Automatic |
-| Drift and hop | Space | Right bumper or X | Hold DRIFT |
-| Use item | E or Enter | Left bumper or Y | Tap ITEM |
-| Brake and reverse | S or ↓ | B or left trigger | Hold BRAKE |
+| Steer | A D or ← → | Left stick | Slide your left thumb |
+| Accelerate | W or ↑ | A or right trigger | Hold the right side |
+| Drift and hop | Space | Right bumper or X | Steer hard over; straighten up to boost |
+| Use item | E or Enter | Left bumper or Y | Tap the left side, or flick your right thumb up |
+| Brake and reverse | S or ↓ | B or left trigger | Pull your right thumb down |
 | Look behind | Q | Click the right stick | |
 | Pause | Esc | Start | Pause button |
 
-Two players can share a keyboard: one on W A S D with Space, the other on the arrow keys with Enter. Tilt steering is in Options on phones.
+Two players can share a keyboard: one on W A S D with Space, the other on the arrow keys with Enter. On a phone there are no buttons to find: the left half of the screen steers and the right half is the pedal. Menus work with the phone upright or on its side; races are played on its side. Automatic accelerate and tilt steering are in Options on phones.
 
 **Going faster**
 

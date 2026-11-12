@@ -17,7 +17,7 @@ export class Input {
   constructor() {
     this.keys = new Set(); this.steerKb = { kb: 0, kb1: 0, kb2: 0 };
     this.assign = ['any'];                 // device per local player; 'any' merges everything (solo play)
-    this.touch = { active: false, steer: 0, throttle: 0, brake: 0, drift: false, item: false, itemBack: false, rear: false, autoGas: true };
+    this.touch = { active: false, steer: 0, throttle: 0, brake: 0, drift: false, item: false, itemBack: false, rear: false };
     this.tilt = { enabled: false, value: 0, available: false };
     this.onMenu = null;                    // (action, device) => void
     this.onAnyInput = null;                // first interaction (to unlock audio)
@@ -87,7 +87,7 @@ export class Input {
         const t = this.touch;
         if (t.active) {
           if (Math.abs(t.steer) > Math.abs(out.steer)) out.steer = t.steer;
-          out.throttle = Math.max(out.throttle, t.autoGas && !t.brake ? 1 : t.throttle); out.brake = Math.max(out.brake, t.brake);
+          out.throttle = Math.max(out.throttle, t.throttle); out.brake = Math.max(out.brake, t.brake);
           out.drift = out.drift || t.drift; out.item = out.item || t.item; out.itemBack = out.itemBack || t.itemBack; out.rear = out.rear || t.rear;
         }
         if (this.tilt.enabled && Math.abs(this.tilt.value) > Math.abs(out.steer)) out.steer = this.tilt.value;

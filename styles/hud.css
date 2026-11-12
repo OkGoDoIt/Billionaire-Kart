@@ -21,8 +21,12 @@
 .hud-item.has .hud-item-coin { display: block; }
 .hud-item-count { position: absolute; right: -1cqh; bottom: -0.6cqh; font-size: 6.2cqh; color: var(--gold); }
 .hud-item.pop { animation: hud-pop 0.32s cubic-bezier(.2,1.6,.4,1); }
-.hud-item-name { position: absolute; left: calc(var(--edge) + var(--safe-l) + 19.5cqh); top: calc(var(--edge) + var(--safe-t) + 5.5cqh); font-family: var(--body); font-weight: 600; font-size: 3.1cqh; background: rgba(11,13,32,0.78); padding: 0.7cqh 1.8cqh; border-radius: 3cqh; opacity: 0; transform: translateX(-1.5cqh); transition: opacity 0.2s, transform 0.2s; white-space: nowrap; }
-.hud-item-name.show { opacity: 1; transform: none; }
+.hud-item-info { position: absolute; left: calc(var(--edge) + var(--safe-l) + 19.5cqh); top: calc(var(--edge) + var(--safe-t) + 1.5cqh); max-width: 58cqh; font-family: var(--body); background: rgba(11,13,32,0.78); padding: 0.9cqh 2cqh 1.1cqh; border-radius: 2.4cqh; opacity: 0; transform: translateX(-1.5cqh); transition: opacity 0.2s, transform 0.2s; }
+.hud-item-info.show { opacity: 1; transform: none; }
+.hud-item-info b { display: block; font-weight: 700; font-size: 3.5cqh; line-height: 1.15; color: var(--gold); white-space: nowrap; }
+.hud-item-info span { display: block; font-weight: 500; font-size: 3cqh; line-height: 1.22; max-height: 12cqh; overflow: hidden; transition: max-height 0.35s, opacity 0.35s; }
+.hud-item-info.brief span { max-height: 0; opacity: 0; }
+.hud-compact .hud-item-info span { display: none; }
 
 /* coins and lap, bottom-left */
 .hud-bl { position: absolute; left: calc(var(--edge) + var(--safe-l)); bottom: calc(var(--edge) + var(--safe-b)); display: flex; gap: 1.6cqh; align-items: center; }

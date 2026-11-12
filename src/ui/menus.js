@@ -5,6 +5,8 @@ import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { CUPS, cupTracks } from '../content/cups.js';
 import { CLASSES } from '../race/kart.js';
 import { DEVICE_LABEL } from '../core/input.js';
+import { ITEMS } from '../race/items.js';
+import { itemIcon } from './hud.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
 
 const h = (tag, attrs = {}, ...kids) => {
@@ -17,6 +19,8 @@ const hex = n => '#' + n.toString(16).padStart(6, '0');
 /* Cup art: a gold, silver, or bronze trophy for a podium finish, and a three-star rating. */
 const trophyImg = rank => rank >= 1 && rank <= 3 ? h('img', { class: 'trophy', src: `assets/ui/trophy-${['gold', 'silver', 'bronze'][rank - 1]}.webp`, alt: '' }) : null;
 const starRow = n => h('span', { class: 'star-row', role: 'img', 'aria-label': `${n} of 3 stars` }, [0, 1, 2].map(i => h('img', { class: i < n ? '' : 'off', src: 'assets/ui/star.webp', alt: '' })));
+/* The larger of the two areas a panel leaves free: beside it (landscape) or above it (portrait). The 3D scene is framed there. */
+const freeRect = panel => { const r = panel.getBoundingClientRect(), W = innerWidth, H = innerHeight; return r.left * H >= W * r.top ? { left: 0, top: 0, width: r.left, height: H } : { left: 0, top: 0, width: W, height: r.top }; };
 const PLAYER_COLORS = ['#ff4d6d', '#38b6ff', '#ffd23c', '#2ee6a6'];
 const LEVELS = [['easy', 'Relaxed'], ['normal', 'Competitive'], ['hard', 'Ruthless']];
 const CC_LIST = [50, 100, 150];
@@ -26,7 +30,10 @@ export class Menus {
   constructor(app) {
     this.app = app; this.layer = h('div', { class: 'menu-layer' }); app.ui.appendChild(this.layer);
     this.stack = []; this.screen = null; this.focusEl = null;
-    this.layer.addEventListener('pointermove', e => { const t = e.target.closest?.('[data-f]'); if (t && t !== this.focusEl && e.pointerType === 'mouse') this.focus(t, false); });
+    this.layer.addEventListener('pointermove', e => { const t = e.target.closest?.('[data-f]'); if (t && t !== this.focusEl && e.pointerType === 'mouse' && !t.hasAttribute('data-nohover')) this.focus(t, false); });
+    // screens that frame the 3D scene (racer select, podium) re-measure when the layout changes
+    const relayout = () => requestAnimationFrame(() => this.screen?.onLayout?.());
+    addEventListener('resize', relayout); screen.orientation?.addEventListener?.('change', relayout);
   }
 
   get visible() { return !!this.screen; }
@@ -52,7 +59,8 @@ export class Menus {
     this.layer.appendChild(def.el); this.screen = def; this.focusEl = null;
     const first = def.el.querySelector('[data-f][data-default]') || def.el.querySelector('[data-f]');
     if (first) this.focus(first, false);
-    def.onOpen?.();
+    def.onOpen?.(); def.onLayout?.();
+    if (def.onLayout) requestAnimationFrame(() => { if (this.screen === def) def.onLayout(); });   // again once fonts and images have settled the layout
   }
   focus(el, sound = true) {
     if (this.focusEl === el) return;
@@ -64,7 +72,7 @@ export class Menus {
     const s = this.screen; if (!s) return false;
     if (s.onAction && s.onAction(action, device) === true) return true;
     if (action === 'back' || action === 'pause') { this.back(); return true; }
-    if (action === 'confirm') { if (this.focusEl) { this.app.audio?.ui('select'); this.focusEl.click(); } return true; }
+    if (action === 'confirm') { if (this.focusEl) { this.app.audio?.ui('select'); this.keyClick = true; try { this.focusEl.click(); } finally { this.keyClick = false; } } return true; }
     if (['up', 'down', 'left', 'right'].includes(action)) { this._move(action); return true; }
     return false;
   }
@@ -157,26 +165,34 @@ export class Menus {
     const taken = flow.racers.slice(0, player);
     let current = RACER_BY_ID[A.save.data.last.racer[player]] || RACERS[player];
     if (taken.includes(current.id)) current = RACERS.find(r => !taken.includes(r.id));
-    const name = h('h2', {}), title = h('div', { class: 'r-title' }), quote = h('p', { class: 'r-quote' }), stats = h('div', { class: 'r-stats' });
-    const show = r => {
-      current = r; name.textContent = r.name; title.textContent = r.title; quote.textContent = `“${r.quote}”`;
-      stats.replaceChildren(...STAT_LABELS.map(([k, label]) => h('div', { class: 'stat' }, h('span', {}, label), h('i', {}, ...Array.from({ length: 5 }, (_, i) => h('b', { class: i < r.stats[k] ? 'on' : '' }))))));
-      A.showroom?.setRacer(player, r);
-    };
+    const name = h('h2', {}), title = h('div', { class: 'r-title' }), quote = h('p', { class: 'r-quote' }), bio = h('p', { class: 'r-bio' }), stats = h('div', { class: 'r-stats' }), big = h('img', { class: 'r-portrait', alt: '', draggable: 'false' });
+    const tiles = new Map();
     const choose = r => {
       flow.racers[player] = r.id; A.save.data.last.racer[player] = r.id; A.save.write();
       A.audio?.racerPicked?.(r);
       if (player + 1 < n) this.open('racers', { player: player + 1 }); else this.open(flow.mode === 'timetrial' ? 'tracks' : 'setup');
     };
+    // Looking and choosing are separate: a tile shows the racer, the button under the card picks them.
+    const go = this.btn('', () => choose(current), { cls: 'go r-go' }), goLabel = go.querySelector('.btn-label');
+    const show = r => {
+      current = r; big.src = r.portrait; big.style.setProperty('--rc', hex(r.color)); name.textContent = r.name; title.textContent = r.title; quote.textContent = `“${r.quote}”`; bio.textContent = r.bio;
+      stats.replaceChildren(...STAT_LABELS.map(([k, label]) => h('div', { class: 'stat', role: 'img', 'aria-label': `${label}: ${r.stats[k]} of 5` }, h('span', {}, label), h('i', {}, ...Array.from({ length: 5 }, (_, i) => h('b', { class: i < r.stats[k] ? 'on' : '' }))))));
+      goLabel.textContent = `Choose ${r.name}`;
+      for (const [id, t] of tiles) t.classList.toggle('sel', id === r.id);
+      A.showroom?.setRacer(player, r);
+    };
     const grid = h('div', { class: 'racer-grid' }, RACERS.map(r => {
-      const t = h('button', { class: 'racer-tile' + (taken.includes(r.id) ? ' taken' : ''), 'data-f': true, 'data-default': r === current, disabled: taken.includes(r.id), style: `--rc:${hex(r.color)}`, onclick: () => choose(r) },
+      // a tap or click only looks; Enter or the controller's confirm button, pressed on a tile, picks straight away
+      const t = h('button', { class: 'racer-tile' + (taken.includes(r.id) ? ' taken' : '') + (r.name.length > 9 ? ' long' : ''), 'data-f': true, 'data-nohover': true, 'data-default': r === current, disabled: taken.includes(r.id), style: `--rc:${hex(r.color)}`, onclick: () => { if (this.keyClick) choose(r); else { this.focus(t, false); A.audio?.ui('move'); } } },
         h('img', { src: r.portrait, alt: '', loading: 'lazy', draggable: 'false' }), h('span', {}, r.name), taken.includes(r.id) && h('em', { style: `background:${PLAYER_COLORS[taken.indexOf(r.id)]}` }, `P${taken.indexOf(r.id) + 1}`));
-      t.addEventListener('menufocus', () => show(r)); return t;
+      t.addEventListener('menufocus', () => show(r)); tiles.set(r.id, t); return t;
     }));
+    const stage = h('div', { class: 'r-stage' });
     const el = h('div', {}, this.header(n > 1 ? `Player ${player + 1}: pick your racer` : 'Pick your racer'),
-      h('div', { class: 'racer-layout' }, grid, h('aside', { class: 'racer-card', style: n > 1 ? `--pc:${PLAYER_COLORS[player]}` : '' }, name, title, quote, stats, h('div', { class: 'r-hint' }, 'Light racers accelerate and turn quickly. Heavy racers are faster flat out and harder to shove.'))));
+      h('div', { class: 'racer-layout' }, grid, stage, h('aside', { class: 'racer-card', style: n > 1 ? `--pc:${PLAYER_COLORS[player]}` : '' }, h('div', { class: 'r-top' }, big, h('div', { class: 'r-id' }, h('div', { class: 'r-head' }, name, title), quote)), bio, stats, go)));
     return {
-      el, onOpen: () => { A.showRoomFor(flow.racers.slice(0, player).map(id => RACER_BY_ID[id]).concat([current]), { offsetX: 3.1 }); show(current); },
+      el, onOpen: () => { A.showRoomFor(flow.racers.slice(0, player).map(id => RACER_BY_ID[id]).concat([current])); show(current); },
+      onLayout: () => A.showroom?.setStage(stage.getBoundingClientRect()),
       onBack: () => { flow.racers.length = player; },
     };
   }
@@ -226,9 +242,11 @@ export class Menus {
 
   /* ---------- pause ---------- */
   s_pause() {
-    const A = this.app;
-    const el = h('div', {}, h('div', { class: 'panel narrow' }, h('h1', {}, 'Paused'),
-      this.btn('Resume', () => A.resume(), { def: true }), this.btn('Restart race', () => A.restartRace()), this.btn('How to play', () => this.open('howto')), this.btn('Options', () => this.open('options')), this.btn('Quit to menu', () => A.quitToMenu(), { cls: 'danger' })));
+    const A = this.app, turn = A.mustTurn();
+    // a phone held upright cannot race: say so in place of Resume, and keep the rest of the menu
+    const el = h('div', {}, h('div', { class: 'panel narrow' + (turn ? ' turn' : '') },
+      turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), h('p', { class: 'turn-sub' }, 'The race is paused.')] : [h('h1', {}, 'Paused'), this.btn('Resume', () => A.resume(), { def: true })],
+      this.btn('Restart race', () => A.restartRace()), this.btn('How to play', () => this.open('howto')), this.btn('Options', () => this.open('options')), this.btn('Quit to menu', () => A.quitToMenu(), { cls: 'danger' })));
     return { el, onBack: () => { A.resume(); return false; }, onAction: a => { if (a === 'pause') { A.resume(); return true; } } };
   }
 
@@ -260,7 +278,7 @@ export class Menus {
       h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
       h('div', { class: 'foot' }, this.btn('Continue', () => A.quitToMenu(), { cls: 'go', def: true }))));
-    return { el, onBack: () => false };
+    return { el, onBack: () => false, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 
   /* ---------- options ---------- */
@@ -286,7 +304,7 @@ export class Menus {
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
       !touch && document.fullscreenEnabled && this.btn(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => { A.fullscreen(!document.fullscreenElement); this.back(); }, { cls: 'small' }),
       cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff),
-      touch && cycle('Automatic accelerate', 'autoGas', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
+      touch && cycle('Automatic accelerate', 'autoGo', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
     return { el };
   }
 
@@ -296,27 +314,56 @@ export class Menus {
     const key = (...k) => h('span', { class: 'keys' }, k.map(x => h('kbd', {}, x)));
     // each action, and how to do it on each kind of control; the screen shows one kind at a time
     const HOW = {
-      touch: [['Steer', 'Slide the left pad'], ['Accelerate', 'Automatic'], ['Drift', 'Hold DRIFT'], ['Use item', 'Tap ITEM'], ['Brake', 'Hold BRAKE']],
       kb: [['Steer', [key('A', 'D'), 'or', key('←', '→')]], ['Accelerate', [key('W'), 'or', key('↑')]], ['Drift and hop', key('Space')], ['Use item', [key('E'), 'or', key('Enter')]], ['Brake and reverse', [key('S'), 'or', key('↓')]], ['Look behind', key('Q')], ['Pause', key('Esc')]],
       pad: [['Steer', 'Left stick'], ['Accelerate', 'A or right trigger'], ['Drift and hop', 'Right bumper or X'], ['Use item', 'Left bumper or Y'], ['Brake and reverse', 'B or left trigger'], ['Look behind', 'Press the right stick'], ['Pause', 'Start']],
     };
-    const tips = [
+    const tips = touch ? [
+      ['Drift for speed', 'Steer hard through a turn and the kart hops into a drift. Sparks go blue, orange, then purple. Straighten up to boost.'],
+      ['Start with a rocket', 'Press the right side just after the 2 appears.'],
+      ['Collect coins', 'Each coin makes you faster, up to ten.'],
+      ['Follow closely', 'Tuck in behind a kart to slingshot past.'],
+      ['Throw it backward', 'Use an item while braking to send it behind you.'],
+    ] : [
       ['Drift for speed', 'Hold drift through a turn. Sparks go blue, orange, then purple. Let go to boost.'],
       ['Start with a rocket', 'Hold accelerate just after the 2 appears.'],
       ['Trick off ramps', 'Press drift as you leave a ramp for a boost.'],
       ['Collect coins', 'Each coin makes you faster, up to ten.'],
       ['Follow closely', 'Tuck in behind a kart to slingshot past.'],
     ];
-    const body = h('tbody', {});
-    let kind = touch ? 'touch' : this.app.input.lastDevice.startsWith('pad') ? 'pad' : 'kb';
-    const chips = touch ? [] : [['kb', 'Keyboard'], ['pad', 'Controller']].map(([id, label]) => { const b = h('button', { class: 'chip', 'data-f': true, onclick: () => { kind = id; show(); } }, label); b.dataset.kind = id; return b; });
-    const show = () => { body.replaceChildren(...HOW[kind].map(c => h('tr', {}, h('th', {}, c[0]), h('td', {}, h('span', { class: 'ctl-how' }, c[1]))))); for (const b of chips) b.classList.toggle('sel', b.dataset.kind === kind); };
-    show();
-    const el = h('div', {}, this.header('How to play'), h('div', { class: 'howto' },
-      h('div', { class: 'panel' }, h('div', { class: 'howto-head' }, h('h3', {}, 'Controls'), chips.length > 0 && h('div', { class: 'chips' }, chips)), h('table', { class: 'ctl' }, body)),
+    let controls;
+    if (touch) {
+      // a picture of the screen: what each thumb does, where it does it
+      const half = (who, ...lines) => h('div', { class: 'pd-half' }, h('b', {}, who), lines.map(l => h('span', {}, l)));
+      controls = h('div', { class: 'panel' }, h('div', { class: 'howto-head' }, h('h3', {}, 'Controls')),
+        h('div', { class: 'pad-diagram' }, half('Left thumb', 'Slide to steer', 'Tap to use an item'), half('Right thumb', 'Hold to accelerate', 'Pull down to brake', 'Flick up to use an item')));
+    } else {
+      const body = h('tbody', {});
+      let kind = this.app.input.lastDevice.startsWith('pad') ? 'pad' : 'kb';
+      const chips = [['kb', 'Keyboard'], ['pad', 'Controller']].map(([id, label]) => { const b = h('button', { class: 'chip', 'data-f': true, onclick: () => { kind = id; show(); } }, label); b.dataset.kind = id; return b; });
+      const show = () => { body.replaceChildren(...HOW[kind].map(c => h('tr', {}, h('th', {}, c[0]), h('td', {}, h('span', { class: 'ctl-how' }, c[1]))))); for (const b of chips) b.classList.toggle('sel', b.dataset.kind === kind); };
+      show();
+      controls = h('div', { class: 'panel' }, h('div', { class: 'howto-head' }, h('h3', {}, 'Controls'), h('div', { class: 'chips' }, chips)), h('table', { class: 'ctl' }, body));
+    }
+    const el = h('div', {}, this.header('How to play'), h('div', { class: 'howto' + (touch ? ' touch' : '') },
+      controls,
       h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1])))))),
-      h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true })));
+      h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true }), this.btn('See the items', () => this.open('items'))));
     return { el };
+  }
+
+  /* ---------- the items: what each one is called, and what it does ---------- */
+  s_items() {
+    const list = Object.values(ITEMS);
+    const icon = h('img', { class: 'i-icon', alt: '' }), name = h('h2', {}), desc = h('p', { class: 'i-desc' });
+    const tiles = new Map();
+    const show = it => { icon.src = itemIcon(it.id); name.textContent = it.name; desc.textContent = it.desc; for (const [id, t] of tiles) t.classList.toggle('sel', id === it.id); };
+    const grid = h('div', { class: 'item-grid' }, list.map((it, i) => {
+      const t = h('button', { class: 'item-tile', 'data-f': true, 'data-nohover': true, 'data-default': i === 0, onclick: () => this.focus(t, false) }, h('img', { src: itemIcon(it.id), alt: '', draggable: 'false' }), (it.uses || 0) > 1 && h('em', {}, `×${it.uses}`), h('span', {}, it.name));
+      t.addEventListener('menufocus', () => show(it)); tiles.set(it.id, t); return t;
+    }));
+    const el = h('div', {}, this.header('Items', 'Drive through a box to get one. The further back you are, the better your odds of something big.'),
+      h('div', { class: 'item-layout' }, grid, h('aside', { class: 'item-card' }, icon, h('div', {}, name, desc))));
+    return { el, onOpen: () => show(list[0]) };
   }
 
   /* ---------- records ---------- */

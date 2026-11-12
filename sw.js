@@ -3,7 +3,7 @@
    - Art, audio, fonts: cached on first use, then served from cache.
    - Offline: everything you have already loaded keeps working.
    It also evicts the caches of the old v1 build and reloads any page that build was still serving. */
-const VERSION = 'bk2-1';
+const VERSION = 'bk2-2';
 const ASSET = /\.(webp|png|jpg|jpeg|mp3|ogg|woff2)$/i;
 
 self.addEventListener('install', e => { e.waitUntil(self.skipWaiting()); });

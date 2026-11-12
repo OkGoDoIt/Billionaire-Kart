@@ -1,12 +1,13 @@
 /* Saved data: settings, unlocks, trophies, best times. One localStorage key. */
 const KEY = 'billionaire-kart-v2';
 const DEFAULTS = {
-  settings: { music: 0.7, sfx: 0.9, quality: 'auto', shake: true, autoGas: true, tilt: false, autoTrick: false, smartSteer: false, hudMap: true },
+  settings: { music: 0.7, sfx: 0.9, quality: 'auto', shake: true, autoGo: false, tilt: false, autoTrick: false, smartSteer: false, hudMap: true },
   last: { racer: ['elon', 'sam', 'zuck', 'bezos'], cc: 100, level: 'normal', cup: 'seed', track: 'silicon-valley' },
   trophies: {},      // `${cupId}:${cc}` -> { rank, points, stars }
   best: {},          // `${trackId}:${cc}` -> { race, lap, racer }
   stats: { races: 0, wins: 0, coins: 0, hitsGiven: 0, hitsTaken: 0 },
   seenHowTo: false,
+  touchRaces: 0,     // races started with touch controls: the first few name the two halves of the screen
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 function merge(base, over) { for (const k in over) { if (over[k] && typeof over[k] === 'object' && !Array.isArray(over[k]) && base[k] && typeof base[k] === 'object') merge(base[k], over[k]); else base[k] = over[k]; } return base; }

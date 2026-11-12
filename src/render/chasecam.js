@@ -123,7 +123,9 @@ export class TvCam {
   snap() { this.station = -1; }
   addShake() {}
   _place(k) {
-    const tr = this.track, st = Math.floor((k.s + 55) / this.spacing);
+    const tr = this.track, nat = Math.floor((k.s + 55) / this.spacing);
+    if (nat !== this.nat) { this.nat = nat; this.ahead = 0; }
+    const st = nat + (this.ahead || 0);   // `ahead` hands over early to the next camera when the kart is about to fill this one
     if (st === this.station) return;
     this.station = st;
     const s = st * this.spacing + this.spacing * 0.45, i = Math.floor(((s % tr.length) + tr.length) % tr.length / tr.ds) % tr.N;
@@ -131,8 +133,8 @@ export class TvCam {
     // stand on the shoulder, or just inside a wall or rail: scenery never sits there, so the view is never inside a tree or a building
     const lat = side * (open ? hw + Math.min(3, sh * 0.8) : hw - 1.2), hx = Math.hypot(tr.lx[i], tr.lz[i]) || 1;
     const x = tr.px[i] + (tr.lx[i] / hx) * lat, z = tr.pz[i] + (tr.lz[i] / hx) * lat;
-    const high = tr.tunnel[i] ? 3.4 : open ? 6.5 : 5;
-    this.camera.position.set(x, tr.py[i] + (st % 3 === 0 && open ? 2.2 : high), z);
+    const high = tr.tunnel[i] ? 3.4 : open ? 6.5 : 6;
+    this.camera.position.set(x, tr.py[i] + (st % 3 === 0 && open && sh > 4 ? 3 : high), z);
     this.look.set(k.x, k.y + 1, k.z);
   }
   update(dt, view) {
@@ -141,6 +143,7 @@ export class TvCam {
     this.look.lerp(_look.set(p.x, p.y + 1.1, p.z), 1 - Math.exp(-9 * dt));
     cam.lookAt(this.look);
     const d = cam.position.distanceTo(this.look), want = clamp(900 / Math.max(8, d), 16, 58);
+    if (d < 8.5 && !this.ahead) this.ahead = 1;   // never let a kart drive into the lens: a head filling the screen behind a menu
     this.fov = damp(this.fov, want, 3, dt);
     if (Math.abs(cam.fov - this.fov) > 0.05) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
     this.focus.copy(this.look);

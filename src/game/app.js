@@ -132,7 +132,7 @@ export class App {
   /* ---------- starting races ---------- */
   _players() {
     const f = this.flow;
-    return f.racers.map((racerId, i) => ({ racerId, device: f.devices[i] || 'any', autoTrick: this.save.settings.autoTrick || this.input.touch.active }));
+    return f.racers.map((racerId, i) => ({ racerId, device: f.devices[i] || 'any', autoTrick: this.save.settings.autoTrick || this.input.touch.active, smartSteer: this.save.settings.smartSteer }));
   }
   startSingle(trackId) {
     const f = this.flow; this.gp = null;

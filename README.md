@@ -32,7 +32,7 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 
 ### The grid
 
-Thirteen racers drive a kart of their own: a steel wedge, a rocket with a parcel strapped on, a graphics card with working fans, a stretch limo, a yacht, a beige desktop PC, and more.
+Every racer drives a kart of their own: a steel wedge, a rocket with a parcel strapped on, a graphics card with working fans, a stretch limo, a yacht, a beige desktop PC, a VR headset, a cloud, a Go board, and more.
 
 ![All sixteen racers in their karts](screenshots/karts.jpg)
 

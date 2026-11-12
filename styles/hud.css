@@ -25,7 +25,12 @@
 .hud-item-info.show { opacity: 1; transform: none; }
 .hud-item-info b { display: block; font-weight: 700; font-size: 3.5cqh; line-height: 1.15; color: var(--gold); white-space: nowrap; }
 .hud-item-info span { display: block; font-weight: 500; font-size: 3cqh; line-height: 1.22; max-height: 12cqh; overflow: hidden; transition: max-height 0.35s, opacity 0.35s; }
-.hud-item-info.brief span { display: none; }
+/* Folded away, the description also gives up its width (once it has faded), so the panel shrinks to the item's name
+   instead of leaving a long empty pill. The race feed shares the top of the screen: while it has something to say,
+   the description folds away too, and comes back when the feed clears. */
+.hud-item-info.brief span, .hud:has(.hud-feed-row:not(.out)) .hud-item-info span { max-height: 0; max-width: 0; opacity: 0; transition: max-height 0.35s, opacity 0.35s, max-width 0s 0.35s; }
+/* first races on a phone: the coaching cards have the middle of the screen, so a rival's speech bubble waits */
+#ui:has(.tc.coaching) .hud-talk { visibility: hidden; }
 .hud-compact .hud-item-info span { display: none; }
 
 /* coins and lap, bottom-left */
@@ -55,8 +60,9 @@
 /* banners (countdown, final lap, finish): brief, upper-centre */
 .hud-banner { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%) scale(0.6); font-size: 11cqh; white-space: nowrap; opacity: 0; color: #fff; text-align: center; filter: drop-shadow(0 0.9cqh 0 rgba(0,0,0,0.35)); }
 .hud-banner.show { animation: hud-banner 0.28s cubic-bezier(.2,1.6,.4,1) forwards; }
-.hud-banner.count { font-size: 30cqh; top: 34%; color: var(--gold); }
-.hud-banner.go { font-size: 30cqh; top: 34%; color: var(--mint); }
+/* the countdown sits under the start gantry's sign, not on it: the track name stays readable through 3, 2, 1 */
+.hud-banner.count { font-size: 24cqh; top: 37.5%; color: var(--gold); }
+.hud-banner.go { font-size: 26cqh; top: 37.5%; color: var(--mint); }
 .hud-banner.final { color: var(--hot); }
 .hud-banner.finish { color: var(--gold); font-size: 17cqh; top: 30%; }
 .hud-banner.good { color: var(--mint); }
@@ -82,7 +88,7 @@
 
 /* event feed, top-centre */
 .hud-feed { position: absolute; left: 50%; top: calc(var(--edge) + var(--safe-t)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 0.6cqh; align-items: center; }
-.hud-feed-row { font-family: var(--body); font-weight: 500; font-size: 2.9cqh; background: rgba(11,13,32,0.72); padding: 0.6cqh 2cqh; border-radius: 3cqh; white-space: nowrap; animation: hud-feed 0.25s ease-out; transition: opacity 0.3s; }
+.hud-feed-row { font-family: var(--body); font-weight: 500; font-size: 2.7cqh; background: rgba(11,13,32,0.72); padding: 0.6cqh 2cqh; border-radius: 3cqh; white-space: nowrap; animation: hud-feed 0.25s ease-out; transition: opacity 0.3s; }
 .hud-feed-row b { font-weight: 700; color: var(--gold); }
 .hud-feed-row.out { opacity: 0; }
 

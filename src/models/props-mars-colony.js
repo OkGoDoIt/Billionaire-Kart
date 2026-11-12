@@ -5,7 +5,7 @@
    merged meshes. Nothing here touches the DOM at import time. */
 import * as THREE from 'three';
 import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, loft, plastic, glow, paint, MAT } from './build.js';
-import { canvasTex } from '../render/textures.js';
+import { canvasTex, fitText } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
 
 const tintable = (color, rough = 0.9) => { const m = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, envMapIntensity: 0.5 }); m.userData.tintable = true; return m; };
@@ -172,8 +172,7 @@ export function hiringSign(text = 'MARS: NOW HIRING', { w = 30, h = 7, legs = 8 
   const tex = canvasTex(1024, 240, (g, cw, ch) => {
     g.fillStyle = '#f2efe6'; g.fillRect(0, 0, cw, ch);
     g.fillStyle = '#c1440e'; g.fillRect(0, 0, cw, 22); g.fillRect(0, ch - 22, cw, 22);
-    g.font = '150px "Luckiest Guy", "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillStyle = '#1f1418'; g.fillText(text, cw / 2, ch / 2 + 8, cw - 60);
+    fitText(g, text, cw / 2, ch / 2 + 8, cw - 60, ch - 60, 150, '"Luckiest Guy", "Arial Black", sans-serif', { fill: '#1f1418' });
   }, { repeat: false, aniso: 8 });
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.2, roughness: 0.55 }));
   panel.position.set(0, legs + h / 2, 0.0); grp.add(panel);

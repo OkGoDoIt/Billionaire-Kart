@@ -83,7 +83,7 @@ export class Hud {
   }
   feed(html, ms = 2600) {
     const f = el('div', 'hud-feed-row', html); this.$.feed.prepend(f);
-    while (this.$.feed.children.length > 3) this.$.feed.lastChild.remove();
+    while (this.$.feed.children.length > 2) this.$.feed.lastChild.remove();   // two lines at most: a third reaches down into the banners
     setTimeout(() => { f.classList.add('out'); setTimeout(() => f.remove(), 350); }, ms);
   }
   /** A rival has something to say: their face, their name, and the line in a speech bubble. Returns false if one is already up. */

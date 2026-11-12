@@ -17,6 +17,28 @@ export function canvasTex(w, h, draw, { repeat = true, aniso = 8, srgb = true, m
 
 const hex = n => '#' + n.toString(16).padStart(6, '0');
 
+/** Draw sign text centred at (cx, cy) inside maxW by maxH. Text that is too long gets smaller, or goes onto a second
+    line when `lines` allows it and that keeps it bigger; it is never squashed sideways. Returns the size used. */
+export function fitText(g, text, cx, cy, maxW, maxH, size, font, { lines = 1, fill = '#ffffff', stroke = null, lw = 0, gap = 1.05 } = {}) {
+  const words = String(text).split(' '), layouts = [[String(text)]];
+  if (lines > 1) for (let k = 1; k < words.length; k++) layouts.push([words.slice(0, k).join(' '), words.slice(k).join(' ')]);
+  g.font = `${size}px ${font}`;
+  let best = null;
+  for (const ls of layouts) {
+    const widest = Math.max(...ls.map(l => g.measureText(l).width));
+    const s = Math.floor(Math.min(size, size * maxW / widest, maxH / (gap * ls.length)));
+    if (!best || s > best.s) best = { s, ls };
+  }
+  const { s, ls } = best;
+  g.font = `${s}px ${font}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  ls.forEach((l, k) => {
+    const y = cy + (k - (ls.length - 1) / 2) * s * gap;
+    if (stroke) { g.lineWidth = lw * s / size; g.strokeStyle = stroke; g.strokeText(l, cx, y); }
+    g.fillStyle = fill; g.fillText(l, cx, y);
+  });
+  return s;
+}
+
 function speckle(g, w, h, rng, count, colors, min = 1, max = 2.5, alpha = 0.5) {
   for (let i = 0; i < count; i++) {
     g.globalAlpha = alpha * (0.4 + rng() * 0.6);

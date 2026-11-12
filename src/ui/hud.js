@@ -24,6 +24,7 @@ export class Hud {
       <div class="hud-banner"></div>
       <div class="hud-warn"></div>
       <div class="hud-feed"></div>
+      <div class="hud-talk"><img alt=""><div><b></b><span></span></div></div>
       <div class="hud-wrong">WRONG WAY</div>
       <div class="hud-ink"></div>
       <div class="hud-speed"></div>
@@ -31,7 +32,7 @@ export class Hud {
     parent.appendChild(root);
     const q = s => root.querySelector(s);
     this.$ = { item: q('.hud-item'), img: q('.hud-item-img'), coinFallback: q('.hud-item-coin'), count: q('.hud-item-count'), info: q('.hud-item-info'), itemName: q('.hud-item-info b'), itemDesc: q('.hud-item-info span'), coins: q('.hud-coins b'), coinsPill: q('.hud-coins'), lap: q('.hud-lap b'), lapPill: q('.hud-lap'),
-      rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed') };
+      rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed') };
     if (showMap) this._buildMap();
     for (const id of ROULETTE) { const i = new Image(); i.src = itemIcon(id); }
     this.update(0);
@@ -85,6 +86,14 @@ export class Hud {
     while (this.$.feed.children.length > 3) this.$.feed.lastChild.remove();
     setTimeout(() => { f.classList.add('out'); setTimeout(() => f.remove(), 350); }, ms);
   }
+  /** A rival has something to say: their face, their name, and the line in a speech bubble. Returns false if one is already up. */
+  talk(racer, line, ms = 3000) {
+    if (!line || this.t < (this._talkUntil || 0)) return false;
+    const $ = this.$; $.talkImg.src = racer.portrait; $.talkName.textContent = racer.name; $.talkLine.textContent = line;
+    $.talk.style.setProperty('--rc', hex(racer.color)); $.talk.classList.remove('show'); void $.talk.offsetWidth; $.talk.classList.add('show');
+    this._talkUntil = this.t + ms / 1000 + 0.6; clearTimeout(this._kt); this._kt = setTimeout(() => $.talk.classList.remove('show'), ms);
+    return true;
+  }
   warn(id) { const w = this.$.warn; w.innerHTML = `<img src="${itemIcon(id)}" alt="">`; w.classList.add('show'); clearTimeout(this._wt); this._wt = setTimeout(() => w.classList.remove('show'), 1800); }
   pop(node) { node.classList.remove('pop'); void node.offsetWidth; node.classList.add('pop'); }
 
@@ -99,7 +108,9 @@ export class Hud {
       case 'rocketStart': this.banner(e.data >= 1 ? 'ROCKET START!' : 'NICE START!', 'good', 1100); break;
       case 'trickLand': this.banner('TRICK!', 'good small', 700); break;
       case 'draft': this.banner('SLIPSTREAM!', 'good small', 800); break;
-      case 'robbed': this.feed(`<b>${e.data.racer.name}</b> stole your item`); break;
+      case 'robbed': this.banner(ITEMS.insider.hit, 'bad small', 1300); this.feed(`<b>${e.data.racer.name}</b> stole your item`); break;
+      case 'itemUse': { const line = ITEMS[e.data]?.use; if (line) this.banner(line, 'good small', 1000); break; }
+      case 'inked': this.banner(ITEMS.smear.hit, 'bad small', 1200); break;
       case 'shieldBlock': this.banner('BLOCKED!', 'good small', 700); break;
     }
   }
@@ -151,5 +162,5 @@ export class Hud {
   }
 
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
-  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._nt); }
+  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._nt); clearTimeout(this._kt); }
 }

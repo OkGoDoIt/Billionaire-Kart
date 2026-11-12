@@ -61,6 +61,19 @@
 .hud-banner.finish { color: var(--gold); font-size: 17cqh; top: 30%; }
 .hud-banner.good { color: var(--mint); }
 .hud-banner.small { font-size: 6.5cqh; top: 16%; }
+.hud-banner.bad { color: var(--hot); }
+.hud-banner.bad.small { font-size: 8cqh; top: 18%; }
+
+/* trash talk: a rival's face and a speech bubble, on the left where it cannot cover the road */
+.hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: 31cqh; display: flex; align-items: center; gap: 2cqh; max-width: 70cqh; opacity: 0; transform: translateX(-8cqh) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }
+.hud-talk.show { opacity: 1; transform: none; }
+.hud-talk img { flex: none; width: 11cqh; height: 11cqh; border-radius: 50%; object-fit: cover; object-position: 50% 20%; background: var(--rc, #444); box-shadow: 0 0 0 0.6cqh var(--ink), 0 0 0 1.1cqh #fff, 0 1cqh 0 1.1cqh rgba(0,0,0,0.3); }
+.hud-talk div { position: relative; background: #fff; color: var(--ink); border: 0.55cqh solid var(--ink); border-radius: 2.6cqh; padding: 0.9cqh 2cqh 1.2cqh; font-family: var(--body); box-shadow: 0 0.9cqh 0 rgba(0,0,0,0.35); }
+.hud-talk div::before { content: ""; position: absolute; left: -1.9cqh; top: 50%; width: 2.6cqh; height: 2.6cqh; background: #fff; border-left: 0.55cqh solid var(--ink); border-bottom: 0.55cqh solid var(--ink); transform: translateY(-50%) rotate(45deg); border-radius: 0 0 0 0.5cqh; }
+.hud-talk b { display: block; position: relative; font-family: var(--display); font-size: 2.7cqh; letter-spacing: 0.03em; color: var(--hot); line-height: 1.1; padding-top: 0.2cqh; }
+.hud-talk span { display: block; position: relative; font-weight: 700; font-size: 3.3cqh; line-height: 1.16; }
+.hud.hud-touch .hud-talk { top: 40cqh; max-width: 64cqh; }
+.hud-compact .hud-talk { max-width: 56cqh; }
 
 /* incoming-item warning, bottom-centre */
 .hud-warn { position: absolute; left: 50%; bottom: calc(var(--edge) + var(--safe-b) + 2cqh); width: 11cqh; height: 11cqh; transform: translateX(-50%) scale(0); border-radius: 50%; box-shadow: 0 0 0 0.6cqh var(--hot), 0 0 3cqh 1cqh rgba(255,77,109,0.7); overflow: hidden; }

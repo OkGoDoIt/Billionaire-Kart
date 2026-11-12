@@ -5,24 +5,28 @@ import { clamp, lerp, wrapAngle, mod, loopDelta } from '../core/util.js';
 import { EDGE, makeGroundHit } from '../track/track.js';
 import { TUNE } from './kart.js';
 
+/* name: what it is called. desc: what it does, with attitude (shown beside the item slot and on the Items screen).
+   use: shouted across your screen when you use it. hit: shouted across the screen of whoever it lands on. */
 export const ITEMS = {
-  boost:     { id: 'boost',     name: 'Series A',           img: 'boost',     desc: 'A quick round of funding. Use it for a burst of speed.' },
-  boost3:    { id: 'boost3',    name: 'Triple Round',       img: 'boost',     uses: 3, base: 'boost', desc: 'Three bursts of speed. Spend them wisely, or all at once.' },
-  golden:    { id: 'golden',    name: 'Series F',           img: 'golden',    desc: 'Unlimited boosts for a few seconds. Keep tapping!' },
-  leak:      { id: 'leak',      name: 'Data Leak',          img: 'banana',    shield: true, desc: 'Drop it behind you. Anyone who drives through it spins out.' },
-  subpoena:  { id: 'subpoena',  name: 'Subpoena',           img: 'green',     shield: true, desc: 'Fires straight ahead and bounces off walls.' },
-  subpoena3: { id: 'subpoena3', name: 'Class Action',       img: 'green',     uses: 3, base: 'subpoena', shield: true, desc: 'Three subpoenas circle your kart. Fire them one at a time.' },
-  tweet:     { id: 'tweet',     name: 'Viral Tweet',        img: 'red',       shield: true, desc: 'Homes in on the racer ahead of you.' },
-  antitrust: { id: 'antitrust', name: 'Antitrust Suit',     img: 'blue',      desc: 'Flies to first place and brings the hammer down.' },
-  star:      { id: 'star',      name: 'Hype Cycle',         img: 'star',      desc: 'Invincible and faster for a few seconds. Bump rivals to spin them out.' },
-  crash:     { id: 'crash',     name: 'Market Crash',       img: 'lightning', desc: 'Shrinks and slows every rival, and makes them drop their items.' },
-  pr:        { id: 'pr',        name: 'PR Blitz',           img: 'horn',      desc: 'A shockwave that spins nearby rivals and destroys incoming items.' },
-  pinkslip:  { id: 'pinkslip',  name: 'Pink Slip',          img: 'bomb',      shield: true, desc: 'Lob it ahead. It blows up on contact or after a short fuse.' },
-  smear:     { id: 'smear',     name: 'Smear Campaign',     img: 'blooper',   desc: 'Splatters ink on the screens of everyone ahead of you.' },
-  insider:   { id: 'insider',   name: 'Insider Trading',    img: 'boo',       desc: 'Turn intangible and steal an item from a rival.' },
-  bailout:   { id: 'bailout',   name: 'Government Bailout', img: 'bailout',   desc: 'Autopilot at ludicrous speed. Flattens anyone in the way.' },
-  dividend:  { id: 'dividend',  name: 'Dividend',           img: 'coin',      desc: 'Two coins. A little more top speed.' },
+  boost:     { id: 'boost',     name: 'Series A',           img: 'boost',     use: 'FUNDED!', desc: 'Somebody else’s money. Burn it for a burst of speed.' },
+  boost3:    { id: 'boost3',    name: 'Triple Round',       img: 'boost',     uses: 3, base: 'boost', use: 'FUNDED!', desc: 'Three rounds of somebody else’s money. Burn rate is a lifestyle.' },
+  golden:    { id: 'golden',    name: 'Series F',           img: 'golden',    use: 'UNLIMITED RUNWAY!', desc: 'Unlimited boosts for a few seconds. Keep tapping. There is no plan.' },
+  leak:      { id: 'leak',      name: 'Data Leak',          img: 'banana',    shield: true, hit: 'YOUR DATA LEAKED!', desc: 'Oops. Drop it behind you and whoever drives through it spins out. Blame an intern.' },
+  subpoena:  { id: 'subpoena',  name: 'Subpoena',           img: 'green',     shield: true, hit: 'YOU’VE BEEN SERVED!', desc: 'Fires straight ahead and bounces off walls until it serves somebody.' },
+  subpoena3: { id: 'subpoena3', name: 'Class Action',       img: 'green',     uses: 3, base: 'subpoena', shield: true, hit: 'YOU’VE BEEN SERVED!', desc: 'Three subpoenas circle your kart. Fire them one at a time. Settle for nothing.' },
+  tweet:     { id: 'tweet',     name: 'Viral Tweet',        img: 'red',       shield: true, hit: 'RATIOED!', desc: 'Homes in on the racer ahead of you and ratios them.' },
+  antitrust: { id: 'antitrust', name: 'Antitrust Suit',     img: 'blue',      hit: 'BROKEN UP!', use: 'SEE YOU IN COURT!', desc: 'Flies to first place and breaks them up. Regulators hate a winner.' },
+  star:      { id: 'star',      name: 'Hype Cycle',         img: 'star',      hit: 'RUN OVER BY THE HYPE!', use: 'PEAK HYPE!', desc: 'Invincible and faster for a few seconds. Bump rivals to spin them out. Do not ask about revenue.' },
+  crash:     { id: 'crash',     name: 'Market Crash',       img: 'lightning', hit: 'MARKET CRASH! −40%', use: 'SOLD THE TOP!', desc: 'Shrinks and slows every rival and shakes loose their items. You sold yesterday.' },
+  pr:        { id: 'pr',        name: 'PR Blitz',           img: 'horn',      hit: 'SPUN!', use: 'WE TAKE THIS VERY SERIOUSLY!', desc: 'A shockwave of spin. Nearby rivals spin out and incoming items vanish.' },
+  pinkslip:  { id: 'pinkslip',  name: 'Pink Slip',          img: 'bomb',      shield: true, hit: 'LAID OFF!', desc: 'Lob it ahead. It blows up on contact or after a short fuse. We’re a family.' },
+  smear:     { id: 'smear',     name: 'Smear Campaign',     img: 'blooper',   hit: 'SMEARED!', use: 'SOURCES SAY!', desc: 'Splatters ink on the screens of everyone ahead of you. Sources say.' },
+  insider:   { id: 'insider',   name: 'Insider Trading',    img: 'boo',       hit: 'ROBBED! (LEGALLY)', use: 'NOTHING TO SEE HERE!', desc: 'Turn untouchable and steal a rival’s item. Perfectly legal if you are in Congress.' },
+  bailout:   { id: 'bailout',   name: 'Government Bailout', img: 'bailout',   hit: 'FLATTENED BY A BAILOUT!', use: 'TOO BIG TO FAIL!', desc: 'Autopilot at ludicrous speed, flattening anyone in the way. Too big to fail.' },
+  dividend:  { id: 'dividend',  name: 'Dividend',           img: 'coin',      use: 'PASSIVE INCOME!', desc: 'Two coins, for doing nothing. A little more top speed.' },
 };
+/* Shouts for hits that are not an item landing. */
+export const HIT_LINES = { squash: 'SQUASHED!', star: ITEMS.star.hit, bailout: ITEMS.bailout.hit };
 
 /* Weights by running position for an 8-kart field. Leaders get defence; the back gets the comeback kit. */
 const TABLE = [

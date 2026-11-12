@@ -198,6 +198,26 @@ export class Gfx {
     return sky;
   }
 
+  /**
+   * Blend the sky, fog, and light toward `over` (the same keys as a sky preset) by t in 0..1, starting from
+   * what the track set up: weather that changes over a race. Call it as often as you like; t = 0 puts it all back.
+   */
+  shiftSky(over, t) {
+    const sky = this.sky, p = sky.p, u = sky.uniforms, L = this.lightScale, c = _shift;
+    const col = (key, target, gain = 1) => { if (over[key] != null) target.set(p[key]).lerp(c.set(over[key]), t).multiplyScalar(gain); };
+    const num = key => over[key] != null ? p[key] + (over[key] - p[key]) * t : p[key];
+    col('zenith', u.uZenith.value); col('horizon', u.uHorizon.value); col('ground', u.uGround.value); col('sun', u.uSun.value);
+    col('cloud', u.uCloud.value); col('cloudShade', u.uCloudShade.value);
+    u.uCover.value = num('cloudCover');
+    col('sunLight', this.sun.color); this.sun.intensity = num('sunIntensity') * L;
+    col('hemiSky', this.hemi.color); col('hemiGround', this.hemi.groundColor); this.hemi.intensity = num('hemiIntensity') * L;
+    col('fog', this.scene.fog.color, L); this.scene.fog.near = num('fogNear'); this.scene.fog.far = num('fogFar');
+    this.renderer.toneMappingExposure = num('exposure') / L;
+    if (over.panoTint) { const b = sky.panoTint0 || (sky.panoTint0 = u.uPanoTint.value.clone()); u.uPanoTint.value.set(b.x + (over.panoTint[0] - b.x) * t, b.y + (over.panoTint[1] - b.y) * t, b.z + (over.panoTint[2] - b.z) * t); }
+    // reflections follow the sky, re-baked only when it has moved a fair way
+    if (Math.abs(t - (sky.envT ?? 0)) >= 0.25) { sky.envT = t; if (this.envTex) this.envTex.dispose(); this.envTex = sky.bakeEnvironment(this.renderer); this.scene.environment = this.envTex; }
+  }
+
   /** Centre the shadow frustum on a world position (snapped to texels so shadows do not shimmer). */
   focusShadow(pos) {
     if (!this.q.shadow) return;
@@ -237,6 +257,7 @@ export class Gfx {
   }
 }
 
+const _shift = new THREE.Color();
 const _t = new THREE.Vector3(), _z = new THREE.Vector3(), _n = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 const _m = new THREE.Matrix4(), _mi = new THREE.Matrix4();
 export { SKY_PRESETS };

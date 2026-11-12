@@ -437,7 +437,7 @@ function beige({ b, K, M, main }) {
   M.glass = glass();
   M.sand = plastic(0xe6c372, 0.8);
   {
-    const hx = 0.2, hz = -1.0, y0 = 0.62, q = 1.45;
+    const hx = 0.22, hz = -1.03, y0 = 0.6, q = 1.3;
     for (const yy of [y0 + 0.02 * q, y0 + 0.56 * q]) b.add('beige2', cyl(0.2 * q, 0.2 * q, 0.04 * q, 18), { p: [hx, yy, hz] });
     for (let i = 0; i < 3; i++) { const a = i / 3 * PI * 2 + 0.5; b.add('beige', cyl(0.016 * q, 0.016 * q, 0.54 * q, 6), { p: [hx + Math.cos(a) * 0.17 * q, y0 + 0.29 * q, hz + Math.sin(a) * 0.17 * q] }); }
     b.add('glass', lathe([[0.001, 0.04], [0.15, 0.05], [0.14, 0.17], [0.03, 0.29], [0.14, 0.41], [0.15, 0.53], [0.001, 0.54]], 18), { p: [hx, y0, hz], s: q });

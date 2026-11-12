@@ -4,7 +4,7 @@
    reads from behind (the chase camera's view). Each outfit is a "kit" named by the
    racer's look; everything for one driver merges into a handful of draw calls. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, torus, tube, lathe, plastic, glow, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, plastic, glow, MAT } from './build.js';
 import { shell } from './kart-geo.js';
 import { FACES } from '../content/faces.js';
 import { buildHair } from './hair.js';
@@ -130,6 +130,11 @@ function makeCtx(b, P) {
   const F = y => { const s = at(secs, y); return s.z + s.f; };
   const Bk = y => { const s = at(secs, y); return s.z - s.k; };
   const W = y => at(secs, y).w;
+  // the neck's axis in torso space: the head group sits at L(0.8)+0.03 (plus the
+  // hunch shift) and the neck cylinder is offset -0.01 inside it. Collars must be
+  // centred here, not on the torso sections' L(y), or the neck slices through
+  // the collar ring off-centre and the intersection reads ragged.
+  const neckZ = L(0.8) + 0.02 + P.hunch * 0.25;
   const joints = sx => {
     const sh = [sx * (P.sw - 0.045), 0.6, L(0.6)];
     const el = [sx * (P.sw + 0.085 + (P.buff ? 0.03 : 0)), 0.33, 0.12 + L(0.33) * 0.3];
@@ -137,7 +142,7 @@ function makeCtx(b, P) {
     return { sh, el, wr, hd };
   };
   const ctx = {
-    b, P, secs, L, F, Bk, W, joints,
+    b, P, secs, L, F, Bk, W, joints, neckZ,
     torso(mat = 'top', { grow = 0, ribbed = 0 } = {}) {
       let list = secs;
       if (ribbed) {   // quilted bands, for puffer coats
@@ -158,13 +163,13 @@ function makeCtx(b, P) {
       b.add(mat, vshell(list, { ring: 16, steps: 2 }));
     },
     /** Round collar ring at the neck. */
-    crew(mat, y = 0.735, r = 0.135, t = 0.026) { b.add(mat, torus(r, t, 6, 20), { p: [0, y, L(y)], r: [PI / 2, 0, 0] }); },
+    crew(mat, y = 0.735, r = 0.135, t = 0.026) { b.add(mat, torus(r, t, 9, 24), { p: [0, y, neckZ], r: [PI / 2, 0, 0] }); },
     /** Shirt collar points either side of the throat. */
     points(mat, spread = 0.07, y = 0.725) {
       for (const sx of [1, -1]) b.add(mat, box(0.085, 0.07, 0.014, 0.006, 1), { p: [sx * spread, y, F(y) - 0.012], r: [-0.35, sx * 0.35, sx * 0.7] });
     },
     /** A stand-up collar (lathe ring) with an optional gap at the front. */
-    stand(mat, prof, gap = 0) { b.add(mat, new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 20, gap / 2, PI * 2 - gap), { p: [0, 0, L(0.74)] }); },
+    stand(mat, prof, gap = 0) { b.add(mat, new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 20, gap / 2, PI * 2 - gap), { p: [0, 0, neckZ] }); },
     /** A line of buttons down the front. */
     buttons(mat, ys, r = 0.014, x = 0) { for (const y of ys) b.add(mat, sphere(r, 6, 4), { p: [x, y, F(y) + 0.008], s: [1, 1, 0.5] }); },
     /** A strip down the front centre (zip, placket, tie). */
@@ -220,8 +225,8 @@ function arms(ctx, { mat = 'top', len = 'long', cuff = null, puff = false, glove
 const PROPS = {
   /** the flamethrower that is legally not a flamethrower, slung across the back with the pilot light on */
   flamethrower(ctx) {
-    const { b, Bk } = ctx, zb = Bk(0.62) - 0.16, ang = 0.74, d = [Math.sin(ang), Math.cos(ang)], n = [Math.cos(ang), -Math.sin(ang)];
-    const o = [-0.25, 0.5], at = (t, u = 0) => [o[0] + d[0] * t + n[0] * u, o[1] + d[1] * t + n[1] * u, zb], r = [0, 0, -ang];
+    const { b, Bk } = ctx, zb = Bk(0.62) - 0.19, ang = 0.92, d = [Math.sin(ang), Math.cos(ang)], n = [Math.cos(ang), -Math.sin(ang)];
+    const o = [-0.28, 0.46], at = (t, u = 0) => [o[0] + d[0] * t + n[0] * u, o[1] + d[1] * t + n[1] * u, zb], r = [0, 0, -ang];
     b.add('white', box(0.13, 0.26, 0.085, 0.03, 1), { p: at(0.1, 0.02), r });          // stock
     b.add('white', box(0.115, 0.52, 0.095, 0.035, 1), { p: at(0.46), r });             // body
     b.add('black', box(0.05, 0.4, 0.1, 0.012, 1), { p: at(0.5, -0.02), r });           // the stripe down the side
@@ -235,10 +240,11 @@ const PROPS = {
     b.add('flame', sphere(0.085, 12, 8), { p: at(1.34) });
     ctx.straps('black', 0.56);
   },
-  /** a sack of money on the back: the seven-trillion ask */
+  /** a sack of money on the back: the seven-trillion ask. Slung low and well behind
+      the neck so the knotted top stays out of the bobblehead's swing. */
   moneybag(ctx) {
-    const { b, Bk } = ctx, c = [0, 0.7, Bk(0.62) - 0.22];
-    const prof = [[0.001, -0.25], [0.15, -0.235], [0.24, -0.14], [0.265, -0.02], [0.24, 0.1], [0.15, 0.19], [0.07, 0.24], [0.065, 0.27], [0.11, 0.31], [0.12, 0.34], [0.07, 0.36], [0.001, 0.355]];
+    const { b, Bk } = ctx, c = [0, 0.67, Bk(0.62) - 0.34];
+    const prof = [[0.001, -0.25], [0.15, -0.235], [0.24, -0.14], [0.265, -0.02], [0.24, 0.1], [0.15, 0.19], [0.07, 0.24], [0.065, 0.27], [0.09, 0.3], [0.095, 0.33], [0.05, 0.35], [0.001, 0.345]];
     b.add('sack', lathe(prof, 18), { p: c });
     b.add('twine', torus(0.07, 0.016, 6, 14), { p: [c[0], c[1] + 0.255, c[2]], r: [PI / 2, 0, 0] });
     const rAt = y => { for (let i = 0; i < prof.length - 1; i++) if (y >= prof[i][1] && y <= prof[i + 1][1]) { const t = (y - prof[i][1]) / (prof[i + 1][1] - prof[i][1]); return prof[i][0] + (prof[i + 1][0] - prof[i][0]) * t; } return 0.1; };
@@ -249,24 +255,26 @@ const PROPS = {
     b.add('ink', tube([onSack(0, 0.165), onSack(0, 0.0), onSack(0, -0.165)], 0.018, 6, 6));
     ctx.straps('twine', 0.5);
   },
-  /** a little robot co-pilot riding on the shoulder, whether you asked for it or not */
+  /** a little robot co-pilot riding on the shoulder, whether you asked for it or not.
+      Sized and perched so it reads at race distance: outboard of the head's silhouette,
+      not buried in it (at the old 1.6 scale its head sat inside the skull). */
   copilot(ctx) {
-    let { b, P, L } = ctx, x = P.sw + 0.02, y = 0.8, z = L(0.74) - 0.04;
-    const o = b; b = { add: (m, g, t = {}) => o.add(m, g, { p: [x + (t.p[0] - x) * 1.6, y + (t.p[1] - y) * 1.6, z + (t.p[2] - z) * 1.6], s: (typeof t.s === 'number' ? t.s : (t.s ?? [1, 1, 1]).map(v => v * 1.6)), r: t.r }) };
+    let { b, P, L } = ctx, x = P.sw + 0.11, y = 0.83, z = L(0.74) - 0.05;
+    const K = 1.95, o = b; b = { add: (m, g, t = {}) => o.add(m, g, { p: [x + (t.p[0] - x) * K, y + (t.p[1] - y) * K, z + (t.p[2] - z) * K], s: (typeof t.s === 'number' ? t.s : (t.s ?? [1, 1, 1]).map(v => v * K)), r: t.r }) };
     b.add('bot', sphere(0.09, 14, 10), { p: [x, y, z], s: [1, 0.9, 1] });
     b.add('bot', sphere(0.08, 14, 10), { p: [x, y + 0.13, z] });
     b.add('black', sphere(0.066, 14, 10), { p: [x, y + 0.135, z + 0.028], s: [1, 0.72, 0.75] });
     for (const sx of [1, -1]) b.add('eye', sphere(0.014, 8, 6), { p: [x + sx * 0.026, y + 0.14, z + 0.077] });
     b.add('bot', cyl(0.007, 0.007, 0.09, 5), { p: [x, y + 0.24, z] });
     b.add('eye', sphere(0.022, 8, 6), { p: [x, y + 0.29, z] });
-    for (const sx of [1, -1]) b.add('bot', sphere(0.03, 8, 6), { p: [x + sx * 0.085, y + 0.13, z] });
+    for (const sx of [1, -1]) b.add('bot', sphere(0.024, 8, 6), { p: [x + sx * 0.085, y + 0.13, z] });
   },
   /** the price tag nobody took off, flapping behind */
   pricetag(ctx) {
     const { b, Bk } = ctx, z0 = Bk(0.76);
-    b.add('twine', tube([[0, 0.77, z0], [0.03, 0.86, z0 - 0.14], [0.1, 0.97, z0 - 0.32], [0.16, 1.02, z0 - 0.44]], 0.008, 10, 4));
+    b.add('twine', tube([[0, 0.77, z0], [0.03, 0.86, z0 - 0.14], [0.12, 0.95, z0 - 0.36], [0.21, 0.96, z0 - 0.54]], 0.008, 10, 4));
     const tg = new THREE.BoxGeometry(0.5, 0.25, 0.014);
-    b.add('tag', tg, { p: [0.26, 0.92, z0 - 0.52], r: [0.35, 0.2, -0.12] });
+    b.add('tag', tg, { p: [0.32, 0.86, z0 - 0.62], r: [0.35, 0.2, -0.12] });
   },
 };
 
@@ -388,7 +396,7 @@ const KITS = {
   /** a black turtleneck, rolled right up to the chin */
   turtleneck: { P: { sw: 0.265, chest: 0.175, arm: 0.066 }, mats: { top: [null, 0.9] }, dress(c) {
     c.torso('top');
-    for (const [y, r] of [[0.72, 0.15], [0.765, 0.145], [0.81, 0.14], [0.85, 0.137]]) c.b.add('top', torus(r, 0.04, 8, 22), { p: [0, y, c.L(y)], r: [PI / 2, 0, 0] });
+    for (const [y, r] of [[0.72, 0.15], [0.765, 0.145], [0.81, 0.14], [0.85, 0.137]]) c.b.add('top', torus(r, 0.04, 8, 22), { p: [0, y, c.neckZ], r: [PI / 2, 0, 0] });
     c.b.add('silver', torus(0.15, 0.007, 4, 28), { p: [0, 0.64, c.L(0.64) + 0.04], r: [PI / 2 - 0.75, 0, 0] });
     c.b.add('silver', box(0.09, 0.03, 0.01, 0.006, 1), { p: [0, 0.535, c.F(0.535) + 0.012] });
     arms(c, {});
@@ -398,7 +406,7 @@ const KITS = {
     c.torso('top');
     c.b.add('top2', vshell([at(c.secs, 0.52), at(c.secs, 0.6), at(c.secs, 0.66), at(c.secs, 0.72)], { grow: 0.006 }));
     for (const a of [0, PI]) c.b.add('top2', vshell([at(c.secs, 0.04), at(c.secs, 0.27), at(c.secs, 0.5)], { a0: a - 0.2, a1: a + 0.2, grow: 0.005, ring: 6 }));
-    c.stand('collarTop2', [[0.145, 0.7], [0.15, 0.76], [0.145, 0.8]], 0.25);
+    c.stand('collarTop2', [[0.16, 0.7], [0.165, 0.76], [0.16, 0.8]], 0.25);
     c.frontStrip('steel', 0.1, 0.76, 0.008, 0.008, 0.012, 0.004);
     arms(c, { glove: true, cuff: 'top2' });
   } },

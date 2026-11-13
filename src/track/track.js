@@ -162,7 +162,7 @@ export class Track {
     this.edgeL = new Uint8Array(N); this.edgeR = new Uint8Array(N);
     this.shL = new Float32Array(N); this.shR = new Float32Array(N);
     this.outerL = new Float32Array(N); this.outerR = new Float32Array(N);
-    this.bridge = new Uint8Array(N); this.gap = new Uint8Array(N); this.tunnel = new Uint8Array(N);
+    this.bridge = new Uint8Array(N); this.gap = new Uint8Array(N); this.tunnel = new Uint8Array(N); this.through = new Uint8Array(N);
     this.surf = new Array(N).fill(this.roadSurface);
     this.wallStyle = new Array(N).fill(null);
     this.hoardL = new Uint8Array(N).fill(1); this.hoardR = new Uint8Array(N).fill(1);   // draw the sponsor wall at the outer limit?
@@ -180,7 +180,7 @@ export class Track {
       }
     }
     for (const r of def.bridges || []) for (const i of this._range(r.from, r.to)) this.bridge[i] = 1;
-    for (const r of def.tunnels || []) for (const i of this._range(r.from, r.to)) { this.tunnel[i] = 1; this.edgeL[i] = EDGE.WALL; this.edgeR[i] = EDGE.WALL; if (r.through) this.bridge[i] = 1; }
+    for (const r of def.tunnels || []) for (const i of this._range(r.from, r.to)) { this.tunnel[i] = 1; this.edgeL[i] = EDGE.WALL; this.edgeR[i] = EDGE.WALL; if (r.through) { this.bridge[i] = 1; this.through[i] = 1; } }
     for (const r of def.gaps || []) for (const i of this._range(r.from, r.to)) { this.gap[i] = 1; this.bridge[i] = 1; }
     this.skin = new Array(N).fill(def.look?.road?.skin || 'asphalt');
     for (const r of def.zones || []) for (const i of this._range(r.from, r.to)) { if (r.surface) this.surf[i] = SURFACES[r.surface]; if (r.skin) this.skin[i] = r.skin; }
@@ -427,6 +427,18 @@ export class Track {
     const stride = 2, pl = [0, 0, 0];
     // ground-level samples only (bridges do not pull the terrain up)
     const cand = []; for (let i = 0; i < N; i += stride) if (!this.bridge[i]) cand.push(i);
+    // through tunnels: the dual rule below keeps the conform from pulling the
+    // terrain DOWN into the bore. Remember each run's first sample and length
+    // so the loop can tell whether a grid point lies over the bore's span.
+    const trun = new Int32Array(N).fill(-1), tlen = new Int32Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!this.through[i] || trun[i] >= 0) continue;
+      let len = 0; while (len < N && this.through[mod(i + len, N)]) len++;
+      for (let k = 0; k < len; k++) trun[mod(i + k, N)] = i;
+      tlen[i] = len;
+    }
+    const tcand = []; for (let i = 0; i < N; i++) if (trun[i] >= 0) tcand.push(i);
+    const tunnelH = def.tunnelHeight ?? 7.5;
     const base = t?.base ?? 0; // offset so the road sits slightly proud of the land
     for (let iz = 0; iz < nz; iz++) {
       const z = z0 + iz * cell;
@@ -450,6 +462,43 @@ export class Track {
         const planeY = this.py[best] + clamp(pl[0], -this.ds, this.ds) * this.ty[best] + latC * this.ly[best];
         const bs = this.blendSide?.[left ? 0 : 1][best], w = smoothstep(sh, sh + (bs >= 0 ? bs : blend), over);
         H[idx] = lerp(planeY - base, far, w);
+        // Through-tunnel airspace: the point's height was blended toward the
+        // ground roads either side of the bore, and wherever that blend lands
+        // between the road and the shell the heightfield slices through the
+        // tunnel as a rock sheet (Crypto Cove's sea cave was plugged exactly
+        // this way, worst mid-bore and just inside both portals). Floor hill
+        // material — terrain at or above road level — at the tunnel arch +
+        // clearance, taking the highest arch any nearby tunnel sample sweeps
+        // over the point, so over a through tunnel the terrain is always
+        // either under the road or over the shell. Terrain deliberately
+        // below the road (a trenched bore, water) is left alone, as are
+        // points beyond the tunnel's span (the portal mouths keep their
+        // carved approach).
+        if (tcand.length) {
+          let floor = -Infinity;
+          for (let c = 0; c < tcand.length; c++) {
+            const tb = tcand[c], dx = x - px[tb], dz = z - pz[tb];
+            if (dx * dx + dz * dz > 1024) continue;   // the arch cannot reach past ~32 m
+            this._plane(tb, x, z, pl);
+            // only the samples whose own piece of tube sweeps over the point
+            // count — a faraway sample's frame can spuriously cover it on a
+            // curve, and its arch belongs to a different part of the hill
+            if (Math.abs(pl[0]) > this.ds * 1.6) continue;
+            const start = trun[tb], posInRun = mod(tb - start, N) * this.ds + pl[0];
+            if (posInRun < -this.ds * 0.75 || posInRun > tlen[start] * this.ds + this.ds * 0.75) continue;
+            const tLat = pl[1], aL = this.hwL[tb] + 0.7, bR = this.hwR[tb] + 0.7, half = (aL + bR) / 2;
+            if (Math.abs(tLat) > half) continue;   // the shell's own footprint only: the hillside beside the portals stays drivable conform terrain, so karts rejoining from it meet no ramp
+            const ratio = clamp((tLat - (aL - bR) / 2) / half, -1, 1);
+            const archY = this.py[tb] + this.ly[tb] * tLat + this.uy[tb] * Math.sin(Math.acos(ratio)) * tunnelH + 1.6;
+            if (archY > floor) floor = archY;
+          }
+          // Hill material only: lift the point when the track's own terrain
+          // fn builds hill over the arch there — that hill is what the
+          // conform dragged down, however far below the road plane the blend
+          // pulled it. Where fn stays low (a trenched bore, water, a cutting)
+          // the conform's word stands and nothing is lifted.
+          if (floor > -Infinity && H[idx] < floor && far > floor) H[idx] = floor;
+        }
         D[idx] = over; S[idx] = over - sh; NI[idx] = best;
       }
     }

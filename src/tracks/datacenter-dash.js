@@ -71,7 +71,7 @@ const HALL_DEFS = [
   { id: 'chiller', from: 6.0, to: 9.15, narrow: 6.2, up: 10.5, rackRows: 0, skin: 'metal',
     panel: ['#15302e', '#1c3d3a', '#0d1f1d', '#3dffd0'], glow: 0x8dffe4, band: 0x3dffd0, accent: 0x16a39a,
     signIn: ['CHILLER PLANT 3', '#7dffe0'], signOut: ['NEXT: THE LAKE (FOR NOW)', '#ffd23c'], jokes: ['PRESSURE: YES', 'COOLANT: 112% OF A LAKE', 'DO NOT LICK THE PIPES'] },
-  { id: 'gpu', from: 15.0, to: 17.55, narrow: 7.4, up: 10.8, skin: 'hallfloor', rowGlow: 0xff3a1a,
+  { id: 'gpu', from: 15.0, to: 17.55, narrow: 7.4, up: 10.8, skin: 'metal', rowGlow: 0xff3a1a,   // dark metal floor under the red light (#238: the white hallfloor tile killed the look)
     panel: ['#2a1416', '#38191c', '#1a0c0e', '#ff5a2a'], glow: 0xffb08a, band: 0xff4a2a, accent: 0xe23b3b,
     signIn: ['GPU HALL · 41°C AND RISING', '#ff8a5c'], signOut: ['COOL DOWN AHEAD (NOT REALLY)', '#ffd23c'], jokes: ['WE BOUGHT ALL OF THEM', 'FAN SPEED: YES', 'SPICY TENSORS INSIDE'] },
   { id: 'inference', from: 21.85, to: 26.45, wide: [23.5, 26.1], wideIn: 9.5, wideOut: 16, inAt: 24.0, narrow: 4.6, up: 9.8, upWide: 11.8, skin: 'neon',
@@ -210,12 +210,14 @@ export default {
     { from: 25.6, to: 26.2, n: 4, lat: [-3, 4] },
   ],
   obstacles: [
-    // security robots on the straights, each sweeping only part of the road
-    { kind: 'patrol', model: 'bot', at: 3.45, lats: [-7, -3.6], speed: 3, effect: 'spin', radius: 1.2 },
-    { kind: 'patrol', model: 'bot', at: 17.75, lats: [-7, -3.4], speed: 3.2, effect: 'spin', radius: 1.2 },
-    // steam vents round the bay, blowing in turn
+    // security robots on the straights, each sweeping only part of the road (#238: sweeps narrowed to the
+    // wall lane — the old bands crossed the racing line at the hall exit and cost ~2 hits a race in the sim)
+    { kind: 'patrol', model: 'bot', at: 3.45, lats: [-7.8, -5.6], speed: 3, effect: 'spin', radius: 1.2 },
+    { kind: 'patrol', model: 'bot', at: 17.75, lats: [-8.2, -6.4], speed: 3.2, effect: 'spin', radius: 1.2 },
+    // steam vents round the bay, blowing in turn (#238: the second vent sat on the bay apex line, 2 hits a
+    // race in the sim; moved to the outside of the bend, where it now only threatens a wide line)
     { kind: 'timed', model: 'vent', at: 11.7, lat: -4, period: 3, duty: 0.3, phase: 0, effect: 'spin', radius: 1.4 },
-    { kind: 'timed', model: 'vent', at: 12.4, lat: 4, period: 3, duty: 0.3, phase: 1.5, effect: 'spin', radius: 1.4 },
+    { kind: 'timed', model: 'vent', at: 12.4, lat: -6, period: 3, duty: 0.3, phase: 1.5, effect: 'spin', radius: 1.4 },
   ],
   models: { vent: () => D.vent() },
   terrain: {

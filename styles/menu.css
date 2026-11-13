@@ -99,6 +99,13 @@
 .screen-setup .sub-h { margin-top: calc(var(--u) * 1.6) !important; margin-bottom: calc(var(--u) * 0.8) !important; }
 .screen-setup .chip { padding-top: calc(var(--u) * 0.85); padding-bottom: calc(var(--u) * 0.85); }
 .screen-setup .foot { margin-top: calc(var(--u) * 1.6); }
+/* four classes in a row: at 1280x720 the card contents outgrew their columns and 200cc ran off the right edge, so the cards trim their own padding and number size */
+@media (orientation: landscape) {
+  .screen-setup .card.cc { min-width: 0; padding-left: calc(var(--u) * 1.4); padding-right: calc(var(--u) * 1.4); }
+  .screen-setup .cc-n { font-size: calc(var(--u) * 5.8); }
+  .screen-setup .cc-l { font-size: calc(var(--u) * 2.1); }
+  .screen-setup .cc-d { font-size: calc(var(--u) * 1.6); }
+}
 .cup { border-color: var(--cc); min-height: calc(var(--u) * 36); }
 .cup ol { margin: calc(var(--u) * 1.6) 0 0; padding-left: 1.3em; font-weight: 600; font-size: calc(var(--u) * 2.1); line-height: 1.5; }
 .cup li.soon { opacity: 0.45; font-weight: 400; }

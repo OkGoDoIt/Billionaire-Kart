@@ -93,15 +93,23 @@ export class Particles {
     this.add = new Batch(3000, glowTexture(64), THREE.AdditiveBlending);
     this.smoke = new Batch(2200, puffTexture(128), THREE.NormalBlending);
     this.bits = new Batch(1400, canvasTex(32, 32, (g, w) => { g.fillStyle = '#fff'; g.fillRect(4, 8, w - 8, w - 16); }, { repeat: false, mip: false }), THREE.NormalBlending);
-    scene.add(this.smoke.points, this.bits.points, this.add.points);
+    // glints: a hot dot with a four-point star flare, additive. Drift sparks and pops use these so they read as
+    // sparks (sharp, twinkling) rather than as the soft round glow the flames use.
+    this.glint = new Batch(1600, canvasTex(32, 32, (g, w) => {
+      const c = w / 2, gr = g.createRadialGradient(c, c, 0, c, c, c * 0.5); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, w, w);
+      g.globalCompositeOperation = 'lighter';
+      for (const [sx, sy] of [[1, 0.12], [0.12, 1]]) { const s = g.createRadialGradient(c, c, 0, c, c, c); s.addColorStop(0, 'rgba(255,255,255,0.9)'); s.addColorStop(1, 'rgba(255,255,255,0)'); g.save(); g.translate(c, c); g.scale(sx, sy); g.translate(-c, -c); g.fillStyle = s; g.beginPath(); g.arc(c, c, c, 0, 7); g.fill(); g.restore(); }
+    }, { repeat: false, mip: false }), THREE.AdditiveBlending);
+    scene.add(this.smoke.points, this.bits.points, this.add.points, this.glint.points);
     this.acc = 0;
   }
   /** Call before rendering each view so point sizes match that viewport. */
   setViewport(heightPx, fovDeg) {
     const s = heightPx / (2 * Math.tan((fovDeg * Math.PI) / 360));
-    this.add.mat.uniforms.uScale.value = s; this.smoke.mat.uniforms.uScale.value = s; this.bits.mat.uniforms.uScale.value = s;
+    this.add.mat.uniforms.uScale.value = s; this.smoke.mat.uniforms.uScale.value = s; this.bits.mat.uniforms.uScale.value = s; this.glint.mat.uniforms.uScale.value = s;
   }
-  update(dt) { this.add.update(dt); this.smoke.update(dt); this.bits.update(dt); }
+  update(dt) { this.add.update(dt); this.smoke.update(dt); this.bits.update(dt); this.glint.update(dt); }
   /** How many to emit this frame for a rate per second (handles fractional rates). */
   count(rate, dt) { const f = rate * dt * this.density; const n = Math.floor(f); return n + (Math.random() < f - n ? 1 : 0); }
 

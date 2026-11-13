@@ -266,8 +266,11 @@ function safety({ b, K, M, main, second }) {
   b.add('haz', capsule(0.13, 0.76, 6, 16), { p: [0, 0.34, -1.25], r: [0, 0, PI / 2] });
   for (let i = -3; i <= 3; i++) b.add('black', cyl(0.134, 0.134, 0.055, 16), { p: [i * 0.12, 0.34, -1.25], r: [0, 0, PI / 2] });
   b.add('main', box(0.82, 0.32, 0.06, 0.03, 2), { p: [0, 0.6, -1.17] });
-  // the roll hoop over the driver
-  b.add('chrome', tube([[-0.46, 0.6, -0.62], [-0.74, 1.25, -0.61], [-0.72, 2.0, -0.6], [-0.44, 2.5, -0.6], [0, 2.63, -0.6], [0.44, 2.5, -0.6], [0.72, 2.0, -0.6], [0.74, 1.25, -0.61], [0.46, 0.6, -0.62]], 0.045, 40, 8));
+  // the roll hoop over the driver. Legs flared, shoulders widened and the peak
+  // lifted a touch (#83): on a big head (Dario's curls) the hair swung into
+  // the hoop's legs at hard head-roll (-0.03 clearance at the ±0.6 clamp);
+  // every pose in the bob grid now clears (+0.04 or better). Feet unchanged.
+  b.add('chrome', tube([[-0.46, 0.6, -0.62], [-0.79, 1.25, -0.61], [-0.84, 2.02, -0.6], [-0.56, 2.56, -0.6], [0, 2.72, -0.6], [0.56, 2.56, -0.6], [0.84, 2.02, -0.6], [0.79, 1.25, -0.61], [0.46, 0.6, -0.62]], 0.045, 40, 8));
   // amber beacon on a pole
   b.add('dark', tube([[-0.36, 0.7, -1.02], [-0.5, 1.0, -1.06], [-0.64, 1.3, -1.1]], 0.02, 8, 6));
   b.add('dark', cyl(0.07, 0.08, 0.06, 12), { p: [-0.64, 1.33, -1.1] });
@@ -378,7 +381,11 @@ function tandem({ b, K, M, main, second, spinner }) {
     { z: -0.36, w: 0.08, h: 0.08, y: 0.36, x: sx * 0.58, n: 3 }, { z: -0.26, w: 0.14, h: 0.13, y: 0.37, x: sx * 0.6, n: 3.2 },
     { z: 0.3, w: 0.14, h: 0.12, y: 0.36, x: sx * 0.6, n: 3.2 }, { z: 0.44, w: 0.08, h: 0.08, y: 0.34, x: sx * 0.58, n: 3 },
   ], 14, 3));
-  const S1 = { x: 0.16, y: 0.5, z: 0.06 }, S2 = { x: -0.17, y: 0.58, z: -0.7 };
+  // staggered wide and tall: from the chase camera the rear rider used to sit
+  // squarely on top of the front driver (42% of the front head visible). The
+  // wider offset + a higher, slightly further-back pillion perch lets both
+  // heads read while keeping the crammed-in tandem gag.
+  const S1 = { x: 0.25, y: 0.48, z: 0.06 }, S2 = { x: -0.28, y: 0.72, z: -0.78 };
   cockpit(b, 0.68, S1.z + 0.02, 0.62, 0.62, 'dark', S1.x);
   cockpit(b, 0.71, S2.z + 0.02, 0.62, 0.6, 'dark', S2.x);
   seat(b, S1, 'yellow'); seat(b, S2, 'green');
@@ -437,7 +444,7 @@ function beige({ b, K, M, main }) {
   M.glass = glass();
   M.sand = plastic(0xe6c372, 0.8);
   {
-    const hx = 0.2, hz = -1.0, y0 = 0.62, q = 1.45;
+    const hx = 0.22, hz = -1.03, y0 = 0.6, q = 1.3;
     for (const yy of [y0 + 0.02 * q, y0 + 0.56 * q]) b.add('beige2', cyl(0.2 * q, 0.2 * q, 0.04 * q, 18), { p: [hx, yy, hz] });
     for (let i = 0; i < 3; i++) { const a = i / 3 * PI * 2 + 0.5; b.add('beige', cyl(0.016 * q, 0.016 * q, 0.54 * q, 6), { p: [hx + Math.cos(a) * 0.17 * q, y0 + 0.29 * q, hz + Math.sin(a) * 0.17 * q] }); }
     b.add('glass', lathe([[0.001, 0.04], [0.15, 0.05], [0.14, 0.17], [0.03, 0.29], [0.14, 0.41], [0.15, 0.53], [0.001, 0.54]], 18), { p: [hx, y0, hz], s: q });

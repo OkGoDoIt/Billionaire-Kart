@@ -19,7 +19,7 @@ import { ModelBuilder, box, cyl, sphere, plastic, glow } from '../models/build.j
 
 const GAP_FROM = 41.0, GAP_TO = 41.44, COIN_AIR = 4.5;   // the Leap: a 22 m gap off the crest
 // the fork's island: a spine of solid posts down the middle of the climb (drawn in decorate; the posts themselves are invisible)
-const FORK = { from: 4.0, to: 5.12, lat: 14 };
+const FORK = { from: 4.12, to: 5.12, lat: 14 };   // nose pushed 0.12 cp into the fork (probe step 1e): karts wedged on the nose posts at cp 4.04-4.13 and needed progress rescues
 const ISLAND = []; for (let c = FORK.from; c <= FORK.to + 1e-6; c += 0.064) ISLAND.push({ kind: 'static', model: 'island', at: c, lat: FORK.lat, radius: c - FORK.from < 0.1 || FORK.to - c < 0.1 ? 1.4 : 2.0, effect: 'bump' });
 const ADS = ['AGI ACHIEVED INTERNALLY', 'COMPUTE OR DIE', 'YOU ARE THE TRAINING DATA', 'SCALE IS ALL YOU NEED', 'HUMAN IN THE LOOP (FOR NOW)', 'PAPERCLIPS MAXIMIZED', 'TRAINED ON YOUR GROUP CHAT', 'THE LINE GOES UP', 'PROMPT ENGINEER WANTED', 'DOOM: 12%'];
 const FACTORY = { x: 165, y: 5, z: -275, yaw: 0 };          // the paperclip maximizer, north of everything
@@ -52,8 +52,8 @@ export default {
     { p: [155, 38, 43], bank: 6 },              // 3 turn one
     { p: [102.5, 42.5, 43], wl: 25.5, wr: 9.5 },  // 4 the climb toward the orb: the fork (ALIGNED right, ACCELERATE left)
     { p: [50, 46.6, 43], wl: 25.5, wr: 9.5 },     // 5 the climb toward the orb: the fork
-    { p: [0, 47.6, 43], w: 21 },                // 6 spiral entry, top level
-    { p: [-29, 45.6, 31], bank: -10, w: 21 },   // 7 spiral, 45 deg
+    { p: [0, 47.2, 43], w: 21 },                // 6 spiral entry, top level
+    { p: [-29, 45.3, 31], bank: -10, w: 21 },   // 7 spiral, 45 deg
     { p: [-41, 43, 2], bank: -10, w: 21 },      // 8 spiral, 90 deg
     { p: [-29, 40.5, -27], bank: -10, w: 21 },  // 9 spiral, 135 deg
     { p: [0, 38, -39], bank: -10, w: 21 },      // 10 spiral, 180 deg
@@ -90,11 +90,11 @@ export default {
     { p: [279, 40, 160.4] },                    // 41 crest: the Leap
     { p: [279, 28, 210.4] },                    // 42 landing, a long dive
     { p: [279, 16, 262] },                      // 43 bottom of the dive, into the hairpin
-    { p: [273.3, 17.6, 283], bank: -16 },       // 44 banked hairpin, climbing
-    { p: [258, 19.4, 298.4], bank: -18 },       // 45 banked hairpin
-    { p: [237, 21.2, 304], bank: -18 },         // 46 banked hairpin
-    { p: [216, 23, 298.4], bank: -18 },         // 47 banked hairpin
-    { p: [200.6, 24.8, 283], bank: -16 },       // 48 banked hairpin
+    { p: [273.3, 17.6, 283], bank: -12 },       // 44 banked hairpin, climbing
+    { p: [258, 19.4, 298.4], bank: -12 },       // 45 banked hairpin
+    { p: [237, 21.2, 304], bank: -12 },         // 46 banked hairpin
+    { p: [216, 23, 298.4], bank: -12 },         // 47 banked hairpin
+    { p: [200.6, 24.8, 283], bank: -12 },       // 48 banked hairpin
     { p: [195, 26.4, 262], bank: -6, w: 20 },   // 49 banked hairpin
     { p: [195, 28.2, 206], w: 21 },             // 50 light rings: boost chain to the line
   ],
@@ -103,6 +103,9 @@ export default {
   sides: [
     { from: 49.66, to: 1.25, edge: 'wall' },                 // start straight: walled for the grid
     { from: 1.0, to: 3.4, side: 'R', edge: 'wall' },          // turn one
+    { from: 1.25, to: 3.4, side: 'L', edge: 'wall' },         // turn one, outside: probe step 1e — karts drift off at lat +11, cp 1.5-2.4
+    { from: 6.0, to: 18.3, side: 'R', edge: 'wall' },         // spiral inside wall (checklist step 1d, extended by probe step 1e: falls span cp 7.9-16.0, incl. after item hits)
+    { from: 3.9, to: 6.5, side: 'L', edge: 'wall' },          // fork exit + spiral entry outside (probe step 1e: ACCELERATE overshoot, lat +28-32 at cp 4.1-4.8, and merge falls at cp 6.0-6.1)
     { from: 6.5, to: 18.3, side: 'L', edge: 'wall' },         // the spiral: outside wall all the way down
     { from: 19.6, to: 21.9, side: 'R', edge: 'wall' },        // neon chicane: left
     { from: 21.9, to: 26.1, side: 'L', edge: 'wall' },        //               right
@@ -154,7 +157,7 @@ export default {
     { kind: 'timed', model: 'review', at: 4.62, lat: 5.6, period: 2.6, duty: 0.5, phase: 1.3, effect: 'spin', radius: 2.4, fromLap: -1 },
   ],
   // the fork on the climb: the narrow ACCELERATE lane, on the void edge, with two boost pads
-  shortcuts: [{ name: 'accelerate lane', from: 3.15, to: 7.35, path: [[140, 50], [125, 58], [110, 63], [80, 64], [55, 63], [30, 58], [12, 53], [-6, 49.5], [-19, 45], [-28, 37]], skill: 0.55, chance: 1 }],
+  shortcuts: [{ name: 'accelerate lane', from: 3.15, to: 6.9, path: [[140, 50], [125, 58], [110, 63], [80, 64], [55, 63], [30, 58], [12, 53], [-6, 49.5], [-19, 45]], skill: 0.55, chance: 0.6 }],
   models: { laser: () => S.laserGate(), drone: () => S.agentDrone(), island: () => S.hidden(), review: () => S.laserGate(['ALIGNMENT', 'REVIEW']) },
   look: {
     road: { skin: 'glass', glow: 0xff5cc8 },
@@ -195,7 +198,7 @@ function decorate(ctx) {
   const inDisc = (x, y, z, pad) => { const r = Math.hypot(x - ox, z - oz); return r > 40 && r < 130 && Math.abs(y - (oy - (z - oz) * Math.tan(DISC_TILT))) < pad; };
   anim.push((dt, time) => { orb.userData.update(time); disc.userData.update(time); });
   // the next data center: a Dyson swarm closing round a star, dead ahead down the Leap. It closes a little more every lap.
-  const dyson = S.dysonSphere({ R: 260 }); dyson.position.set(CX + 40, 250, CZ + 1480); dyson.lookAt(CX, 120, CZ); ctx.group.add(dyson);
+  const dyson = S.dysonSphere({ R: 260, panels: 700, fill: 0.5 });   // checklist step 9: denser, smaller panels read as a swarm, not a disco ball dyson.position.set(CX + 40, 250, CZ + 1480); dyson.lookAt(CX, 120, CZ); ctx.group.add(dyson);
   let built = 0.55, builtTo = 0.55;
   anim.push((dt, time) => { dyson.userData.update(time); if (Math.abs(builtTo - built) > 0.002) { built += Math.sign(builtTo - built) * Math.min(Math.abs(builtTo - built), dt * 0.12); dyson.userData.setBuilt(built); } });
   // it has a face, and the face watches whoever is looking at it

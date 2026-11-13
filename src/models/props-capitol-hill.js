@@ -113,15 +113,105 @@ export function capitol({ len = 80, half = 20 } = {}) {
   return grp;
 }
 
-/** The obelisk: about 31 m of pale stone, gently tapered, with a pyramid top. */
-export function obelisk({ h = 26 } = {}) {
+/** The obelisk: pale stone, tapered about 0.62 like the real one, with a pyramid top on a stepped plinth.
+ *  h is the shaft height; w the base side. userData.half(y): the half-side of the shaft at height y above the origin. */
+export function obelisk({ h = 26, w = 5.0 } = {}) {
+  const b = new ModelBuilder(), r0 = w / Math.SQRT2, r1 = r0 * 0.62, P = w * 0.12;
+  b.add('stone', box(w * 2.4, P * 0.8, w * 2.4, 0.15, 1), { p: [0, P * 0.4, 0] });
+  b.add('stoneD', box(w * 1.9, P, w * 1.9, 0.15, 1), { p: [0, P * 1.3, 0] });
+  b.add('stone', box(w * 1.5, P * 0.75, w * 1.5, 0.12, 1), { p: [0, P * 2.17, 0] });
+  const y0 = P * 2.55;
+  b.add('shaft', cyl(r1, r0, h, 4), { p: [0, y0 + h / 2, 0], r: [0, Math.PI / 4, 0] });
+  b.add('shaft', cone(r1, h * 0.105, 4), { p: [0, y0 + h + h * 0.0525, 0], r: [0, Math.PI / 4, 0] });
+  // the two little windows near the top, both faces the road sees
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, d = r1 * Math.SQRT1_2 * 1.06; b.add('dark', box(w * 0.07, h * 0.012, 0.08, 0.02, 1), { p: [Math.sin(a) * d - Math.cos(a) * w * 0.06, y0 + h * 0.965, Math.cos(a) * d + Math.sin(a) * w * 0.06], r: [0, a, 0] }); b.add('dark', box(w * 0.07, h * 0.012, 0.08, 0.02, 1), { p: [Math.sin(a) * d + Math.cos(a) * w * 0.06, y0 + h * 0.965, Math.cos(a) * d - Math.sin(a) * w * 0.06], r: [0, a, 0] }); }
+  const g = b.build({ stone: plastic(STONE, 0.7), stoneD: plastic(0xd6cdb9, 0.75), shaft: flat(0xece6d6), dark: plastic(0x2a2a30, 0.6) });
+  g.userData.half = y => { const t = Math.min(1, Math.max(0, (y - y0) / h)); return (w + (w * 0.62 - w) * t) / 2; };
+  g.userData.top = y0 + h * 1.105;
+  return g;
+}
+
+/** An American elm: a tall clean trunk that forks into a high vase-shaped crown, the tree that lines the Mall. */
+export function elm(seed = 1, { h = 15, leafA = 0x4d8f3c, leafB = 0x5fa246 } = {}) {
+  const rng = makeRng(seed), b = new ModelBuilder();
+  b.add('bark', cyl(0.36, 0.55, h * 0.42, 8), { p: [0, h * 0.21, 0] });
+  for (let i = 0; i < 4; i++) { const a = (i / 4) * 6.28 + rng() * 0.6; b.add('bark', cyl(0.14, 0.3, h * 0.36, 6), { p: [Math.cos(a) * h * 0.06, h * 0.55, Math.sin(a) * h * 0.06], r: [Math.sin(a) * 0.42, 0, -Math.cos(a) * 0.42] }); }
+  const n = 6;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rng() * 0.5, d = i === 0 ? 0 : h * (0.2 + rng() * 0.06), r = h * (0.2 + rng() * 0.05) * (i === 0 ? 1.15 : 1);
+    b.add(i % 2 ? 'leafB' : 'leafA', blob(r, seed * 13 + i, 0.3, 1), { p: [Math.cos(a) * d, h * (0.74 + rng() * 0.1) + (i === 0 ? h * 0.08 : 0), Math.sin(a) * d], s: [1, 0.78, 1] });
+  }
+  return b.build({ bark: plastic(0x4a3a30, 0.9), leafA: leaf(leafA), leafB: leaf(leafB) });
+}
+
+/** A stretch of pool coping: a pale granite kerb, `len` metres along X, 1.3 m wide, its top 0.32 m up and its face
+ *  running 1 m down below the origin, so it walls the water in. */
+export function coping(len = 8) {
   const b = new ModelBuilder();
-  b.add('stone', box(12, 1.0, 12, 0.15, 1), { p: [0, 0.5, 0] });
-  b.add('stoneD', box(9.6, 1.2, 9.6, 0.15, 1), { p: [0, 1.6, 0] });
-  b.add('stone', box(7.6, 0.9, 7.6, 0.12, 1), { p: [0, 2.65, 0] });
-  b.add('shaft', cyl(2.35, 3.55, h, 4), { p: [0, 3.1 + h / 2, 0], r: [0, Math.PI / 4, 0] });
-  b.add('shaft', cone(2.35, 2.9, 4), { p: [0, 3.1 + h + 1.45, 0], r: [0, Math.PI / 4, 0] });
-  return b.build({ stone: plastic(STONE, 0.7), stoneD: plastic(0xd6cdb9, 0.75), shaft: flat(0xece6d6) });
+  b.add('c', box(len, 1.32, 1.3, 0.08, 1), { p: [0, -0.34, 0] });
+  b.add('d', box(len, 0.06, 0.14, 0.02, 1), { p: [0, 0.3, -0.6] });
+  b.add('d', box(len, 0.06, 0.14, 0.02, 1), { p: [0, 0.3, 0.6] });
+  return b.build({ c: plastic(0xe9e3d6, 0.6), d: plastic(0xcfc7b6, 0.7) });
+}
+
+/**
+ * The memorial at the head of the pool: a colonnaded temple on a tall stepped plinth, the front (+Z) open
+ * between its middle columns onto a giant seated marble figure: a lobbyist, briefcase on his knee.
+ * userData.attic: the centre of the front attic band (for the name), in local space; userData.wide: its width.
+ */
+export function lincolnMemorial({ w = 44, d = 28, h = 12.5 } = {}) {
+  const b = new ModelBuilder(), grp = new THREE.Group();
+  // the plinth: a terrace with a broad flight of steps down the front
+  b.add('base', box(w + 8, 2.2, d + 8, 0.2, 2), { p: [0, 1.1, 0] });
+  for (let k = 0; k < 9; k++) b.add(k % 2 ? 'base' : 'baseD', box(w * 0.42, 0.36, 1.1, 0.05, 1), { p: [0, 0.18 + k * 0.245, d / 2 + 4 + 9 * 1.0 - k * 1.0] });
+  for (const s of [1, -1]) b.add('baseD', box(2.2, 2.6, 10, 0.15, 1), { p: [s * (w * 0.21 + 1.1), 1.3, d / 2 + 8.6] });
+  const y0 = 2.2;
+  b.add('baseD', box(w + 2, 0.6, d + 2, 0.1, 1), { p: [0, y0 + 0.3, 0] });
+  // the cella: back and side walls, the front open between the middle columns
+  const cw = w - 8, cd = d - 8, H = h + 0.4;
+  b.add('wall', box(cw, H, 1.2, 0.1, 1), { p: [0, y0 + H / 2, -cd / 2] });
+  for (const s of [1, -1]) {
+    b.add('wall', box(1.2, H, cd, 0.1, 1), { p: [s * cw / 2, y0 + H / 2, 0] });
+    b.add('wall', box(cw * 0.3, H, 1.2, 0.1, 1), { p: [s * (cw / 2 - cw * 0.15), y0 + H / 2, cd / 2] });
+  }
+  b.add('dark', box(cw * 0.4 - 0.2, H - 0.3, 0.2, 0.02, 1), { p: [0, y0 + H / 2, -cd / 2 + 0.7] });            // the shadowed back wall
+  b.add('darkF', box(cw - 2, 0.2, cd - 2, 0.02, 1), { p: [0, y0 + 0.62, 0] });
+  // the colonnade all round
+  const nx = 12, nz = 7;
+  for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) {
+    if (i > 0 && i < nx && j > 0 && j < nz) continue;
+    column(b, -w / 2 + 1 + (i / nx) * (w - 2), y0 + 0.6, h, -d / 2 + 1 + (j / nz) * (d - 2), 0.78);
+  }
+  // entablature, frieze, and the tall attic
+  b.add('ent', box(w + 0.6, 1.6, d + 0.6, 0.15, 1), { p: [0, y0 + 0.6 + h + 0.8, 0] });
+  b.add('gold', box(w + 0.7, 0.22, d + 0.7, 0.04, 1), { p: [0, y0 + 0.6 + h + 0.2, 0] });
+  b.add('wall', box(w - 3, 3.6, d - 3, 0.2, 2), { p: [0, y0 + 0.6 + h + 1.6 + 1.8, 0] });
+  b.add('ent', box(w - 2.4, 0.5, d - 2.4, 0.1, 1), { p: [0, y0 + 0.6 + h + 1.6 + 3.85, 0] });
+  // the seated figure, about 9 m tall in his chair, facing out of the open front
+  const fz = -cd / 2 + 4.2, fy = y0 + 0.6;
+  b.add('statD', box(7.2, 2.4, 5.6, 0.2, 2), { p: [0, fy + 1.2, fz] });                                     // pedestal
+  b.add('stat', box(6.4, 4.4, 3.6, 0.5, 3), { p: [0, fy + 2.4 + 2.2, fz - 0.6] });                           // the chair
+  b.add('stat', box(6.8, 0.6, 0.9, 0.2, 2), { p: [0, fy + 2.4 + 4.6, fz - 2.1] });
+  for (const s of [1, -1]) {
+    b.add('stat', box(0.8, 1.6, 3.8, 0.3, 2), { p: [s * 3.0, fy + 2.4 + 3.2, fz - 0.4] });                  // arms of the chair
+    b.add('suit', box(1.3, 1.2, 3.2, 0.5, 3), { p: [s * 0.95, fy + 2.4 + 2.9, fz + 1.3] });                 // thighs
+    b.add('suit', box(1.2, 3.0, 1.2, 0.45, 3), { p: [s * 0.95, fy + 2.4 + 1.3, fz + 2.6] });                // shins
+    b.add('stat', box(1.3, 0.6, 1.8, 0.3, 2), { p: [s * 0.95, fy + 2.7, fz + 3.0] });                       // shoes
+    b.add('suit', box(0.95, 2.6, 1.0, 0.4, 3), { p: [s * 2.25, fy + 2.4 + 4.6, fz + 0.4], r: [0.25, 0, 0] }); // arms
+    b.add('stat', sphere(0.48, 10, 8), { p: [s * 2.25, fy + 2.4 + 3.25, fz + 1.2] });                       // hands on the chair
+  }
+  b.add('suit', box(3.6, 4.0, 2.2, 0.8, 3), { p: [0, fy + 2.4 + 5.2, fz + 0.2] });                           // torso
+  b.add('stat', box(0.9, 2.4, 0.2, 0.05, 1), { p: [0, fy + 2.4 + 5.6, fz + 1.32] });                         // the tie
+  b.add('stat', sphere(1.25, 14, 10), { p: [0, fy + 2.4 + 8.2, fz + 0.4], s: [0.92, 1.05, 0.95] });           // head
+  b.add('stat', box(2.2, 0.5, 2.0, 0.2, 2), { p: [0, fy + 2.4 + 9.2, fz + 0.2] });                            // the side parting
+  // the briefcase on his knee, bursting with cash
+  b.add('case', box(2.6, 1.7, 0.7, 0.15, 2), { p: [-0.95, fy + 2.4 + 4.3, fz + 2.6] });
+  b.add('cash', box(2.3, 0.5, 0.6, 0.1, 1), { p: [-0.95, fy + 2.4 + 5.3, fz + 2.6], r: [0, 0, 0.2] });
+  const m = { base: marbleD(), baseD: plastic(0xd2cab6, 0.7), wall: marble(), col: plastic(0xfaf8f2, 0.45), colD: marbleD(), ent: marble(), gold: gold(),
+    dark: plastic(0x8a8070, 0.8), darkF: plastic(0xb5ab98, 0.8), stat: plastic(0xf4f1ea, 0.5), statD: plastic(0xe2dccd, 0.6), suit: plastic(0xece8de, 0.5), case: plastic(0x6b4a2e, 0.6), cash: plastic(0x8fd18a, 0.7) };
+  grp.add(b.build(m));
+  grp.userData.attic = [0, y0 + 0.6 + h + 1.6 + 1.8, d / 2 - 1.45]; grp.userData.wide = w - 6;
+  return grp;
 }
 
 /** A columned memorial hall: a rectangular colonnade round a cella, flat attic roof. Front on +Z. */
@@ -488,6 +578,70 @@ export function revolvingDoorComplex({ TW = 15, TH = 36, off = 20, R = 9.5, DH =
   grp.userData.door = door;
   grp.userData.signs = { reg: [rx, 2.4 + TH + 7.6, 0], ind: [ix, 2.4 + TH + 4 + 7.4, 0], door: [0, TH + 21, 0], tw: TW };
   return grp;
+}
+
+/**
+ * The revolving door, built over the road: REGULATOR (marble, -X) and INDUSTRY (glass, +X) either side, joined by a
+ * glass skybridge at deckY with the revolving door itself standing on it, so the suits go round over the karts' heads.
+ * Local Z runs along the road. userData.door: the part that spins (about Y, at the drum's centre); userData.drum: the
+ * drum's floor centre; userData.signs: board centres (reg, ind, door) in local space.
+ */
+export function revolvingDoorBridge({ span = 60, deckY = 10, TW = 15, TH = 36, R = 7.2, DH = 9 } = {}) {
+  const grp = new THREE.Group(), b = new ModelBuilder(), D = 7.5, rx = -span / 2, ix = span / 2, low = -16;
+  // REGULATOR: marble with pilasters, a cornice and a pediment, on a plinth that reaches down to whatever ground is there
+  b.add('marbleD', box(TW + 3, 2.4 - low, TW + 3, 0.2, 2), { p: [rx, (2.4 + low) / 2, 0] });
+  b.add('marble', box(TW, TH, TW, 0.2, 2), { p: [rx, 2.4 + TH / 2, 0] });
+  for (const s of [1, -1]) for (let k = 0; k < 5; k++) { const u = -TW / 2 + 1.2 + k * (TW - 2.4) / 4; b.add('col', box(0.6, TH - 3, 0.9, 0.1, 1), { p: [rx + s * (TW / 2 + 0.2), 2.4 + (TH - 3) / 2 + 0.5, u] }); }
+  for (const s of [1, -1]) for (let f = 0; f < 8; f++) for (let k = 0; k < 4; k++) b.add('win', box(0.2, 2.4, 1.6, 0.05, 1), { p: [rx + s * (TW / 2 + 0.05), 6 + f * 4, -TW / 2 + 2.6 + k * (TW - 5.2) / 3] });
+  for (const s of [1, -1]) for (let f = 0; f < 8; f++) for (let k = 0; k < 4; k++) b.add('win', box(1.6, 2.4, 0.2, 0.05, 1), { p: [rx - TW / 2 + 2.6 + k * (TW - 5.2) / 3, 6 + f * 4, s * (TW / 2 + 0.05)] });
+  b.add('gold', box(TW + 1.2, 1.2, TW + 1.2, 0.1, 1), { p: [rx, 2.4 + TH + 0.6, 0] });
+  b.add('marbleD', box(TW + 0.4, 2.2, TW + 0.4, 0.2, 2), { p: [rx, 2.4 + TH + 2.3, 0] });
+  // INDUSTRY: a blue glass tower with a dark crown
+  b.add('dark', box(TW + 3, 2.4 - low, TW + 3, 0.2, 2), { p: [ix, (2.4 + low) / 2, 0] });
+  b.add('glass', box(TW, TH + 4, TW, 0.2, 2), { p: [ix, 2.4 + (TH + 4) / 2, 0] });
+  for (let f = 1; f < 11; f++) b.add('mull', box(TW + 0.15, 0.25, TW + 0.15, 0.05, 1), { p: [ix, 2.4 + f * (TH + 4) / 11, 0] });
+  for (const u of [-TW / 4, 0, TW / 4]) for (const s of [1, -1]) { b.add('mull', box(0.25, TH + 4, 0.2, 0.05, 1), { p: [ix + u, 2.4 + (TH + 4) / 2, s * (TW / 2 + 0.05)] }); b.add('mull', box(0.2, TH + 4, 0.25, 0.05, 1), { p: [ix + s * (TW / 2 + 0.05), 2.4 + (TH + 4) / 2, u] }); }
+  b.add('dark', box(TW + 0.6, 2.4, TW + 0.6, 0.2, 2), { p: [ix, 2.4 + TH + 4 + 1.2, 0] });
+  // the skybridge: a deck from tower to tower, a gold fascia either side, railing posts
+  const inner = span - TW;
+  b.add('dark', box(inner + 1, 1.6, D, 0.2, 2), { p: [0, deckY - 0.8, 0] });
+  for (const s of [1, -1]) { b.add('gold', box(inner + 1, 0.5, 0.3, 0.05, 1), { p: [0, deckY - 1.1, s * (D / 2 + 0.1)] }); b.add('dark', box(inner + 1, 0.25, 0.25, 0.05, 1), { p: [0, deckY + 1.15, s * (D / 2 - 0.15)] }); }
+  for (let k = 0; k <= 8; k++) { const x = -inner / 2 + 0.5 + k * (inner - 1) / 8; if (Math.abs(x) < R + 0.5) continue; for (const s of [1, -1]) b.add('dark', box(0.18, 1.2, 0.18, 0.04, 1), { p: [x, deckY + 0.6, s * (D / 2 - 0.15)] }); }
+  // the drum on the deck: floor, crown with a gold band, posts, two curved glass walls left open toward the towers
+  b.add('dark', cyl(R + 0.5, R + 0.7, 0.6, 40), { p: [0, deckY + 0.3, 0] });
+  b.add('dark', cyl(R + 0.5, R + 0.7, 0.9, 40), { p: [0, deckY - 1.3, 0] });
+  b.add('dark', cyl(R + 0.7, R + 0.7, 1.8, 40), { p: [0, deckY + 0.6 + DH + 0.9, 0] });
+  b.add('gold', cyl(R + 0.75, R + 0.75, 0.4, 40, true), { p: [0, deckY + 0.6 + DH + 0.2, 0] });
+  for (const s of [1, -1]) for (let k = 0; k <= 4; k++) { const a = s * Math.PI / 2 + Math.PI / 2 + (k - 2) * 0.42; b.add('dark', cyl(0.2, 0.2, DH, 8), { p: [Math.sin(a) * R, deckY + 0.6 + DH / 2, Math.cos(a) * R] }); }
+  grp.add(b.build({ marble: plastic(0xf2efe6, 0.55), marbleD: plastic(0xe0d9c8, 0.62), col: plastic(0xfaf8f2, 0.45), win: plastic(0x3a3f4a, 0.4, 0.2), gold: paint(0xd4af37, { rough: 0.3, metal: 0.65, clear: 0.4 }), dark: plastic(0x23262e, 0.45, 0.4), glass: new THREE.MeshStandardMaterial({ color: 0x5aa2d8, roughness: 0.12, metalness: 0.55, envMapIntensity: 1.4 }), mull: plastic(0x1b2533, 0.4, 0.5) }));
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xbfe2ff, transparent: true, opacity: 0.26, roughness: 0.05, metalness: 0.3, depthWrite: false, side: THREE.DoubleSide });
+  { const wb = new ModelBuilder(); for (const s of [1, -1]) wb.add('w', new THREE.CylinderGeometry(R, R, DH, 24, 1, true, s > 0 ? -0.95 : Math.PI - 0.95, 1.9), { p: [0, deckY + 0.6 + DH / 2, 0] }); grp.add(wb.build({ w: wallMat }, { cast: false })); }
+  // the door: four glass wings on a post
+  const door = new THREE.Group(), d = new ModelBuilder();
+  d.add('frame', cyl(0.4, 0.4, DH, 12), { p: [0, DH / 2, 0] });
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2;
+    d.add('frame', box(R - 0.5, 0.4, 0.35, 0.1, 1), { p: [Math.cos(a) * (R / 2), DH - 0.2, -Math.sin(a) * (R / 2)], r: [0, a, 0] });
+    d.add('frame', box(R - 0.5, 0.4, 0.35, 0.1, 1), { p: [Math.cos(a) * (R / 2), 0.4, -Math.sin(a) * (R / 2)], r: [0, a, 0] });
+    d.add('frame', box(0.35, DH, 0.35, 0.1, 1), { p: [Math.cos(a) * (R - 0.4), DH / 2, -Math.sin(a) * (R - 0.4)] });
+    d.add('pane', box(R - 0.9, DH - 1.1, 0.12, 0.04, 1), { p: [Math.cos(a) * (R / 2), DH / 2, -Math.sin(a) * (R / 2)], r: [0, a, 0] });
+  }
+  door.add(d.build({ frame: paint(0xd4af37, { rough: 0.3, metal: 0.65 }), pane: new THREE.MeshStandardMaterial({ color: 0xd8f0ff, transparent: true, opacity: 0.32, roughness: 0.05, depthWrite: false }) }, { cast: false }));
+  door.position.y = deckY + 0.6;
+  grp.add(door);
+  grp.userData.door = door; grp.userData.drum = [0, deckY + 0.6, 0];
+  grp.userData.signs = { reg: [rx, 2.4 + TH + 7.6, 0], ind: [ix, 2.4 + TH + 4 + 7.4, 0], door: [0, deckY + 0.6 + DH + 5.2, 0] };
+  return grp;
+}
+
+/** A road barricade: a red-and-white striped board on two splayed legs, 1.5 m wide. Faces +Z. */
+export function barricade() {
+  const b = new ModelBuilder();
+  for (const s of [1, -1]) { b.add('leg', box(0.1, 1.15, 0.1, 0.02, 1), { p: [s * 0.6, 0.55, 0.15], r: [0.25, 0, 0] }); b.add('leg', box(0.1, 1.15, 0.1, 0.02, 1), { p: [s * 0.6, 0.55, -0.15], r: [-0.25, 0, 0] }); }
+  b.add('board', box(1.55, 0.32, 0.06, 0.02, 1), { p: [0, 0.95, 0] });
+  b.add('board', box(1.55, 0.32, 0.06, 0.02, 1), { p: [0, 0.5, 0] });
+  const tex = canvasTex(128, 32, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#d61f2c'; for (let x = -32; x < w; x += 32) { g.beginPath(); g.moveTo(x, h); g.lineTo(x + 16, h); g.lineTo(x + 32, 0); g.lineTo(x + 16, 0); g.fill(); } }, { repeat: false });
+  return b.build({ leg: plastic(0x8a8f99, 0.5, 0.3), board: new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 }) });
 }
 
 /** A bronze statue of a senator on the phone (a flip phone, naturally), about 19 m tall with its plinth. Faces +Z. */

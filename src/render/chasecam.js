@@ -5,6 +5,10 @@ import { clamp, lerp, damp, dampAngle, wrapAngle, smoothstep } from '../core/uti
 import { TAG_LAYER } from './kartview.js';
 
 const _look = new THREE.Vector3(), _want = new THREE.Vector3();
+/* Reduced motion (the system setting): no shake, no roll or dip kicks, and only a hint of the boost punch. */
+const REDUCED = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+/* A damped spring driven by impulses: kicks rise and settle instead of popping. */
+const spring = (s, k, c, dt) => { s.v += (-s.x * k - s.v * c) * dt; s.x += s.v * dt; if (Math.abs(s.x) < 1e-4 && Math.abs(s.v) < 1e-3) s.x = s.v = 0; return s.x; };
 
 export class ChaseCam {
   constructor(kart, track, playerIndex = 0) {
@@ -16,14 +20,26 @@ export class ChaseCam {
     this.yaw = kart.yaw; this.pos = new THREE.Vector3(); this.focus = new THREE.Vector3();
     this.dist = 5.5; this.height = 2.35; this.fov = 54; this.baseFov = 54;
     this.shake = 0; this.kick = 0; this.y = kart.y; this.mode = 'chase'; this.t = 0; this.rear = false;
+    // impulse springs: surge (the kart pulls away on a boost), fov punch, roll (a hit knocks the frame), dip (a landing)
+    this.surge = { x: 0, v: 0 }; this.punchS = { x: 0, v: 0 }; this.roll = { x: 0, v: 0 }; this.dipS = { x: 0, v: 0 };
+    this.lines = 0;   // speed-line strength this view wants, 0..1 (read by the race view)
     this.snap();
   }
   snap() {
     const k = this.kart; this.yaw = k.yaw; this.y = k.y;
     this.pos.set(k.x - Math.sin(k.yaw) * this.dist, k.y + this.height, k.z - Math.cos(k.yaw) * this.dist);
     this.camera.position.copy(this.pos);
+    for (const s of [this.surge, this.punchS, this.roll, this.dipS]) s.x = s.v = 0;
   }
-  addShake(a) { this.shake = Math.min(1.2, this.shake + a * (this.shakeScale ?? 1)); }
+  get motion() { return REDUCED.matches ? 0.25 : 1; }
+  get shakeK() { return REDUCED.matches ? 0 : (this.shakeScale ?? 1); }
+  addShake(a) { this.shake = Math.min(1.2, this.shake + a * this.shakeK); }
+  /** A boost lands: the kart surges away from the lens and the view widens for a beat. s: 0..1 strength. */
+  punch(s) { const m = this.motion; this.surge.v += s * 19 * m; this.punchS.v += s * 150 * m; }
+  /** A hit lands on this kart: shake and a knock of the horizon, scaled by severity (0..1). side: -1..1. */
+  impact(sev, side = 0) { this.addShake(0.35 + sev * 0.75); this.roll.v += (side || (Math.random() < 0.5 ? -1 : 1)) * (0.6 + sev * 1.4) * this.shakeK; }
+  /** A heavy landing: the camera sinks with the kart and springs back. */
+  dip(a) { this.dipS.v -= a * 3 * this.shakeK; }
 
   /** view: a KartView (for the interpolated position). aspect: viewport aspect ratio. */
   update(dt, view, aspect = 16 / 9) {
@@ -37,7 +53,7 @@ export class ChaseCam {
       this.pos.lerp(_want, 1 - Math.exp(-3 * dt));
       cam.position.copy(this.pos); _look.set(p.x, p.y + 1.1, p.z); cam.lookAt(_look);
       this.fov = damp(this.fov, 48, 3, dt); cam.fov = this.fov; cam.updateProjectionMatrix();
-      this.focus.copy(_look); return;
+      this.focus.copy(_look); this.lines = 0; return;
     }
     // follow the direction of travel, which swings less than the nose does in a drift
     const moving = k.speed > 4 && k.hitT <= 0;
@@ -49,14 +65,22 @@ export class ChaseCam {
     const yaw = this.yaw + (this.rear ? Math.PI : 0);
 
     const speedN = clamp(k.speed / Math.max(1, k.baseTop), 0, 1.5);
-    const boost = k.boostT > 0 || k.bulletT > 0 ? 1 : 0;
-    this.kick = damp(this.kick, boost, boost ? 9 : 3, dt);
+    // how hard the current boost pushes, 0..1: a blue mini-turbo is about half a mushroom, the bullet is all of it
+    const boost = k.bulletT > 0 ? 1 : k.boostT > 0 ? clamp((k.boostMul - 1) / 0.34, 0.35, 1) : 0;
+    this.kick = damp(this.kick, boost, boost > this.kick ? 9 : 3, dt);
+    const surge = spring(this.surge, 60, 14, dt), punch = spring(this.punchS, 90, 19, dt), roll = spring(this.roll, 120, 9, dt), dip = spring(this.dipS, 140, 15, dt);
+    // speed lines (#222): only while boosting or at ~95%+ of top speed — at ordinary race speeds they
+    // showed in nearly every frame and looked busy. A near-top-speed cruise draws a few on its own, a
+    // building slipstream adds a few while gated in, and the strength fades in over ~0.2 s (fast out).
+    const boosting = k.boostT > 0 || k.bulletT > 0, fast = speedN >= 0.95;
+    const wantLines = (boosting || fast) ? Math.min(1, Math.max(boosting ? this.kick * clamp(speedN * 1.25, 0, 1) : 0, clamp((speedN - 0.95) * 3, 0, 0.45)) + (k.drafting && k.draftT > 0.3 ? 0.25 : 0)) : 0;
+    this.lines = damp(this.lines, Math.min(1, wantLines), wantLines > this.lines ? 12 : 7, dt);
     // narrow split-screen views sit a bit further back
     const tall = (aspect < 1.2 ? 1.18 : 1) * (this.pullBack || 1);
-    const dist = (this.dist + speedN * 0.7 - this.kick * 0.5) * tall * (k.shrinkT > 0 ? 0.8 : 1);
+    const dist = (this.dist + speedN * 0.7 - this.kick * 0.5 + surge) * tall * (k.shrinkT > 0 ? 0.8 : 1);
     const height = (this.height + (k.grounded ? 0 : 0.25)) * tall;
     this.y = damp(this.y, p.y, k.grounded ? 12 : 6, dt);
-    _want.set(p.x - Math.sin(yaw) * dist, this.y + height + k.pitch * -1.2, p.z - Math.cos(yaw) * dist);
+    _want.set(p.x - Math.sin(yaw) * dist, this.y + height + k.pitch * -1.2 + dip, p.z - Math.cos(yaw) * dist);
     // keep the camera above the ground behind the kart
     const gy = this.track.hasTerrain && !this.track.tunnel[k.hint] && !this.track.bridge[k.hint] ? Math.max(this.track.terrainHeight(_want.x, _want.z), -1e3) : -1e3;
     const road = this._g || (this._g = { y: 0 }); void road;
@@ -71,10 +95,11 @@ export class ChaseCam {
     _look.set(p.x + Math.sin(yaw) * 4.2, this.y + 1.25 + k.pitch * 2.2, p.z + Math.cos(yaw) * 4.2);
     cam.lookAt(_look);
     // drift roll and boost field of view
-    cam.rotation.z += clamp(-(k.yawRate || 0) * 0.018 * speedN, -0.05, 0.05);
+    cam.rotation.z += clamp(-(k.yawRate || 0) * 0.018 * speedN, -0.05, 0.05) + clamp(roll * 0.33, -0.12, 0.12);
     const wantFov = this.baseFov + speedN * 5 + this.kick * 11 + (aspect < 1.2 ? 8 : 0);
     this.fov = damp(this.fov, wantFov, 6, dt);
-    if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
+    const fov = this.fov + clamp(punch, -4, 9);
+    if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
     this.focus.set(p.x + Math.sin(yaw) * 10, p.y, p.z + Math.cos(yaw) * 10);
     void lerp; void smoothstep;
   }
@@ -121,7 +146,8 @@ export class TvCam {
     this.spacing = 120;
   }
   snap() { this.station = -1; }
-  addShake() {}
+  addShake() {} punch() {} impact() {} dip() {}
+  get lines() { return 0; }
   _place(k) {
     const tr = this.track, nat = Math.floor((k.s + 55) / this.spacing);
     if (nat !== this.nat) { this.nat = nat; this.ahead = 0; }

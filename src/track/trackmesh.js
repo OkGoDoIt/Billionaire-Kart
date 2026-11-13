@@ -55,6 +55,8 @@ export function buildTrackMesh(track, look = {}) {
     m.matrixAutoUpdate = false; group.add(m); return m;
   };
   const { N, ds, px, py, pz, lx, ly, lz, ux, uy, uz, hwL, hwR } = track;
+  // floating decks (def.decks) are drawn by the track, in a group it moves: treat them as gaps here
+  const gap = track.deckK ? track.gap.map((g, i) => g || (track.deckK[i] ? 1 : 0)) : track.gap;
 
   /* ----- road: one mesh per surface skin ----- */
   {
@@ -62,7 +64,7 @@ export function buildTrackMesh(track, look = {}) {
     for (const skin of skins) {
       const g = new Geo(), sk = roadSkin(skin, L.road), tile = sk.tile ?? 18;
       for (let r = 0; r < N; r++) {
-        if (track.gap[r] || track.skin[r] !== skin) continue;
+        if (gap[r] || track.skin[r] !== skin) continue;
         const first = g.count;
         for (const rr of [r, r + 1]) {
           const i = rr % N;
@@ -89,7 +91,7 @@ export function buildTrackMesh(track, look = {}) {
       let prev = -1;
       for (let r = 0; r <= N; r++) {
         const i = r % N;
-        if (edge[i] !== EDGE.OPEN || track.gap[i]) { prev = -1; continue; }
+        if (edge[i] !== EDGE.OPEN || gap[i]) { prev = -1; continue; }
         const a = hw[i] * side, b = (hw[i] + KERB_W) * side;
         const v0 = g.v(px[i] + lx[i] * a, py[i] + ly[i] * a + 0.012, pz[i] + lz[i] * a, ux[i], uy[i], uz[i], 0, (r * ds) / 5);
         g.v(px[i] + lx[i] * b + ux[i] * KERB_H, py[i] + ly[i] * b + uy[i] * KERB_H, pz[i] + lz[i] * b + uz[i] * KERB_H, ux[i], uy[i], uz[i], 1, (r * ds) / 5);
@@ -128,7 +130,7 @@ export function buildTrackMesh(track, look = {}) {
       let prev = -1;
       for (let r = 0; r <= N; r++) {
         const i = r % N;
-        if (edge[i] !== EDGE.OPEN || track.gap[i] || track.bridge[i]) { prev = -1; continue; }
+        if (edge[i] !== EDGE.OPEN || gap[i] || track.bridge[i]) { prev = -1; continue; }
         const sh = shA[i];
         // rows: kerb outer edge, mid shoulder, shoulder end, then a skirt that dives under the terrain
         const rows = [KERB_W, Math.max(KERB_W + 0.3, sh * 0.55), Math.max(KERB_W + 0.6, sh), Math.max(KERB_W + 0.6, sh) + 3.2];
@@ -201,7 +203,7 @@ export function buildTrackMesh(track, look = {}) {
       let prevB = -1, prevW = -1;
       for (let r = 0; r <= N; r++) {
         const i = r % N;
-        if (track.gap[i]) { prevB = prevW = -1; continue; }
+        if (gap[i]) { prevB = prevW = -1; continue; }
         if (edge[i] === EDGE.OPEN && !track.bridge[i] && track.def.hoardings !== false && (side > 0 ? track.hoardL[i] : track.hoardR[i])) {
           prevW = -1;
           const lat = (hw[i] + outA[i]) * side;
@@ -253,7 +255,7 @@ export function buildTrackMesh(track, look = {}) {
     let prev = -1;
     for (let r = 0; r <= N; r++) {
       const i = r % N;
-      if (!track.bridge[i] || track.gap[i] || track.tunnel[i] || track.def.bridgeDeck === false) { prev = -1; continue; }
+      if (!track.bridge[i] || gap[i] || track.tunnel[i] || track.def.bridgeDeck === false) { prev = -1; continue; }
       any = true;
       const a = hwL[i] + 0.25, b = -hwR[i] - 0.25, first = g.count;
       const L = [px[i] + lx[i] * a, py[i] + ly[i] * a, pz[i] + lz[i] * a], R = [px[i] + lx[i] * b, py[i] + ly[i] * b, pz[i] + lz[i] * b];
@@ -286,7 +288,7 @@ export function buildTrackMesh(track, look = {}) {
       const hw = side > 0 ? hwL : hwR, edge = side > 0 ? track.edgeL : track.edgeR; let prev = -1;
       for (let r = 0; r <= N; r++) {
         const i = r % N;
-        if (edge[i] !== EDGE.VOID || track.gap[i]) { prev = -1; continue; }
+        if (edge[i] !== EDGE.VOID || gap[i]) { prev = -1; continue; }
         any = true;
         const a = (hw[i] - 0.05) * side, b = (hw[i] + 0.3) * side;
         const v0 = g.v(px[i] + lx[i] * a + ux[i] * 0.05, py[i] + ly[i] * a + uy[i] * 0.05, pz[i] + lz[i] * a + uz[i] * 0.05, ux[i], uy[i], uz[i], 0, r * ds * 0.25);
@@ -342,6 +344,7 @@ export function buildTrackMesh(track, look = {}) {
     const g = new Geo();
     const P = new THREE.Vector3();
     for (const rmp of track.ramps) {
+      if (track.deckK?.[rmp.i0]) continue;
       const steps = Math.max(4, Math.round(rmp.len / 1.2)), i0 = rmp.i0;
       const latA = rmp.full ? -track.hwR[i0] : rmp.lat - rmp.half, latB = rmp.full ? track.hwL[i0] : rmp.lat + rmp.half;
       let prev = -1;
@@ -377,6 +380,7 @@ export function buildTrackMesh(track, look = {}) {
   if (track.boosts.length) {
     const g = new Geo(); const P = new THREE.Vector3();
     for (const b of track.boosts) {
+      if (track.deckK?.[b.i0]) continue;
       const steps = Math.max(3, Math.round(b.len / 1.5)); let prev = -1;
       for (let k = 0; k <= steps; k++) {
         const t = k / steps, s = b.s0 + b.len * t; const first = g.count;

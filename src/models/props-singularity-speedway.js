@@ -214,7 +214,7 @@ export function chatFace(r = 21) {
 
 /** A Dyson swarm under construction around a small star: the AI's next data center. Not fogged.
     userData.setBuilt(f) closes the shell (0..1: the fraction of panels in place), userData.update(time) turns it. */
-export function dysonSphere({ R = 240, panels = 460, text = 'MINIMUM VIABLE COMPUTE' } = {}) {
+export function dysonSphere({ R = 240, panels = 460, fill = 0.62, text = 'MINIMUM VIABLE COMPUTE' } = {}) {
   const grp = new THREE.Group(), rng = makeRng(23);
   // the star
   const starM = new THREE.MeshBasicMaterial({ color: 0xfff1c8, fog: false });
@@ -225,7 +225,7 @@ export function dysonSphere({ R = 240, panels = 460, text = 'MINIMUM VIABLE COMP
   // the panels: solar-and-server tiles on a Fibonacci sphere, each with a glowing frame
   const panelTex = artTex('panel.webp', THREE.ClampToEdgeWrapping);
   const pm = new THREE.MeshStandardMaterial({ map: panelTex, emissiveMap: panelTex, emissive: 0xffffff, emissiveIntensity: 1.1, roughness: 0.4, metalness: 0.5, side: THREE.DoubleSide }); pm.fog = false;
-  const size = R * Math.sqrt(4 * Math.PI / panels) * 0.62;
+  const size = R * Math.sqrt(4 * Math.PI / panels) * fill;
   const im = new THREE.InstancedMesh(new THREE.CircleGeometry(size, 6), pm, panels); im.frustumCulled = false; grp.add(im);
   const list = [], up = new THREE.Vector3(0, 1, 0);
   for (let k = 0; k < panels; k++) {

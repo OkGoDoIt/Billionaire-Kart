@@ -12,6 +12,7 @@ const MAX = Math.max(1, Math.min(2, +(process.env.BK_MAX_JOBS || 2) || 2));
 const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
 
 export async function takeSlot(label = 'job') {
+  if (process.env.CI) return;   // a CI runner is a fresh machine of its own: nothing to share, never wait
   mkdirSync(DIR, { recursive: true });
   for (let tries = 0; ; tries++) {
     for (let i = 0; i < MAX; i++) {

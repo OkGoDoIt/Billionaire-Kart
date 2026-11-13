@@ -11,6 +11,8 @@
 5. **Plays anywhere.** Keyboard, four controllers, touch, tilt; one to four players on one screen; quality tiers and dynamic resolution for phones.
 6. **Satire, not slander.** Jokes are about public personas and industry tropes. Every brand on a track, a kart, or a sponsor board is an invented parody. The one place a real company logo appears is on a racer's portrait, worn as a pin, patch, or pendant, so you can tell at a glance who is who (sources in `assets/logos/SOURCES.md`). No claims of fact, nothing cruel.
 
+**Engine classes.** Four, all selectable in setup, each with its own Records column and cup trophies: 50cc Bootstrapped, 100cc Venture-Backed, 150cc Blitzscaling, and 200cc Hypergrowth — the fastest tier, the chaos mode for players who have cleared the cups at 150cc.
+
 **How the code is organised.** The simulation (`src/race`, `src/track`) has no rendering in it, so whole races run headless at hundreds of times real speed for testing and balance (`tools/sim.mjs`). Rendering mirrors the simulation and reacts to its events. Tracks are data; the engine generates road, kerbs, walls, tunnels, bridges, and terrain from a spline.
 
 **Research.** `docs/research/` holds notes on how the reference games work mechanically, what players and reviewers praise and criticise, and a visual study of their composition, HUD, and track dressing.

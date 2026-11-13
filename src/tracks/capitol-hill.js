@@ -13,7 +13,7 @@ import { canvasTex } from '../render/textures.js';
 import { ModelBuilder, cyl, box, plastic, paint } from '../models/build.js';
 
 export const CAPITOL = { x: -85, z: 147, y: 19.5, ax: 66, az: 34 };   // plateau (half-axes) the capitol stands on
-export const POOL = { x0: 171, x1: 203, z0: 64, z1: 214, depth: -1.4 }; // the reflecting pool, east of the pool run
+export const POOL = { x0: 167, x1: 191, z0: 56, z1: 228, depth: -1.4 }; // the reflecting pool (round 3, #140): a 172 x 24 m basin hugging the run's left edge
 export const OBELISK = { x: 113, z: 236 };                             // centre of the bend round the obelisk
 
 const segDist = (x, z, ax, az, bx, bz) => {
@@ -83,7 +83,7 @@ export default {
   ],
   sides: [
     { from: 43.6, to: 1.7, side: 'R', edge: 'wall' },                          // grandstand wall along the Avenue
-    { from: 4.4, to: 7.1, side: 'L', outer: 33, hoarding: false },             // the Reflecting Pool: run wide into the shallows
+    { from: 4.4, to: 7.1, side: 'L', outer: 33, hoarding: false, blend: 2 },   // the Reflecting Pool: run wide into the shallows; blend 2 so the basin edge lands at the coping, not ~16 m out
     { from: 5.7, to: 7.0, side: 'R', outer: 32, shoulder: 4, hoarding: false }, // the Mall: open lawn between the pool run...
     { from: 10.15, to: 11.6, side: 'R', outer: 32, shoulder: 4, hoarding: false }, // ...and the Mall leg (cut it with a boost)
     { from: 19.3, to: 20.0, edge: 'wall' },                                     // forecourt walls either side of the capitol
@@ -305,33 +305,46 @@ export default {
     for (let z = POOL.z0; z <= POOL.z1; z += 15) lamps.push({ x: POOL.x1 + 3.5, z, y: sc.y(POOL.x1 + 3.5, z), yaw: 0 });
     sc.instances(lamp, lamps, { cast: false });
 
-    // the reflecting pool: a stone balustrade along its far side and ends
+    // the reflecting pool: a stone balustrade along its far bank (past the coping and the
+    // lamp line) and across its ends
     const bal = partsOf(C.balustrade(4)), balSpots = [];
-    for (let z = POOL.z0 + 2; z < POOL.z1 - 1; z += 4) balSpots.push({ x: POOL.x1 + 1.6, z, y: sc.y(POOL.x1 + 1.6, z), yaw: Math.PI / 2 });
+    for (let z = POOL.z0 + 2; z < POOL.z1 - 1; z += 4) balSpots.push({ x: POOL.x1 + 5.5, z, y: sc.y(POOL.x1 + 5.5, z), yaw: Math.PI / 2 });
     for (const zz of [POOL.z0 - 1.6, POOL.z1 + 1.6]) for (let x = POOL.x1 - 2; x > POOL.x0 + 2; x -= 4) if (!reach(x, zz, 0.5)) balSpots.push({ x, z: zz, y: sc.y(x, zz), yaw: 0 });
     sc.instances(bal, balSpots, { sink: 0.05, cast: false });
 
-    // the reflecting pool, ROUND 2 (#140): it rendered swimming-pool blue and Roger called it.
-    // The water is murky green now (look.water), and the surface itself carries the joke (the
-    // MKW water-frame principle): algae mats in three greens, scum strips along both edges,
-    // resident ducks, and signage at both reading distances — a pool-scale board at the north
-    // end facing the approaching road, and a smaller one standing IN the water on the far side.
+    // the reflecting pool, ROUND 3 (#140): round 2's green pond was not recognisable as THE
+    // Reflecting Pool, so this round is modelled on the real one (2,028 x 167 ft: a 12:1
+    // granite basin on the Mall axis, gravel walks and elm rows along both long sides, the
+    // Washington Monument closing the vista at the end). Ours: a 172 x 24 m basin (7.2:1)
+    // whose long west edge runs within a few metres of the asphalt for the whole pool run — POOL
+    // moved to the road and blend 2 on the run's left side so the terrain conform lets the
+    // basin edge land there — with a pale stone coping frame at the waterline, a dark liner
+    // under the water, and elm allées up the far bank; the obelisk bend closes the view
+    // down its length. The algae gag stays as the second read (the MKW water-frame
+    // principle: the surface itself carries it): mats in three greens biased to the
+    // driver's edge, scum strips inside both copings, resident ducks, and signage at both
+    // reading distances — the pool-scale board at the south end facing the approaching
+    // road, and a smaller one standing IN the water at the closest pass.
     {
+      sc.place(C.poolBasin({ w: POOL.x1 - POOL.x0, l: POOL.z1 - POOL.z0 }), (POOL.x0 + POOL.x1) / 2, (POOL.z0 + POOL.z1) / 2, { y: 0, cast: false });
       const WY = track.water + 0.07, matSpots = [];
-      for (let k = 0; k < 46; k++) matSpots.push({ x: rng.range(POOL.x0 + 2.5, POOL.x1 - 2.5), z: rng.range(POOL.z0 + 3, POOL.z1 - 3), y: WY, yaw: rng.range(0, 6.28) });
-      sc.instances(partsOf(C.algaePatch(0x3e7a24)), matSpots.slice(0, 16), { scale: [1.3, 4.4], cast: false });
-      sc.instances(partsOf(C.algaePatch(0x639c33)), matSpots.slice(16, 32), { scale: [1.1, 3.6], cast: false });
-      sc.instances(partsOf(C.algaePatch(0x8aa832)), matSpots.slice(32), { scale: [0.9, 2.8], cast: false });
+      for (let k = 0; k < 64; k++) {
+        const west = k < 26;   // two in five mats crowd the driver's edge, where they read
+        matSpots.push({ x: west ? rng.range(POOL.x0 + 3, POOL.x0 + 9.5) : rng.range(POOL.x0 + 2.5, POOL.x1 - 2.5), z: rng.range(POOL.z0 + 3, POOL.z1 - 3), y: WY, yaw: rng.range(0, 6.28) });
+      }
+      sc.instances(partsOf(C.algaePatch(0x3e7a24)), matSpots.slice(0, 22), { scale: [1.3, 4.4], cast: false });
+      sc.instances(partsOf(C.algaePatch(0x639c33)), matSpots.slice(22, 44), { scale: [1.1, 3.6], cast: false });
+      sc.instances(partsOf(C.algaePatch(0x8aa832)), matSpots.slice(44), { scale: [0.9, 2.8], cast: false });
       const strips = [];
-      for (let z = POOL.z0 + 6; z < POOL.z1 - 4; z += 11) { strips.push({ x: POOL.x0 + 1.15, z, y: WY, yaw: Math.PI / 2 }); strips.push({ x: POOL.x1 - 1.15, z: z + 5, y: WY, yaw: Math.PI / 2 }); }
+      for (let z = POOL.z0 + 6; z < POOL.z1 - 4; z += 11) { strips.push({ x: POOL.x0 + 4.2, z, y: WY, yaw: Math.PI / 2 }); strips.push({ x: POOL.x1 - 2.4, z: z + 5, y: WY, yaw: Math.PI / 2 }); }
       sc.instances(partsOf(C.algaeStrip()), strips, { scale: [0.8, 1.25], cast: false });
       const duckProto = C.duck(), ducks = [];
-      for (const [dx, dz, dyaw] of [[183, 104, 2.6], [194.5, 152, -0.7], [178.5, 196, 1.4]]) {
+      for (const [dx, dz, dyaw] of [[177, 96, 2.6], [184, 148, -0.7], [175.5, 202, 1.4]]) {
         const d = duckProto.clone(); sc.place(d, dx, dz, { yaw: dyaw, y: track.water - 0.06 }); ducks.push(d);
       }
       anim.push((dt, time) => ducks.forEach((d, n) => { d.position.y = track.water - 0.06 + Math.sin(time * 0.9 + n * 2.1) * 0.055; d.rotation.z = Math.sin(time * 0.7 + n * 1.7) * 0.05; }));
       sc.place(C.poolSign(), (POOL.x0 + POOL.x1) / 2, POOL.z0 - 8, { yaw: Math.PI });
-      sc.place(C.poolSignSmall(), POOL.x1 - 4.5, 150, { yaw: -Math.PI / 2, y: POOL.depth });
+      sc.place(C.poolSignSmall(), POOL.x0 + 5, 150, { yaw: -Math.PI / 2, y: POOL.depth });
       taken.push([(POOL.x0 + POOL.x1) / 2, POOL.z0 - 8, 11]);
     }
 
@@ -353,13 +366,21 @@ export default {
       ...sc.along({ from: 11.6, to: 19.3, side: 1, offset: 21, spacing: 9, jitter: 2.5 }), ...sc.along({ from: 11.6, to: 19.3, side: -1, offset: 21, spacing: 9, jitter: 2.5 }),
       ...sc.along({ from: 10.2, to: 11.6, side: 1, offset: 13.5, spacing: 8, jitter: 1 }),
     ];
-    for (let z = POOL.z0 - 6; z <= POOL.z1 + 6; z += 9) for (const dx of [10, 17]) cherrySpots.push({ x: POOL.x1 + dx + rng.range(-1.5, 1.5), z: z + rng.range(-2, 2), y: 0 });
+    // the pool's elm allées (round 3, #140): two rows up the far bank, and a near row west
+    // of the road for the southern half of the run, before the Mall opens out
+    const elmSpots = [];
+    for (let z = POOL.z0 - 4; z <= POOL.z1 + 4; z += 11) for (const dx of [8, 15]) elmSpots.push({ x: POOL.x1 + dx + rng.range(-1.2, 1.2), z: z + rng.range(-1.8, 1.8), y: 0 });
+    for (let z = POOL.z0 + 8; z <= 128; z += 11) elmSpots.push({ x: 131.5 + rng.range(-1.2, 1.2), z: z + rng.range(-1.8, 1.8), y: 0 });
     cherrySpots.push(...sc.scatter({ count: 60, min: 14, max: 70, maxSlope: 0.5, minGap: 7, where: (x, z) => (onPlateau(x, z, 1.6) && !onPlateau(x, z, 1.02)) || (x > -60 && x < 100 && z > 20 && z < 95) }));
     const cherries = cherrySpots.filter(p => ok(p.x, p.z, 1.5)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
     const chA = partsOf(C.cherryTree(1, { h: 6.5 })), chB = partsOf(C.cherryTree(4, { h: 7.2, pinkA: 0xf9c7da, pinkB: 0xf2a2c2 })), chC = partsOf(C.cherryTree(7, { h: 5.8, pinkA: 0xf4a6c4, pinkB: 0xe57aa6 }));
     sc.instances(chA, cherries.filter((_, i) => i % 3 === 0), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
     sc.instances(chB, cherries.filter((_, i) => i % 3 === 1), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
     sc.instances(chC, cherries.filter((_, i) => i % 3 === 2), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
+    const elms = elmSpots.filter(p => ok(p.x, p.z, 1.5)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
+    const elmA = partsOf(P.roundTree(21, { h: 9.2, leafA: 0x5d8a3c, leafB: 0x7aa24a })), elmB = partsOf(P.roundTree(22, { h: 8.4, leafA: 0x527d34, leafB: 0x6f9a44 }));
+    sc.instances(elmA, elms.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.2], yaw: 'random', tilt: 0.03 });
+    sc.instances(elmB, elms.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.2], yaw: 'random', tilt: 0.03 });
 
     // hedges and flower beds: formal gardens on the lawns and round the capitol
     const hedgeSpots = [];

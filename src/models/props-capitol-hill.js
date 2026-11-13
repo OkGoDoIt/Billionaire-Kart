@@ -219,6 +219,26 @@ export function balustrade(len = 4) {
   return b.build({ s: plastic(STONE, 0.65), b: plastic(0xf0ebdf, 0.6) });
 }
 
+/** The reflecting pool's stonework (round 3, #140): a pale granite coping frame at the
+ *  waterline plus a dark basin liner. Built in pool-local coords (origin at the basin
+ *  centre, Y absolute — place it with y: 0). The coping centre lines are NOT symmetric
+ *  about the basin: they encode where the waterline actually falls once the terrain
+ *  conform has had its say (blend 2 on the pool run) — the west rim sits ~2 m inside
+ *  the POOL rectangle, the east rim ~0.4 m outside it. Coping top is 0.45 m above the
+ *  water; the liner lies on the basin floor so the water reads murk green over
+ *  near-black instead of over lawn. */
+export function poolBasin({ w = 24, l = 172 } = {}) {
+  const b = new ModelBuilder();
+  const cw = 3.2, top = -0.5, cy = top - 0.65;                          // coping width, top height, box centre
+  const west = -w / 2 + 1.9, east = w / 2 + 0.4;                       // coping centre lines (see above)
+  b.add('stone', box(cw, 1.3, l + cw, 0.05, 1), { p: [west, cy, 0] });
+  b.add('stone', box(cw, 1.3, l + cw, 0.05, 1), { p: [east, cy, 0] });
+  b.add('stone', box(east - west + cw, 1.3, cw, 0.05, 1), { p: [(west + east) / 2, cy, -l / 2] });
+  b.add('stone', box(east - west + cw, 1.3, cw, 0.05, 1), { p: [(west + east) / 2, cy, l / 2 + 0.6] });
+  b.add('liner', box(w - 1, 0.12, l - 1, 0.02, 1), { p: [0, -1.33, 0] });
+  return b.build({ stone: plastic(STONE, 0.6), liner: plastic(0x20300f, 1) });
+}
+
 /** Classic street lamp with two warm globes. */
 export function streetLamp({ h = 5.2 } = {}) {
   const b = new ModelBuilder();

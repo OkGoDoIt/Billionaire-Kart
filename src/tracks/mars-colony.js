@@ -3,7 +3,7 @@
    airlock tube, a climb along the canyon rim, the long low-gravity jump across
    the canyon, a banked bowl inside a crater with a rim hop, and a fast S-bend
    through the solar field back home. */
-import { fbm, ridged, smoothstep } from '../core/util.js';
+import { clamp, fbm, ridged, smoothstep } from '../core/util.js';
 import { Scenery, partsOf } from '../render/scenery.js';
 import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
@@ -35,7 +35,7 @@ export default {
   id: 'mars-colony',
   name: 'Mars Colony',
   tagline: 'The commute is murder. The oxygen is extra.',
-  lapNotes: ['<b>Oxygen renewed.</b> $9.99 has been charged.', '<b>Final lap.</b> Return tickets are sold out.'],
+  lapNotes: ['<b>Launch update:</b> departure moved to THE YEAR AFTER.', '<b>Final lap.</b> The rocket is launching. Stand well back.'],
   laps: 3,
   width: 18,
   sky: 'mars',
@@ -160,7 +160,7 @@ export default {
   },
   CRATER, COLONY,
   models: { rover: M.robotaxi, dustdevil: M.dustdevil, crate: M.oxyCrate },
-  // the opening shot: the rocket on the pad, lifting off, and then not
+  // the opening shot: the rocket on the pad tries to light, hops, and gives up — an aborted ignition, so the real launch (and the bang) is saved for the final lap
   intro: [{ pos: [262, 46, -196], pos1: [252, 52, -212], look: [158, 72, -300], look1: [158, 76, -300], fov: 48, dur: 3.6 }],
 
   /** Dress the course. ctx: { THREE, track, group, gfx, anim, view } */
@@ -253,18 +253,38 @@ function dress(ctx) {
     });
     const g = sticks.build({ s: MAT_STICK }); ctx.group.add(g); bake.add(g, false);
   }
-  // the countdown board on Main Street, raised clear of the lamps and flags so the punch line reads from the grid
-  sign(0.55, 1, 9, (g, w, h) => {
-    g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); g.strokeStyle = RUST_HEX; g.lineWidth = 14; g.strokeRect(7, 7, w - 14, h - 14);
-    K.fitText(g, 'COLONISTS ARRIVING:', w / 2, h * 0.14, w * 0.9, 66, K.SANS, '#ffb020', { lines: 1 });
-    const years = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
-    years.forEach((y, k) => {
-      const cx = w * (0.1 + (k % 5) * 0.2), cy = h * (k < 5 ? 0.33 : 0.5);
-      K.fitText(g, String(y), cx, cy, w * 0.17, 56, K.SANS, '#9aa3ad', { lines: 1 });
-      g.strokeStyle = '#ff3b30'; g.lineWidth = 9; g.beginPath(); g.moveTo(cx - w * 0.08, cy + 18); g.lineTo(cx + w * 0.08, cy - 18); g.stroke();
-    });
-    K.fitText(g, 'NEXT YEAR', w / 2, h * 0.78, w * 0.9, 190, K.FONT, '#38ff74', { lines: 1, maxH: h * 0.3 });
-  }, 22, 10, 12.5, { turn: 0.55 });
+  // the countdown board on Main Street, raised clear of the lamps and flags so the punch line reads from the grid.
+  // The punch line is a live canvas of its own (like the days counter): NEXT YEAR on lap 1, THE YEAR AFTER from
+  // lap 2 on — redrawn only when the lap changes. The back is a finished board, as usual.
+  const setCountdown = (() => {
+    const p = sc.beside(0.55, 1, 9), yaw = faceIn(p.i, 1, 0.55), w = 22, h = 10, up = 12.5;
+    const rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
+    if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return () => {};
+    const y0 = sc.y(p.x, p.z), f = K.signFrame(w, h, up, { color: 0x2a2026, legs: 2 }); sc.place(f, p.x, p.z, { yaw, y: y0 }); bake.add(f); take(p.x, p.z, w * 0.55);
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 465;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const q = new K.Quads(); q.panel([p.x + Math.sin(yaw) * 0.03, y0 + up, p.z + Math.cos(yaw) * 0.03], yaw, w, h, [0, 0, 1, 1]);
+    const mesh = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ color: 0x000000, map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 0.5 }));
+    mesh.matrixAutoUpdate = false; ctx.group.add(mesh);
+    { const r = atlas.add(1024, 465, K.board('DEPARTURES: NONE', { bg: INK, fg: CREAM, size: 170, lines: 1 })); atlas.place(r, [p.x - Math.sin(yaw) * 0.39, y0 + up, p.z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h); }
+    const g = cv.getContext('2d');
+    return later => {
+      g.fillStyle = '#101418'; g.fillRect(0, 0, 1024, 465); g.strokeStyle = RUST_HEX; g.lineWidth = 14; g.strokeRect(7, 7, 1010, 451);
+      K.fitText(g, 'COLONISTS ARRIVING:', 512, 65, 922, 66, K.SANS, '#ffb020', { lines: 1 });
+      const years = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
+      years.forEach((y, k) => {
+        const cx = 1024 * (0.1 + (k % 5) * 0.2), cy = 465 * (k < 5 ? 0.33 : 0.5);
+        K.fitText(g, String(y), cx, cy, 174, 56, K.SANS, '#9aa3ad', { lines: 1 });
+        g.strokeStyle = '#ff3b30'; g.lineWidth = 9; g.beginPath(); g.moveTo(cx - 82, cy + 18); g.lineTo(cx + 82, cy - 18); g.stroke();
+      });
+      if (!later) K.fitText(g, 'NEXT YEAR', 512, 363, 922, 190, K.FONT, '#38ff74', { lines: 1, maxH: 140 });
+      else {
+        K.fitText(g, 'THE YEAR AFTER', 512, 344, 942, 170, K.FONT, '#ffb020', { lines: 1, maxH: 121 });
+        K.fitText(g, '(IT WAS NEXT YEAR LAST YEAR TOO)', 512, 433, 922, 52, K.SANS, '#ff6a2a', { lines: 1 });
+      }
+      tex.needsUpdate = true;
+    };
+  })();
   // the big dome sells the air
   {
     const d = { x: 12, z: -46 }, top = track.terrainHeight(d.x, d.z) + 12.6, yaw = -0.5, mb = new ModelBuilder();
@@ -343,7 +363,8 @@ function dress(ctx) {
   sc.instances(spireA, spires.filter((_, i) => i % 2 === 0), { scale: [0.8, 1.2], tints: ROCK_TINTS, sink: 0.5 });
   sc.instances(spireB, spires.filter((_, i) => i % 2 === 1), { scale: [0.8, 1.2], tints: ROCK_TINTS, sink: 0.5 });
 
-  // ---- the centrepiece: a megarocket on the pad that lifts off and blows up, every few seconds, on purpose ----
+  // ---- the centrepiece: a megarocket on the pad whose story is the race — lap 1 it cannot get off the ground,
+  // lap 2 the engines stay lit and go nowhere, and on the final lap it launches and comes apart ----
   const padY = track.terrainHeight(ROCKET.x, ROCKET.z) - 0.1, MOUNT = 9;
   {
     const tw = M.launchTower({ h: 96 }); sc.place(tw, ROCKET.x - 13, ROCKET.z, { yaw: Math.PI / 2, y: padY }); bake.add(tw);
@@ -377,41 +398,106 @@ function dress(ctx) {
       tex.needsUpdate = true;
     };
   })();
-  let rt = 2.1, shown = -1, boomed = false;
-  const CYCLE = 17, wp = new THREE.Vector3(), Mq = new THREE.Matrix4(), Qq = new THREE.Quaternion(), S1 = new THREE.Vector3(1, 1, 1), G = 9.8 * 0.55;
-  anim.push((dt) => {
-    rt += dt; const t = rt % CYCLE, fx = view.fx;
-    if (t < 4) {                                                   // ignition, lift-off
-      boomed = false; debris.forEach(m => { m.visible = false; });
-      const up = t < 1.6 ? 0 : Math.pow(t - 1.6, 2.1) * 3.2;
-      rocket.position.y = rocketY + up; rocket.visible = true; rocket.rotation.z = t > 3 ? Math.sin(t * 9) * 0.03 * (t - 3) : 0;
-      wp.set(ROCKET.x, rocket.position.y, ROCKET.z);
-      for (let i = 0, n = fx.count(t < 1.6 ? 60 : 120, dt); i < n; i++) {
-        fx.flame(wp.x + rng.range(-3, 3), wp.y - 1, wp.z + rng.range(-3, 3), rng.range(-5, 5), -16 - rng() * 10, rng.range(-5, 5), [1, 0.72, 0.3], 5 + rng() * 4, 0.55);
-        if (i % 3 === 0) fx.dust(wp.x + rng.range(-6, 6), padY + 2, wp.z + rng.range(-6, 6), rng.range(-12, 12), rng.range(0, 5), rng.range(-12, 12), [0.93, 0.62, 0.42], 9 + rng() * 6, 3.5, 0.55);
+  // the engine plume: one additive cone under the rocket, bright at the nozzle and fading down its length
+  const plume = (() => {
+    const cv = Object.assign(document.createElement('canvas'), { width: 8, height: 128 }), g2 = cv.getContext('2d');
+    const gr = g2.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,244,190,1)'); gr.addColorStop(0.25, 'rgba(255,170,40,0.95)'); gr.addColorStop(0.7, 'rgba(240,70,10,0.6)'); gr.addColorStop(1, 'rgba(160,20,0,0)');
+    g2.fillStyle = gr; g2.fillRect(0, 0, 8, 128);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const geo = new THREE.ConeGeometry(1, 1, 10, 4, true); geo.translate(0, 0.5, 0);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(2.2, 1.7, 1.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    m.rotation.z = Math.PI; m.position.set(ROCKET.x, rocketY, ROCKET.z); m.visible = false; m.frustumCulled = false; m.renderOrder = 6; ctx.group.add(m);
+    return m;
+  })();
+  // the dust column that hangs over the pad once it has blown
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(30, 6, 175, 14, 1, true), new THREE.MeshBasicMaterial({ color: 0x4a2c1c, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  column.position.set(ROCKET.x, padY + 88, ROCKET.z); column.renderOrder = 5; ctx.group.add(column);
+  // the storm the bang leaves behind: thicker, browner, closer
+  const DUST = { zenith: 0x6e3a22, horizon: 0xd98a52, ground: 0xc98a5e, sun: 0xffc9a0, cloud: 0xd9905f, cloudShade: 0x8a4f2c, cloudCover: 0.92, fog: 0xcf8850, fogNear: 45, fogFar: 400, sunLight: 0xffbe8a, sunIntensity: 2.0, hemiSky: 0xe8a878, hemiGround: 0x8a4a30, panoTint: [0.82, 0.6, 0.42] };
+  const rst = { mode: '', sputter: 0, lit: 0, tF: 0, tL: -1, boomed: false, tBoom: -1, storm: 0, cd: -1, days: -1 };
+  const Mq = new THREE.Matrix4(), Qq = new THREE.Quaternion(), S1 = new THREE.Vector3(1, 1, 1), G = 9.8 * 0.55;
+  const boom = () => {
+    rst.boomed = true; rst.tBoom = rst.tF; rocket.visible = false; plume.visible = false;
+    const cy = rocket.position.y + 32;
+    bits.forEach(b => { b.p.set(ROCKET.x + rng.range(-4, 4), cy + rng.range(-25, 25), ROCKET.z + rng.range(-4, 4)); b.v.set(rng.range(-26, 26), rng.range(10, 34), rng.range(-26, 26)); b.r.set(rng() * 6, rng() * 6, rng() * 6); b.w.set(rng.range(-3, 3), rng.range(-3, 3), rng.range(-3, 3)); });
+    debris.forEach(m => { m.visible = true; });
+    for (let i = 0; i < 170; i++) { const a = rng() * 6.28, e = rng.range(-1, 1), sp = 8 + rng() * 30, yy = cy + rng.range(-30, 30); view.fx.flame(ROCKET.x, yy, ROCKET.z, Math.cos(a) * sp * Math.sqrt(1 - e * e), e * sp, Math.sin(a) * sp * Math.sqrt(1 - e * e), [1, 0.55 + rng() * 0.3, 0.2], 8 + rng() * 7, 0.9 + rng() * 0.6); }
+    view.fx.burst(ROCKET.x, cy, ROCKET.z, 240, [1, 0.62, 0.18], 36, 1.4, 2.8, 12);
+    view.fx.burst(ROCKET.x, cy, ROCKET.z, 120, [1, 0.95, 0.75], 20, 0.9, 1.8, 6);
+    if (view.fx.smoke) for (let i = 0; i < 46; i++) view.fx.smoke.emit({ x: ROCKET.x + rng.range(-10, 10), y: cy + rng.range(-25, 25), z: ROCKET.z + rng.range(-10, 10), vx: rng.range(-6, 6), vy: rng.range(-1, 5), vz: rng.range(-6, 6), color: [0.12, 0.09, 0.08], color2: [0.45, 0.32, 0.26], size: 14 + rng() * 10, grow: 3, drag: 0.4, gravity: -0.2, life: 6 + rng() * 3, alpha: 0.85, fadeIn: 0.03, spin: rng.range(-0.4, 0.4), rot: rng() * 6.28 });
+  };
+  anim.push((dt, time) => {
+    const fx = view.fx, lap = view.showLap || 1, laps = view.race?.laps ?? 3;
+    const mode = view.finalLap || lap >= laps ? 'final' : lap >= 2 ? 'lit' : 'vent';
+    if (mode !== rst.mode) { rst.mode = mode; if (mode === 'final') rst.tF = 0; }
+    // the boards follow the lap; each canvas is redrawn only when what it says changes
+    const cd = mode === 'vent' ? 0 : 1;
+    if (cd !== rst.cd) { rst.cd = cd; setCountdown(cd); }
+    const days = rst.boomed ? 0 : mode === 'vent' ? 2 : 3;
+    if (days !== rst.days) { rst.days = days; counter(days); }
+
+    if (mode === 'vent') {
+      // lap 1: an aborted ignition, over and over — vent, cough, hop a little, settle back with a sigh.
+      // This is also what the opening shot watches, so the real launch is never spent before the race.
+      rst.sputter += dt; const c = rst.sputter % 7;
+      rocket.visible = true;
+      const hop = c > 1.1 && c < 2.6 ? Math.sin((c - 1.1) / 1.5 * Math.PI) * 2.3 : 0;
+      rocket.position.y = rocketY + hop;
+      rocket.rotation.z = c > 1 && c < 3 ? Math.sin(c * 30) * 0.006 * (3 - c) : 0;
+      const cough = c > 0.9 && c < 2.2;
+      plume.visible = cough;
+      if (cough) { const s = Math.sin((c - 0.9) / 1.3 * Math.PI); plume.position.y = rocket.position.y; plume.scale.set(3.5 * s + 0.01, 11 * s + 0.01, 3.5 * s + 0.01); }
+      for (let i = 0, n = fx.count(cough ? 110 : 26, dt); i < n; i++) {
+        if (cough && i % 3) fx.flame(ROCKET.x + rng.range(-3, 3), rocketY - 1, ROCKET.z + rng.range(-3, 3), rng.range(-5, 5), -14 - rng() * 8, rng.range(-5, 5), [1, 0.72, 0.3], 4 + rng() * 3, 0.5);
+        else fx.dust(ROCKET.x + rng.range(-7, 7), padY + 1.5, ROCKET.z + rng.range(-7, 7), rng.range(-7, 7), rng.range(1, 5), rng.range(-7, 7), [0.93, 0.62, 0.42], 6 + rng() * 5, 2.6, 0.5);
+      }
+    } else if (mode === 'lit') {
+      // lap 2: the engines stay lit and the whole pad rumbles; it just never goes anywhere
+      rst.lit = Math.min(1, rst.lit + dt * 0.5);
+      rocket.visible = true; rocket.position.y = rocketY; rocket.rotation.z = Math.sin(time * 41) * 0.0035 * rst.lit;
+      plume.visible = rst.lit > 0.03; plume.position.y = rocketY;
+      const fl = 0.85 + 0.15 * Math.sin(time * 23) + 0.07 * Math.sin(time * 47);
+      plume.scale.set(5 * rst.lit, 17 * rst.lit * fl, 5 * rst.lit);
+      for (let i = 0, n = fx.count(95 * rst.lit, dt); i < n; i++) {
+        if (i % 3) fx.flame(ROCKET.x + rng.range(-3, 3), rocketY - 1, ROCKET.z + rng.range(-3, 3), rng.range(-6, 6), -17 - rng() * 9, rng.range(-6, 6), [1, 0.72, 0.3], 5 + rng() * 4, 0.55);
+        else fx.dust(ROCKET.x + rng.range(-9, 9), padY + 1.5, ROCKET.z + rng.range(-9, 9), rng.range(-13, 13), rng.range(0, 5), rng.range(-13, 13), [0.93, 0.62, 0.42], 9 + rng() * 6, 3.2, 0.55);
       }
     } else {
-      if (!boomed) {                                               // the bang
-        boomed = true; rocket.visible = false;
-        const cy = rocket.position.y + 32;
-        bits.forEach(b => { b.p.set(ROCKET.x + rng.range(-4, 4), cy + rng.range(-25, 25), ROCKET.z + rng.range(-4, 4)); b.v.set(rng.range(-22, 22), rng.range(8, 30), rng.range(-22, 22)); b.r.set(rng() * 6, rng() * 6, rng() * 6); b.w.set(rng.range(-3, 3), rng.range(-3, 3), rng.range(-3, 3)); });
-        debris.forEach(m => { m.visible = true; });
-        for (let i = 0; i < 140; i++) { const a = rng() * 6.28, e = rng.range(-1, 1), sp = 8 + rng() * 26, yy = cy + rng.range(-30, 30); fx.flame(ROCKET.x, yy, ROCKET.z, Math.cos(a) * sp * Math.sqrt(1 - e * e), e * sp, Math.sin(a) * sp * Math.sqrt(1 - e * e), [1, 0.55 + rng() * 0.3, 0.2], 8 + rng() * 7, 0.9 + rng() * 0.6); }
-        if (fx.smoke) for (let i = 0; i < 40; i++) fx.smoke.emit({ x: ROCKET.x + rng.range(-10, 10), y: cy + rng.range(-25, 25), z: ROCKET.z + rng.range(-10, 10), vx: rng.range(-6, 6), vy: rng.range(-1, 5), vz: rng.range(-6, 6), color: [0.12, 0.09, 0.08], color2: [0.45, 0.32, 0.26], size: 14 + rng() * 10, grow: 3, drag: 0.4, gravity: -0.2, life: 6 + rng() * 3, alpha: 0.85, fadeIn: 0.03, spin: rng.range(-0.4, 0.4), rot: rng() * 6.28 });
+      // the final lap: it launches as the leader comes down the rim road toward the run-up, so the climb and
+      // the bang happen where the road faces the pad; a slow field gets the fallback timer instead
+      rst.tF += dt;
+      const progF = clamp((view.showProgress || 0) * laps - (laps - 1), 0, 1);
+      if (!rst.boomed && rst.tL < 0 && (progF >= 0.26 || rst.tF > 25)) rst.tL = 0;
+      if (!rst.boomed && rst.tL >= 0) {
+        rst.tL += dt; const tL = rst.tL;
+        rocket.position.y = rocketY + Math.pow(tL, 2.05) * 4.0;
+        rocket.rotation.z = Math.sin(tL * 2.1) * 0.02 * tL + tL * 0.035;
+        plume.visible = true; plume.position.y = rocket.position.y;
+        const fl = 0.88 + 0.12 * Math.sin(time * 27);
+        plume.scale.set(6.5, 30 * fl, 6.5);
+        for (let i = 0, n = fx.count(150, dt); i < n; i++) {
+          if (i % 3) fx.flame(ROCKET.x + rng.range(-3, 3), rocket.position.y - 1, ROCKET.z + rng.range(-3, 3), rng.range(-6, 6), -19 - rng() * 10, rng.range(-6, 6), [1, 0.72, 0.3], 6 + rng() * 4, 0.6);
+          else fx.dust(ROCKET.x + rng.range(-11, 11), padY + 2, ROCKET.z + rng.range(-11, 11), rng.range(-16, 16), rng.range(0, 6), rng.range(-16, 16), [0.93, 0.62, 0.42], 11 + rng() * 7, 3.6, 0.55);
+        }
+        if (tL >= 9.5) boom();
       }
-      if (t < 11) {                                                // the bits come down
+      if (rst.boomed && rst.tF - rst.tBoom < 9) {                 // the bits come down, and stay down as wreckage
         for (const b of bits) {
           b.v.y -= G * dt; b.p.addScaledVector(b.v, dt);
           if (b.p.y < padY + 0.5) { b.p.y = padY + 0.5; b.v.set(b.v.x * 0.3, 0, b.v.z * 0.3); b.w.multiplyScalar(0.9); }
           b.r.x += b.w.x * dt; b.r.y += b.w.y * dt; b.r.z += b.w.z * dt;
           Mq.compose(b.p, Qq.setFromEuler(b.r), S1); b.m.setMatrixAt(b.j, Mq);
-          if (t < 7 && fx.count(3, dt)) fx.flame(b.p.x, b.p.y, b.p.z, 0, 2, 0, [1, 0.6, 0.2], 2.5, 0.5);
+          if (rst.tF - rst.tBoom < 3.5 && fx.count(3, dt)) fx.flame(b.p.x, b.p.y, b.p.z, 0, 2, 0, [1, 0.6, 0.2], 2.5, 0.5);
         }
         debris.forEach(m => { m.instanceMatrix.needsUpdate = true; });
-      } else { debris.forEach(m => { m.visible = false; }); rocket.visible = true; rocket.position.y = rocketY; rocket.rotation.z = 0; }   // a fresh one, rolled out
+      }
+      column.material.opacity += ((rst.boomed ? 0.38 : 0) - column.material.opacity) * Math.min(1, dt * 0.5);
+      column.rotation.y = time * 0.05;
     }
-    const days = t < 4 ? Math.floor(t + CYCLE - 4) : Math.floor(t - 4);
-    if (days !== shown) { shown = days; counter(days); }
+    // after the bang the dust closes in for the rest of the race
+    rst.storm += ((rst.boomed ? 1 : 0) - rst.storm) * Math.min(1, dt * 0.07);
+    if (rst.storm > 0.004) ctx.gfx.shiftSky(DUST, rst.storm * (0.92 + 0.08 * Math.sin(time * 0.7)));
+    if (rst.boomed) for (let i = 0, n = fx.count(11, dt); i < n; i++) { const a = rng() * 6.28, d = rng.range(15, 90); fx.dust(ROCKET.x + Math.cos(a) * d, padY + rng.range(2, 14), ROCKET.z + Math.sin(a) * d, rng.range(-9, -3), rng.range(0, 2), rng.range(-3, 3), [0.85, 0.55, 0.34], 10 + rng() * 8, 3.4, 0.5); }
   });
 
   // ---- Earth, small and blue, hanging ahead of the jump ----

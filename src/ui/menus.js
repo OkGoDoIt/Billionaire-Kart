@@ -341,7 +341,7 @@ export class Menus {
     const el = h('div', {}, h('div', { class: 'panel cupres' },
       h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
-      h('div', { class: 'foot' }, this.btn('Continue', () => A.quitToMenu(), { cls: 'go', def: true }))));
+      h('div', { class: 'foot' }, this.btn('Race this cup again', () => A.restartCup(), { cls: 'go', def: true }), this.btn('Change racer', () => A.backToRacers()), this.btn('Continue', () => A.quitToMenu()))));
     return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 

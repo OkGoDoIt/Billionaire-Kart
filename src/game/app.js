@@ -138,9 +138,9 @@ export class App {
     const f = this.flow; this.gp = null;
     this._race({ trackId, cc: f.cc || this.save.data.last.cc, level: f.level || 'normal', players: this._players(), mode: f.mode === 'timetrial' ? 'timetrial' : 'race' });
   }
-  startCup(cup) {
+  startCup(cup, grid = null) {
     const f = this.flow, tracks = cupTracks(cup), humans = f.racers.map(id => RACER_BY_ID[id]);
-    const rivals = this.rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, 8 - humans.length).map(r => r.id);
+    const rivals = grid || this.rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, 8 - humans.length).map(r => r.id);
     this.gp = { cup, tracks, index: 0, grid: rivals, totals: Object.fromEntries([...rivals, ...f.racers].map(id => [id, 0])), order: null, cc: f.cc, level: f.level };
     this._gpRace();
   }
@@ -179,6 +179,10 @@ export class App {
   onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
 
   restartRace() { this.menus.close(); this._race(this.lastConfig, this.lastCupLine); }
+  /* Run the finished cup again from race 1: same cup, class, level, racer picks, and rival grid; the
+     standings start empty. The recorded result in the save is untouched — a better run replaces it. */
+  restartCup() { const g = this.gp; if (g) this.startCup(g.cup, g.grid); }
+  backToRacers() { this.gp = null; this._wake(false); this._lockLandscape(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.menus.open('racers', { player: 0 }); }); }
   backToTracks() { this.transition(() => { this._attract(); this.menus.reset('main'); this.menus.open('tracks'); }); }
   quitToMenu() { this.gp = null; this._wake(false); this._lockLandscape(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.audio?.music?.('menu'); }); }
 

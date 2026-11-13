@@ -257,7 +257,12 @@ export class Kart {
     const surf = this.surface;
     const boosting = this.boostT > 0;
     const offroad = surf.offroad && !boosting && this.starT <= 0;
-    let top = this.top * (offroad ? Math.min(1, 1 - (1 - surf.speed * this.offroadMul) * (this.sp.offroad || 1)) : surf.offroad ? 1 : surf.speed);
+    // Surface top-speed factor. While the hype cycle (star) runs, no surface slows the kart —
+    // off-road, shoulders and dirt are all full speed, exactly like Mario Kart's star.
+    let sf = surf.speed;
+    if (offroad) sf = Math.min(1, 1 - (1 - surf.speed * this.offroadMul) * (this.sp.offroad || 1));
+    else if (surf.offroad || this.starT > 0) sf = 1;
+    let top = this.top * sf;
     if (this.starT > 0) top *= 1.12;
     if (this.squashT > 0) top *= 0.6;
     const topBoost = top * (boosting ? this.boostMul : 1);
@@ -336,7 +341,10 @@ export class Kart {
     if (this.boostT > 0) { this.boostT -= dt; if (this.boostT <= 0) { this.boostMul = 1; this.boostKind = ''; } }
 
     // ----- sideways grip
-    const grip = stunned ? T.gripSpin : airborne ? T.gripAir : (this.drifting ? T.gripDrift : T.grip) * surf.grip;
+    // Off-road surfaces also steal sideways grip, which bleeds speed in every turn; the star
+    // gives that back too. Ice keeps its slide: it is a handling hazard, not a slowdown.
+    const surfGrip = surf.offroad && this.starT > 0 ? 1 : surf.grip;
+    const grip = stunned ? T.gripSpin : airborne ? T.gripAir : (this.drifting ? T.gripDrift : T.grip) * surfGrip;
     vl *= Math.exp(-grip * dt);
     this.vx = sy * vf + cy * vl; this.vz = cy * vf - sy * vl;
     // never exceed the allowed speed through the vector sum

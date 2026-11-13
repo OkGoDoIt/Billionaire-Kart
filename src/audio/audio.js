@@ -21,6 +21,7 @@ export class AudioEngine {
     this.save = save; this.ctx = null; this.muted = false; this.buffers = new Map(); this.loading = new Map();
     this.vol = { music: save.settings.music, sfx: save.settings.sfx };
     this.loops = []; this.musicId = null; this.musicNodes = []; this.musicRate = 1; this.seq = null; this.lastVoiceT = 0; this.cool = new Map();
+    this.baseMusicId = null; this.starOn = false;   // the track's own music, and whether the star theme has taken it over
   }
 
   /** Create or resume the context. Browsers only allow this after a user gesture, and iPhones only
@@ -177,17 +178,21 @@ export class AudioEngine {
       const drifting = on && k.drifting && k.grounded;
       L.drift.g.gain.setTargetAtTime(drifting ? (0.06 + k.driftTier * 0.02) * k1 : 0, t, 0.05);
       L.drift.fl.frequency.setTargetAtTime(2000 + k.driftTier * 700 + Math.sin(t * 30) * 150, t, 0.05);
-      const off = on && k.grounded && (k.surface.offroad || k.surface.rumble > 0.3);
+      const off = on && k.grounded && k.starT <= 0 && (k.surface.offroad || k.surface.rumble > 0.3);   // starred: off-road is silent, like the road
       L.rumble.g.gain.setTargetAtTime(off ? 0.22 * clamp(sp, 0, 1) * k1 : 0, t, 0.08);
       L.wind.g.gain.setTargetAtTime(on ? 0.03 * clamp(sp - 0.5, 0, 1) * k1 : 0, t, 0.1);
       L.jet.g.gain.setTargetAtTime(on && (k.boostT > 0 || k.bulletT > 0) ? 0.16 * k1 : 0, t, 0.05);
       L.jet.fl.frequency.setTargetAtTime(600 + sp * 500, t, 0.1);
       if (L.panNode) L.panNode.pan.setTargetAtTime(pan, t, 0.05);
     });
-    // final-lap lift and hype-cycle shimmer on the music
+    // hype-cycle star: while any local player is starred, the music IS the star theme (Mario Kart rules);
+    // when it expires the track's own music comes back. Checked every frame, swapped only on the edge.
+    const anyStar = race.state !== 'done' && players.some(k => k.starT > 0 && !k.finished);
+    this.setStarTheme(anyStar);
+    // final-lap lift on the music (suspended while the star theme owns it; it lands when the star ends)
     const lead = players[0];
     const want = lead && !lead.finished && lead.lap >= race.laps && race.laps > 1 ? 1.1 : 1;
-    if (want !== this.musicRate) this.setMusicRate(want);
+    if (!anyStar && want !== this.musicRate) this.setMusicRate(want);
     this._updateRivals(dt, race, quiet);
     this._crowdTick(dt, race);
     void view;
@@ -348,6 +353,11 @@ export class AudioEngine {
       case 'count': this.play('count', { gap: 0.3 }); this.say('count_' + e.data, { force: true }); break;
       case 'go': this.play('go'); this.say('go', { force: true }); this.play('crowd', { vol: 0.5 }); break;
       case 'boxBreak': this.play('item_box', { vol: e.data.kart.isPlayer ? 1 : this._nearness(e.data.kart) * 0.7 }); break;
+      case 'kartHit': // the item's owner hears the connection land — before this, a hit was silent for the player who caused it
+        if (e.data.by?.isPlayer && !e.data.victim?.isPlayer) this.play('hitmark', { vol: 0.9, gap: 0.1 });
+        else if (e.data.by?.isPlayer && e.data.victim?.isPlayer) this.play('hitmark', { vol: 0.5, gap: 0.1 });
+        break;
+      case 'blueHit': this.play('explosion', { vol: this._nearPoint(race, e.data.x, e.data.z, 90) }); break;
       case 'explosion': this.play('explosion', { vol: this._nearPoint(race, e.data.x, e.data.z, 90) }); break;
       case 'lightning': this.play('lightning'); break;
       case 'shock': this.play('shock', { vol: this._nearPoint(race, e.data.x, e.data.z, 70) }); break;
@@ -371,8 +381,18 @@ export class AudioEngine {
   _nearPoint(race, x, z, range) { let best = 1e9; for (const p of race.players) best = Math.min(best, Math.hypot(p.x - x, p.z - z)); if (!race.players.length) return 0; return clamp(1 - best / range, 0, 1); }
 
   /* ---------- music ---------- */
+  /** The star theme takes the music over while a local player is starred, and hands it back after.
+      Called every frame from frame(); converges from any state, so a race that ends mid-star (the
+      game calls music('results') itself) or a pause can never leave the wrong theme playing. */
+  setStarTheme(on) {
+    this.starOn = on;
+    if (!this.ctx) return;
+    const want = on ? 'star' : this.baseMusicId;
+    if (want && want !== this.musicId) this.music(want);
+  }
   music(id) {
     if (id === 'menu') this._crowdMode('off');   // back in the menus, the grandstand goes home
+    if (id && id !== 'star') this.baseMusicId = id;   // the music the race/menu asked for; the star theme borrows the slot, it does not replace this
     if (!this.ctx) { this.pendingMusic = id; return; }
     if (id === this.musicId) return;
     this.musicId = id; this.musicRate = 1;
@@ -381,7 +401,7 @@ export class AudioEngine {
     this.musicNodes = []; this.seq?.stop(); this.seq = null; clearTimeout(this.loopTimer);
     if (!id) return;
     const url = MUSIC[id] || (MUSIC.default && !MUSIC[id] ? null : null);
-    if (!url) { this.seq = new Sequencer(this, id); this.seq.start(); return; }
+    if (!url) { this.seq = id === 'star' ? new StarSequencer(this) : new Sequencer(this, id); this.seq.start(); return; }
     const key = 'music:' + id;
     const start = buf => { if (this.musicId !== id || !buf) { if (!buf && this.musicId === id) { this.seq = new Sequencer(this, id); this.seq.start(); } return; } this._loopMusic(buf, id); };
     if (this.buffers.has(key)) start(this.buffers.get(key));
@@ -417,7 +437,7 @@ export class AudioEngine {
   }
 }
 
-const USE_SOUND = { boost: 'boost', boost3: 'boost', golden: 'boost', leak: 'drop', pinkslip: 'throw', subpoena: 'throw', subpoena3: 'throw', tweet: 'tweet', antitrust: 'siren', star: 'star', crash: 'lightning', pr: 'shock', smear: 'ink', insider: 'ghost', bailout: 'rocket', dividend: 'coin' };
+const USE_SOUND = { boost: 'boost', boost3: 'boost', golden: 'boost', leak: 'leak', pinkslip: 'lob', subpoena: 'serve', subpoena3: 'serve', tweet: 'tweet', antitrust: 'siren', star: 'star', crash: 'lightning', pr: 'shock', smear: 'ink', insider: 'ghost', bailout: 'rocket', dividend: 'coin' };
 
 /* Synthesized versions of every effect, used until a generated sample exists (and as a fallback offline). */
 const SYNTH = {
@@ -447,6 +467,10 @@ const SYNTH = {
   item_use: (a, v) => a.noise({ dur: 0.25, vol: 0.2 * v, type: 'bandpass', f: 800, f1: 2600, q: 2 }),
   drop: (a, v) => a.tone({ type: 'sine', f: 520, f1: 180, dur: 0.2, vol: 0.2 * v }),
   throw: (a, v) => a.noise({ dur: 0.3, vol: 0.25 * v, type: 'bandpass', f: 600, f1: 3000, q: 2.5 }),
+  leak: (a, v) => { a.noise({ dur: 0.22, vol: 0.3 * v, type: 'lowpass', f: 900, f1: 240, q: 2 }); a.tone({ type: 'sine', f: 300, f1: 90, dur: 0.18, vol: 0.2 * v }); a.noise({ dur: 0.12, vol: 0.14 * v, type: 'bandpass', f: 2400, f1: 3600, q: 3, delay: 0.05 }); },
+  serve: (a, v) => { a.noise({ dur: 0.28, vol: 0.26 * v, type: 'bandpass', f: 900, f1: 3800, q: 2 }); a.tone({ type: 'square', f: 190, f1: 70, dur: 0.09, vol: 0.16 * v, delay: 0.16 }); },
+  lob: (a, v) => { a.tone({ type: 'sine', f: 500, f1: 1250, dur: 0.3, vol: 0.13 * v }); a.noise({ dur: 0.2, vol: 0.12 * v, type: 'bandpass', f: 700, f1: 2400, q: 2.5 }); },
+  hitmark: (a, v) => { a.tone({ type: 'square', f: 1560, dur: 0.06, vol: 0.13 * v }); a.tone({ type: 'square', f: 2090, dur: 0.1, vol: 0.11 * v, delay: 0.05 }); },
   tweet: (a, v) => { for (let i = 0; i < 3; i++) a.tone({ type: 'sine', f: 2200 + i * 300, f1: 3000 + i * 300, dur: 0.07, vol: 0.12 * v, delay: i * 0.08 }); },
   siren: (a, v) => { for (let i = 0; i < 4; i++) a.tone({ type: 'sawtooth', f: i % 2 ? 620 : 880, dur: 0.16, vol: 0.12 * v, delay: i * 0.16 }); },
   star: a => a.arp([72, 76, 79, 84, 88, 91, 96], { type: 'square', step: 0.05, dur: 0.12, vol: 0.1 }),
@@ -500,6 +524,39 @@ class Sequencer {
       if (beat === 0) for (const iv of this.minor ? [0, 3, 7] : [0, 4, 7]) voice('triangle', NOTE(root + 12 + iv), spb * 7, 0.05, 2400);
       const l = this.lead[s % 32]; if (l != null) voice('square', NOTE(this.root + 24 + l), spb * 0.85, 0.055, 2600);
       this.next += spb; this.step++;
+    }
+    this.timer = setTimeout(() => this.tick(), 60);
+  }
+}
+
+/** The hype-cycle star theme: a relentless two-bar arpeggio loop that takes the music over while a
+    local player is starred, Mario Kart style. Fixed tempo (the final-lap rate lift does not apply),
+    seamless by construction, and it stops the moment it is swapped out — notes already scheduled are
+    sixteenths, so the handover rings out in under a tenth of a second. */
+class StarSequencer {
+  constructor(audio) {
+    this.a = audio; this.rate = 1; this.step = 0; this.timer = null; this.next = 0;
+    this.bpm = 172;
+    // I–V–vi–IV in C, as MIDI roots; the arpeggio walks each chord up two octaves and back down
+    this.chords = [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]];
+    this.arp = [0, 1, 2, 3, 2, 1];   // chord tones + the octave, indexed into an extended tone list
+  }
+  start() { this.next = this.a.t + 0.06; this.tick(); }
+  stop() { clearTimeout(this.timer); this.stopped = true; }
+  tick() {
+    if (this.stopped) return;
+    const a = this.a, c = a.ctx, s16 = 60 / this.bpm / 4;   // sixteenth notes
+    while (this.next < c.currentTime + 0.25) {
+      const s = this.step, bar = Math.floor(s / 16) % 4, six = s % 16, t = this.next;
+      const voice = (type, f, dur, vol, cut) => { const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter(); o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = cut; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(fl); fl.connect(g); g.connect(a.mus); o.start(t); o.stop(t + dur + 0.02); };
+      const nz = (dur, vol, type, f) => { const src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); src.buffer = a.noiseBuf; fl.type = type; fl.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); src.connect(fl); fl.connect(g); g.connect(a.mus); src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02); };
+      const chord = this.chords[bar], tones = [chord[0], chord[1], chord[2], chord[0] + 12];
+      voice('square', NOTE(tones[this.arp[six % 6]] + 12), s16 * 0.95, 0.075, 3200);
+      if (six % 2 === 0) voice('sawtooth', NOTE(chord[0] - 12), s16 * 1.7, 0.16, 800);            // bass, eighth notes
+      if (six % 8 === 4) nz(0.1, 0.16, 'bandpass', 1900);                                       // backbeat
+      nz(0.03, six % 2 ? 0.05 : 0.028, 'highpass', 7500);                                       // hats
+      if (six === 0) voice('triangle', NOTE(chord[2] + 24), s16 * 3, 0.05, 4000);                // bar sparkle
+      this.next += s16; this.step++;
     }
     this.timer = setTimeout(() => this.tick(), 60);
   }

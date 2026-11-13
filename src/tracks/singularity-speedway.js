@@ -402,6 +402,8 @@ function decorate(ctx) {
 
     // red alert: the sky preset the final lap eases into
     const ALERT = { zenith: 0x14030a, horizon: 0xc21736, ground: 0x3d0a18, sun: 0xff7a5c, cloud: 0x9c3044, cloudShade: 0x38101f, cloudCover: 0.7, fog: 0x8c1f36, fogNear: 160, fogFar: 900, sunLight: 0xff8a66, sunIntensity: 2.2, hemiSky: 0xff9a80, hemiGround: 0x38182a, panoTint: [0.95, 0.5, 0.45] };
+    const alertPano = new THREE.TextureLoader().load('assets/backdrops/singularity-speedway-alert.webp');
+    alertPano.colorSpace = THREE.SRGBColorSpace; alertPano.wrapS = alertPano.wrapT = THREE.ClampToEdgeWrapping; alertPano.anisotropy = 4;
     let boardKey = '', alert = 0, growth = 0.16, conv = 0, flipped = false;
     anim.push((dt, time) => {
       const lap = view.showLap || 1, laps = view.race?.laps ?? 3, fin = !!view.finalLap || lap >= laps;
@@ -425,6 +427,9 @@ function decorate(ctx) {
       alert += ((fin ? 1 : 0) - alert) * Math.min(1, dt * 0.45);
       if (alert > 0.002) ctx.gfx.shiftSky(ALERT, alert * (0.93 + 0.07 * Math.sin(time * 3.7)));
       if (Math.abs(alert - (road.alertShown ?? 0)) > 0.01) { road.alertShown = alert; road.setAlert(alert); }
+      // the painted nebula swaps to its red-alert grade once the final lap has taken hold
+      const pu = ctx.gfx.sky?.uniforms?.uPano;
+      if (pu?.value && alertPano.image && (alert > 0.5) !== !!alertPano.on) { if (!alertPano.on) { alertPano.orig = pu.value; pu.value = alertPano; } else pu.value = alertPano.orig; alertPano.on = !alertPano.on; }
       const gt = laps <= 1 ? 1 : 0.16 + 0.84 * Math.pow((Math.min(lap, laps) - 1) / (laps - 1), 1.2);
       if (Math.abs(gt - growth) > 0.0004) { growth += (gt - growth) * Math.min(1, dt * 0.8); drawLattice(growth); }
       const ct = laps <= 1 ? 1 : Math.pow((Math.min(lap, laps) - 1) / (laps - 1), 1.3);

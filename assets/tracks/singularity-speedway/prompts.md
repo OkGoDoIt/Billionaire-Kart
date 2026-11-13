@@ -18,6 +18,15 @@ magick pano.png -crop 2952x1024+60+0 +repage -write mpr:src +delete \
 magick p2.png -channel RGB -evaluate multiply 0.8 +channel -modulate 100,90 -resize 2304x -quality 78 -define webp:alpha-quality=80 singularity-speedway.webp   # pushed back a little so signs and karts stay on top
 ```
 
+The final lap's red-alert grade, `assets/backdrops/singularity-speedway-alert.webp`, is the same painting run through a red ramp:
+
+```bash
+magick -size 1x256 gradient:'#1a0006'-'#e0102c' \( -size 1x256 gradient:'#e0102c'-'#ffd0a0' \) -append -resize 1x256\! clut.png
+magick p2.png -resize 1536x -alpha extract ra.png
+magick p2.png -resize 1536x -alpha off -colorspace gray -level 0%,90% clut.png -clut rc.png
+magick rc.png ra.png -alpha off -compose CopyOpacity -composite -quality 76 -define webp:alpha-quality=75 singularity-speedway-alert.webp
+```
+
 ## Server rack face: `rack.webp` (the floating monoliths and the capabilities tower)
 
 `--size 1024x1536`, then `magick rack.png -resize 512x768 -quality 82 rack.webp`

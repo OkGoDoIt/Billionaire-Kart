@@ -98,7 +98,7 @@ export const RACERS = [
    a number is a multiplier unless noted. Each is modest and most carry a cost. The slate is the one Roger
    reviewed for v1 (#51), carried onto v2's numbers (#84). */
 const SPECIALS = {
-  elon:        { name: 'Launch Window', text: 'Rev early and still get a longer blast-off. Miss the window badly and the stall is worse.', startWindow: 2.6, startBoost: 1.17, burnoutAt: 2.9, burnoutT: 1.3 },
+  elon:        { name: 'Launch Window', text: 'His launches are strangely forgiving — he gets away with starts that would stall anyone else. Nobody can explain it. Least of all him.', startWindow: 2.6, startBoost: 1.17, burnoutAt: 2.9, burnoutT: 1.3 },
   sam:         { name: 'Scaling Laws', text: 'Every drift boost you land charges the next 5% faster, up to 25%. A hit resets the curve.', streak: 0.05, streakMax: 5 },
   zuck:        { name: 'Platform Bulk', text: 'You shove rivals aside in a collision, but that data profile makes you a bigger target.', mass: 1.3, targetR: 1.2 },
   bezos:       { name: 'Prime Delivery', text: 'Your orange drift boost arrives early, but the package is smaller.', orangeAt: 0.82, orangeDur: 0.89 },

@@ -12,6 +12,12 @@ import { RACER_BY_ID } from '../content/racers.js';
 import { clamp } from '../core/util.js';
 
 const CONFETTI = [[1, 0.82, 0.24], [1, 0.3, 0.43], [0.22, 0.71, 1], [0.18, 0.9, 0.65], [0.62, 0.42, 1], [1, 1, 1]];
+/** Per-item feedback colour: the ring/burst an item use and a hit land in the item's own colour, so a
+    player can read WHAT fired and WHAT hit them at a glance, at phone size. Projectiles also get a
+    muzzle flash at the barrel. */
+const ITEM_FX = {};
+for (const [id, hex] of Object.entries({ boost: 0xff8c3a, boost3: 0xff8c3a, golden: 0xffd23e, leak: 0x37e0e0, subpoena: 0xffe9a8, subpoena3: 0xffe9a8, tweet: 0x4da3ff, antitrust: 0x3a6bff, pinkslip: 0xff5d7a, star: 0xffe14d, crash: 0xc9a7ff, pr: 0xffc44d, smear: 0xb46bff, insider: 0x9fe8ff, bailout: 0xffa03c, dividend: 0xffd23e })) ITEM_FX[id] = { rgb: rgbOf(hex) };
+for (const id of ['subpoena', 'subpoena3', 'tweet', 'antitrust', 'pinkslip']) if (ITEM_FX[id]) ITEM_FX[id].muzzle = true;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3(), _e = new THREE.Euler();
 
 export class RaceView {
@@ -133,7 +139,7 @@ export class RaceView {
           case 'burnout': fx.puff(p.x, p.y + 0.2, p.z, 18, [0.25, 0.25, 0.28], 3, 1.8, 1.2, 0.7); break;
           case 'coin': fx.burst(p.x, p.y + 1.2, p.z, 8, [1, 0.85, 0.2], 4, 0.25, 0.4, 3); break;
           case 'dropCoins': fx.confetti(p.x, p.y + 1, p.z, 10, [[1, 0.8, 0.15]], 6, p.y); break;
-          case 'itemUse': fx.ring(p.x, p.y + 0.6, p.z, 10, [1, 1, 1], 6, 0.35, 0.3); break;
+          case 'itemUse': { const f = ITEM_FX[e.data]; fx.ring(p.x, p.y + 0.6, p.z, 14, f ? f.rgb : [1, 1, 1], 8, 0.4, 0.35); if (f?.muzzle) fx.burst(p.x + Math.sin(k.yaw) * 1.7, p.y + 0.7, p.z + Math.cos(k.yaw) * 1.7, 10, f.rgb, 3, 0.3, 0.25, 1); break; }
           case 'shieldBlock': fx.burst(p.x, p.y + 0.6, p.z, 16, [0.6, 1, 0.8], 8, 0.3, 0.4); break;
           case 'finish': fx.confetti(p.x, p.y + 2, p.z, 90, CONFETTI, 10, p.y); break;
           case 'rescue': fx.puff(p.x, p.y, p.z, 10, [1, 1, 1], 3, 1.5, 0.8, 0.5); break;
@@ -155,7 +161,13 @@ export class RaceView {
         case 'lightning': this.flash = 1; this.gfx.post.flashColor.setRGB(0.85, 0.9, 1); for (const v of this.karts) if (v.kart !== d.by) fx.burst(v.pos.x, v.pos.y + 1.5, v.pos.z, 14, [0.7, 0.85, 1], 10, 0.4, 0.5); for (const c of this.cams) c.addShake(0.5); break;
         case 'shotGone': case 'hazardGone': { const t = this.things.get(d.id); if (t) { fx.burst(d.x, d.y + 0.4, d.z, 10, [1, 1, 1], 6, 0.25, 0.3); this.root.remove(t); this.things.delete(d.id); } break; }
         case 'shotBounce': fx.burst(d.x, d.y, d.z, 6, [1, 0.9, 0.6], 5, 0.2, 0.25, 1); break;
-        case 'kartHit': break;
+        case 'kartHit': { // a hit lands visibly on the victim, in the item's colour — before this, hits had no effect at all here
+          const v = this.viewOf.get(d.victim); if (!v) break; const f = ITEM_FX[d.with];
+          fx.ring(v.pos.x, v.pos.y + 0.8, v.pos.z, 18, f ? f.rgb : [1, 1, 1], 9, 0.45, 0.4);
+          fx.burst(v.pos.x, v.pos.y + 0.9, v.pos.z, 14, f ? f.rgb : [1, 1, 1], 7, 0.35, 0.4, 3);
+          if (d.victim.isPlayer) this.cams.find(c => c.kart === d.victim)?.addShake(0.35);
+          break; }
+        case 'robbed': { const v = this.viewOf.get(d.kart); if (v) { fx.burst(v.pos.x, v.pos.y + 1.1, v.pos.z, 12, [1, 0.85, 0.2], 5, 0.3, 0.45, 3); if (d.kart.isPlayer) this.cams.find(c => c.kart === d.kart)?.addShake(0.3); } break; }
         case 'obstacleHit': fx.burst(d.obstacle.x, d.obstacle.y + 1, d.obstacle.z, 14, [1, 0.8, 0.3], 7, 0.3, 0.4); break;
         case 'blueHit': this.flash = 0.6; this.gfx.post.flashColor.setRGB(0.6, 0.75, 1); break;
       }
@@ -267,19 +279,40 @@ export class RaceView {
         m.rotation.y = o.yaw || 0;
         if (m.userData.spin) m.userData.spin.rotation.x += dt * 22;
         if (m.userData.wings) for (const w of m.userData.wings) w.rotation.z = Math.sin(this.time * (o.type === 'antitrust' ? 14 : 26)) * 0.7 * Math.sign(w.scale.x);
-        if (o.type === 'pinkslip') { m.position.y = o.y - 0.5; m.rotation.x += dt * (o.phase === 'arc' ? 9 : 0); if (o.phase === 'sit') { const f = 1 + Math.sin(this.time * 26) * 0.08; m.scale.setScalar(f); } }
+        if (o.type === 'pinkslip') { m.position.y = o.y - 0.5; m.rotation.x += dt * (o.phase === 'arc' ? 9 : 0); if (o.phase === 'sit') { const f = 1 + Math.sin(this.time * 26) * 0.08; m.scale.setScalar(f); } if (o.phase === 'arc' && this.fx.count(45, dt)) this.fx.dust(o.x, o.y - 0.3, o.z, 0, 0.8, 0, [0.45, 0.44, 0.48], 0.8, 0.55, 0.5); }
         if (o.type === 'antitrust' && this.fx.count(50, dt)) this.fx.add.emit({ x: o.x, y: o.y, z: o.z, vx: 0, vy: 0, vz: 0, color: [0.3, 0.55, 1], size: 1.1, life: 0.4, alpha: 0.9 });
+        if (o.type === 'antitrust') {
+          // the strike telegraph: a target ring on the road under the victim that
+          // closes from the full blast footprint to the strike point as the hover runs out
+          const hovering = o.phase === 'hover' || o.phase === 'dive';
+          let ring = m.userData.ring;
+          if (hovering && !ring) {
+            ring = m.userData.ring = new THREE.Mesh(
+              new THREE.RingGeometry(0.86, 1, 40),
+              new THREE.MeshBasicMaterial({ color: 0x4d8dff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+            ring.rotation.x = -Math.PI / 2; ring.renderOrder = 5; this.root.add(ring);
+          }
+          if (ring) {
+            ring.visible = hovering;
+            if (hovering) {
+              const f = o.phase === 'dive' ? 1 : (o.hoverFrac || 0);
+              ring.scale.setScalar((7.5 - 4.9 * f) * (1 + Math.sin(this.time * 10) * 0.05));
+              ring.position.set(o.mx ?? o.x, (o.my ?? o.y) + 0.15, o.mz ?? o.z);
+            }
+          }
+        }
         if (o.type === 'tweet' && this.fx.count(40, dt)) this.fx.add.emit({ x: o.x, y: o.y, z: o.z, vx: 0, vy: 0.5, vz: 0, color: [0.3, 0.7, 1], size: 0.4, life: 0.3, alpha: 0.9 });
         if (o.type === 'subpoena' && this.fx.count(30, dt)) this.fx.add.emit({ x: o.x, y: o.y, z: o.z, vx: 0, vy: 0.5, vz: 0, color: [1, 0.9, 0.6], size: 0.35, life: 0.25, alpha: 0.8 });
       } else {
         m.rotation.y += dt * (o.type === 'leak' ? 0.8 : 0);
+        if (o.type === 'leak') { const f = 1 + Math.sin(this.time * 5 + o.x * 0.7 + o.z) * 0.1; m.scale.set(f, 1, f); }   // the puddle breathes — a hazard you can see coming
         if (o.type === 'pinkslip') { const f = 1 + Math.sin(this.time * (8 + o.age * 8)) * 0.07; m.scale.setScalar(f); }
         if (o.type === 'leak' && this.fx.count(5, dt)) this.fx.add.emit({ x: o.x + (Math.random() - 0.5), y: o.y + 0.2, z: o.z + (Math.random() - 0.5), vx: 0, vy: 1.4, vz: 0, color: [0.2, 0.9, 1], size: 0.2, life: 0.8, alpha: 0.9 });
       }
     };
     for (const h of items.hazards) sync(h, 'hazard');
     for (const s of items.shots) sync(s, 'shot');
-    for (const [id, m] of this.things) if (!seen.has(id)) { this.root.remove(m); this.things.delete(id); }
+    for (const [id, m] of this.things) if (!seen.has(id)) { this.root.remove(m); if (m.userData.ring) this.root.remove(m.userData.ring); this.things.delete(id); }
   }
 
   dispose() {

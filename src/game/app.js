@@ -4,6 +4,7 @@ import { Gfx, detectQuality } from '../render/gfx.js';
 import { Input } from '../core/input.js';
 import { Save } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
+import { Wipe } from '../ui/wipe.js';
 import { Showroom } from '../render/showroom.js';
 import { RaceSession } from './session.js';
 import { AudioEngine } from '../audio/audio.js';
@@ -24,8 +25,8 @@ export class App {
     this.input = new Input();
     this.menus = new Menus(this);
     this.audio = new AudioEngine(this.save);
-    this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = [];
-    this.curtain = el('div', 'curtain'); document.body.appendChild(this.curtain);
+    this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = []; this._turnOk = false;
+    this.wipe = new Wipe();
     this.rng = makeRng(Date.now() & 0xffff);
     this.input.onMenu = (a, d) => this.onMenu(a, d);
     this.input.onAnyInput = () => this.audio?.unlock?.();
@@ -69,6 +70,7 @@ export class App {
     const S = this.save.settings;
     const want = S.quality === 'auto' ? (this.autoQuality || detectQuality()) : S.quality;
     if (!initial && want !== this.gfx.qualityName) this.gfx.applyQuality(want);
+    this.input.setPadBindings(S.padBinds, S.padSteer);
     if (this.session?.touch) this.session.touch.autoGo = S.autoGo;
     if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
     this.audio?.setVolumes?.(S.music, S.sfx);
@@ -82,11 +84,22 @@ export class App {
       else if (!on && document.fullscreenElement) document.exitFullscreen?.();
     } catch { /* not supported here */ }
   }
-  /** True while a touch-screen race is on and the phone is upright. */
-  mustTurn() { return !!this.session?.touch && !this.attract && this.session.race.state !== 'done' && matchMedia('(orientation: portrait)').matches; }
+  /** True while a touch-driven race is on, the phone is upright, and the player has not chosen to race upright anyway. */
+  mustTurn() {
+    if (!this.session?.touch || this.attract || this.session.race.state === 'done') return false;
+    if (this.save.settings.pausePortrait === false) return false;   // the Options switch: never pause for portrait
+    if (this._turnOk) return false;                                 // resumed upright: sticks until the phone has been sideways and back
+    if (this._nonTouchPlayer()) return false;                       // a controller or keyboard player is not holding the screen to steer
+    return matchMedia('(orientation: portrait)').matches;
+  }
+  /** The controls actually in use are a gamepad or a keyboard, not the on-screen ones. lastDevice alone
+      cannot say so: it starts life as 'kb' and touch never overwrites it. A connected pad, a pad that has
+      driven the menus, or a real key press are the honest signals. */
+  _nonTouchPlayer() { return this.input.lastDevice.startsWith('pad') || this.input.pads().length > 0 || this.input.kbUsed; }
   /** Where the browser allows it (Android, in full screen), hold the screen sideways for the race; elsewhere the pause panel asks. */
   _lockLandscape(on) { try { if (on) screen.orientation?.lock?.('landscape')?.catch(() => {}); else screen.orientation?.unlock?.(); } catch { /* not supported here */ } }
   _onTurn() {
+    if (!matchMedia('(orientation: portrait)').matches) this._turnOk = false;   // sideways again: the upright prompt re-arms
     const turn = this.mustTurn();
     document.body.classList.toggle('must-turn', turn);
     if (!this.session?.touch || this.attract) return;
@@ -98,12 +111,8 @@ export class App {
     try { if (on && !this.wakeLock && navigator.wakeLock) { this.wakeLock = await navigator.wakeLock.request('screen'); this.wakeLock.addEventListener('release', () => { this.wakeLock = null; }); } else if (!on && this.wakeLock) { await this.wakeLock.release(); this.wakeLock = null; } } catch { /* unsupported or denied */ }
   }
 
-  /** Fade to dark, swap the scene, fade back. */
-  async transition(fn) {
-    this.curtain.classList.add('on');
-    await new Promise(r => setTimeout(r, 300));
-    try { await fn(); } finally { requestAnimationFrame(() => requestAnimationFrame(() => this.curtain.classList.remove('on'))); }
-  }
+  /** Checker wipe: cover the screen, swap the scene, reveal. */
+  async transition(fn) { await this.wipe.through(fn); }
   _clearScene() {
     this.session?.dispose(); this.session = null; this.attract = false; document.body.classList.remove('must-turn');
     this.showroom?.dispose(); this.showroom = null;
@@ -132,15 +141,15 @@ export class App {
   /* ---------- starting races ---------- */
   _players() {
     const f = this.flow;
-    return f.racers.map((racerId, i) => ({ racerId, device: f.devices[i] || 'any', autoTrick: this.save.settings.autoTrick || this.input.touch.active }));
+    return f.racers.map((racerId, i) => ({ racerId, device: f.devices[i] || 'any', autoTrick: this.save.settings.autoTrick || this.input.touch.active, smartSteer: this.save.settings.smartSteer }));
   }
   startSingle(trackId) {
     const f = this.flow; this.gp = null;
     this._race({ trackId, cc: f.cc || this.save.data.last.cc, level: f.level || 'normal', players: this._players(), mode: f.mode === 'timetrial' ? 'timetrial' : 'race' });
   }
-  startCup(cup) {
+  startCup(cup, grid = null) {
     const f = this.flow, tracks = cupTracks(cup), humans = f.racers.map(id => RACER_BY_ID[id]);
-    const rivals = this.rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, 8 - humans.length).map(r => r.id);
+    const rivals = grid || this.rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, 8 - humans.length).map(r => r.id);
     this.gp = { cup, tracks, index: 0, grid: rivals, totals: Object.fromEntries([...rivals, ...f.racers].map(id => [id, 0])), order: null, cc: f.cc, level: f.level };
     this._gpRace();
   }
@@ -149,7 +158,7 @@ export class App {
     this._race({ trackId: g.tracks[g.index], cc: g.cc, level: g.level, players: this._players(), grid: g.grid, order: g.order, mode: 'race' }, `${g.cup.name} · Race ${g.index + 1} of ${g.tracks.length}`);
   }
   _race(config, cupLine = '') {
-    this.lastConfig = config; this.lastCupLine = cupLine;
+    this.lastConfig = config; this.lastCupLine = cupLine; this._turnOk = false;
     this.menus.close(); this._wake(true); this._lockLandscape(true);
     return this.transition(() => {
       this._clearScene();
@@ -179,12 +188,20 @@ export class App {
   onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
 
   restartRace() { this.menus.close(); this._race(this.lastConfig, this.lastCupLine); }
+  /* Run the finished cup again from race 1: same cup, class, level, racer picks, and rival grid; the
+     standings start empty. The recorded result in the save is untouched — a better run replaces it. */
+  restartCup() { const g = this.gp; if (g) this.startCup(g.cup, g.grid); }
+  backToRacers() { this.gp = null; this._wake(false); this._lockLandscape(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.menus.open('racers', { player: 0 }); }); }
   backToTracks() { this.transition(() => { this._attract(); this.menus.reset('main'); this.menus.open('tracks'); }); }
   quitToMenu() { this.gp = null; this._wake(false); this._lockLandscape(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.audio?.music?.('menu'); }); }
 
   /* ---------- pause ---------- */
   pause() { if (!this.session || this.attract || this.session.paused) return; this.session.setPaused(true); this.session.touch?.setVisible(false); this.menus.reset('pause'); }
-  resume() { if (this.mustTurn()) return; this.menus.close(); this.session?.setPaused(false); this.session?.touch?.setVisible(this.session.phase !== 'intro'); }
+  resume() {
+    if (this.mustTurn()) this._turnOk = true;   // resuming while upright: race on upright, and do not pause again until the phone has been sideways and back
+    this.menus.close(); this.session?.setPaused(false); this.session?.touch?.setVisible(this.session.phase !== 'intro');
+    document.body.classList.toggle('must-turn', this.mustTurn());
+  }
 
   /* ---------- results ---------- */
   _finishRace(session, results) {
@@ -205,10 +222,27 @@ export class App {
     }
     for (const h of session.huds) h.setVisible(false);
     session.touch?.setVisible(false); this._lockLandscape(false); document.body.classList.remove('must-turn');
-    this.menus.reset('results', { results, gp, track: def, records });
+    // a single race gets the cup's finish: the podium first, the full table behind it (#92)
+    if (!gp && cfg.mode === 'race') this._racePodium({ results, track: def, records });
+    else this.menus.reset('results', { results, gp, track: def, records });
     this.audio?.event?.('results', mine?.rank);
     this.audio?.music?.('results');
   }
+  _racePodium({ results, track, records }) {
+    const top3 = [...results].sort((a, b) => a.rank - b.rank).slice(0, 3);
+    const mine = results.filter(r => r.isPlayer);
+    const best = mine.length ? Math.min(...mine.map(r => r.rank)) : 1;
+    this.lastResults = { results, gp: null, track, records };
+    this.menus.close();
+    this.transition(() => {
+      this._clearScene();
+      this.showroom = new Showroom(this.gfx);
+      this.showroom.setPodium(top3.map(r => r.racer));
+      this.menus.reset('racePodium', { results, track, records, best });
+      this.audio?.event?.('podium', best);
+    });
+  }
+  showResults() { if (this.lastResults) this.menus.reset('results', this.lastResults); }
   gpNext() {
     const g = this.gp; if (!g) return;
     if (g.index < g.tracks.length - 1) { g.index++; this._gpRace(); return; }

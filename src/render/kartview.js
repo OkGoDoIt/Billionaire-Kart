@@ -12,6 +12,14 @@ const TIER_HEX = [0xffffff, 0x40a8ff, 0xff8a1a, 0xf04dff];
 const ghostMat = new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.32, depthWrite: false });
 const _v = new THREE.Vector3(), _c = new THREE.Color();
 const BLOB_GEO = new THREE.CircleGeometry(1, 20);
+/* Star halo: a rainbow ring that spins on the ground under a starred kart. Vertex colours carry the
+   rainbow so the spin reads; additive so it glows over any surface, road or grass. */
+const HALO_GEO = (() => {
+  const g = new THREE.RingGeometry(1.15, 1.8, 48), p = g.attributes.position, c = new Float32Array(p.count * 3), col = new THREE.Color();
+  for (let i = 0; i < p.count; i++) { col.setHSL(((Math.atan2(p.getY(i), p.getX(i)) / (Math.PI * 2)) + 1) % 1, 1, 0.6); c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return g;
+})();
 /* Boost flame: a cone with its mouth at the origin and its tip along +y, so scaling y stretches it away from the exhaust. */
 const FLAME_GEO = (() => {
   const g = new THREE.ConeGeometry(0.15, 0.8, 12, 4, true).translate(0, 0.4, 0), p = g.attributes.position, c = new Float32Array(p.count * 3);
@@ -113,6 +121,9 @@ export class KartView {
     rig.root.add(this.tag); this.tag.userData.view = this; TAGS.add(this);
     // soft contact shadow, used when real shadows are off (low quality, or three or more split-screen views)
     this.blob = new THREE.Mesh(BLOB_GEO, BLOB_MAT); this.blob.rotation.x = -Math.PI / 2; this.blob.renderOrder = 3; this.blob.visible = false; scene.add(this.blob);
+    // spinning rainbow halo on the ground while the hype-cycle star is active — readable from any camera, at any size
+    this.halo = new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    this.halo.rotation.x = -Math.PI / 2; this.halo.renderOrder = 4; this.halo.visible = false; scene.add(this.halo);
     // boost glow at the exhausts
     this.flames = rig.exhausts.map(a => {
       const m = new THREE.Mesh(FLAME_GEO, new THREE.MeshBasicMaterial({ color: 0xffa040, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
@@ -174,7 +185,8 @@ export class KartView {
     this.scale = damp(this.scale, targetScale, 9, dt);
     this.flat = damp(this.flat, k.squashT > 0 ? 0.32 : 1, 12, dt);
     const sq = this.squash * 0.22, st = this.stretch * 0.1;
-    rig.tilt.scale.set(this.scale * (1 + sq * 0.6 - st * 0.4), this.scale * (1 - sq) * this.flat, this.scale * (1 + sq * 0.4 + st));
+    const starPulse = k.starT > 0 ? 1 + Math.sin(this.t * 17) * 0.03 : 1;   // a starred kart visibly throbs with the music's beat
+    rig.tilt.scale.set(this.scale * starPulse * (1 + sq * 0.6 - st * 0.4), this.scale * starPulse * (1 - sq) * this.flat, this.scale * starPulse * (1 + sq * 0.4 + st));
 
     // suspension bounce and surface rumble
     const s = this.susp;
@@ -209,9 +221,18 @@ export class KartView {
     const blink = k.invulnT > 0 && k.hitT <= 0 && k.rescueT <= 0 && Math.floor(this.t * 16) % 2 === 0;
     rig.tilt.visible = !blink;
     this._ghost(k.ghostT > 0);
-    // hype-cycle rainbow
-    if (k.starT > 0) { _c.setHSL((this.t * 1.6) % 1, 1, 0.55); this.paint.color.copy(_c); this.paint.emissive.copy(_c); this.paint.emissiveIntensity = 0.9; }
+    // hype-cycle rainbow: fast cycle, and a blink in the last 1.6 s so the expiry never surprises (Mario Kart warns the same way)
+    if (k.starT > 0) { _c.setHSL((this.t * 2.2) % 1, 1, 0.55); this.paint.color.copy(_c); this.paint.emissive.copy(_c); this.paint.emissiveIntensity = k.starT < 1.6 ? (Math.floor(this.t * 10) % 2 ? 0.95 : 0.2) : 0.95; }
     else if (this.paint.emissiveIntensity > 0) { this.paint.color.copy(this.baseColor); this.paint.emissive.setRGB(0, 0, 0); this.paint.emissiveIntensity = 0; }
+    // the halo rides the ground under the kart, pulsing; it blinks with the paint as the star runs out
+    if (k.starT > 0) {
+      this.halo.visible = true;
+      this.halo.position.set(x, k.gy + 0.09, z);
+      this.halo.rotation.z = -this.t * 2.6;
+      const hs = this.scale * (1.12 + Math.sin(this.t * 10) * 0.07);
+      this.halo.scale.set(hs, hs, 1);
+      this.halo.material.opacity = (k.starT < 1.6 && Math.floor(this.t * 10) % 2 === 0 ? 0.25 : 0.62);
+    } else this.halo.visible = false;
 
     if (this.blob.visible) { const h = clamp(k.y - k.gy, 0, 6), sc = this.scale * (1 + h * 0.12); this.blob.position.set(x, k.gy + 0.06, z); this.blob.scale.set(sc * 1.25, sc * 1.6, 1); this.blob.rotation.z = -yaw; this.blob.material.opacity = 0.42; }
     this._trail(dt);
@@ -261,10 +282,14 @@ export class KartView {
     // drifting: sparks in the colour of the charge tier, plus tyre smoke
     if (k.drifting && k.grounded) {
       const tier = k.driftTier, col = TIER_RGB[tier];
+      // charge paused on the dirt (#147: the drift survives offroad, the charge does not
+      // grow) — flicker the sparks between the tier colour and a dull grey so the pause
+      // reads at a glance instead of looking like the drift died
+      const sparkCol = k.driftPaused && Math.sin(this.t * 26) > -0.25 ? [0.42, 0.42, 0.46] : col;
       for (let sd = 0; sd < 2; sd++) {
         const w = rear(sd);
         const n = fx.count(tier ? 70 + tier * 30 : 18, dt);
-        for (let i = 0; i < n; i++) fx.spark(w.x, w.y + 0.05, w.z, -sy * sp * 0.25 + (Math.random() - 0.5) * 5 + cy * k.driftDir * 3, 2.5 + Math.random() * (3 + tier * 1.5), -cy * sp * 0.25 + (Math.random() - 0.5) * 5 - sy * k.driftDir * 3, col, tier ? 0.2 + tier * 0.06 : 0.12, 0.25 + tier * 0.06);
+        for (let i = 0; i < n; i++) fx.spark(w.x, w.y + 0.05, w.z, -sy * sp * 0.25 + (Math.random() - 0.5) * 5 + cy * k.driftDir * 3, 2.5 + Math.random() * (3 + tier * 1.5), -cy * sp * 0.25 + (Math.random() - 0.5) * 5 - sy * k.driftDir * 3, sparkCol, tier ? 0.2 + tier * 0.06 : 0.12, 0.25 + tier * 0.06);
         if (fx.count(26, dt)) fx.dust(w.x, w.y + 0.1, w.z, -sy * 2, 0.8, -cy * 2, [0.85, 0.85, 0.88], 0.7, 0.55, 0.28);
       }
     }
@@ -293,12 +318,12 @@ export class KartView {
     if (!boosting && k.grounded && sp < 8 && fx.count(7, dt)) { rig.exhausts[Math.random() < 0.5 ? 0 : 1].getWorldPosition(_v); fx.dust(_v.x, _v.y, _v.z, -sy * 1.5, 0.8, -cy * 1.5, [0.6, 0.62, 0.66], 0.28, 0.4, 0.16); }
     // slipstream streaks
     if (k.drafting && k.draftT > 0.2) { const n = fx.count(40, dt); for (let i = 0; i < n; i++) { const ox = (Math.random() - 0.5) * 2.2, oy = 0.3 + Math.random() * 1.4; fx.add.emit({ x: this.pos.x + cy * ox + sy * 2.5, y: this.pos.y + oy, z: this.pos.z - sy * ox + cy * 2.5, vx: -sy * sp * 0.7, vy: 0, vz: -cy * sp * 0.7, color: [0.8, 0.95, 1], size: 0.14, life: 0.22, alpha: 0.8 }); } }
-    // hype-cycle sparkles
-    if (k.starT > 0) { const n = fx.count(60, dt); for (let i = 0; i < n; i++) { _c.setHSL(Math.random(), 1, 0.6); fx.add.emit({ x: this.pos.x + (Math.random() - 0.5) * 2.4, y: this.pos.y + Math.random() * 2.2, z: this.pos.z + (Math.random() - 0.5) * 2.4, vx: 0, vy: 1.5, vz: 0, color: [_c.r, _c.g, _c.b], size: 0.16, life: 0.4, alpha: 1.1 }); } }
+    // hype-cycle sparkles: a dense rainbow wake streaming behind the kart, not a faint halo of dust
+    if (k.starT > 0) { const n = fx.count(110, dt); for (let i = 0; i < n; i++) { _c.setHSL(Math.random(), 1, 0.62); fx.add.emit({ x: this.pos.x + (Math.random() - 0.5) * 1.8, y: this.pos.y + 0.2 + Math.random() * 1.8, z: this.pos.z + (Math.random() - 0.5) * 1.8, vx: -sy * sp * 0.35 + (Math.random() - 0.5) * 1.5, vy: 0.9, vz: -cy * sp * 0.35 + (Math.random() - 0.5) * 1.5, color: [_c.r, _c.g, _c.b], size: 0.21, life: 0.5, alpha: 1.1 }); } }
     // revving on the grid
     if (k.revving && fx.count(22, dt)) { rig.exhausts[Math.random() < 0.5 ? 0 : 1].getWorldPosition(_v); fx.dust(_v.x, _v.y, _v.z, -sy * 3 + (Math.random() - 0.5) * 2, 1.2, -cy * 3 + (Math.random() - 0.5) * 2, [0.62, 0.63, 0.66], 0.45, 0.5, 0.3); }
     void TIER_HEX; void KART; void smoothstep;
   }
 
-  dispose(scene) { TAGS.delete(this); scene.remove(this.rig.root); scene.remove(this.blob); this.paint.dispose(); this.tag.material.map.dispose(); this.tag.material.dispose(); }
+  dispose(scene) { TAGS.delete(this); scene.remove(this.rig.root); scene.remove(this.blob); scene.remove(this.halo); this.halo.material.dispose(); this.paint.dispose(); this.tag.material.map.dispose(); this.tag.material.dispose(); }
 }

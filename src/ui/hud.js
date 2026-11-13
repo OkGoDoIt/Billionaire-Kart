@@ -2,7 +2,11 @@
    lap bottom-left, rank bottom-right, minimap right) and keeps the centre clear.
    Sized in container units so it scales to split-screen panes. */
 import { ITEMS } from '../race/items.js';
+import { TUNE } from '../race/kart.js';
 import { fmtTime, ordinalSuffix, clamp } from '../core/util.js';
+
+/* kart.speed is metres per second (the class table in race/kart.js says so); the readout shows honest mph. */
+const MPH_PER_MS = 2.23694;
 
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const hex = n => '#' + n.toString(16).padStart(6, '0');
@@ -18,7 +22,7 @@ export class Hud {
     root.innerHTML = `
       <div class="hud-item"><div class="hud-item-ring"></div><img class="hud-item-img" alt=""><div class="hud-item-coin">$</div><div class="hud-item-count"></div></div>
       <div class="hud-item-info"><b></b><span></span></div>
-      <div class="hud-bl"><div class="hud-pill hud-coins"><i class="ico-coin"></i><b>0</b></div><div class="hud-pill hud-lap"><i class="ico-flag"></i><b>1</b><span>/${race.laps}</span></div></div>
+      <div class="hud-bl"><div class="hud-pill hud-coins"><i class="ico-coin"></i><b>0</b><div class="hud-coin-pop"></div></div><div class="hud-pill hud-lap"><i class="ico-flag"></i><b>1</b><span>/${race.laps}</span></div></div>
       <div class="hud-rank"><b>1</b><span>st</span></div>
       <div class="hud-time"></div>
       <div class="hud-banner"></div>
@@ -27,12 +31,13 @@ export class Hud {
       <div class="hud-talk"><img alt=""><div><b></b><span></span></div></div>
       <div class="hud-wrong">WRONG WAY</div>
       <div class="hud-ink"><i>EXCLUSIVE!</i><i>SOURCES SAY</i><i>SHOCKING!</i><i>SCANDAL</i><i>YOU WON’T BELIEVE</i></div>
-      <div class="hud-speed"></div>
+      <div class="hud-speed"><b>0</b><span>mph</span></div>
       <div class="hud-draft"></div>`;
     parent.appendChild(root);
     const q = s => root.querySelector(s);
     this.$ = { item: q('.hud-item'), img: q('.hud-item-img'), coinFallback: q('.hud-item-coin'), count: q('.hud-item-count'), info: q('.hud-item-info'), itemName: q('.hud-item-info b'), itemDesc: q('.hud-item-info span'), coins: q('.hud-coins b'), coinsPill: q('.hud-coins'), lap: q('.hud-lap b'), lapPill: q('.hud-lap'),
-      rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed') };
+      rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed'), speedN: q('.hud-speed b'), coinPop: q('.hud-coin-pop'),
+    };
     if (showMap) this._buildMap();
     for (const id of ROULETTE) { const i = new Image(); i.src = itemIcon(id); }
     this.update(0);
@@ -57,6 +62,24 @@ export class Hud {
     // start line tick
     const [sx, sy] = this.mapXY(tr.px[0], tr.pz[0]); g.fillStyle = '#12142b'; g.beginPath(); g.arc(sx, sy, 7, 0, 7); g.fill(); g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(sx, sy, 4, 0, 7); g.fill();
     this.mapCtx = c.getContext('2d');
+    // faces for the map, loaded once; a kart whose portrait has not arrived yet keeps its colored dot
+    this.mapFaces = new Map();
+    for (const k of [...this.race.order, this.kart]) {
+      const p = k?.racer?.portrait;
+      if (p && !this.mapFaces.has(p)) { const img = new Image(); img.src = p; this.mapFaces.set(p, img); }
+    }
+  }
+  /* A round portrait in the map: the dark ring every marker wears, an optional bright ring for the
+     player, and the face clipped to the circle, framed on the top of the portrait where the face is. */
+  _mapFace(g, img, x, y, r, ring) {
+    g.save();
+    g.beginPath(); g.arc(x, y, r + 3, 0, 7); g.fillStyle = '#12142b'; g.fill();
+    if (ring) { g.beginPath(); g.arc(x, y, r + 1.5, 0, 7); g.fillStyle = ring; g.fill(); }
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.clip();
+    // the portraits are square with the head in the top two-thirds: zoom in and center on it (35% down)
+    const D = 2.8 * r;
+    g.drawImage(img, x - D / 2, y - 0.35 * D, D, D);
+    g.restore();
   }
   _drawMap() {
     const g = this.mapCtx; if (!g) return;
@@ -66,19 +89,31 @@ export class Hud {
     for (let i = order.length - 1; i >= 0; i--) {
       const k = order[i]; if (k === this.kart) continue;
       const [x, y] = this.mapXY(k.x, k.z);
-      g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill();
-      g.fillStyle = hex(k.racer.color); g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill();
-      // Total Awareness (Thiel's special): what each rival is holding, beside their dot
+      const face = this.mapFaces?.get(k.racer.portrait), hasFace = !!(face?.complete && face.naturalWidth);
+      if (hasFace) this._mapFace(g, face, x, y, 15);
+      else { g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill(); g.fillStyle = hex(k.racer.color); g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill(); }
+      // Total Awareness (Thiel's special): what each rival is holding, beside their marker
       if (this.kart.sp.seeItems && k.item) {
+        const o = hasFace ? 19 : 15;   // the badge sits a little further out over a face than over a dot
         const icons = this._icons || (this._icons = {}), img = icons[k.item] || (icons[k.item] = Object.assign(new Image(), { src: itemIcon(k.item) }));
-        if (img.complete && img.naturalWidth) { g.save(); g.beginPath(); g.arc(x + 15, y - 15, 13, 0, 7); g.fillStyle = '#12142b'; g.fill(); g.clip(); g.drawImage(img, x + 3, y - 27, 24, 24); g.restore(); }
+        if (img.complete && img.naturalWidth) { g.save(); g.beginPath(); g.arc(x + o, y - o, 13, 0, 7); g.fillStyle = '#12142b'; g.fill(); g.clip(); g.drawImage(img, x + o - 12, y - o - 12, 24, 24); g.restore(); }
       }
     }
     const k = this.kart, [x, y] = this.mapXY(k.x, k.z);
-    g.save(); g.translate(x, y); g.rotate(Math.PI - k.yaw);   // the arrow is drawn pointing up; heading is measured from +z toward +x
-    g.fillStyle = '#12142b'; g.beginPath(); g.moveTo(0, -20); g.lineTo(14, 13); g.lineTo(0, 7); g.lineTo(-14, 13); g.closePath(); g.fill();
-    g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -14); g.lineTo(9, 9); g.lineTo(0, 4); g.lineTo(-9, 9); g.closePath(); g.fill();
-    g.restore();
+    const face = this.mapFaces?.get(k.racer.portrait);
+    if (face?.complete && face.naturalWidth) {
+      this._mapFace(g, face, x, y, 20, '#fff');
+      // a small pointer on the ring keeps the heading the arrow used to give
+      g.save(); g.translate(x, y); g.rotate(Math.PI - k.yaw);   // heading is measured from +z toward +x
+      g.fillStyle = '#12142b'; g.beginPath(); g.moveTo(0, -32); g.lineTo(7, -21); g.lineTo(-7, -21); g.closePath(); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -29.5); g.lineTo(4.5, -22); g.lineTo(-4.5, -22); g.closePath(); g.fill();
+      g.restore();
+    } else {
+      g.save(); g.translate(x, y); g.rotate(Math.PI - k.yaw);   // the arrow is drawn pointing up; heading is measured from +z toward +x
+      g.fillStyle = '#12142b'; g.beginPath(); g.moveTo(0, -20); g.lineTo(14, 13); g.lineTo(0, 7); g.lineTo(-14, 13); g.closePath(); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -14); g.lineTo(9, 9); g.lineTo(0, 4); g.lineTo(-9, 9); g.closePath(); g.fill();
+      g.restore();
+    }
   }
 
   /* ---------- transient messages ---------- */
@@ -101,6 +136,13 @@ export class Hud {
   }
   warn(id) { const w = this.$.warn; w.innerHTML = `<img src="${itemIcon(id)}" alt="">`; w.classList.add('show'); clearTimeout(this._wt); this._wt = setTimeout(() => w.classList.remove('show'), 1800); }
   pop(node) { node.classList.remove('pop'); void node.offsetWidth; node.classList.add('pop'); }
+  /** A one-line tick at the coin pill saying what the last coin change did to top speed:
+      gold and bigger for the coin that maxes the bonus, red for coins a hit shook loose. */
+  coinPop(text, cls, ms) {
+    const p = this.$.coinPop; p.textContent = text; p.className = 'hud-coin-pop ' + cls;
+    void p.offsetWidth; p.classList.add('show');
+    clearTimeout(this._ct); this._ct = setTimeout(() => p.classList.remove('show'), ms);
+  }
 
   /** Kart events the HUD reacts to. */
   onKartEvent(e) {
@@ -131,7 +173,17 @@ export class Hud {
       this.lastRank = k.rank; $.rankN.textContent = k.rank; $.rankS.textContent = ordinalSuffix(k.rank);
       $.rank.dataset.r = Math.min(k.rank, 4); this.pop($.rank);
     }
-    if (k.coins !== this.lastCoins) { if (this.lastCoins >= 0) this.pop($.coinsPill); this.lastCoins = k.coins; $.coins.textContent = k.coins; $.coinsPill.classList.toggle('max', k.coins >= 10); }
+    if (k.coins !== this.lastCoins) {
+      const prev = this.lastCoins;
+      if (prev >= 0) {
+        if (k.coins > prev) {
+          this.pop($.coinsPill);
+          $.coinsPill.classList.remove('glow'); void $.coinsPill.offsetWidth; $.coinsPill.classList.add('glow');
+          if (k.coins >= TUNE.coinMax && prev < TUNE.coinMax) this.coinPop('+SPEED MAX', 'max', 1700);   // the coin that caps the bonus, taught in the moment it lands
+        } else this.coinPop('-SPEED', 'down', 1100);   // a hit or a rescue just shook coins loose, and top speed with them
+      }
+      this.lastCoins = k.coins; $.coins.textContent = k.coins; $.coinsPill.classList.toggle('max', k.coins >= TUNE.coinMax);
+    }
     const lap = clamp(k.lap, 1, race.laps);
     if (lap !== this.lastLap) { if (this.lastLap >= 0) this.pop($.lapPill); this.lastLap = lap; $.lap.textContent = lap; }
     // item slot
@@ -150,10 +202,11 @@ export class Hud {
         $.img.style.display = isCoin ? 'none' : ''; $.coinFallback.style.display = isCoin ? '' : 'none';
         if (!isCoin) $.img.src = itemIcon(shown);
         $.count.textContent = k.item && k.itemUses > 1 ? '×' + k.itemUses : '';
-        // what you are holding, by name, for as long as you hold it; what it does shows for the first few seconds
+        // what you are holding: its name AND its full description, for as long as you hold it (issue #132).
+        // Nothing may fold the description away while the item is held — no timer, no feed/banner state,
+        // no HUD variant. There is deliberately no code path from here to a name-only card.
         if (k.item && def.id !== this._infoId) {
           this._infoId = def.id; $.itemName.textContent = def.name; $.itemDesc.textContent = def.desc || '';
-          $.info.classList.remove('brief'); clearTimeout(this._nt); this._nt = setTimeout(() => $.info.classList.add('brief'), 6000);
         }
         if (!k.item) this._infoId = null;
         $.info.classList.toggle('show', !!k.item);
@@ -164,10 +217,10 @@ export class Hud {
     if (Math.floor(race.time * 10) !== this._tt) { this._tt = Math.floor(race.time * 10); $.time.textContent = fmtTime(k.finished ? k.finishTime : race.time).slice(0, -2); }
     $.wrong.classList.toggle('show', k.wrongWayT > 1 && !k.finished);
     $.ink.classList.toggle('show', k.inkT > 0);
-    $.speed.textContent = Math.round(k.speed * 3.4);
+    $.speedN.textContent = Math.round(k.speed * MPH_PER_MS);
     this.mapT -= dt; if (this.mapT <= 0) { this.mapT = 0.05; this._drawMap(); }
   }
 
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
-  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._nt); clearTimeout(this._kt); }
+  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._kt); clearTimeout(this._ct); }
 }

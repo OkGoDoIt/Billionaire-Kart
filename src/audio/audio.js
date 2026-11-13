@@ -1,6 +1,8 @@
-/* Audio: synthesized engine, drift, and boost loops per local player; one-shot
-   effects (generated samples when present, synthesized otherwise); announcer
-   lines; and looping music with crossfades and a final-lap lift. */
+/* Audio: synthesized engine, drift, and boost loops per local player; a small
+   pool of rival engine voices and a positional crowd loop at the start/finish
+   grandstands; one-shot effects (generated samples when present, synthesized
+   otherwise); announcer lines; and looping music with crossfades and a
+   final-lap lift. */
 import { SAMPLES, MUSIC, VOICE } from '../content/audio-manifest.js';
 import { clamp, makeRng, hashString } from '../core/util.js';
 
@@ -19,6 +21,8 @@ export class AudioEngine {
     this.save = save; this.ctx = null; this.muted = false; this.buffers = new Map(); this.loading = new Map();
     this.vol = { music: save.settings.music, sfx: save.settings.sfx };
     this.loops = []; this.musicId = null; this.musicNodes = []; this.musicRate = 1; this.seq = null; this.lastVoiceT = 0; this.cool = new Map();
+    this.playingId = null; this.musicGen = 0;
+    this.baseMusicId = null; this.starOn = false;   // the track's own music, and whether the star theme has taken it over
   }
 
   /** Create or resume the context. Browsers only allow this after a user gesture, and iPhones only
@@ -41,11 +45,11 @@ export class AudioEngine {
     const nb = this.noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.setVolumes(this.vol.music, this.vol.sfx);
-    for (const name of ['ui_move', 'ui_select', 'coin', 'item_box', 'boost', 'hit', 'count', 'go']) this.load(name);
+    for (const name of ['ui_move', 'ui_select', 'coin', 'item_box', 'boost', 'hit', 'count', 'go', 'crowd']) this.load(name);
     if (ctx.state !== 'running') ctx.resume?.().catch(() => {});
     ctx.addEventListener?.('statechange', () => { if (ctx.state === 'running' && !this.kicked) this._kick(); });
     this._kick();
-    if (this.pendingMusic) { const id = this.pendingMusic; this.pendingMusic = null; this.music(id); }
+    if (this.pendingMusic) { const id = this.pendingMusic; this.pendingMusic = null; this._play(id); }
   }
   /** An iPhone plays web audio as "ambient" sound, which the ring/silent switch mutes. A game the player
       started on purpose should be heard, so ask for the playback category: through the audio session
@@ -134,7 +138,11 @@ export class AudioEngine {
 
   /* ---------- continuous kart loops ---------- */
   _makeLoop() {
-    const c = this.ctx, out = c.createGain(); out.gain.value = 0; out.connect(this.sfx);
+    const c = this.ctx, out = c.createGain(); out.gain.value = 0;
+    // a stereo panner per loop: frame() parks each split-screen engine on its own side
+    let panNode = null, tail = out;
+    if (c.createStereoPanner) { panNode = c.createStereoPanner(); out.connect(panNode); tail = panNode; }
+    tail.connect(this.sfx);
     // engine: two detuned saws and a sub, through a low-pass that opens with revs, chopped by a "putt" tremolo
     const o1 = c.createOscillator(), o2 = c.createOscillator(), sub = c.createOscillator(), lp = c.createBiquadFilter(), eg = c.createGain(), trem = c.createOscillator(), tg = c.createGain();
     o1.type = 'sawtooth'; o2.type = 'sawtooth'; sub.type = 'square'; lp.type = 'lowpass'; lp.Q.value = 2.5; eg.gain.value = 0.5;
@@ -143,11 +151,11 @@ export class AudioEngine {
     o1.connect(lp); o2.connect(lp); sub.connect(sg); sg.connect(lp); lp.connect(eg); eg.connect(out);
     // tyres: band-passed noise for drifting; low rumble off the road; wind at speed; jet for boosts
     const mkNoise = (type, f, q) => { const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(this.sfx); s.start(0, Math.random()); return { s, fl, g }; };
-    const L = { out, o1, o2, sub, lp, trem, drift: mkNoise('bandpass', 2400, 5), rumble: mkNoise('lowpass', 220, 0.7), wind: mkNoise('highpass', 2600, 0.5), jet: mkNoise('bandpass', 700, 0.8), rev: 0 };
+    const L = { out, panNode, o1, o2, sub, lp, trem, drift: mkNoise('bandpass', 2400, 5), rumble: mkNoise('lowpass', 220, 0.7), wind: mkNoise('highpass', 2600, 0.5), jet: mkNoise('bandpass', 700, 0.8), rev: 0 };
     for (const o of [o1, o2, sub, trem]) o.start();
     return L;
   }
-  _killLoops() { for (const L of this.loops) { for (const o of [L.o1, L.o2, L.sub, L.trem]) { try { o.stop(); } catch { /* already stopped */ } } for (const n of [L.drift, L.rumble, L.wind, L.jet]) { try { n.s.stop(); } catch { /* already stopped */ } n.g.disconnect(); } L.out.disconnect(); } this.loops = []; }
+  _killLoops() { for (const L of this.loops) { for (const o of [L.o1, L.o2, L.sub, L.trem]) { try { o.stop(); } catch { /* already stopped */ } } for (const n of [L.drift, L.rumble, L.wind, L.jet]) { try { n.s.stop(); } catch { /* already stopped */ } n.g.disconnect(); } L.out.disconnect(); L.panNode?.disconnect(); } this.loops = []; }
 
   /** Per rendered frame during a race. */
   frame(dt, race, view) {
@@ -171,20 +179,142 @@ export class AudioEngine {
       const drifting = on && k.drifting && k.grounded;
       L.drift.g.gain.setTargetAtTime(drifting ? (0.06 + k.driftTier * 0.02) * k1 : 0, t, 0.05);
       L.drift.fl.frequency.setTargetAtTime(2000 + k.driftTier * 700 + Math.sin(t * 30) * 150, t, 0.05);
-      const off = on && k.grounded && (k.surface.offroad || k.surface.rumble > 0.3);
+      const off = on && k.grounded && k.starT <= 0 && (k.surface.offroad || k.surface.rumble > 0.3);   // starred: off-road is silent, like the road
       L.rumble.g.gain.setTargetAtTime(off ? 0.22 * clamp(sp, 0, 1) * k1 : 0, t, 0.08);
       L.wind.g.gain.setTargetAtTime(on ? 0.03 * clamp(sp - 0.5, 0, 1) * k1 : 0, t, 0.1);
       L.jet.g.gain.setTargetAtTime(on && (k.boostT > 0 || k.bulletT > 0) ? 0.16 * k1 : 0, t, 0.05);
       L.jet.fl.frequency.setTargetAtTime(600 + sp * 500, t, 0.1);
-      void pan;
+      if (L.panNode) L.panNode.pan.setTargetAtTime(pan, t, 0.05);
     });
-    // final-lap lift and hype-cycle shimmer on the music
+    // hype-cycle star: while any local player is starred, the music IS the star theme (Mario Kart rules);
+    // when it expires the track's own music comes back. Checked every frame, swapped only on the edge.
+    const anyStar = race.state !== 'done' && players.some(k => k.starT > 0 && !k.finished);
+    this.setStarTheme(anyStar);
+    // final-lap lift on the music (suspended while the star theme owns it; it lands when the star ends)
     const lead = players[0];
     const want = lead && !lead.finished && lead.lap >= race.laps && race.laps > 1 ? 1.1 : 1;
-    if (want !== this.musicRate) this.setMusicRate(want);
+    if (!anyStar && want !== this.musicRate) this.setMusicRate(want);
+    this._updateRivals(dt, race, quiet);
+    this._crowdTick(dt, race);
     void view;
   }
-  stopLoops() { if (this.ctx) this._killLoops(); }
+  stopLoops() { if (this.ctx) { this._killLoops(); this._killRivals(); } }
+
+  /* ---------- rival engines (#149) ----------
+     A fixed pool of two light engine voices, lent to the nearest rival karts
+     and driven from the primary player's kart, so an approach from behind is
+     heard before it is seen. Distance sets the volume, the rival's own speed
+     sets the pitch, and its bearing sets the stereo pan. */
+  _makeRivalVoice() {
+    const c = this.ctx, out = c.createGain(); out.gain.value = 0;
+    let panNode = null, tail = out;
+    if (c.createStereoPanner) { panNode = c.createStereoPanner(); out.connect(panNode); tail = panNode; }
+    tail.connect(this.sfx);
+    // the local engine recipe, minus the tyre, wind, and boost noise chains
+    const o1 = c.createOscillator(), o2 = c.createOscillator(), sub = c.createOscillator(), lp = c.createBiquadFilter(), eg = c.createGain(), trem = c.createOscillator(), tg = c.createGain(), sg = c.createGain();
+    o1.type = 'sawtooth'; o2.type = 'sawtooth'; sub.type = 'square'; lp.type = 'lowpass'; lp.Q.value = 2.5; eg.gain.value = 0.5;
+    trem.type = 'sawtooth'; tg.gain.value = 0.28; trem.connect(tg); tg.connect(eg.gain);
+    sg.gain.value = 0.5;
+    o1.connect(lp); o2.connect(lp); sub.connect(sg); sg.connect(lp); lp.connect(eg); eg.connect(out);
+    for (const o of [o1, o2, sub, trem]) o.start();
+    return { out, panNode, o1, o2, sub, lp, trem, rev: 0, kart: null, arm: 0, coolUntil: 0 };
+  }
+  _killRivals() {
+    if (!this.rivalPool) return;
+    for (const V of this.rivalPool) { for (const o of [V.o1, V.o2, V.sub, V.trem]) { try { o.stop(); } catch { /* already stopped */ } } V.out.disconnect(); V.panNode?.disconnect(); }
+    this.rivalPool = null;
+  }
+  _updateRivals(dt, race, quiet) {
+    const me = race.players[0];
+    if (!me) { if (this.rivalPool) for (const V of this.rivalPool) V.out.gain.setTargetAtTime(0, this.t, 0.1); return; }
+    if (!this.rivalPool) this.rivalPool = [this._makeRivalVoice(), this._makeRivalVoice()];
+    const t = this.t, sy = Math.sin(me.yaw), cy = Math.cos(me.yaw), near = [];
+    for (const k of race.karts) {
+      if (k.isPlayer || k.finished || k.rescueT > 0) continue;
+      const dx = k.x - me.x, dz = k.z - me.z, d = Math.hypot(dx, dz);
+      if (d > 46) continue;
+      // fwd > 0: the rival is ahead of me; side > 0: on my right
+      near.push({ k, d, fwd: dx * sy + dz * cy, side: dz * sy - dx * cy });
+    }
+    near.sort((a, b) => a.d - b.d);
+    for (let i = 0; i < this.rivalPool.length; i++) {
+      const V = this.rivalPool[i], C = near[i];
+      if (!C || quiet) { V.out.gain.setTargetAtTime(0, t, 0.09); V.kart = null; V.arm = 0; continue; }
+      const k = C.k;
+      if (V.kart !== k) { V.kart = k; V.arm = 0; }
+      const sp = clamp(k.speed / k.baseTop, 0, 1.6);
+      const target = race.frozen ? 0.12 : clamp(sp * 0.85 + (k.grounded ? 0 : 0.18) + (k.boostT > 0 ? 0.2 : 0), 0.1, 1.5);
+      V.rev += (target - V.rev) * Math.min(1, dt * 7);
+      const f = (52 + V.rev * 150) * 0.94;   // a shade under the local pitch recipe, so a rival never phases as my own engine
+      V.o1.frequency.setTargetAtTime(f, t, 0.03); V.o2.frequency.setTargetAtTime(f * 1.008 + 1, t, 0.03);
+      V.sub.frequency.setTargetAtTime(f * 0.5, t, 0.03); V.trem.frequency.setTargetAtTime(f * 0.5, t, 0.03);
+      V.lp.frequency.setTargetAtTime(380 + V.rev * 1900, t, 0.05);
+      const att = Math.pow(clamp(1 - C.d / 42, 0, 1), 1.5);
+      V.out.gain.setTargetAtTime(att * (0.045 + Math.min(V.rev, 1.2) * 0.07) * (k.shrinkT > 0 ? 0.6 : 1), t, 0.07);
+      if (V.panNode) V.panNode.pan.setTargetAtTime(clamp(C.side / Math.max(10, C.d), -1, 1), t, 0.05);
+      // a pass-by: the rival crosses from clearly behind to clearly ahead (or the reverse, as I pass them)
+      if (V.arm === -1 && C.fwd > 2.5) { if (t >= V.coolUntil) { this._whoosh(C, 1); V.coolUntil = t + 1; } V.arm = 1; }
+      else if (V.arm === 1 && C.fwd < -2.5) { if (t >= V.coolUntil) { this._whoosh(C, -1); V.coolUntil = t + 1; } V.arm = -1; }
+      else if (V.arm === 0) V.arm = C.fwd < -2.5 ? -1 : C.fwd > 2.5 ? 1 : 0;
+    }
+  }
+  /** The air a passing kart pushes past the listener: a band sweep, rising as
+      they come through, falling as they drop behind. */
+  _whoosh(C, dir) {
+    this.noise({ dur: 0.38, vol: 0.22 * clamp(1 - C.d / 25, 0.3, 1), type: 'bandpass', f: dir > 0 ? 600 : 2400, f1: dir > 0 ? 2400 : 600, q: 1.1, pan: clamp(C.side / Math.max(8, C.d), -1, 1) });
+  }
+
+  /* ---------- crowd (#148) ----------
+     One loop of the crowd sample under a low-pass, gain-driven. In a race it
+     follows the local players' distance to the start/finish line (the
+     grandstands live there), builds through the final lap, and jumps on line
+     crossings and finishes; on the results and podium screens it settles to
+     a low bed. It routes through the sfx bus, so the mute and the sfx volume
+     apply as they do to every other effect. */
+  _crowdBed() {
+    const B = this.crowd || (this.crowd = { gain: null, excite: 0 });
+    if (!this.ctx || B.gain) return B;
+    const buf = this.buffers.get('crowd');
+    if (!buf) { this.load('crowd'); return B; }
+    const c = this.ctx, src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+    const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 850;
+    const g = c.createGain(); g.gain.value = 0;
+    src.connect(fl); fl.connect(g); g.connect(this.sfx);
+    src.start(0, buf.duration > 0.2 ? Math.random() * (buf.duration - 0.1) : 0);
+    B.gain = g;
+    return B;
+  }
+  _crowdMode(mode) {
+    this.crowdModeWanted = mode;
+    this.crowdDuck = false;   // a pause in some earlier race must not mute this one
+    if (!this.ctx) return;
+    const B = this._crowdBed();
+    if (!B.gain) { this.load('crowd').then(() => { if (this.crowd?.gain && this.crowdModeWanted === mode) this._crowdMode(mode); }); return; }
+    if (mode === 'ambient') B.gain.gain.setTargetAtTime(0.15, this.t, 0.9);
+    else if (mode === 'off') B.gain.gain.setTargetAtTime(0, this.t, 0.4);
+    if (mode !== 'race') B.excite = 0;
+  }
+  _exciteCrowd(v) { const B = this.crowd || (this.crowd = { gain: null, excite: 0 }); B.excite = Math.min(1, B.excite + v); }
+  _crowdTick(dt, race) {
+    // A session built before the first unlock never delivered its start
+    // event (event() drops everything pre-context), so if a live race is
+    // running and no mode was ever set, engage the crowd from here.
+    if (this.crowdModeWanted === undefined && race.state !== 'done' && race.players?.length) this._crowdMode('race');
+    const B = this._crowdBed(); if (!B.gain) return;
+    if (this.crowdDuck) { B.gain.gain.setTargetAtTime(0, this.t, 0.12); return; }
+    if ((this.crowdModeWanted || 'off') !== 'race') return;   // ambient and off levels are held by _crowdMode
+    B.excite = Math.max(0, B.excite - dt * 0.3);
+    const L = race.track.length; let prox = 0, runIn = 0;
+    for (const p of race.players) {
+      const d = Math.min(p.s, L - p.s);
+      prox = Math.max(prox, clamp(1 - d / 48, 0, 1));
+      if (!p.finished && race.laps > 1 && p.lap >= race.laps) runIn = Math.max(runIn, 0.1 + 0.2 * clamp(p.s / L, 0, 1));
+    }
+    const t = this.t, wander = 0.92 + 0.08 * Math.sin(t * 0.6) * Math.sin(t * 0.23 + 1.7);
+    let target = clamp((0.36 * prox * prox + runIn + B.excite * 0.45) * wander, 0, 0.8);
+    if (race.frozen) target *= 0.55;   // on the grid and in the flyover the crowd is there, not yet loud
+    B.gain.gain.setTargetAtTime(target, t, 0.3);
+  }
 
   /* ---------- events from the game ---------- */
   kartEvent(e, kart, local) {
@@ -211,8 +341,8 @@ export class AudioEngine {
       case 'rescue': if (local) this.play('rescue'); break;
       case 'inked': if (local) this.play('ink'); break;
       case 'robbed': if (local) this.play('steal'); break;
-      case 'lap': if (local && e.data > 1 && e.data <= kart.race.laps) { this.play('lap'); if (e.data === kart.race.laps) this.say('final_lap', { force: true }); } break;
-      case 'finish': if (local) { this.play(e.data <= 3 ? 'finish_good' : 'finish'); this.say(e.data === 1 ? 'winner' : 'finish', { force: true, delay: 0.4 }); } break;
+      case 'lap': if (local) { if (e.data === kart.race.laps && kart.race.laps > 1) { this._exciteCrowd(0.55); this.play('crowd', { vol: 0.55, gap: 0.6 }); } else if (e.data > 1) this._exciteCrowd(0.3); if (e.data > 1 && e.data <= kart.race.laps) { this.play('lap'); if (e.data === kart.race.laps) this.say('final_lap', { force: true }); } } break;
+      case 'finish': if (local) { this.play(e.data <= 3 ? 'finish_good' : 'finish'); this.say(e.data === 1 ? 'winner' : 'finish', { force: true, delay: 0.4 }); this._exciteCrowd(1); this.play('crowd', { vol: e.data <= 3 ? 0.85 : 0.6, gap: 0.6 }); } break;
       case 'rankUp': if (local && kart.race.time > 4) { this.play('rank_up', { vol: 0.5 }); if (e.data === 1) this.say('first_place'); } break;
       case 'rankDown': if (local && kart.race.time > 4) this.play('rank_down', { vol: 0.4 }); break;
       case 'draft': if (local) this.play('boost', { vol: 0.6, rate: 1.2 }); break;
@@ -224,48 +354,80 @@ export class AudioEngine {
       case 'count': this.play('count', { gap: 0.3 }); this.say('count_' + e.data, { force: true }); break;
       case 'go': this.play('go'); this.say('go', { force: true }); this.play('crowd', { vol: 0.5 }); break;
       case 'boxBreak': this.play('item_box', { vol: e.data.kart.isPlayer ? 1 : this._nearness(e.data.kart) * 0.7 }); break;
+      case 'kartHit': // the item's owner hears the connection land — before this, a hit was silent for the player who caused it
+        if (e.data.by?.isPlayer && !e.data.victim?.isPlayer) this.play('hitmark', { vol: 0.9, gap: 0.1 });
+        else if (e.data.by?.isPlayer && e.data.victim?.isPlayer) this.play('hitmark', { vol: 0.5, gap: 0.1 });
+        break;
+      case 'blueHit': this.play('explosion', { vol: this._nearPoint(race, e.data.x, e.data.z, 90) }); break;
       case 'explosion': this.play('explosion', { vol: this._nearPoint(race, e.data.x, e.data.z, 90) }); break;
       case 'lightning': this.play('lightning'); break;
       case 'shock': this.play('shock', { vol: this._nearPoint(race, e.data.x, e.data.z, 70) }); break;
       case 'ink': this.play('ink', { vol: 0.6 }); break;
       case 'blueArrive': if (e.data.target.isPlayer) this.play('warning', { rate: 1.3, gap: 0.5 }); break;
+      case 'blueStrike': if (e.data.target.isPlayer) this.play('warning', { rate: 1.7, gap: 0.25 }); break;
+      case 'finish': this._exciteCrowd(0.15); break;   // every kart home stirs the grandstand a little
       case 'shotBounce': this.play('bounce', { vol: this._nearPoint(race, e.data.x, e.data.z, 40) * 0.6 }); break;
     }
   }
   event(name, data) {
     if (!this.ctx) return;
-    if (name === 'pause') { this.pausedLoops = true; this.play('ui_back'); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.2, this.t, 0.1); }
-    else if (name === 'resume') { this.pausedLoops = false; this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.55, this.t, 0.1); }
-    else if (name === 'results') { this.stopLoops(); this.setMusicRate(1); if (data === 1) this.say('you_win', { delay: 0.3 }); }
-    else if (name === 'podium') { this.play('finish_good'); this.say(data === 1 ? 'champion' : 'cup_over', { force: true, delay: 0.5 }); }
-    else if (name === 'introStart') { this.stopLoops(); this.pausedLoops = false; }
-    else if (name === 'countdownStart') { this.pausedLoops = false; }
+    if (name === 'pause') { this.pausedLoops = true; this.crowdDuck = true; if (this.crowd?.gain) this.crowd.gain.gain.setTargetAtTime(0, this.t, 0.12); this.play('ui_back'); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.2, this.t, 0.1); }
+    else if (name === 'resume') { this.pausedLoops = false; this.crowdDuck = false; this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.55, this.t, 0.1); }
+    else if (name === 'results') { this.stopLoops(); this.setMusicRate(1); if (data === 1) this.say('you_win', { delay: 0.3 }); this._crowdMode('ambient'); }
+    else if (name === 'podium') { this.play('finish_good'); this.say(data === 1 ? 'champion' : 'cup_over', { force: true, delay: 0.5 }); this._crowdMode('ambient'); }
+    else if (name === 'introStart') { this.stopLoops(); this.pausedLoops = false; this._crowdMode('race'); }
+    else if (name === 'countdownStart') { this.pausedLoops = false; this._crowdMode('race'); }
   }
   racerPicked(r) { this.play('ui_select'); void r; }
   _nearness(kart) { const race = kart.race; return this._nearPoint(race, kart.x, kart.z, 45); }
   _nearPoint(race, x, z, range) { let best = 1e9; for (const p of race.players) best = Math.min(best, Math.hypot(p.x - x, p.z - z)); if (!race.players.length) return 0; return clamp(1 - best / range, 0, 1); }
 
   /* ---------- music ---------- */
+  /** The star theme takes the music over while a local player is starred, and hands it back after.
+      Called every frame from frame(); converges from any state, so a race that ends mid-star (the
+      game calls music('results') itself) or a pause can never leave the wrong theme playing. (#134) */
+  setStarTheme(on) {
+    this.starOn = on;
+    if (!this.ctx) return;
+    const want = on ? 'star' : this.baseMusicId;
+    if (want && want !== this.musicId) this.music(want);
+  }
+  /** Ask for a theme (a track id, 'menu', 'results', or 'star' via setStarTheme).
+      The request is remembered even before the audio context exists. */
   music(id) {
+    if (id === 'menu') this._crowdMode('off');   // back in the menus, the grandstand goes home (#163)
+    if (id && id !== 'star') this.baseMusicId = id;   // the music the race/menu asked for; the star theme borrows the slot, it does not replace this (#134)
+    this.musicId = id;
     if (!this.ctx) { this.pendingMusic = id; return; }
-    if (id === this.musicId) return;
-    this.musicId = id; this.musicRate = 1;
+    this._play(id);
+  }
+  _play(id) {
+    if (id === this.playingId && (this.seq || this.musicNodes.length)) return;   // already on its way or playing: do not stack a second copy
+    this.playingId = id; this.musicRate = 1;
+    const gen = ++this.musicGen;   // completions from an older request must never start music
+    if (this.ctx.state === 'suspended') this.ctx.resume?.().catch(() => {});
     const old = this.musicNodes, t = this.t;
     for (const n of old) { n.g.gain.cancelScheduledValues(t); n.g.gain.setTargetAtTime(0, t, 0.25); setTimeout(() => { try { n.s.stop(); } catch { /* done */ } }, 1500); }
-    this.musicNodes = []; this.seq?.stop(); this.seq = null; clearTimeout(this.loopTimer);
+    this.musicNodes = []; this.seq?.stop(); this.seq = null; clearTimeout(this.loopTimer); clearTimeout(this.musicWatchdog);
     if (!id) return;
-    const url = MUSIC[id] || (MUSIC.default && !MUSIC[id] ? null : null);
-    if (!url) { this.seq = new Sequencer(this, id); this.seq.start(); return; }
+    const url = MUSIC[id];
+    if (!url) { this.seq = id === 'star' ? new StarSequencer(this) : new Sequencer(this, id); this.seq.start(); return; }
     const key = 'music:' + id;
-    const start = buf => { if (this.musicId !== id || !buf) { if (!buf && this.musicId === id) { this.seq = new Sequencer(this, id); this.seq.start(); } return; } this._loopMusic(buf, id); };
-    if (this.buffers.has(key)) start(this.buffers.get(key));
-    else fetch(url).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => { this.buffers.set(key, buf); for (const k of [...this.buffers.keys()]) if (k.startsWith('music:') && k !== key && k !== 'music:menu') this.buffers.delete(k); start(buf); }).catch(() => start(null));
+    let bufStarted = false, seqStarted = false;
+    const startSeq = () => { if (bufStarted || seqStarted || gen !== this.musicGen) return; seqStarted = true; this.seq = new Sequencer(this, id); this.seq.start(); };
+    const startBuf = buf => { if (bufStarted || gen !== this.musicGen) return; bufStarted = true; clearTimeout(this.musicWatchdog); if (seqStarted) { this.seq?.stop(); this.seq = null; } this._loopMusic(buf, id); };
+    // If the theme file hangs — stalled network, a service worker that never
+    // answers — the race must not stay silent: after a few seconds the
+    // sequencer covers for it, and the real theme takes over if it ever lands.
+    this.musicWatchdog = setTimeout(startSeq, 6000);
+    if (this.buffers.has(key)) { clearTimeout(this.musicWatchdog); startBuf(this.buffers.get(key)); }
+    else fetch(url).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => { this.buffers.set(key, buf); for (const k of [...this.buffers.keys()]) if (k.startsWith('music:') && k !== key && k !== 'music:menu') this.buffers.delete(k); startBuf(buf); }).catch(() => { clearTimeout(this.musicWatchdog); startSeq(); });
   }
   /** Loop a buffer with a short crossfade at the seam, so any piece of music loops cleanly. */
   _loopMusic(buf, id) {
     const XF = 1.2, c = this.ctx;
     const playOnce = when => {
-      if (this.musicId !== id) return;
+      if (this.playingId !== id) return;
       const s = c.createBufferSource(), g = c.createGain(); s.buffer = buf; s.playbackRate.value = this.musicRate;
       const len = buf.duration / this.musicRate;
       g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(1, when + XF * 0.6);
@@ -282,16 +444,16 @@ export class AudioEngine {
     if (this.seq) this.seq.rate = r;
     // re-time the next loop: simplest is to restart the scheduling from the current node
     const cur = this.musicNodes[this.musicNodes.length - 1];
-    if (cur && this.musicId && this.buffers.has('music:' + this.musicId)) {
+    if (cur && this.playingId && this.buffers.has('music:' + this.playingId)) {
       clearTimeout(this.loopTimer);
-      const played = (this.t - cur.when) * 1, remain = Math.max(0.5, (cur.s.buffer.duration - played) / r), id = this.musicId, buf = cur.s.buffer;
+      const played = (this.t - cur.when) * 1, remain = Math.max(0.5, (cur.s.buffer.duration - played) / r), id = this.playingId, buf = cur.s.buffer;
       cur.g.gain.cancelScheduledValues(this.t); cur.g.gain.setValueAtTime(1, this.t); cur.g.gain.setValueAtTime(1, this.t + remain - 1.2); cur.g.gain.linearRampToValueAtTime(0, this.t + remain);
-      this.loopTimer = setTimeout(() => { if (this.musicId === id) this._loopMusic(buf, id); }, Math.max(50, (remain - 1.2 - 0.3) * 1000));
+      this.loopTimer = setTimeout(() => { if (this.playingId === id) this._loopMusic(buf, id); }, Math.max(50, (remain - 1.2 - 0.3) * 1000));
     }
   }
 }
 
-const USE_SOUND = { boost: 'boost', boost3: 'boost', golden: 'boost', leak: 'drop', pinkslip: 'throw', subpoena: 'throw', subpoena3: 'throw', tweet: 'tweet', antitrust: 'siren', star: 'star', crash: 'lightning', pr: 'shock', smear: 'ink', insider: 'ghost', bailout: 'rocket', dividend: 'coin' };
+const USE_SOUND = { boost: 'boost', boost3: 'boost', golden: 'boost', leak: 'leak', pinkslip: 'lob', subpoena: 'serve', subpoena3: 'serve', tweet: 'tweet', antitrust: 'siren', star: 'star', crash: 'lightning', pr: 'shock', smear: 'ink', insider: 'ghost', bailout: 'rocket', dividend: 'coin' };
 
 /* Synthesized versions of every effect, used until a generated sample exists (and as a fallback offline). */
 const SYNTH = {
@@ -321,6 +483,10 @@ const SYNTH = {
   item_use: (a, v) => a.noise({ dur: 0.25, vol: 0.2 * v, type: 'bandpass', f: 800, f1: 2600, q: 2 }),
   drop: (a, v) => a.tone({ type: 'sine', f: 520, f1: 180, dur: 0.2, vol: 0.2 * v }),
   throw: (a, v) => a.noise({ dur: 0.3, vol: 0.25 * v, type: 'bandpass', f: 600, f1: 3000, q: 2.5 }),
+  leak: (a, v) => { a.noise({ dur: 0.22, vol: 0.3 * v, type: 'lowpass', f: 900, f1: 240, q: 2 }); a.tone({ type: 'sine', f: 300, f1: 90, dur: 0.18, vol: 0.2 * v }); a.noise({ dur: 0.12, vol: 0.14 * v, type: 'bandpass', f: 2400, f1: 3600, q: 3, delay: 0.05 }); },
+  serve: (a, v) => { a.noise({ dur: 0.28, vol: 0.26 * v, type: 'bandpass', f: 900, f1: 3800, q: 2 }); a.tone({ type: 'square', f: 190, f1: 70, dur: 0.09, vol: 0.16 * v, delay: 0.16 }); },
+  lob: (a, v) => { a.tone({ type: 'sine', f: 500, f1: 1250, dur: 0.3, vol: 0.13 * v }); a.noise({ dur: 0.2, vol: 0.12 * v, type: 'bandpass', f: 700, f1: 2400, q: 2.5 }); },
+  hitmark: (a, v) => { a.tone({ type: 'square', f: 1560, dur: 0.06, vol: 0.13 * v }); a.tone({ type: 'square', f: 2090, dur: 0.1, vol: 0.11 * v, delay: 0.05 }); },
   tweet: (a, v) => { for (let i = 0; i < 3; i++) a.tone({ type: 'sine', f: 2200 + i * 300, f1: 3000 + i * 300, dur: 0.07, vol: 0.12 * v, delay: i * 0.08 }); },
   siren: (a, v) => { for (let i = 0; i < 4; i++) a.tone({ type: 'sawtooth', f: i % 2 ? 620 : 880, dur: 0.16, vol: 0.12 * v, delay: i * 0.16 }); },
   star: a => a.arp([72, 76, 79, 84, 88, 91, 96], { type: 'square', step: 0.05, dur: 0.12, vol: 0.1 }),
@@ -344,6 +510,51 @@ const SYNTH = {
   rank_down: a => a.tone({ type: 'triangle', f: 600, f1: 380, dur: 0.12, vol: 0.12 }),
 };
 
+/* Authored sequencer themes. Tracks without a generated MP3 (the whole third
+   cup, for now) used to get the same hash-seeded house band with a different
+   random tune — same instruments, same shape, nothing to recognise a track
+   by. These give each one its own hook, tempo, and band. lead/bass entries
+   are semitone offsets from the root (null = rest); lead spans 4 bars of
+   eighth notes (32 steps), bass one bar (8). A generated MP3, when one is
+   made for the track, still wins — this is the floor, not the ceiling. */
+const THEMES = {
+  /* Davos: mock-heroic alpine fanfare — brass-ish saw lead, oom-pah bass. */
+  'davos': {
+    bpm: 118, root: 50, prog: [0, 7, 5, 4], minor: false,
+    leadWave: 'sawtooth', leadCut: 1800, leadVol: 0.07, padVol: 0.045,
+    lead: [12, null, 7, null, 4, 7, 12, null, 16, null, 12, null, 9, null, 7, null, 12, null, 11, null, 9, null, 7, null, 9, null, 7, null, 4, null, 2, null],
+    bass: [0, null, 7, null, 0, null, 7, null],
+  },
+  /* Boring Tunnel: subterranean techno — four-on-the-floor, driving octave
+     bass, a sparse two-note drone for a lead, no pad. The tunnel is bare. */
+  'boring-tunnel': {
+    bpm: 134, root: 45, prog: [0, 0, 3, 5], minor: true,
+    leadWave: 'square', leadCut: 1400, leadVol: 0.05, bassCut: 500, padVol: 0,
+    kick: [0, 2, 4, 6], kickVol: 0.55, snareVol: 0.18, hatEven: 0.03, hatOdd: 0.09,
+    lead: [12, null, null, null, null, null, 12, null, null, null, null, null, null, null, 15, null, null, null, null, null, null, null, 12, null, null, null, null, null, 10, null, null, null],
+    bass: [0, 0, 12, 0, 0, 0, 12, 0],
+  },
+  /* International Waters: a rolling sea-shanty — fife-like triangle lead that
+     never sits still, bom-bom bass, everything bouncing. */
+  'international-waters': {
+    bpm: 138, root: 48, prog: [0, 5, 7, 5], minor: false,
+    leadWave: 'triangle', leadCut: 3200, leadVol: 0.075, snareVol: 0.16, padVol: 0.04,
+    lead: [7, 12, 11, 12, 16, null, 14, null, 12, 9, 7, 9, 12, null, 7, null, 7, 12, 11, 12, 19, null, 16, null, 14, 12, 11, 9, 7, null, null, null],
+    bass: [0, null, 7, null, 0, null, 7, null],
+  },
+  /* WeWork Memorial: elevator bossa-funk for a dead office — soft triangle
+     everything, syncopated bass, no snare, the kick turned down. Smooth. */
+  'wework-memorial': {
+    bpm: 102, root: 50, prog: [0, 5, 7, 9], minor: false,
+    leadWave: 'triangle', leadCut: 1600, leadVol: 0.06, bassWave: 'triangle', bassVol: 0.16,
+    kickVol: 0.3, snare: [], hatEven: 0.02, hatOdd: 0.035, padVol: 0.05,
+    lead: [12, null, null, 11, null, null, 9, null, 12, null, null, 14, null, null, 12, null, 9, null, null, 11, null, null, 12, null, 16, null, null, 14, null, null, 12, null],
+    bass: [0, null, 7, null, null, 10, null, 7],
+  },
+  /* No 'star' entry here: the invincibility-star theme is the dedicated
+     StarSequencer below (#134), reached via music('star'). */
+};
+
 /** Tiny procedural band, used for any track or menu without generated music (and when offline). */
 class Sequencer {
   constructor(audio, id) {
@@ -357,6 +568,18 @@ class Sequencer {
     const scale = this.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
     this.lead = Array.from({ length: 32 }, (_, i) => (rng() < (i % 4 === 0 ? 0.9 : 0.5) ? scale[Math.floor(rng() * scale.length)] + (rng() < 0.3 ? 12 : 0) : null));
     this.bassPat = Array.from({ length: 8 }, (_, i) => (i % 2 === 0 || rng() < 0.5 ? (rng() < 0.25 ? 12 : rng() < 0.2 ? 7 : 0) : null));
+    // an authored theme replaces the dice: its own hook, tempo, and band
+    const theme = THEMES[id];
+    if (theme) {
+      this.bpm = theme.bpm; this.root = theme.root; this.prog = theme.prog; this.minor = !!theme.minor;
+      this.lead = theme.lead; this.bassPat = theme.bass;
+    }
+    this.leadWave = theme?.leadWave || 'square'; this.leadVol = theme?.leadVol ?? 0.055; this.leadCut = theme?.leadCut ?? 2600;
+    this.bassWave = theme?.bassWave || 'sawtooth'; this.bassVol = theme?.bassVol ?? 0.2; this.bassCut = theme?.bassCut ?? 700;
+    this.padWave = theme?.padWave || 'triangle'; this.padVol = theme?.padVol ?? 0.05; this.padCut = theme?.padCut ?? 2400;
+    this.kickPat = theme?.kick || [0, 4]; this.kickVol = theme?.kickVol ?? 0.5;
+    this.snarePat = theme?.snare || [2, 6]; this.snareVol = theme?.snareVol ?? 0.22;
+    this.hatEven = theme?.hatEven ?? 0.04; this.hatOdd = theme?.hatOdd ?? 0.07;
   }
   start() { this.next = this.a.t + 0.1; this.tick(); }
   stop() { clearTimeout(this.timer); this.stopped = true; }
@@ -367,13 +590,46 @@ class Sequencer {
       const s = this.step, bar = Math.floor(s / 8) % 4, beat = s % 8, t = this.next, root = this.root + this.prog[bar];
       const voice = (type, f, dur, vol, cut) => { const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter(); o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = cut; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(fl); fl.connect(g); g.connect(a.mus); o.start(t); o.stop(t + dur + 0.02); };
       const nz = (dur, vol, type, f) => { const src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); src.buffer = a.noiseBuf; fl.type = type; fl.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); src.connect(fl); fl.connect(g); g.connect(a.mus); src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02); };
-      const b = this.bassPat[beat]; if (b != null) voice('sawtooth', NOTE(root - 12 + b), spb * 0.9, 0.2, 700);
-      if (beat % 4 === 0) { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16); o.connect(g); g.connect(a.mus); o.start(t); o.stop(t + 0.2); }
-      if (beat % 4 === 2) nz(0.12, 0.22, 'bandpass', 1900);
-      nz(0.03, beat % 2 ? 0.07 : 0.04, 'highpass', 7000);
-      if (beat === 0) for (const iv of this.minor ? [0, 3, 7] : [0, 4, 7]) voice('triangle', NOTE(root + 12 + iv), spb * 7, 0.05, 2400);
-      const l = this.lead[s % 32]; if (l != null) voice('square', NOTE(this.root + 24 + l), spb * 0.85, 0.055, 2600);
+      const b = this.bassPat[beat]; if (b != null) voice(this.bassWave, NOTE(root - 12 + b), spb * 0.9, this.bassVol, this.bassCut);
+      if (this.kickPat.includes(beat)) { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12); g.gain.setValueAtTime(this.kickVol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16); o.connect(g); g.connect(a.mus); o.start(t); o.stop(t + 0.2); }
+      if (this.snarePat.includes(beat)) nz(0.12, this.snareVol, 'bandpass', 1900);
+      nz(0.03, beat % 2 ? this.hatOdd : this.hatEven, 'highpass', 7000);
+      if (beat === 0 && this.padVol > 0) for (const iv of this.minor ? [0, 3, 7] : [0, 4, 7]) voice(this.padWave, NOTE(root + 12 + iv), spb * 7, this.padVol, this.padCut);
+      const l = this.lead[s % 32]; if (l != null) voice(this.leadWave, NOTE(this.root + 24 + l), spb * 0.85, this.leadVol, this.leadCut);
       this.next += spb; this.step++;
+    }
+    this.timer = setTimeout(() => this.tick(), 60);
+  }
+}
+
+/** The hype-cycle star theme: a relentless two-bar arpeggio loop that takes the music over while a
+    local player is starred, Mario Kart style. Fixed tempo (the final-lap rate lift does not apply),
+    seamless by construction, and it stops the moment it is swapped out — notes already scheduled are
+    sixteenths, so the handover rings out in under a tenth of a second. */
+class StarSequencer {
+  constructor(audio) {
+    this.a = audio; this.rate = 1; this.step = 0; this.timer = null; this.next = 0;
+    this.bpm = 172;
+    // I–V–vi–IV in C, as MIDI roots; the arpeggio walks each chord up two octaves and back down
+    this.chords = [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]];
+    this.arp = [0, 1, 2, 3, 2, 1];   // chord tones + the octave, indexed into an extended tone list
+  }
+  start() { this.next = this.a.t + 0.06; this.tick(); }
+  stop() { clearTimeout(this.timer); this.stopped = true; }
+  tick() {
+    if (this.stopped) return;
+    const a = this.a, c = a.ctx, s16 = 60 / this.bpm / 4;   // sixteenth notes
+    while (this.next < c.currentTime + 0.25) {
+      const s = this.step, bar = Math.floor(s / 16) % 4, six = s % 16, t = this.next;
+      const voice = (type, f, dur, vol, cut) => { const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter(); o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = cut; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(fl); fl.connect(g); g.connect(a.mus); o.start(t); o.stop(t + dur + 0.02); };
+      const nz = (dur, vol, type, f) => { const src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); src.buffer = a.noiseBuf; fl.type = type; fl.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); src.connect(fl); fl.connect(g); g.connect(a.mus); src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02); };
+      const chord = this.chords[bar], tones = [chord[0], chord[1], chord[2], chord[0] + 12];
+      voice('square', NOTE(tones[this.arp[six % 6]] + 12), s16 * 0.95, 0.075, 3200);
+      if (six % 2 === 0) voice('sawtooth', NOTE(chord[0] - 12), s16 * 1.7, 0.16, 800);            // bass, eighth notes
+      if (six % 8 === 4) nz(0.1, 0.16, 'bandpass', 1900);                                       // backbeat
+      nz(0.03, six % 2 ? 0.05 : 0.028, 'highpass', 7500);                                       // hats
+      if (six === 0) voice('triangle', NOTE(chord[2] + 24), s16 * 3, 0.05, 4000);                // bar sparkle
+      this.next += s16; this.step++;
     }
     this.timer = setTimeout(() => this.tick(), 60);
   }

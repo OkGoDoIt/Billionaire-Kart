@@ -1,16 +1,47 @@
 /* AI drivers. They use the same kart physics and inputs as players: steer toward a
    point on the racing line, drift through real corners, avoid traffic and hazards,
    and use items with a little judgement. Rubber-banding only nudges top speed.
+   Every race also deals the field a spread of form (see assignFieldForm): some
+   drivers are simply quicker today than others, like Mario Kart's assigned CPU
+   performance order, so the field strings out instead of touring in one pack.
    Tracks may list shortcuts (def.shortcuts); skilled rivals take them now and then. */
 import { clamp, lerp, wrapAngle, mod, loopDelta } from '../core/util.js';
 import { TUNE } from './kart.js';
 
 // cuts: chance per lap of taking a shortcut the driver qualifies for (the easiest level never does)
+// form: half-range of the per-race form spread dealt across the AI field (see assignFieldForm)
 export const AI_LEVELS = {
-  easy:   { skill: 0.45, speed: 0.93, band: 0.05, driftChance: 0.35, startChance: 0.15, itemDelay: [1.5, 5], line: 0.5, cuts: 0 },
-  normal: { skill: 0.7,  speed: 0.975, band: 0.045, driftChance: 0.7,  startChance: 0.45, itemDelay: [0.8, 3.5], line: 0.75, cuts: 0.45 },
-  hard:   { skill: 0.92, speed: 1.0,  band: 0.04, driftChance: 0.95, startChance: 0.8,  itemDelay: [0.4, 2.2], line: 0.95, cuts: 0.8 },
+  easy:   { skill: 0.45, speed: 0.93, band: 0.05, driftChance: 0.35, startChance: 0.15, itemDelay: [1.5, 5], line: 0.5, cuts: 0, form: 0.025 },
+  normal: { skill: 0.7,  speed: 0.975, band: 0.045, driftChance: 0.7,  startChance: 0.45, itemDelay: [0.8, 3.5], line: 0.75, cuts: 0.45, form: 0.04 },
+  hard:   { skill: 0.92, speed: 1.0,  band: 0.04, driftChance: 0.95, startChance: 0.8,  itemDelay: [0.4, 2.2], line: 0.95, cuts: 0.8, form: 0.045 },
 };
+
+/* Per-race form for a whole AI field, dealt at race setup. Mario Kart has never run its
+   computer drivers at one uniform level: Super Mario Kart assigns them a performance
+   order (one very fast, one fast, one medium, the rest slow), and from Mario Kart 64 on,
+   one or two randomly chosen opponents are designated rivals of much greater skill. The
+   equivalent here: pace offsets (top-speed fractions) stratified from +form to -form with
+   a little jitter, the best draw reserved for one randomly chosen designated rival — the
+   race's pace-setter — and the rest shuffled, so every race has a front, a middle, and a
+   tail instead of a single touring pack. Draws come from the race RNG, so a race and its
+   form are reproducible from the race seed. Returns { forms, rival } indexed like the
+   field's AI drivers. */
+export function assignFieldForm(aiCount, maxForm, rng) {
+  if (aiCount <= 0) return { forms: [], rival: -1 };
+  const rival = Math.floor(rng() * aiCount);
+  if (aiCount === 1) return { forms: [maxForm * 0.7], rival: 0 };
+  const step = 2 * maxForm / (aiCount - 1);
+  const draws = [];
+  for (let i = 0; i < aiCount; i++) draws.push(maxForm - i * step + rng.range(-0.3, 0.3) * step);
+  draws.sort((a, b) => b - a);
+  const rest = draws.slice(1);                       // everyone but the rival gets a shuffled remaining draw
+  for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+  const forms = new Array(aiCount);
+  forms[rival] = draws[0];
+  let p = 0;
+  for (let i = 0; i < aiCount; i++) if (i !== rival) forms[i] = rest[p++];
+  return { forms, rival };
+}
 const BOOST_ITEMS = new Set(['boost', 'boost3', 'golden']);
 
 /* Shortcuts from the track definition, resolved once per track: entry and rejoin distances,
@@ -43,12 +74,18 @@ export class AIDriver {
   constructor(kart, level, rng, personality = {}) {
     this.kart = kart; this.rng = rng;
     this.lv = { ...AI_LEVELS[level] || AI_LEVELS.normal };
-    this.skill = clamp(this.lv.skill + (personality.skill || 0) + rng.range(-0.08, 0.08), 0.2, 1);
+    // per-race form (assignFieldForm): race setup hands each driver its draw in the
+    // personality; a driver built standalone (tests, stand-in pilots) draws its own.
+    // Form moves pace and skill together — a driver having a good or a bad day.
+    this.form = personality.form != null ? personality.form : rng.range(-1, 1) * (this.lv.form ?? 0.04);
+    this.paceMul = 1 + this.form;
+    this.rival = !!personality.rival;
+    this.skill = clamp(this.lv.skill + (personality.skill || 0) + rng.range(-0.08, 0.08) + this.form * 1.5, 0.2, 1);
     this.aggr = clamp(0.5 + (personality.aggression || 0) + rng.range(-0.2, 0.2), 0, 1);
     this.bias = rng.range(-1, 1) * 1.6 * (1 - this.skill * 0.6);       // habitual lateral offset
     this.wanderPhase = rng() * 10; this.wanderRate = rng.range(0.25, 0.6);
     this.input = { steer: 0, throttle: 1, brake: 0, drift: false, item: false };
-    this.driftPlan = null; this.stuckT = 0; this.reverseT = 0; this.itemT = rng.range(...this.lv.itemDelay);
+    this.driftPlan = null; this.stuckT = 0; this.reverseT = 0; this.bestProg = null; this.progT = 0; this.itemT = rng.range(...this.lv.itemDelay);
     this.willRocket = rng() < this.lv.startChance; this.avoid = 0; this.mistakeT = rng.range(6, 20); this.wobble = 0;
     kart.autoTrick = rng() < 0.55 + this.skill * 0.45;
     this.cut = null; this.cutPlan = null; this._cutLap = {};
@@ -69,6 +106,17 @@ export class AIDriver {
     if (k.speed < 2.5 && k.hitT <= 0 && k.rescueT <= 0) this.stuckT += dt; else this.stuckT = Math.max(0, this.stuckT - dt * 2);
     if (this.stuckT > 1.6 && this.reverseT <= 0) { this.reverseT = 1.0; }
     if (this.stuckT > 5) { k.startRescue(); this.stuckT = 0; }
+    // progress rescue: the speed timer above limit-cycles against a bump obstacle (reverse,
+    // roll forward, bump again — stuckT drains while moving and never reaches 5), so also
+    // watch the kart's best distance. No gain of 2 m in 6 s of live racing means it is
+    // wedged somewhere; rescue it outright. A rescue may set the kart back a little, so
+    // bestProg follows it down instead of counting the setback against the kart.
+    const prog = k.lap * tr.length + k.s;
+    if (this.bestProg === null) this.bestProg = prog;
+    if (prog > this.bestProg + 2) { this.bestProg = prog; this.progT = 0; }
+    else if (k.rescueT <= 0) this.progT += dt;
+    else this.bestProg = Math.min(this.bestProg, prog);
+    if (this.progT > 6) { k.startRescue(); this.progT = 0; this.stuckT = 0; }
     if (this.reverseT > 0) {
       this.reverseT -= dt; inp.throttle = 0; inp.brake = 1; inp.drift = false;
       const ang = wrapAngle(tr.yaw[k.hit.i] - k.yaw); inp.steer = clamp(ang * 2, -1, 1); // reversed steering points the nose back
@@ -296,10 +344,12 @@ export class AIDriver {
   }
 }
 
-/** Rubber band: nudge AI top speed by how far they are from the lead human. */
+/** Rubber band: nudge AI top speed by how far they are from the lead human.
+    Each driver's per-race form (paceMul) rides underneath the band: the band still
+    keeps the field in reach of the human, but it no longer irons them flat. */
 export function rubberBand(race) {
   const humans = race.karts.filter(k => k.isPlayer);
-  if (!humans.length) { for (const k of race.karts) k.aiSpeedMul = k.ai ? k.ai.lv.speed : 1; return; }
+  if (!humans.length) { for (const k of race.karts) k.aiSpeedMul = k.ai ? k.ai.lv.speed * (k.ai.paceMul || 1) : 1; return; }
   const L = race.track.length;
   let lead = humans[0];
   for (const h of humans) if (h.lap * L + h.s > lead.lap * L + lead.s) lead = h;
@@ -309,6 +359,6 @@ export function rubberBand(race) {
     const d = (k.lap * L + k.s) - leadP;        // + = ahead of the human
     const band = k.ai.lv.band;
     const adj = d > 0 ? -band * clamp(d / 110, 0, 1) : band * 1.25 * clamp(-d / 150, 0, 1);
-    k.aiSpeedMul = k.ai.lv.speed * (1 + adj) * (race.cls.ai || 1);
+    k.aiSpeedMul = k.ai.lv.speed * (k.ai.paceMul || 1) * (1 + adj) * (race.cls.ai || 1);
   }
 }

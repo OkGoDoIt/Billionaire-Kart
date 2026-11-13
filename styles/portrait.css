@@ -7,6 +7,9 @@
   .menu-screen { padding: calc(var(--u) * 3 + var(--safe-t)) calc(var(--u) * 3 + var(--safe-r)) calc(var(--u) * 3 + var(--safe-b)) calc(var(--u) * 3 + var(--safe-l)); background: linear-gradient(180deg, rgba(11,13,32,0.6), rgba(11,13,32,0.2) 25%, rgba(11,13,32,0.2) 60%, rgba(11,13,32,0.7)); }
   /* a tablet is wider: the content keeps a phone's proportions, centered */
   .menu-screen > * { width: 100%; max-width: calc(var(--u) * 64); align-self: center; }
+
+  /* the scroll fade spans the whole screen here too, not just the centered content column */
+  .scroll-fade { width: auto; max-width: none; align-self: stretch; margin-left: calc(var(--u) * -3 - var(--safe-l)); margin-right: calc(var(--u) * -3 - var(--safe-r)); }
   .menu-head { margin-bottom: calc(var(--u) * 2); gap: calc(var(--u) * 1.6); }
   .menu-head h1 { font-size: calc(var(--u) * 4.4); }
   .menu-head p { font-size: calc(var(--u) * 1.9); }
@@ -16,6 +19,9 @@
   .foot { margin-top: calc(var(--u) * 2.4); }
 
   /* title */
+  /* the landscape title's vignette over the attract race, reshaped for a tall screen:
+     the wash above overrides .screen-title's own background, so it is restored here */
+  .screen-title { background: radial-gradient(ellipse 95% 60% at 50% 45%, rgba(11,13,32,0.1), rgba(11,13,32,0.6)); }
   .screen-title > * { width: auto; max-width: none; }
   .logo-top { font-size: calc(var(--u) * 5.4); }
   .logo-main { font-size: calc(var(--u) * 17); }
@@ -55,7 +61,7 @@
   .r-top { gap: calc(var(--u) * 1.6); }
   .racer-tile span { font-size: min(calc(var(--u) * 1.8), calc(var(--side) * 0.19)); }
   .racer-tile.long span { font-size: min(calc(var(--u) * 1.35), calc(var(--side) * 0.14)); }
-  .r-bio { font-size: calc(var(--u) * 1.75); }
+  .r-bio { font-size: calc(var(--u) * 1.75); min-height: calc(var(--u) * 6.72); }   /* the same three lines as landscape, at this size */
   .r-stats { grid-template-columns: repeat(2, 1fr); column-gap: calc(var(--u) * 2.4); row-gap: calc(var(--u) * 0.9); }
   .stat { font-size: calc(var(--u) * 1.75); }
   .btn.r-go { padding: calc(var(--u) * 1.4) calc(var(--u) * 2) calc(var(--u) * 1.1); }
@@ -154,6 +160,13 @@
   .track-card h1 { font-size: calc(var(--u) * 7); }
   .track-card p { font-size: calc(var(--u) * 2.4); }
   .hint-card { bottom: calc(var(--u) * 6 + var(--safe-b)); white-space: normal; max-width: calc(100% - var(--u) * 6); text-align: center; line-height: 1.6; }
+
+  /* a short upright screen: under 90 px the turntable strip shows nothing (menus.js hides the model
+     there too), so its row goes away entirely and the portraits take the room instead */
+  @media (max-height: 640px) {
+    .racer-layout { grid-template-rows: 0 auto minmax(0, calc((var(--side) + var(--plate)) * 4 + var(--gap-r) * 3)); }
+    .r-stage { display: none; }
+  }
 
   /* an upright tablet: the same layouts, sized by height so they keep a phone's proportions */
   @media (min-aspect-ratio: 5/8) {

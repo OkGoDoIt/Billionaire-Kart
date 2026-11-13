@@ -63,6 +63,24 @@ export class Hud {
     // start line tick
     const [sx, sy] = this.mapXY(tr.px[0], tr.pz[0]); g.fillStyle = '#12142b'; g.beginPath(); g.arc(sx, sy, 7, 0, 7); g.fill(); g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(sx, sy, 4, 0, 7); g.fill();
     this.mapCtx = c.getContext('2d');
+    // faces for the map, loaded once; a kart whose portrait has not arrived yet keeps its colored dot
+    this.mapFaces = new Map();
+    for (const k of [...this.race.order, this.kart]) {
+      const p = k?.racer?.portrait;
+      if (p && !this.mapFaces.has(p)) { const img = new Image(); img.src = p; this.mapFaces.set(p, img); }
+    }
+  }
+  /* A round portrait in the map: the dark ring every marker wears, an optional bright ring for the
+     player, and the face clipped to the circle, framed on the top of the portrait where the face is. */
+  _mapFace(g, img, x, y, r, ring) {
+    g.save();
+    g.beginPath(); g.arc(x, y, r + 3, 0, 7); g.fillStyle = '#12142b'; g.fill();
+    if (ring) { g.beginPath(); g.arc(x, y, r + 1.5, 0, 7); g.fillStyle = ring; g.fill(); }
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.clip();
+    // the portraits are square with the head in the top two-thirds: zoom in and center on it (35% down)
+    const D = 2.8 * r;
+    g.drawImage(img, x - D / 2, y - 0.35 * D, D, D);
+    g.restore();
   }
   _drawMap() {
     const g = this.mapCtx; if (!g) return;
@@ -72,19 +90,31 @@ export class Hud {
     for (let i = order.length - 1; i >= 0; i--) {
       const k = order[i]; if (k === this.kart) continue;
       const [x, y] = this.mapXY(k.x, k.z);
-      g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill();
-      g.fillStyle = hex(k.racer.color); g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill();
-      // Total Awareness (Thiel's special): what each rival is holding, beside their dot
+      const face = this.mapFaces?.get(k.racer.portrait), hasFace = !!(face?.complete && face.naturalWidth);
+      if (hasFace) this._mapFace(g, face, x, y, 15);
+      else { g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill(); g.fillStyle = hex(k.racer.color); g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill(); }
+      // Total Awareness (Thiel's special): what each rival is holding, beside their marker
       if (this.kart.sp.seeItems && k.item) {
+        const o = hasFace ? 19 : 15;   // the badge sits a little further out over a face than over a dot
         const icons = this._icons || (this._icons = {}), img = icons[k.item] || (icons[k.item] = Object.assign(new Image(), { src: itemIcon(k.item) }));
-        if (img.complete && img.naturalWidth) { g.save(); g.beginPath(); g.arc(x + 15, y - 15, 13, 0, 7); g.fillStyle = '#12142b'; g.fill(); g.clip(); g.drawImage(img, x + 3, y - 27, 24, 24); g.restore(); }
+        if (img.complete && img.naturalWidth) { g.save(); g.beginPath(); g.arc(x + o, y - o, 13, 0, 7); g.fillStyle = '#12142b'; g.fill(); g.clip(); g.drawImage(img, x + o - 12, y - o - 12, 24, 24); g.restore(); }
       }
     }
     const k = this.kart, [x, y] = this.mapXY(k.x, k.z);
-    g.save(); g.translate(x, y); g.rotate(Math.PI - k.yaw);   // the arrow is drawn pointing up; heading is measured from +z toward +x
-    g.fillStyle = '#12142b'; g.beginPath(); g.moveTo(0, -20); g.lineTo(14, 13); g.lineTo(0, 7); g.lineTo(-14, 13); g.closePath(); g.fill();
-    g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -14); g.lineTo(9, 9); g.lineTo(0, 4); g.lineTo(-9, 9); g.closePath(); g.fill();
-    g.restore();
+    const face = this.mapFaces?.get(k.racer.portrait);
+    if (face?.complete && face.naturalWidth) {
+      this._mapFace(g, face, x, y, 20, '#fff');
+      // a small pointer on the ring keeps the heading the arrow used to give
+      g.save(); g.translate(x, y); g.rotate(Math.PI - k.yaw);   // heading is measured from +z toward +x
+      g.fillStyle = '#12142b'; g.beginPath(); g.moveTo(0, -32); g.lineTo(7, -21); g.lineTo(-7, -21); g.closePath(); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -29.5); g.lineTo(4.5, -22); g.lineTo(-4.5, -22); g.closePath(); g.fill();
+      g.restore();
+    } else {
+      g.save(); g.translate(x, y); g.rotate(Math.PI - k.yaw);   // the arrow is drawn pointing up; heading is measured from +z toward +x
+      g.fillStyle = '#12142b'; g.beginPath(); g.moveTo(0, -20); g.lineTo(14, 13); g.lineTo(0, 7); g.lineTo(-14, 13); g.closePath(); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -14); g.lineTo(9, 9); g.lineTo(0, 4); g.lineTo(-9, 9); g.closePath(); g.fill();
+      g.restore();
+    }
   }
 
   /* ---------- transient messages ---------- */

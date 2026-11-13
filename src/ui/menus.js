@@ -22,7 +22,7 @@ const starRow = n => h('span', { class: 'star-row', role: 'img', 'aria-label': `
 /* The larger of the two areas a panel leaves free: beside it (landscape) or above it (portrait). The 3D scene is framed there. */
 const freeRect = panel => { const r = panel.getBoundingClientRect(), W = innerWidth, H = innerHeight; return r.left * H >= W * r.top ? { left: 0, top: 0, width: r.left, height: H } : { left: 0, top: 0, width: W, height: r.top }; };
 const PLAYER_COLORS = ['#ff4d6d', '#38b6ff', '#ffd23c', '#2ee6a6'];
-const LEVELS = [['easy', 'Relaxed'], ['normal', 'Competitive'], ['hard', 'Ruthless']];
+const LEVELS = [['easy', 'Relaxed', 'Rivals top out at 93% speed, hold a loose line, and sit on their items. They never take a shortcut.'], ['normal', 'Competitive', 'Rivals run at nearly full speed, hold a tidy line, and use their items in good time. Now and then, one takes a shortcut.'], ['hard', 'Ruthless', 'Rivals run at full speed, hold the tightest line, take shortcuts, and fire items the moment they land.']];
 const CC_LIST = [50, 100, 150];
 const STAT_LABELS = [['speed', 'Speed'], ['accel', 'Acceleration'], ['handling', 'Handling'], ['weight', 'Weight']];
 
@@ -57,11 +57,24 @@ export class Menus {
     const def = this['s_' + spec.name](spec.params || {});
     def.spec = spec; def.el.classList.add('menu-screen', 'screen-' + spec.name);
     this.layer.appendChild(def.el); this.screen = def; this.focusEl = null;
+    this._scrollHint(def);
     const first = def.el.querySelector('[data-f][data-default]') || def.el.querySelector('[data-f]');
     if (first) this.focus(first, false);
     def.onOpen?.(); def.onLayout?.();
     this.app.showroom?.setShown(!!def.stage);   // the turntable karts appear only on screens that place them
     if (def.onLayout) requestAnimationFrame(() => { if (this.screen === def) def.onLayout(); });   // again once fonts and images have settled the layout
+  }
+  /* One scroll check for every screen, run where screens mount: while more content sits below the fold,
+     the screen wears a fade at its bottom edge; at the end of the scroll, the fade is gone. */
+  _scrollHint(def) {
+    const sc = def.el;
+    sc.appendChild(h('div', { class: 'scroll-fade', 'aria-hidden': 'true' }));
+    const check = () => sc.classList.toggle('more-below', sc.scrollHeight - sc.scrollTop - sc.clientHeight > 4);
+    check(); requestAnimationFrame(check);
+    sc.addEventListener('scroll', check, { passive: true });
+    addEventListener('resize', check);
+    const prevClose = def.onClose;
+    def.onClose = () => { removeEventListener('resize', check); prevClose?.(); };
   }
   focus(el, sound = true) {
     if (this.focusEl === el) return;
@@ -206,10 +219,11 @@ export class Menus {
     flow.cc = flow.cc || last.cc; flow.level = flow.level || last.level;
     const ccBtns = CC_LIST.map(cc => { const b = h('button', { class: 'card cc', 'data-f': true, 'data-default': cc === flow.cc, onclick: () => { flow.cc = cc; mark(); this.focus(next); } }, h('div', { class: 'cc-n' }, CLASSES[cc].label), h('div', { class: 'cc-l' }, CLASSES[cc].name), h('div', { class: 'cc-d' }, cc === 50 ? 'Gentle pace' : cc === 100 ? 'The standard' : 'Fast and frantic')); b.dataset.cc = cc; return b; });
     const lvBtns = LEVELS.map(([id, label]) => { const b = h('button', { class: 'chip', 'data-f': true, onclick: () => { flow.level = id; mark(); } }, label); b.dataset.lv = id; return b; });
-    const mark = () => { for (const b of ccBtns) b.classList.toggle('sel', +b.dataset.cc === flow.cc); for (const b of lvBtns) b.classList.toggle('sel', b.dataset.lv === flow.level); };
+    const lvDesc = h('p', { class: 'lv-desc' });
+    const mark = () => { for (const b of ccBtns) b.classList.toggle('sel', +b.dataset.cc === flow.cc); for (const b of lvBtns) b.classList.toggle('sel', b.dataset.lv === flow.level); lvDesc.textContent = LEVELS.find(l => l[0] === flow.level)[2]; };
     const next = this.btn('Next', () => { last.cc = flow.cc; last.level = flow.level; A.save.write(); this.open(flow.mode === 'gp' ? 'cups' : 'tracks'); }, { cls: 'go' });
     mark();
-    const el = h('div', {}, this.header('Engine class'), h('div', { class: 'cards three' }, ccBtns), h('h3', { class: 'sub-h' }, 'Rivals'), h('div', { class: 'chips' }, lvBtns), h('div', { class: 'foot' }, next));
+    const el = h('div', {}, this.header('Engine class'), h('div', { class: 'cards three' }, ccBtns), h('h3', { class: 'sub-h' }, 'Rivals'), h('div', { class: 'chips' }, lvBtns), lvDesc, h('div', { class: 'foot' }, next));
     return { el };
   }
 

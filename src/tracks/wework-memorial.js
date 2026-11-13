@@ -13,6 +13,7 @@ import { Scenery, partsOf } from '../render/scenery.js';
 import * as P from '../models/props.js';
 import * as W from '../models/props-wework-memorial.js';
 import { canvasTex, fitText } from '../render/textures.js';
+import * as S from '../models/props-silicon-valley.js';   // the sign kit: canvas atlas + static baker (draw calls, #237 step 5)
 
 /* ---------- centreline, built row by row from the design doc's table ----------
    Plan geometry and corner radii are the doc's; heights follow its
@@ -107,7 +108,8 @@ export default {
     // a) the lobby, low, along the start straight toward the gantry and the $47B → $0 board
     { pos: [-60, 2.5, 50], pos1: [-40, 3, 52], look: [30, 4, 60], look1: [30, 4, 60], fov: 58, dur: 3.0 },
     // b) under the mezzanine bridge, along the return lane, glass bridge overhead
-    { pos: [40, 1.6, 32], pos1: [52, 1.8, 32], look: [80, 4, 32], look1: [80, 4, 32], fov: 56, dur: 2.8 },
+    //    (starts east of the L2 ramp skirt — from x40 the skirt fills the whole frame)
+    { pos: [54, 1.7, 32], pos1: [66, 1.9, 32], look: [88, 3.5, 30], look1: [88, 3.5, 30], fov: 56, dur: 2.8 },
     // c) from the executive balcony over the cubicle field to the DO WHAT YOU L VE neon
     { pos: [-20, 9.5, -12], pos1: [10, 9.5, -14], look: [0, 4, -51], look1: [0, 4, -51], fov: 56, dur: 3.0 },
   ],
@@ -230,9 +232,15 @@ function decorate(ctx) {
   sc.place(gantry, g0.x, g0.z, { yaw: g0.yaw, y: g0.y });
   view.startLights = gantry.userData.lights;
 
-  /* ---- sign machinery: canvas texture + fitText (never squashed) ---- */
-  function signMat(lines, { w = 1024, h = 256, bg = '#23262d', fg = '#f5efe0', size = 120, after = null } = {}) {
-    const draw = (g) => {
+  /* ---- sign machinery: one shared canvas atlas for every flat sign (fitText, never squashed) ----
+     Was: ~45 signs, each with its own canvas texture + MeshBasicMaterial + mesh (~45 draw calls and
+     ~45 canvases against Safari's canvas-memory budget, PR #211). Now every putSign() packs its panel
+     into the atlas (Davos pattern, PR #219) and the panels bake into one mesh per atlas page.
+     signMat/sign survive only where a real material/mesh is needed: banner cloth, the ATM screen,
+     the founder portrait. */
+  const atlas = S.makeAtlas(group), bake = S.makeBaker(group, sc.shadows);
+  function signDraw(lines, { w = 1024, h = 256, bg = '#23262d', fg = '#f5efe0', size = 120, after = null } = {}) {
+    return (g) => {
       g.fillStyle = bg; g.fillRect(0, 0, w, h);
       const ls = lines.map(l => typeof l === 'string' ? { t: l } : l);
       ls.forEach((ln, i) => {
@@ -242,7 +250,10 @@ function decorate(ctx) {
       });
       if (after) after(g, w, h);
     };
-    const tex = canvasTex(w, h, draw, { repeat: false });
+  }
+  function signMat(lines, opts = {}) {
+    const draw = signDraw(lines, opts);
+    const tex = canvasTex(opts.w || 1024, opts.h || 256, draw, { repeat: false });
     if (typeof document !== 'undefined' && document.fonts?.ready) document.fonts.ready.then(() => { draw(tex.image.getContext('2d')); tex.needsUpdate = true; });
     return new THREE.MeshBasicMaterial({ map: tex });
   }
@@ -250,7 +261,7 @@ function decorate(ctx) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(wM, hM), signMat(lines, opts));
     return m;
   }
-  const putSign = (lines, wM, hM, x, y, z, yawDeg = 0, opts = {}) => put(sign(lines, wM, hM, opts), x, y, z, yawDeg);
+  const putSign = (lines, wM, hM, x, y, z, yawDeg = 0, opts = {}) => { atlas.place(atlas.add(opts.w || 1024, opts.h || 256, signDraw(lines, opts)), [x, y, z], yawDeg * DEG, wM, hM); };
 
   /* ---- shared interior textures ---- */
   const wallTex = canvasTex(256, 256, (g) => {
@@ -382,7 +393,7 @@ function decorate(ctx) {
   const mail = new Quads(THREE); mail.box(58.5, 0, 25.7, 77.5, 3.05, 26.3);
   group.add(mail.mesh(new THREE.MeshStandardMaterial({ map: pigeonTex, vertexColors: true, roughness: .8, side: THREE.DoubleSide })));
 
-  dressSectors(ctx, { sc, atPos, put, putSign, sign, track });
+  dressSectors(ctx, { sc, atPos, put, putSign, sign, track, atlas, bake });
 }
 
 /* Spline-following soffit: a strip under the road between two control
@@ -403,38 +414,43 @@ function splineSlab(ctx, at0, at1, halfW, drop, mat) {
 
 /* ================= sector dressing ================= */
 function dressSectors(ctx, H) {
-  const { THREE, group, track } = ctx;
-  const { sc, atPos, put, putSign, sign } = H;
+  const { THREE, group, track, view, anim } = ctx;
+  const { sc, atPos, put, putSign, sign, atlas, bake } = H;
+  /* Place-and-bake: static props merge into one mesh per material at flush (draw calls, #237 step 5). */
+  const bakePlace = (obj, x, z, o = {}) => { sc.place(obj, x, z, o); bake.add(obj, o.cast !== false); return obj; };
+  const bakePut = (obj, x, y, z, yawDeg = 0) => { put(obj, x, y, z, yawDeg); bake.add(obj); return obj; };
   const soffitMat = new THREE.MeshStandardMaterial({ color: 0x8f959e, roughness: .8, metalness: .2, side: THREE.DoubleSide });
   const ATT = (name) => AT[name];
 
   /* ---- soffits under the elevated roads ---- */
-  splineSlab(ctx, ATT('climb begins'), ATT('C1 exit'), 8.8, .3, soffitMat);       // feature ramp
-  splineSlab(ctx, ATT('C2 entry'), ATT('touchdown'), 11.4, .3, soffitMat);        // descent
-  splineSlab(ctx, ATT('L7 entry'), ATT('L-A entry'), 6.9, .28, soffitMat);        // Stair A flight 1
-  splineSlab(ctx, ATT('L8 entry'), ATT('C7 entry'), 7.4, .28, soffitMat);         // flight 2
-  splineSlab(ctx, ATT('L13 entry'), ATT('L14 entry'), 6.9, .28, soffitMat);       // Stair B throat
-  splineSlab(ctx, ATT('L14 entry'), ATT('L-B entry'), 6.9, .28, soffitMat);       // Stair B flight 1
-  splineSlab(ctx, ATT('L15 entry'), ATT('L16 entry'), 6.9, .28, soffitMat);       // flight 2
+  bake.add(splineSlab(ctx, ATT('climb begins'), ATT('C1 exit'), 8.8, .3, soffitMat));       // feature ramp
+  bake.add(splineSlab(ctx, ATT('C2 entry'), ATT('touchdown'), 11.4, .3, soffitMat));        // descent
+  bake.add(splineSlab(ctx, ATT('L7 entry'), ATT('L-A entry'), 6.9, .28, soffitMat));        // Stair A flight 1
+  bake.add(splineSlab(ctx, ATT('L8 entry'), ATT('C7 entry'), 7.4, .28, soffitMat));         // flight 2
+  bake.add(splineSlab(ctx, ATT('L13 entry'), ATT('L14 entry'), 6.9, .28, soffitMat));       // Stair B throat
+  bake.add(splineSlab(ctx, ATT('L14 entry'), ATT('L-B entry'), 6.9, .28, soffitMat));       // Stair B flight 1
+  bake.add(splineSlab(ctx, ATT('L15 entry'), ATT('L16 entry'), 6.9, .28, soffitMat));       // flight 2
   for (const [cx, cz] of [[95, -40], [122, 45]]) {                                // landing discs
     const disc = new THREE.Mesh(new THREE.CylinderGeometry(13.6, 13.6, .3, 24), soffitMat);
-    disc.position.set(cx, 2.79, cz); disc.receiveShadow = true; group.add(disc);
+    disc.position.set(cx, 2.79, cz); disc.receiveShadow = true; group.add(disc); bake.add(disc);
   }
   const island = new THREE.Mesh(new THREE.BoxGeometry(31, .26, 13), soffitMat);   // Stair A island apron
-  island.position.set(79.5, 2.81, -40); island.receiveShadow = true; group.add(island);
+  island.position.set(79.5, 2.81, -40); island.receiveShadow = true; group.add(island); bake.add(island);
 
   /* ---- balustrades: deck west edge, bridge glass, balcony + gallery overlooks ---- */
   const bal = W.balustrade(13);
-  for (const z of [-6.5, 6.5, 19.5]) sc.place(bal, 59.9, z, { yaw: Math.PI / 2, y: 3.44 });
-  sc.place(W.balustrade(12), 76.6, 32, { yaw: Math.PI / 2, y: 3.44 });
+  for (const z of [-6.5, 6.5, 19.5]) bakePlace(bal, 59.9, z, { yaw: Math.PI / 2, y: 3.44 });
+  bakePlace(W.balustrade(12), 76.6, 32, { yaw: Math.PI / 2, y: 3.44 });
   const bal20 = W.balustrade(20);
-  for (const x of [-60, -40, -20, 0, 20, 40]) sc.place(bal20, x, 46.3, { yaw: 0, y: 5.94 });
-  for (const x of [-70, -50, -30, -10, 10]) sc.place(bal20, x, -5.7, { yaw: 0, y: 5.94 });
+  for (const x of [-60, -40, -20, 0, 20, 40]) bakePlace(bal20, x, 46.3, { yaw: 0, y: 5.94 });
+  for (const x of [-70, -50, -30, -10, 10]) bakePlace(bal20, x, -5.7, { yaw: 0, y: 5.94 });
 
   /* ---- emergency light strips: green in Stair A, red in Stair B ---- */
+  const stripMats = new Map();
   const strip = (x, y, z, len, color, yawDeg = 0) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(len, .14, .07), new THREE.MeshBasicMaterial({ color }));
-    m.position.set(x, y, z); m.rotation.y = yawDeg * DEG; group.add(m);
+    if (!stripMats.has(color)) stripMats.set(color, new THREE.MeshBasicMaterial({ color }));
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, .14, .07), stripMats.get(color));
+    m.position.set(x, y, z); m.rotation.y = yawDeg * DEG; group.add(m); bake.add(m);
   };
   strip(57.5, 5.4, -40, 34, 0x2eff8a, 90); strip(111.5, 5.4, -40, 34, 0x2eff8a, 90); strip(84, 5.4, -58.6, 50, 0x2eff8a);
   strip(100, 8.6, 24.55, 40, 0xff3b30); strip(100, 8.6, 65.45, 40, 0xff3b30); strip(147.4, 8.6, 45, 36, 0xff3b30, 90);
@@ -447,42 +463,70 @@ function dressSectors(ctx, H) {
   putSign(['SPACE AS A SERVICE'], 10, 2.4, -99.6, 6, 48, 90, { bg: '#274b63', fg: '#ffe9a8' });
   putSign(['ELEVATE THE WORLD’S CONSCIOUSNESS'], 36, 4.4, 0, 8.8, 25.55, 0, { bg: '#2a2f3a', fg: '#ffe9b0', size: 110 });
   putSign(['MEZZANINE — COMMUNITY LOUNGE →'], 8, 1.1, 4, 1.9, 66.8, 180, { bg: '#23262d', fg: '#f5efe0', size: 90 });
-  sc.place(W.bleacherStep(50), 18, 68.4, { yaw: Math.PI, y: 0 });
-  sc.place(W.bleacherStep(50), 18, 70.3, { yaw: Math.PI, y: .42 });
-  for (const x of [-52, -30, 30, 52]) sc.place(W.planter(3), x, 71.5, { yaw: 0, y: 0 });
+  bakePlace(W.bleacherStep(50), 18, 68.4, { yaw: Math.PI, y: 0 });
+  bakePlace(W.bleacherStep(50), 18, 70.3, { yaw: Math.PI, y: .42 });
+  for (const x of [-52, -30, 30, 52]) bakePlace(W.planter(3), x, 71.5, { yaw: 0, y: 0 });
   // glass entrance doors in the C1 braking zone, with the notice on them
   const doorMat = new THREE.MeshStandardMaterial({ color: 0xaad4e2, roughness: .15, transparent: true, opacity: .4 });
-  for (const x of [33, 38.5]) { const d = new THREE.Mesh(new THREE.BoxGeometry(4.6, 3.3, .14), doorMat); d.position.set(x, 1.65, 49.3); group.add(d); }
+  for (const x of [33, 38.5]) { const d = new THREE.Mesh(new THREE.BoxGeometry(4.6, 3.3, .14), doorMat); d.position.set(x, 1.65, 49.3); group.add(d); bake.add(d); }
   putSign(['NOTICE', 'TO VACATE'], .95, 1.25, 35.8, 1.7, 49.15, 180, { bg: '#f4f1e8', fg: '#22242a', size: 100 });
   // hanging banners over the atrium floor
   const bannerMat = (lines, opts) => sign(lines, .1, .1, opts).material;
   const hb1 = W.hangingBanner(2.6, 4.6, bannerMat(['HUSTLE'], { bg: '#7a1f3a', fg: '#ffe9a8', size: 130 }));
-  put(hb1, -30, 12.3, 47, 0);
+  bakePut(hb1, -30, 12.3, 47, 0);
   const hb2 = W.hangingBanner(2.6, 4.6, bannerMat(['COMMUNITY'], { bg: '#274b63', fg: '#ffe9a8', size: 110 }));
-  put(hb2, 8, 12.3, 47, 0);
+  bakePut(hb2, 8, 12.3, 47, 0);
   const hb3 = W.hangingBanner(2.6, 4.6, bannerMat(['DO WHAT', 'YOU LOVE'], { bg: '#2a4a2f', fg: '#ffe9a8', size: 110 }));
-  put(hb3, 44, 12.3, 43, 20);
+  bakePut(hb3, 44, 12.3, 43, 20);
+  { // warm pendant lights over the atrium, between the two lanes (baked: cord + shade + bulb)
+    const cordMat = new THREE.MeshStandardMaterial({ color: 0x2a2c33, roughness: .6, metalness: .4 });
+    const shadeMat = new THREE.MeshStandardMaterial({ color: 0x8a6d2f, roughness: .35, metalness: .7 });
+    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
+    for (const x of [-44, -22, 0, 22, 44]) {
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, 2.6, 6), cordMat); cord.position.set(x, 11.2, 45); group.add(cord); bake.add(cord);
+      const shade = new THREE.Mesh(new THREE.CylinderGeometry(.28, .85, .55, 12, 1, true), shadeMat); shade.position.set(x, 9.75, 45); group.add(shade); bake.add(shade);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(.17, 10, 8), bulbMat); bulb.position.set(x, 9.55, 45); group.add(bulb); bake.add(bulb);
+    }
+  }
+  { // the lobby's south lightboxes: a painted city at dusk — a backlit mural, not a window (no exterior exists)
+    const skyline = (seed) => (g, w, h) => {
+      let sd = seed * 7919 + 13; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+      const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#232c47'); gr.addColorStop(.62, '#5a4a6b'); gr.addColorStop(1, '#e8975a');
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#f7c873'; g.beginPath(); g.arc(w * .78, h * .68, h * .13, 0, 7); g.fill();
+      let x = -20;
+      while (x < w) {
+        const bw = 40 + rnd() * 90, bh = h * (.34 + rnd() * .5), by = h - bh;
+        g.fillStyle = '#171c2c'; g.fillRect(x, by, bw, bh);
+        if (rnd() < .5) g.fillRect(x + bw * .3, by - 12, bw * .4, 12);
+        g.fillStyle = '#ffd98a';
+        for (let wy = by + 10; wy < h - 12; wy += 17) for (let wx = x + 7; wx < x + bw - 10; wx += 15) if (rnd() < .42) g.fillRect(wx, wy, 7, 9);
+        x += bw + 6 + rnd() * 22;
+      }
+      g.fillStyle = 'rgba(10,12,20,.55)'; g.fillRect(0, h - 8, w, 8);
+    };
+    [-95, -78, -61].forEach((x, i) => { const r = atlas.add(1024, 288, skyline(i + 1)); atlas.place(r, [x, 6, 75.55], Math.PI, 15, 4.2); });
+  }
 
   /* ================= S11: atrium return + hairpin ================= */
-  put(W.receptionDesk(), -71, 0, 45, 90);   // long axis on the hairpin's axis: the widened inside apron (wl 12.5) passes its short ends, not its lobes
+  bakePut(W.receptionDesk(), -71, 0, 45, 90);   // long axis on the hairpin's axis: the widened inside apron (wl 12.5) passes its short ends, not its lobes
   putSign(['RECEPTION — PLEASE CHECK IN WITH THE COMMUNITY MANAGER'], 3.6, .5, -71, .8, 43.25, 180, { bg: '#8a6d2f', fg: '#fff3c4', size: 70 });
-  putSign(['WATCH FOR FALLING VALUATIONS'], 9.5, 1.15, 76.75, 2.75, 32, 90, { bg: '#7a1f1f', fg: '#ffe9a8', size: 95 });
+  putSign(['WATCH FOR FALLING VALUATIONS'], 9.5, 1.15, 76.75, 2.75, 32, -90, { bg: '#7a1f1f', fg: '#ffe9a8', size: 95 });
   putSign(['MAIL — NO FORWARDING ADDRESS'], 8, .8, 68, 2.55, 25.5, 0, { bg: '#4a3a22', fg: '#ffe9a8', size: 90 });
-  sc.place(W.paperStack(), 63, 28.6, { yaw: .4, y: 0 });
-  sc.place(W.paperStack(), 73, 29, { yaw: 1.2, y: 0 });
+  bakePlace(W.paperStack(), 63, 28.6, { yaw: .4, y: 0 });
+  bakePlace(W.paperStack(), 73, 29, { yaw: 1.2, y: 0 });
 
   /* ================= S2: mezzanine / phone booth alley ================= */
   putSign(['CHIEF VIBES OFFICER'], 3.4, .55, 79.3, 5.6, 20, -90, { bg: '#3c4149', fg: '#f5efe0', size: 80 });
   putSign(['HEAD OF SYNERGY'], 3.4, .55, 79.3, 5.6, 6, -90, { bg: '#3c4149', fg: '#f5efe0', size: 80 });
   putSign(['REGIONAL MANAGER OF COMMUNITY'], 3.8, .55, 79.3, 5.6, -8, -90, { bg: '#3c4149', fg: '#f5efe0', size: 70 });
   putSign(['COFFEE — BACK IN 5 MIN (2019)'], 3.8, .55, 79.3, 4.4, 30, -90, { bg: '#4a3a22', fg: '#ffe9a8', size: 70 });
-  sc.place(W.keg(), 77.6, 30.5, { yaw: -Math.PI / 2, y: 3.44 });
-  sc.place(W.deskUnit(), 78.2, 14, { yaw: -Math.PI / 2, y: 3.44 });       // the lone lit office
-  for (const z of [21, 3]) sc.place(W.planter(2.6), 58.6, z, { yaw: Math.PI / 2, y: 3.44 });
-  { // DO NOT DISTURB on the second booth, facing the road
+  bakePlace(W.keg(), 77.6, 30.5, { yaw: -Math.PI / 2, y: 3.44 });
+  bakePlace(W.deskUnit(), 78.2, 14, { yaw: -Math.PI / 2, y: 3.44 });       // the lone lit office
+  for (const z of [21, 3]) bakePlace(W.planter(2.6), 58.6, z, { yaw: Math.PI / 2, y: 3.44 });
+  { // DO NOT DISTURB on the second booth, facing the road (atlas panel)
     const bp = atPos(between('C1 exit', 'C2 entry', 0.477), -3.6, 1.55);
-    const s = sign(['DO NOT DISTURB — PERMANENTLY'], 1.7, .34, { bg: '#23262d', fg: '#ffb3ab', size: 70 });
-    s.position.set(bp.x, bp.y, bp.z); s.rotation.y = bp.yaw + Math.PI; group.add(s);
+    putSign(['DO NOT DISTURB — PERMANENTLY'], 1.7, .34, bp.x, bp.y, bp.z, bp.yaw / DEG + 180, { bg: '#23262d', fg: '#ffb3ab', size: 70 });
   }
 
   /* ================= S3: cubicle field ================= */
@@ -494,10 +538,21 @@ function dressSectors(ctx, H) {
   for (const x of [-28, -7, 14]) spots.push({ x, y: 0, z: -9.5, yaw: Math.PI });
   spots.push({ x: -79, y: 0, z: -28, yaw: Math.PI / 2 });
   sc.instances(cub, spots, { cast: false });
-  sc.place(W.deskUnit(), -52, -10.5, { yaw: Math.PI, y: 0 });
-  sc.place(W.deskUnit(), 30, -10.5, { yaw: Math.PI, y: 0 });
-  sc.place(W.paperStack(), 62, -45, { yaw: .7, y: 0 });
-  sc.place(W.paperStack(), -72, -44, { yaw: 2.1, y: 0 });
+  bakePlace(W.deskUnit(), -52, -10.5, { yaw: Math.PI, y: 0 });
+  bakePlace(W.deskUnit(), 30, -10.5, { yaw: Math.PI, y: 0 });
+  bakePlace(W.paperStack(), 62, -45, { yaw: .7, y: 0 });
+  bakePlace(W.paperStack(), -72, -44, { yaw: 2.1, y: 0 });
+  { // e-waste: a pile of dead monitors by the field exit — one screen still faintly alive
+    const deadMat = new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: .35, metalness: .3 });
+    const shellMat = new THREE.MeshStandardMaterial({ color: 0x2c313a, roughness: .6 });
+    const aliveMat = new THREE.MeshBasicMaterial({ color: 0x2e4a3a });
+    const mon = (x, y, z, yaw, tilt, alive = false) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.15, .72, .07), shellMat); m.position.set(x, y, z); m.rotation.set(tilt, yaw, 0); group.add(m); bake.add(m);
+      const sc2 = new THREE.Mesh(new THREE.PlaneGeometry(1.02, .6), alive ? aliveMat : deadMat); sc2.position.set(x, y, z); sc2.rotation.set(tilt, yaw, 0); sc2.translateZ(.045); group.add(sc2); bake.add(sc2);
+    };
+    mon(-74, .38, -14, .4, 0); mon(-72.8, .38, -13.2, -.3, 0); mon(-73.4, 1.1, -13.7, .9, 0); mon(-75.2, .35, -12.6, 1.8, .5); mon(-71.8, .3, -14.8, 2.6, 1.2, true);
+    putSign(['E-WASTE — PLEASE TAKE ONE'], 4.4, .7, -87.55, 2.3, -13.5, 90, { bg: '#23262d', fg: '#ffb3ab', size: 85 });
+  }
 
   /* ================= S4: community kitchen ================= */
   putSign(['COMMUNITY'], 11, 2.8, -69.55, 2.9, 14, 90, {
@@ -505,62 +560,62 @@ function dressSectors(ctx, H) {
     after: (g, w, h) => { g.fillStyle = '#1b2f40'; for (const [x, y] of [[.18, .12], [.55, .55], [.82, .1]]) g.fillRect(w * x, h * y, w * .09, h * .34); },
   });
   putSign(['KOMBUCHA ON TAP —', 'HELP YOURSELF, FOREVER'], 6.4, 1.6, -30, 3.6, 2.45, 0, { bg: '#2a4a2f', fg: '#ffe9a8', size: 95 });
-  sc.place(W.keg(), -30, 6.5, { yaw: 0, y: 0 });
-  sc.place(W.keg(), -32.2, 6.2, { yaw: .5, y: 0 });
+  putSign(['HUSTLE HARDER', '(RENT DUE)'], 3.6, 1.8, -69.55, 2.9, 22, 90, { bg: '#7a1f3a', fg: '#ffe9a8', size: 100 });
+  bakePlace(W.keg(), -30, 6.5, { yaw: 0, y: 0 });
+  bakePlace(W.keg(), -32.2, 6.2, { yaw: .5, y: 0 });
   const counterMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c2, roughness: .6 });
-  for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.05, 5.4), counterMat); c.position.set(-67.5, .53, 8 + i * 5.6); c.castShadow = true; group.add(c); }
+  for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.05, 5.4), counterMat); c.position.set(-67.5, .53, 8 + i * 5.6); c.castShadow = true; group.add(c); bake.add(c); }
   const tgim1 = W.hangingBanner(7, 1.7, bannerMat(["THANK GOD IT'S MONDAY"], { bg: '#7a1f3a', fg: '#ffe9a8', size: 100 }));
-  put(tgim1, 44, 5.3, 12, 0);
+  bakePut(tgim1, 44, 5.3, 12, 0);
 
   /* ================= S5: service corridor ================= */
   const atmScreen = sign(['OUT OF CASH', 'SEE THE COMMUNITY MANAGER'], .1, .1, { bg: '#0d2138', fg: '#9fd0ff', size: 64, w: 512, h: 320 }).material;
-  put(W.atm(atmScreen), 60.2, 0, 4, -90);
+  bakePut(W.atm(atmScreen), 60.2, 0, 4, -90);
   putSign(['STAIR A — MIND THE PAPERWORK'], 5.4, .8, 60.55, 2.6, -14, -90, { bg: '#23262d', fg: '#f5efe0', size: 80 });
-  sc.place(W.paperStack(), 46.5, 8.5, { yaw: 1.9, y: 0 });
+  putSign(['PERKS INCLUDE:', 'EXPOSURE'], 3.2, 1.6, 60.55, 2.7, -6, -90, { bg: '#274b63', fg: '#ffe9a8', size: 95 });
+  bakePlace(W.paperStack(), 46.5, 8.5, { yaw: 1.9, y: 0 });
 
   /* ================= S6: Stairwell A ================= */
-  put(W.piano(), 95, 2.94, -40, 90);
-  put(W.stairFlight(5, 2.2), 93, 2.94, -36.5, 180);
+  bakePut(W.piano(), 95, 2.94, -40, 90);
+  bakePut(W.stairFlight(5, 2.2), 93, 2.94, -36.5, 180);
   const exitWall = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.4, .25), new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: .9 }));
-  exitWall.position.set(93, 4.6, -34.6); group.add(exitWall);
+  exitWall.position.set(93, 4.6, -34.6); group.add(exitWall); bake.add(exitWall);
   putSign(['EXIT'], 1.6, .5, 93, 5.9, -34.4, 0, { bg: '#123d22', fg: '#7dffce', size: 110 });
-  put(W.elevatorDoors(), 111.5, 0, -40, -90);
+  bakePut(W.elevatorDoors(), 111.5, 0, -40, -90);
   putSign(['OUT OF ORDER SINCE 2019'], 3.2, .6, 111.35, 3.5, -40, -90, { bg: '#23262d', fg: '#ffb3ab', size: 80 });
 
   /* ================= S7: executive row ================= */
-  for (const x of [-64, -48, -32, -16, 0, 32, 48]) sc.place(W.deskUnit(), x, -19.6, { yaw: 0, y: 5.94 });
-  put(W.parachuteCase(), 20, 5.94, -8.5, 0);
+  for (const x of [-64, -48, -32, -16, 0, 32, 48]) bakePlace(W.deskUnit(), x, -19.6, { yaw: 0, y: 5.94 });
+  bakePut(W.parachuteCase(), 20, 5.94, -8.5, 0);
   putSign(['IN CASE OF BANKRUPTCY'], 2.6, .5, 20, 6.6, -7.85, 0, { bg: '#8a6d2f', fg: '#fff3c4', size: 80 });
-  {
-    const m = sign(['COMMUNITY-ADJUSTED EBITDA'], 9.5, 2.7, {
-      bg: '#20242c', fg: '#ffe9a8', size: 84,
-      after: (g, w, h) => {
-        g.strokeStyle = '#7dffce'; g.lineWidth = 7; g.beginPath();
-        g.moveTo(w * .08, h * .88); g.lineTo(w * .3, h * .8); g.lineTo(w * .52, h * .84); g.lineTo(w * .74, h * .62); g.lineTo(w * .93, h * .52); g.stroke();
-        g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 2; g.beginPath(); g.moveTo(w * .08, h * .45); g.lineTo(w * .08, h * .9); g.lineTo(w * .94, h * .9); g.stroke();
-      },
-    });
-    put(m, -16, 8.9, -21.6, 0);
-  }
-  sc.place(W.paperStack(), 40, -19.5, { yaw: .3, y: 5.94 });
+  putSign(['DREAM BIG.', 'EXIT BIGGER.'], 4.2, 2.0, -40, 8.7, -22.35, 0, { bg: '#3a2a4a', fg: '#e8d8ff', size: 105 });
+  putSign(['COMMUNITY-ADJUSTED EBITDA'], 9.5, 2.7, -16, 8.9, -21.6, 0, {
+    bg: '#20242c', fg: '#ffe9a8', size: 84,
+    after: (g, w, h) => {
+      g.strokeStyle = '#7dffce'; g.lineWidth = 7; g.beginPath();
+      g.moveTo(w * .08, h * .88); g.lineTo(w * .3, h * .8); g.lineTo(w * .52, h * .84); g.lineTo(w * .74, h * .62); g.lineTo(w * .93, h * .52); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 2; g.beginPath(); g.moveTo(w * .08, h * .45); g.lineTo(w * .08, h * .9); g.lineTo(w * .94, h * .9); g.stroke();
+    },
+  });
+  bakePlace(W.paperStack(), 40, -19.5, { yaw: .3, y: 5.94 });
 
   /* ================= S8: meeting gallery ================= */
-  put(W.meetingRoom(12, 8), -111.5, 6, 8, 90);
+  bakePut(W.meetingRoom(12, 8), -111.5, 6, 8, 90);
   putSign(['SYNERGY'], 3, .7, -107.2, 8.3, 8, 90, { bg: '#3c4149', fg: '#f5efe0', size: 90 });
-  put(W.meetingRoom(9, 8), -111.5, 6, 32, 90);
+  bakePut(W.meetingRoom(9, 8), -111.5, 6, 32, 90);
   putSign(['DEEP DIVE'], 3, .7, -107.2, 8.3, 32, 90, { bg: '#3c4149', fg: '#f5efe0', size: 90 });
-  put(W.meetingRoom(7, 11), -83.5, 6, 16, 180);
+  bakePut(W.meetingRoom(7, 11), -83.5, 6, 16, 180);
   putSign(['DISRUPTION'], 3.2, .7, -83.5, 8.3, 10.2, 180, { bg: '#3c4149', fg: '#f5efe0', size: 90 });
   putSign(['SYNERGY → ??? → PROFIT'], 3.4, 1.1, -83.5, 7.4, 11.2, 180, { bg: '#f4f1e8', fg: '#2a4a8f', size: 80 });
   putSign(['EXIT STRATEGY'], 10, 2.4, -97, 9.2, -15.5, 0, { bg: '#3a2a4a', fg: '#e8d8ff' });
   const tgim2 = W.hangingBanner(7.5, 1.9, bannerMat([{ t: "THANK GOD IT'S MONDAY", strike: '#ff3b30' }, { t: "THANK GOD IT'S OVER", fg: '#ff8a7a' }], { bg: '#23262d', fg: '#f5efe0', size: 92 }));
-  put(tgim2, -90, 11.6, 34, 90);
+  bakePut(tgim2, -90, 11.6, 34, 90);
 
   /* ================= S9: south balcony dressing ================= */
-  for (const x of [-58, 24]) sc.place(W.planter(3), x, 43.8, { yaw: 0, y: 5.94 });
+  for (const x of [-58, 24]) bakePlace(W.planter(3), x, 43.8, { yaw: 0, y: 5.94 });
   { // the fallen banner, draped over the balcony railing
     const fb = W.hangingBanner(2.6, 4.2, bannerMat(['DO WHAT', 'YOU LOVE'], { bg: '#2a4a2f', fg: '#ffe9a8', size: 110 }));
-    fb.position.set(-16, 7.3, 45.9); fb.rotation.x = -1.05; group.add(fb);
+    fb.position.set(-16, 7.3, 45.9); fb.rotation.x = -1.05; group.add(fb); bake.add(fb);
   }
 
   /* ================= S10: Stairwell B ================= */
@@ -576,9 +631,22 @@ function dressSectors(ctx, H) {
         g.fillStyle = '#191410'; g.beginPath(); g.ellipse(w / 2, h * .88, w * .3, h * .2, 0, 0, 7); g.fill();
       },
     });
-    pm.position.set(124.7, 5.3, 45); pm.rotation.y = -90 * DEG; pm.rotation.z = .07; group.add(pm);
-    putSign(['ADAM, FOUNDER (FORMER)'], 2.8, .5, 124.7, 3.55, 45, -90, { bg: '#8a6d2f', fg: '#fff3c4', size: 80 });
+    pm.position.set(124.7, 5.3, 45); pm.rotation.y = -90 * DEG; pm.rotation.z = .07; group.add(pm); bake.add(pm);
+    putSign(['OUR FOUNDER (FORMER)'], 2.8, .5, 124.7, 3.55, 45, -90, { bg: '#8a6d2f', fg: '#fff3c4', size: 80 });
   }
   const pipe = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, 3.2, 8), new THREE.MeshStandardMaterial({ color: 0xb03024, roughness: .5 }));
-  pipe.position.set(84, 1.6, 62); pipe.castShadow = true; group.add(pipe);
+  pipe.position.set(84, 1.6, 62); pipe.castShadow = true; group.add(pipe); bake.add(pipe);
+
+  { // dust motes drifting in the atrium light and over the cubicle field — the air of a closed office
+    const rng = sc.rng;
+    anim.push((dt) => {
+      let n = view.fx.count(7, dt);
+      while (n-- > 0) view.fx.dust(rng.range(-70, 60), rng.range(0.6, 10.5), rng.range(34, 62), rng.range(-.15, .15), rng.range(-.06, .02), rng.range(-.15, .15), [0.92, 0.88, 0.78], 0.55, 2.8, 0.35);
+      n = view.fx.count(5, dt);
+      while (n-- > 0) view.fx.dust(rng.range(-80, 70), rng.range(0.6, 11), rng.range(-48, -4), rng.range(-.15, .15), rng.range(-.06, .02), rng.range(-.15, .15), [0.88, 0.86, 0.8], 0.5, 2.8, 0.3);
+    });
+  }
+
+  /* ---- one mesh per atlas page + one per prop material: the draw-call fix ---- */
+  atlas.flush(); bake.flush();
 }

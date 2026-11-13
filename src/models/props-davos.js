@@ -22,6 +22,14 @@ const RED = paint(0xe23b3b, { rough: 0.45, clear: 0.4 });
 const ORANGE = paint(0xff8a3c, { rough: 0.5, clear: 0.3 });
 const PINE = plastic(0x2e5d3a, 0.9), PINE_D = plastic(0x24492e, 0.9);
 const STEEL = plastic(0x3c424c, 0.5, 0.6);
+const SMOKE = plastic(0xe8edf2, 0.95);
+const SNOW_SOFT = plastic(0xfdfdff, 1.0);
+const ICE_BLOCK = plastic(0xe8f3ff, 0.75);
+const BLACK = plastic(0x1b1d22, 0.6);
+const SKIN = plastic(0xe6b98f, 0.7);
+/** Lit windows, the track's own material (not the shared glow cache) so the
+    final-lap alpenglow can turn every window in the valley up at once. */
+export const WINDOW = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: 0xffc27a, emissiveIntensity: 1.1, roughness: 0.4 });
 
 /** A box stretched between two points. */
 function strut(b, mat, a, c, w = 0.3, d = w) {
@@ -117,7 +125,7 @@ export function chalet(seed = 1, { sign = null } = {}) {
   b.add('win', box(1.3, 2.0, 0.15, 0.05, 1), { p: [0, 1.6, D / 2 + 0.06] });                          // door
   b.add('stone', box(0.9, 2.2, 0.9, 0.1, 1), { p: [3.4, 8.2, -1.5] });                               // chimney
   b.add('smoke', sphere(0.8, 10, 8), { p: [3.4, 9.8, -1.5], s: [1, 0.8, 1] });
-  grp.add(b.build({ stone: STONE, wood: WOOD, roof: WOOD_D, snow: SNOW, balc: WOOD, win: glow(0xffc890, 1.1) }));
+  grp.add(b.build({ stone: STONE, wood: WOOD, roof: WOOD_D, snow: SNOW, balc: WOOD, win: WINDOW, smoke: SMOKE }));
   if (sign) {
     const panel = signPanel(sign, { w: 7.6, h: 1.6, bg: '#5d3d22', fg: '#f6ead2' });
     panel.position.set(0, 5.6, D / 2 + 0.35);
@@ -129,7 +137,7 @@ export function chalet(seed = 1, { sign = null } = {}) {
 
 /* ---------- the summit and the plunge ---------- */
 /** The GREAT RESET panel stage: a stage, a big screen, and rows of the owners of everything. */
-export function panelStage() {
+export function panelStage({ screenMat = null } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder();
   b.add('deck', box(26, 1.2, 10, 0.15, 2), { p: [0, 0.6, 0] });
   b.add('back', box(26, 9, 0.6, 0.15, 2), { p: [0, 5.4, -4.6] });
@@ -152,6 +160,7 @@ export function panelStage() {
     }, { repeat: false, aniso: 8 });
     return new THREE.Mesh(new THREE.PlaneGeometry(21, 8.2), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.4 }));
   })();
+  if (screenMat) screen.material = screenMat;
   screen.position.set(0, 5.6, -4.25);
   grp.add(screen);
   return grp;
@@ -193,11 +202,12 @@ export function fencePanel() {
 }
 
 /* ---------- edges and hillsides ---------- */
-/** A soft snow bank, ~3.4 m wide: merged lumps that hug the road edge. */
+/** A plowed snow drift, ~5 m long: smooth overlapping mounds (smooth-shaded spheres, not
+    lumpy icosahedra, which read as faceted ice at kart height). */
 export function snowBank(seed = 1) {
   const b = new ModelBuilder(), rng = makeRng(seed);
-  for (let i = 0; i < 3; i++) b.add('snow', blob(1.15 - Math.abs(i - 1) * 0.25, seed + i * 7), { p: [(i - 1) * 1.25, 0.1, rng.range(-0.2, 0.2)], s: [1.15, 0.62, 0.9] });
-  return b.build({ snow: SNOW });
+  for (let i = 0; i < 3; i++) b.add('snow', sphere(1, 16, 9), { p: [(i - 1) * 1.6, 0, rng.range(-0.2, 0.2)], s: [1.7 - Math.abs(i - 1) * 0.35, 0.62 - Math.abs(i - 1) * 0.12, 1.15] });
+  return b.build({ snow: SNOW_SOFT });
 }
 
 /** The Mount Wario marker: a thin red post with a white band, 1.15 m tall. */
@@ -293,7 +303,7 @@ export function woodPile() {
 }
 
 /** The grand hotel behind the start: three storeys of lit balconies under one long snow roof. */
-export function grandHotel() {
+export function grandHotel({ sign = true } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder();
   const W = 34, D = 11;
   b.add('stone', box(W, 3, D, 0.15, 2), { p: [0, 1.5, 0] });
@@ -316,10 +326,12 @@ export function grandHotel() {
   b.add('stone', box(1.0, 2.6, 1.0, 0.1, 1), { p: [-11, 11.4, -2] });
   b.add('stone', box(1.0, 2.6, 1.0, 0.1, 1), { p: [12.5, 11.2, 1.5] });
   b.add('smoke', sphere(0.9, 10, 8), { p: [-11, 13.2, -2], s: [1, 0.75, 1] });
-  grp.add(b.build({ stone: STONE, wood: WOOD, roof: WOOD_D, snow: SNOW, balc: WOOD_D, win: glow(0xffc890, 1.15), smoke: plastic(0xe8edf2, 0.95) }));
-  const panel = signPanel('HOTEL STAKEHOLDER', { w: 13, h: 1.9, bg: '#1f2a44', fg: '#f4f6f8' });
-  panel.position.set(0, 9.35, (D - 2) / 2 + 0.35);
-  grp.add(panel);
+  grp.add(b.build({ stone: STONE, wood: WOOD, roof: WOOD_D, snow: SNOW, balc: WOOD_D, win: WINDOW, smoke: SMOKE }));
+  if (sign) {
+    const panel = signPanel('HOTEL STAKEHOLDER', { w: 13, h: 1.9, bg: '#1f2a44', fg: '#f4f6f8' });
+    panel.position.set(0, 9.35, (D - 2) / 2 + 0.35);
+    grp.add(panel);
+  }
   return grp;
 }
 
@@ -336,7 +348,7 @@ export function chapel() {
   b.add('spire', cone(2.3, 4.8, 4), { p: [0, 11, 5.4], r: [0, Math.PI / 4, 0] });
   b.add('ball', sphere(0.34, 10, 8), { p: [0, 13.7, 5.4] });
   b.add('win', box(0.95, 1.6, 0.14, 0.05, 1), { p: [0, 6.2, 6.76] });
-  grp.add(b.build({ nave: plastic(0xf2f0e9, 0.85), roof: WOOD_D, snow: SNOW, tower: plastic(0xf2f0e9, 0.85), spire: NAVY, ball: GOLD, win: glow(0xffc890, 1.2) }));
+  grp.add(b.build({ nave: plastic(0xf2f0e9, 0.85), roof: WOOD_D, snow: SNOW, tower: plastic(0xf2f0e9, 0.85), spire: NAVY, ball: GOLD, win: WINDOW }));
   const clock = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.12, 20), GOLD);
   clock.rotation.x = Math.PI / 2; clock.position.set(0, 7.9, 6.78);
   grp.add(clock);
@@ -427,7 +439,7 @@ export function securityVan() {
  * ramp edges (with a gold top trim), steel pillars carry the edges, and a tower arch at the lip carries
  * THE CREST over the takeoff. L/R: sampled top-edge points, lip last. towers: [{ x, z, y0, y1 }] x2.
  */
-export function crestJump({ L, R, pillars = [], towers = [], travelYaw = 0 }) {
+export function crestJump({ L, R, pillars = [], towers = [], travelYaw = 0, sign: signText = 'THE CREST' }) {
   const grp = new THREE.Group();
   const navy = [], gold = [], steel = [];
   const panel = (list, a, b, drop, lift = 0) => {
@@ -446,10 +458,10 @@ export function crestJump({ L, R, pillars = [], towers = [], travelYaw = 0 }) {
     for (const t of towers) { const g = new THREE.BoxGeometry(0.85, t.y1 - t.y0, 0.85); g.translate(t.x, (t.y0 + t.y1) / 2, t.z); steel.push(g); }
     panel(navy, [t0.x, t0.y1, t0.z], [t1.x, t1.y1, t1.z], 1.25);
     panel(gold, [t0.x, t0.y1, t0.z], [t1.x, t1.y1, t1.z], 0.28, 0.3);
-    const sign = signPanel('THE CREST', { w: 9, h: 1.1, bg: '#1f2a44', fg: '#f4f6f8' });
-    sign.position.set((t0.x + t1.x) / 2 - Math.sin(travelYaw) * 0.18, (t0.y1 + t1.y1) / 2 - 0.62, (t0.z + t1.z) / 2 - Math.cos(travelYaw) * 0.18);
+    const sign = signText ? signPanel(signText, { w: 9, h: 1.1, bg: '#1f2a44', fg: '#f4f6f8' }) : null;
+    if (sign) { sign.position.set((t0.x + t1.x) / 2 - Math.sin(travelYaw) * 0.18, (t0.y1 + t1.y1) / 2 - 0.62, (t0.z + t1.z) / 2 - Math.cos(travelYaw) * 0.18);
     sign.rotation.y = travelYaw + Math.PI;
-    grp.add(sign);
+    grp.add(sign); }
   }
   const merged = (list, mat) => { if (!list.length) return; const m = new THREE.Mesh(mergeGeometries(list), mat); m.castShadow = true; grp.add(m); };
   merged(navy, NAVY); merged(gold, GOLD); merged(steel, STEEL);
@@ -470,4 +482,141 @@ export function plow() {
   b.add('lamp', box(0.4, 0.25, 0.15, 0.05, 1), { p: [-0.7, 2.9, -0.9] });
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.add('wheel', cyl(0.55, 0.55, 0.4, 12), { p: [sx * 1.05, 0.55, sz > 0 ? 1.1 : -1.5], r: [0, 0, Math.PI / 2] });
   return b.build({ body: ORANGE, cab: ORANGE, glass: GLASS, blade: STEEL, arm: STEEL, lamp: glow(0xffc23c, 2.2), wheel: STEEL });
+}
+
+/* ---------- quality pass (Nov 2026): the town in the bowl, the slopes, the jokes ---------- */
+/** A tall alpine snow pole: orange with a dark reflector band. Lines the mountain road both sides. */
+export function snowPole() {
+  const b = new ModelBuilder();
+  b.add('pole', cyl(0.055, 0.07, 2.5, 6), { p: [0, 1.25, 0] });
+  b.add('band', cyl(0.075, 0.075, 0.45, 6), { p: [0, 2.15, 0] });
+  return b.build({ pole: ORANGE, band: BLACK });
+}
+
+/** A delegate snowman: three snowballs in a navy suit, red tie, conference lanyard, and a top hat. ~3.3 m. */
+export function snowman(seed = 1) {
+  const b = new ModelBuilder(), rng = makeRng(seed);
+  b.add('snow', sphere(0.8, 16, 10), { p: [0, 0.72, 0] });
+  b.add('snow', sphere(0.58, 16, 10), { p: [0, 1.82, 0] });
+  b.add('snow', sphere(0.4, 14, 10), { p: [0, 2.62, 0] });
+  b.add('suit', cyl(0.52, 0.66, 0.95, 14, true), { p: [0, 1.78, 0] });                         // the jacket, wrapped on
+  b.add('shirt', box(0.34, 0.62, 0.12, 0.04, 1), { p: [0, 1.88, 0.53], r: [-0.12, 0, 0] });
+  b.add('tie', box(0.13, 0.5, 0.06, 0.02, 1), { p: [0, 1.86, 0.6], r: [-0.12, 0, 0] });
+  b.add('shirt', box(0.24, 0.3, 0.04, 0.02, 1), { p: [0.3, 1.62, 0.6], r: [-0.2, 0.25, 0] });   // the lanyard badge
+  b.add('tie', box(0.03, 0.4, 0.03, 0.01, 1), { p: [0.22, 1.86, 0.62], r: [-0.2, 0, 0.35] });
+  b.add('hat', cyl(0.3, 0.3, 0.55, 14), { p: [0, 3.22, 0] });
+  b.add('hat', cyl(0.48, 0.48, 0.06, 16), { p: [0, 2.96, 0] });
+  b.add('nose', cone(0.07, 0.42, 8), { p: [0, 2.62, 0.55], r: [Math.PI / 2, 0, 0] });
+  for (const sx of [-1, 1]) b.add('hat', sphere(0.05, 6, 5), { p: [sx * 0.14, 2.74, 0.36] });
+  for (const sx of [-1, 1]) b.add('arm', cyl(0.035, 0.05, 1.3, 5), { p: [sx * 0.95, 2.0, 0], r: [0, 0, sx * (1.0 + rng.range(-0.2, 0.2))] });
+  return b.build({ snow: SNOW_SOFT, suit: NAVY, shirt: WHITE, tie: RED, hat: BLACK, nose: ORANGE, arm: WOOD_D });
+}
+
+/** A VIP igloo: an ice-block dome, an entrance tunnel, a red carpet, and gold rope posts. Faces +Z. */
+export function igloo() {
+  const b = new ModelBuilder();
+  b.add('ice', new THREE.SphereGeometry(3.4, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), {});
+  b.add('ice', new THREE.CylinderGeometry(1.25, 1.25, 2.6, 14, 1, false, -Math.PI / 2, Math.PI), { p: [0, 0, 3.4], r: [Math.PI / 2, 0, 0], s: [1, 1, 1.15] });
+  b.add('dark', box(1.5, 1.4, 0.2, 0.05, 1), { p: [0, 0.7, 4.66] });
+  b.add('carpet', box(1.6, 0.06, 4.2, 0.02, 1), { p: [0, 0.03, 6.8] });
+  for (const sx of [-1, 1]) for (const k of [0, 1, 2]) b.add('gold', cyl(0.07, 0.09, 1.0, 8), { p: [sx * 1.25, 0.5, 5.4 + k * 1.4] });
+  return b.build({ ice: ICE_BLOCK, dark: BLACK, carpet: RED, gold: GOLD });
+}
+
+/** A heli-shuttle: navy body, glass bubble, tail boom, skids. userData.rotor / userData.tail spin. Nose +Z. */
+export function helicopter() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('body', sphere(1.6, 18, 12), { p: [0, 1.9, 0.4], s: [1, 0.95, 1.5] });
+  b.add('glass', sphere(1.25, 16, 10), { p: [0, 2.15, 1.55], s: [1, 0.85, 1.05] });
+  b.add('body', cyl(0.28, 0.5, 6, 10), { p: [0, 2.3, -4.0], r: [Math.PI / 2 - 0.06, 0, 0] });
+  b.add('gold', box(0.18, 1.6, 1.1, 0.05, 1), { p: [0, 3.0, -6.9], r: [-0.3, 0, 0] });
+  b.add('gold', box(3.3, 0.22, 0.6, 0.05, 1), { p: [0, 1.3, 0.4] });
+  for (const sx of [-1, 1]) {
+    b.add('skid', cyl(0.07, 0.07, 4.2, 6), { p: [sx * 1.25, 0.12, 0.3], r: [Math.PI / 2, 0, 0] });
+    for (const sz of [-0.9, 1.4]) b.add('skid', cyl(0.06, 0.06, 0.9, 6), { p: [sx * 1.1, 0.55, sz], r: [0, 0, sx * 0.35] });
+  }
+  b.add('skid', cyl(0.12, 0.12, 0.6, 8), { p: [0, 3.55, 0.3] });
+  grp.add(b.build({ body: NAVY, glass: GLASS, gold: GOLD, skid: STEEL }));
+  const rb = new ModelBuilder();
+  for (let k = 0; k < 4; k++) rb.add('blade', box(5.2, 0.06, 0.36, 0.02, 1), { p: [Math.cos(k * Math.PI / 2) * 2.6, 0, Math.sin(k * Math.PI / 2) * 2.6], r: [0, -k * Math.PI / 2, 0] });
+  const rotor = rb.build({ blade: BLACK }, { cast: false }); rotor.position.set(0, 3.9, 0.3); grp.add(rotor);
+  const tb = new ModelBuilder();
+  tb.add('blade', box(0.1, 1.5, 0.18, 0.02, 1), {}); tb.add('blade', box(0.1, 0.18, 1.5, 0.02, 1), {});
+  const tail = tb.build({ blade: BLACK }, { cast: false }); tail.position.set(0.25, 3.0, -6.9); grp.add(tail);
+  grp.userData.rotor = rotor; grp.userData.tail = tail;
+  return grp;
+}
+
+const HALL_GLASS = new THREE.MeshStandardMaterial({ color: 0x2b3f5c, emissive: 0xffb36b, emissiveIntensity: 0.32, roughness: 0.15, metalness: 0.5, envMapIntensity: 1.5 });
+/** The World Elite Forum's congress hall: a long glass hall under a gently curved snow roof,
+    white piers, an entrance canopy, and a row of flagpoles. ~66 x 15 x 30 m, entrance toward +Z. */
+export function congressHall() {
+  const b = new ModelBuilder();
+  const W = 66, D = 30, H = 11;
+  b.add('base', box(W + 2, 1.2, D + 2, 0.1, 1), { p: [0, 0.6, 0] });
+  b.add('glass', box(W - 1, H - 1.2, D - 1, 0.1, 1), { p: [0, 1.2 + (H - 1.2) / 2, 0] });
+  for (let i = 0; i <= 12; i++) for (const sz of [-1, 1]) b.add('pier', box(0.7, H - 1.2, 0.7, 0.08, 1), { p: [-W / 2 + i * (W / 12), 1.2 + (H - 1.2) / 2, sz * (D / 2 - 0.1)] });
+  for (const sx of [-1, 1]) for (let i = 0; i <= 5; i++) b.add('pier', box(0.7, H - 1.2, 0.7, 0.08, 1), { p: [sx * (W / 2 - 0.1), 1.2 + (H - 1.2) / 2, -D / 2 + i * (D / 5)] });
+  for (const y of [4.6, 8.0]) for (const sz of [-1, 1]) b.add('pier', box(W, 0.35, 0.5, 0.05, 1), { p: [0, y, sz * (D / 2 + 0.05)] });
+  // the curved roof: five slabs stepping round a shallow arc, snow on top
+  for (let k = -2; k <= 2; k++) {
+    const a = k * 0.13, z = Math.sin(a) * 34, y = H + Math.cos(a) * 34 - 34 + 0.4;
+    b.add('roof', box(W + 4, 0.6, D / 5 + 0.9, 0.1, 1), { p: [0, y, z], r: [-a, 0, 0] });
+    b.add('snow', box(W + 3.6, 0.3, D / 5 + 0.8, 0.1, 1), { p: [0, y + 0.42, z], r: [-a, 0, 0] });
+  }
+  b.add('roof', box(22, 0.5, 7, 0.08, 1), { p: [0, 5.2, D / 2 + 3.4] });                        // entrance canopy
+  for (const sx of [-1, 1]) b.add('pier', cyl(0.3, 0.3, 4.6, 10), { p: [sx * 10, 2.9, D / 2 + 6.4] });
+  b.add('carpet', box(8, 0.08, 9, 0.02, 1), { p: [0, 0.65, D / 2 + 4.4] });
+  for (let i = 0; i < 9; i++) {                                                                    // the flag row out front
+    const x = (i - 4) * 7.2;
+    b.add('pole', cyl(0.07, 0.1, 9, 8), { p: [x, 4.5, D / 2 + 11] });
+    b.add(['fA', 'fB', 'fC'][i % 3], box(2.2, 1.3, 0.05, 0.02, 1), { p: [x + 1.15, 8.1, D / 2 + 11] });
+  }
+  return b.build({ base: STONE, glass: HALL_GLASS, pier: WHITE, roof: plastic(0xd9dde3, 0.5), snow: SNOW, carpet: RED, pole: STEEL, fA: NAVY, fB: GOLD, fC: RED });
+}
+
+/** A skier (or, without skis, a skater): a small chunky figure, tintable coat, dark trousers. Faces +Z. */
+export function skier({ skis = true } = {}) {
+  const b = new ModelBuilder();
+  b.add('legs', box(0.42, 0.75, 0.3, 0.08, 1), { p: [0, 0.48, 0], r: [0.25, 0, 0] });
+  b.add('coat', box(0.6, 0.72, 0.42, 0.14, 2), { p: [0, 1.15, 0.12], r: [0.35, 0, 0] });
+  b.add('skin', sphere(0.21, 10, 8), { p: [0, 1.66, 0.3] });
+  b.add('coat', sphere(0.23, 10, 6), { p: [0, 1.76, 0.27], s: [1, 0.6, 1] });                       // the beanie
+  if (skis) {
+    for (const sx of [-1, 1]) b.add('legs', box(0.12, 0.05, 1.9, 0.02, 1), { p: [sx * 0.15, 0.05, 0.2] });
+    for (const sx of [-1, 1]) b.add('legs', cyl(0.02, 0.02, 1.2, 4), { p: [sx * 0.42, 0.75, -0.15], r: [0.5, 0, sx * 0.15] });
+  }
+  return b.build({ legs: BLACK, coat: COAT, skin: SKIN });
+}
+const COAT = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
+COAT.userData.tintable = true;
+
+/** A two-leg sign frame (no face): the face is an atlas panel the track places at y = legs + h / 2, z = 0.08. */
+export function signFrame(w = 9, h = 2.4, legs = 3.2, color = NAVY) {
+  const b = new ModelBuilder();
+  for (const sx of [-1, 1]) b.add('post', cyl(0.14, 0.17, legs + h, 8), { p: [sx * w * 0.38, (legs + h) / 2, -0.2] });
+  b.add('frame', box(w + 0.45, h + 0.45, 0.22, 0.08, 2), { p: [0, legs + h / 2, -0.05] });
+  return b.build({ post: STEEL, frame: color });
+}
+
+/** The ski jump's tower at the summit: four raked legs, braces, a glass judges' cabin on top, a gold roof,
+    a flag and a beacon. ~46 m. The big boards on it are atlas panels the track places at userData.boardY. */
+export function jumpTower({ h = 34 } = {}) {
+  const b = new ModelBuilder(), B = 5.5, T = 3.6;
+  b.add('stone', box(B * 2 + 3, 2, B * 2 + 3, 0.2, 2), { p: [0, 1, 0] });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) strut(b, 'leg', [sx * B, 1.5, sz * B], [sx * T, h, sz * T], 0.9);
+  for (const k of [0.25, 0.5, 0.75]) {
+    const w = B + (T - B) * k, y = 1.5 + (h - 1.5) * k;
+    for (const s of [-1, 1]) { strut(b, 'brace', [-w, y, s * w], [w, y, s * w], 0.45); strut(b, 'brace', [s * w, y, -w], [s * w, y, w], 0.45); }
+  }
+  b.add('cab', box(T * 2 + 3, 1.6, T * 2 + 3, 0.15, 2), { p: [0, h + 0.8, 0] });
+  b.add('glass', box(T * 2 + 2.6, 3, T * 2 + 2.6, 0.12, 2), { p: [0, h + 3.1, 0] });
+  b.add('roof', box(T * 2 + 4, 0.6, T * 2 + 4, 0.15, 2), { p: [0, h + 4.9, 0] });
+  b.add('leg', cyl(0.12, 0.16, 7, 8), { p: [0, h + 8.6, 0] });
+  b.add('flag', box(3.2, 1.8, 0.06, 0.02, 1), { p: [1.7, h + 11.2, 0] });
+  b.add('beacon', sphere(0.5, 12, 8), { p: [0, h + 12.3, 0] });
+  const g = b.build({ stone: STONE, leg: NAVY, brace: STEEL, cab: NAVY, glass: GLASS, roof: GOLD, flag: RED, beacon: glow(0xff4a3c, 3) });
+  g.userData.boardY = h + 3.1;
+  g.userData.half = T + 1.3;
+  return g;
 }

@@ -10,7 +10,7 @@ import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
 import * as M from '../models/props-mars-colony.js';
 import * as K from '../models/props-burning-circuit.js';   // the sign kit (atlas, baker, boards) lives there
-import { ModelBuilder, cyl, box, sphere, plastic } from '../models/build.js';
+import { ModelBuilder, cyl, box, sphere, plastic, glow } from '../models/build.js';
 
 /* The canyon the jump crosses: a winding cut along the east side of the rim road. */
 const CANYON = [[330, -10], [270, -100], [242, -165], [240, -215], [258, -262], [260, -320], [216, -371], [176, -392], [148, -386]];
@@ -18,6 +18,8 @@ const CRATER = { x: 176, z: -470, r: 62 };     // crater bowl; the road circles 
 const COLONY = { x: 10, z: -40, r: 150 };      // plateau the colony stands on
 const ROCKET = { x: 165, z: -300 };            // launch pad on the rim mesa; the road now threads its mount
 const EARTH = { x: 300, y: 165, z: -1060 };    // hangs in the sky ahead of the jump
+const BOWL = { x: -110, z: -192, r: 44 };          // the Dust Bowl: the hairpin's infield, a shallow dusty dip the boost cut crosses
+const DOME = { x: 9, z: -242, r: 40, h: 25, y: 14.6 };   // the terraforming biodome the solar-field road drives through
 
 function canyonDist(x, z) {
   let d = Infinity, t = 0, acc = 0, total = 0;
@@ -36,11 +38,11 @@ export default {
   id: 'mars-colony',
   name: 'Mars Colony',
   tagline: 'The commute is murder. The oxygen is extra.',
-  lapNotes: ['<b>Launch update:</b> departure moved to THE YEAR AFTER.', '<b>Final lap.</b> The rocket is launching. Stand well back.'],
+  lapNotes: ['<b>Launch update:</b> departure moved to THE YEAR AFTER. Dust storm inbound.', '<b>Final lap.</b> The rocket is launching. Stand well back.'],
   laps: 3,
   width: 18,
   sky: 'mars',
-  skyOverrides: { fogNear: 150, fogFar: 980 },
+  skyOverrides: { zenith: 0x7a3d26, horizon: 0xf0ae80, fogNear: 170, fogFar: 1100, sunIntensity: 3.4, hemiGround: 0x7a4030 },
   backdrop: { img: 'assets/backdrops/mars-colony.webp', top: 26, bottom: -8, rot: 0.3 },
   gravity: 0.55,
   offroad: 'dust',
@@ -69,12 +71,15 @@ export default {
     { p: [60, 21.5, -350] },             // 20
     { p: [62, 18, -292] },             // 21
     { p: [20, 15.5, -250] },             // 22
-    { p: [-40, 13.5, -215] },            // 23
-    { p: [-100, 14.5, -178] },           // 24 left
-    { p: [-115, 16.5, -118] },         // 25
-    { p: [-110, 17.5, -55] },          // 26 final corner
+    { p: [-50, 13.5, -222] },            // 23 out of the dome
+    { p: [-120, 13.5, -238] },           // 24 into the Dust Bowl hairpin (left); the dust cut skips it with a boost
+    { p: [-158, 14.5, -203] },           // 25 hairpin apex
+    { p: [-128, 16.5, -142] },           // 26 back out, then the final corner
     { p: [-96, 18, -12] },             // 27
     { p: [-55, 18, 0] },               // 28 Main Street
+  ],
+  shortcuts: [
+    { name: 'dust bowl', from: 23.25, to: 26.05, boost: true, path: [[-80, -224], [-92, -215], [-103, -202], [-113, -187], [-121, -170], [-126, -152]] },
   ],
   sides: [
     { from: 27.6, to: 1.6, edge: 'wall' },                    // Main Street: walls both sides
@@ -83,7 +88,7 @@ export default {
     { from: 7.9, to: 10.55, edge: 'wall' },                    // the launch complex: apron, mount corridor, drift out
     { from: 10.55, to: 10.85, side: 'R', edge: 'void' },       // a short open drop where the rejoin runs along the canyon shoulder
     { from: 10.75, to: 12.6, edge: 'wall' },                   // launch deck and landing deck
-    { from: 23.2, to: 25.1, side: 'L', outer: 34, shoulder: 5, hoarding: false }, // dust cut inside the west corner (needs a boost)
+    { from: 23.1, to: 26.15, side: 'L', outer: 36, shoulder: 5, hoarding: false }, // the dust cut across the hairpin's infield (needs a boost)
   ],
   zones: [{ from: 27.6, to: 1.6, skin: 'metal' }, { from: 1.6, to: 3.7, skin: 'metal' }, { from: 7.9, to: 12.6, skin: 'metal' }],
   tunnels: [{ from: 1.75, to: 3.6, through: false }],
@@ -92,6 +97,7 @@ export default {
   ramps: [
     { at: 11.0, len: 10, lift: 2.4 },
     { at: 17.75, len: 8, lift: 1.6, lat: -4.5, w: 7 },
+    { at: 21.8, len: 8, lift: 0.8, lat: 4, w: 9 },   // the low-gravity hop over the biodome lawn (the right lane has a boost pad instead)
   ],
   boosts: [
     { at: 0.5, lat: 0, w: 5 },
@@ -100,8 +106,9 @@ export default {
     { at: 10.65, lat: 0, w: 6 },
     { at: 12.2, lat: 0, w: 8, len: 12 },
     { at: 18.8, lat: -2.5, w: 6 },
+    { at: 21.85, lat: -4.5, w: 6 },
   ],
-  itemRows: [{ at: 2.4 }, { at: 6.1 }, { at: 13.5 }, { at: 19.5 }, { at: 25.0, n: 3 }],
+  itemRows: [{ at: 2.4 }, { at: 6.1 }, { at: 13.5 }, { at: 19.5 }, { at: 26.35, n: 3 }],
   coins: [
     { from: 0.15, to: 0.45, n: 4, lat: 4 },
     { from: 5.3, to: 5.8, n: 5, lat: [5, -4] },
@@ -109,9 +116,9 @@ export default {
     ...[[11.2, 4.5], [11.3, 6.2], [11.4, 7.4], [11.5, 8.1], [11.6, 8]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 0, air })),   // on the arc over the canyon
     { from: 14.4, to: 15.8, n: 6, lat: 5 },
     { from: 18.25, to: 18.6, n: 3, lat: -3 },
-    { from: 21.2, to: 21.8, n: 4, lat: [4, -4] },
-    { from: 22.3, to: 22.9, n: 4, lat: 4 },
-    { from: 23.8, to: 24.4, n: 4, lat: [18, 18] },   // the dust cut
+    ...[[22.0, 1.6], [22.1, 2.6], [22.2, 3.0], [22.3, 2.8], [22.4, 2.0]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 4, air })),   // on the hop's arc
+    { from: 22.0, to: 22.5, n: 4, lat: -4.5 },   // the boost lane under the hop
+    ...[[23.48, 17], [23.53, 27], [25.64, 30], [25.73, 19]].map(([at, lat]) => ({ from: at, to: at, n: 1, lat })),   // across the Dust Bowl
   ],
   obstacles: [
     // rovers crawl across part of Main Street and the solar field road
@@ -120,6 +127,8 @@ export default {
     // dust devils on the outside of the rim road and the crater bowl
     { kind: 'orbit', model: 'dustdevil', at: 5.6, lat: 11.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
     { kind: 'orbit', model: 'dustdevil', at: 15.3, lat: -10.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
+    // and one that lives in the Dust Bowl, so the boost cut has a price
+    { kind: 'orbit', model: 'dustdevil', at: 23.55, lat: 31, orbit: 7, speed: 5, effect: 'spin', radius: 1.6 },
     // cargo waiting at the airlock
     { kind: 'static', model: 'crate', at: 1.5, lat: 5.6, effect: 'bump' },
     { kind: 'static', model: 'crate', at: 1.62, lat: -5.6, effect: 'bump' },
@@ -152,7 +161,20 @@ export default {
       const c = canyonDist(x, z), fade = 1 - smoothstep(0.9, 1.0, c.t);
       const wall = 13 + (fbm(x * 0.05, z * 0.05, 2, 6) - 0.5) * 6, cut = (1 - smoothstep(wall, wall + 13, c.d)) * fade;
       h = h * (1 - cut) + (1 + (fbm(x * 0.04, z * 0.04, 2, 8) - 0.5) * 3) * cut;
+      // the Dust Bowl inside the west hairpin: a smooth shallow dip, so the cut across it is a drive, not a climb
+      const bk = 1 - smoothstep(BOWL.r * 0.55, BOWL.r, Math.hypot(x - BOWL.x, z - BOWL.z));
+      h = h * (1 - bk) + (12.2 + (fbm(x * 0.05, z * 0.05, 2, 12) - 0.5) * 1.2) * bk;
+      // the biodome stands on a level lawn
+      const dk = 1 - smoothstep(DOME.r - 2, DOME.r + 10, Math.hypot(x - DOME.x, z - DOME.z));
+      h = h * (1 - dk) + (DOME.y + 0.3) * dk;
       return h;
+    },
+    // the one green thing on Mars: a lawn under the biodome
+    color(x, z, h, slope, over, out) {
+      const d = Math.hypot(x - DOME.x, z - DOME.z), k = 1 - smoothstep(DOME.r - 3, DOME.r - 0.5, d);
+      if (k <= 0) return;
+      const n = fbm(x * 0.15, z * 0.15, 2, 17) * 0.12;
+      out[0] += (0.3 + n - out[0]) * k; out[1] += (0.58 + n - out[1]) * k; out[2] += (0.2 - out[2]) * k;
     },
   },
   look: {
@@ -194,7 +216,7 @@ function dress(ctx) {
   const taken = [];                       // footprints of the big things, so scattered props keep off them
   const free = (x, z, r = 0) => !taken.some(t => near(x, z, t, t.r + r));
   const take = (x, z, r) => taken.push({ x, z, r });
-  take(ROCKET.x, ROCKET.z, 26); take(CRATER.x, CRATER.z, 16);
+  take(ROCKET.x, ROCKET.z, 26); take(CRATER.x, CRATER.z, 16); take(DOME.x, DOME.z, DOME.r + 4);
 
   // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
   const bake = K.makeBaker(ctx.group, sc.shadows), atlas = K.makeAtlas(ctx.group, { glow: 0.5 });
@@ -306,9 +328,9 @@ function dress(ctx) {
   // lamps and flags down Main Street
   const board = sc.beside(0.55, 1, 9), inFront = p => p.x > board.x - 45 && p.x < board.x + 14;   // nothing tall between the grid and the countdown board
   const lamps = sc.along({ from: 27.7, to: 1.6, side: 1, offset: 1.6, spacing: 16 }).filter(p => !inFront(p));
-  sc.instances(partsOf(M.lampPost()), lamps, {});
+  { const lp = M.lampPost(); for (const p of lamps) bake.add(sc.place(lp.clone(), p.x, p.z, { yaw: p.yaw, y: p.y })); }   // baked into the shared buckets: fewer draw calls on the grid
   const flags = sc.along({ from: 27.7, to: 1.5, side: 1, offset: 4.5, spacing: 16, phase: 8 }).filter(p => !inFront(p));
-  sc.instances(partsOf(M.colonyFlag()), flags.map(p => ({ ...p, yaw: p.along + Math.PI / 2 })), {});
+  { const fl = M.colonyFlag(); for (const p of flags) bake.add(sc.place(fl.clone(), p.x, p.z, { yaw: p.along + Math.PI / 2, y: p.y })); }
 
   // ---- habitat domes around the colony, linked by glass tubes ----
   const domeSpots = [
@@ -325,7 +347,7 @@ function dress(ctx) {
     if (len < 4 || len > 60) return;
     const ux = dx / d, uz = dz / d, sx = a.x + ux * (a.r - 0.8), sz = a.z + uz * (a.r - 0.8);
     for (let k = 0; k <= 6; k++) { const t = k / 6; if (!clear(sx + ux * len * t, sz + uz * len * t, 1)) return; }
-    sc.place(M.transitTube(len), sx, sz, { yaw: Math.atan2(ux, uz), y: Math.min(track.terrainHeight(sx, sz), track.terrainHeight(sx + ux * len, sz + uz * len)) - 0.3 });
+    bake.add(sc.place(M.transitTube(len), sx, sz, { yaw: Math.atan2(ux, uz), y: Math.min(track.terrainHeight(sx, sz), track.terrainHeight(sx + ux * len, sz + uz * len)) - 0.3 }), false);
   };
   const byPos = (x, z) => domes.find(d => d.x === x && d.z === z);
   for (const [a, b] of [[[-30, -40], [12, -46]], [[12, -46], [58, -40]], [[12, -46], [40, -96]], [[-30, -40], [-24, -104]], [[-30, -40], [-78, -66]], [[-34, 50], [30, 56]], [[30, 56], [92, 46]], [[58, -40], [92, -72]]]) {
@@ -333,7 +355,7 @@ function dress(ctx) {
   }
   // greenhouses and habitat modules between the domes
   const ghSpots = [[-60, -100, 0.3], [80, -110, 1.2], [-6, 86, 0.1], [62, 92, 0.1], [-120, -40, 1.4]].filter(([x, z]) => clear(x, z, 6) && free(x, z, 10));
-  ghSpots.forEach(([x, z, yaw]) => { take(x, z, 12); sc.place(M.greenhouse({ len: 22 }), x, z, { yaw, y: track.terrainHeight(x, z) - 0.2 }); });
+  ghSpots.forEach(([x, z, yaw]) => { take(x, z, 12); bake.add(sc.place(M.greenhouse({ len: 22 }), x, z, { yaw, y: track.terrainHeight(x, z) - 0.2 })); });
   const modSpots = sc.scatter({ count: 10, min: 20, max: 90, maxSlope: 0.25, minGap: 22, where: (x, z) => near(x, z, COLONY, COLONY.r * 0.95) && clear(x, z, 4) && free(x, z, 8) });
   modSpots.forEach(p => take(p.x, p.z, 7));
   sc.instances(partsOf(M.habModule()), modSpots, { scale: [0.9, 1.15], yaw: 'random' });
@@ -540,7 +562,10 @@ function dress(ctx) {
       column.rotation.y = time * 0.05;
     }
     // after the bang the dust closes in for the rest of the race
-    rst.storm += ((rst.boomed ? 1 : 0) - rst.storm) * Math.min(1, dt * 0.07);
+    // lap 2 brings a dust storm in off the plains (half strength, blowing grit across the road); the bang finishes the job
+    rst.storm += ((rst.boomed ? 1 : mode === 'vent' ? 0 : 0.45) - rst.storm) * Math.min(1, dt * (rst.boomed ? 0.07 : 0.12));
+    const ck = view.cams?.[0]?.kart;
+    if (ck && rst.storm > 0.1) for (let i = 0, n = fx.count(70 * rst.storm, dt); i < n; i++) { const a = rng() * 6.28, d = rng.range(6, 45); fx.dust(ck.x + Math.cos(a) * d, ck.y + rng.range(0.3, 5), ck.z + Math.sin(a) * d, -14 - rng() * 8, rng.range(-0.5, 1.5), rng.range(-5, 5), [0.86, 0.56, 0.36], 3 + rng() * 4, 1.6, 0.35); }
     if (rst.storm > 0.004) ctx.gfx.shiftSky(DUST, rst.storm * (0.92 + 0.08 * Math.sin(time * 0.7)));
     if (rst.boomed) for (let i = 0, n = fx.count(11, dt); i < n; i++) { const a = rng() * 6.28, d = rng.range(15, 90); fx.dust(ROCKET.x + Math.cos(a) * d, padY + rng.range(2, 14), ROCKET.z + Math.sin(a) * d, rng.range(-9, -3), rng.range(0, 2), rng.range(-3, 3), [0.85, 0.55, 0.34], 10 + rng() * 8, 3.4, 0.5); }
   });
@@ -563,7 +588,7 @@ function dress(ctx) {
   sc.place(M.hiringSign('NOW HIRING: EXTREMELY HARDCORE', { w: 30, h: 7, legs: 7 }), signP.x, signP.z, { yaw: signP.yaw + 0.35, y: signP.y - 0.3 });
   take(signP.x, signP.z, 18);
   const lander2 = sc.beside(21.6, 1, 46);
-  if (clear(lander2.x, lander2.z, 8)) { sc.place(M.lander({ h: 8 }), lander2.x, lander2.z, { yaw: 0.6 }); take(lander2.x, lander2.z, 12); }
+  if (clear(lander2.x, lander2.z, 8)) { bake.add(sc.place(M.lander({ h: 8 }), lander2.x, lander2.z, { yaw: 0.6 })); take(lander2.x, lander2.z, 12); }
 
   // ---- the rim road: an angular truck nose-down in a crater, and the flag ----
   {
@@ -615,9 +640,153 @@ function dress(ctx) {
     K.fitText(g, '0 (ACTUAL)', w / 2, h * 0.75, w * 0.8, 150, K.FONT, '#ffd23c', { lines: 1 });
   }, 22, 9.5, 9.5, { turn: 0.5 });
 
+  // ---- the terraforming biodome: the solar-field road drives straight through a geodesic glass dome full of
+  // the only trees on Mars, hops a low-gravity ramp over the lawn, and leaves by the far airlock. On the final
+  // lap, once the rocket has blown, the dust gets in and the trees give up ----
+  {
+    const dy = DOME.y;
+    const portal = (x, y, z) => {
+      const g = track.ground(x, z, -1, hit), off = g.onRoad ? 0 : g.outside;
+      return off < 5.5 && y - track.py[g.i] < 11.5;
+    };
+    const dome = M.geoDome(DOME.r, { h: DOME.h, keep: (x, y, z) => !portal(DOME.x + x, dy + y, DOME.z + z) });
+    sc.place(dome, DOME.x, DOME.z, { y: dy }); bake.add(dome);
+    // a concrete plinth ring under the glass, broken where the road runs through
+    {
+      const mb = new ModelBuilder(), n = 72;
+      for (let k = 0; k < n; k++) {
+        const a = (k + 0.5) / n * Math.PI * 2, x = DOME.x + Math.cos(a) * DOME.r, z = DOME.z + Math.sin(a) * DOME.r;
+        if (portal(x, dy + 1, z)) continue;
+        mb.add('base', box(DOME.r * Math.PI * 2 / n + 0.2, 2.4, 1.6, 0.2, 1), { p: [x, dy + 0.2, z], r: [0, -a + Math.PI / 2, 0] });
+      }
+      const g = mb.build({ base: plastic(0xd9d2c4, 0.85) }); ctx.group.add(g); bake.add(g);
+    }
+    // the two airlock portals where the road meets the glass: chunky white arches with a rust band
+    const ports = [];
+    for (let i = 0, was = Math.hypot(track.px[track.N - 1] - DOME.x, track.pz[track.N - 1] - DOME.z) < DOME.r; i < track.N; i++) {
+      const inside = Math.hypot(track.px[i] - DOME.x, track.pz[i] - DOME.z) < DOME.r;
+      if (inside !== was) ports.push({ i, entry: inside });
+      was = inside;
+    }
+    for (const { i, entry } of ports) {
+      const half = (track.hwL[i] + track.hwR[i]) / 2 + 4.2, H = 11.5, yaw = track.yaw[i];
+      const mb = new ModelBuilder();
+      const arch = new THREE.TorusGeometry(half, 0.9, 8, 28, Math.PI); arch.scale(1, H / half, 1);
+      mb.add('white', arch);
+      const arch2 = new THREE.TorusGeometry(half + 1.1, 0.35, 6, 28, Math.PI); arch2.scale(1, (H + 1.1) / (half + 1.1), 1);
+      mb.add('rust', arch2, { p: [0, 0, entry ? -0.9 : 0.9] });
+      for (const sx of [-1, 1]) mb.add('white', box(2.4, 2.2, 3.2, 0.3, 2), { p: [sx * half, 1.1, 0] });
+      const g = mb.build({ white: plastic(0xf2efe6, 0.45), rust: plastic(0xc1440e, 0.5) }); g.position.set(track.px[i], track.py[i] - 0.2, track.pz[i]); g.rotation.y = yaw; ctx.group.add(g); bake.add(g);
+      // the lettering over the entry arch faces the oncoming karts; the exit arch says goodbye from the inside
+      const r = atlas.add(1024, 220, entry
+        ? K.board('TERRAFORMING PILOT', { bg: CREAM, fg: '#1d7a3a', size: 150, stripe: '#1d7a3a', lines: 1, pad: 0.05 })
+        : K.board('BACK TO MARS (SORRY)', { bg: INK, fg: CREAM, size: 150, stripe: RUST_HEX, lines: 1, pad: 0.05 }));
+      const face = yaw + Math.PI, fx = Math.sin(face), fz = Math.cos(face), bw = half * 1.5;
+      atlas.place(r, [track.px[i] + fx * 1.25, track.py[i] + H + 0.6, track.pz[i] + fz * 1.25], face, bw, bw * 220 / 1024);
+    }
+    // the garden: trees in clumps, bushes, two ponds with fountains
+    const inDome = (x, z, m) => Math.hypot(x - DOME.x, z - DOME.z) < DOME.r - m;
+    const ponds = [];
+    for (const side of [1, -1]) { const p = sc.beside(22.05, side, 19); if (inDome(p.x, p.z, 9)) ponds.push(p); }
+    const spots = [];
+    for (let gx = -DOME.r; gx <= DOME.r; gx += 6) for (let gz = -DOME.r; gz <= DOME.r; gz += 6) {
+      const x = DOME.x + gx + rng.range(-2, 2), z = DOME.z + gz + rng.range(-2, 2);
+      if (!inDome(x, z, 4) || !clear(x, z, 1.5) || ponds.some(p => near(x, z, p, 9))) continue;
+      const room = DOME.h * Math.sqrt(Math.max(0, 1 - (Math.hypot(x - DOME.x, z - DOME.z) / DOME.r) ** 2));
+      spots.push({ x, y: track.terrainHeight(x, z), z, yaw: rng() * 6.28, room });
+    }
+    const tall = spots.filter(s => s.room > 14), low = spots.filter(s => s.room <= 14 && s.room > 5);
+    const leafy = [];
+    const grow = (proto, list, opts) => {
+      const parts = partsOf(proto);
+      for (const pt of parts) if (pt.material.color && pt.material.color.g > pt.material.color.r * 1.15) { pt.material = pt.material.clone(); leafy.push(pt.material); }
+      sc.instances(parts, list, opts);
+    };
+    grow(P.roundTree(5, { h: 10, leafA: 0x3f9d3a, leafB: 0x6cc24a }), tall.filter((_, k) => k % 3 === 0), { scale: [0.9, 1.3] });
+    grow(P.roundTree(9, { h: 8, leafA: 0x58b548, leafB: 0x8fd65a }), tall.filter((_, k) => k % 3 === 1), { scale: [0.9, 1.25] });
+    grow(P.cypress(2, { h: 12, color: 0x2f7d3a }), tall.filter((_, k) => k % 3 === 2), { scale: [0.8, 1.1] });
+    grow(P.palm(4, { h: 8 }), low.filter((_, k) => k % 2 === 0), { scale: [0.7, 0.95] });
+    grow(P.bush(3, { color: 0x58b548, flower: 0xff7ab0 }), low.filter((_, k) => k % 2 === 1), { scale: [1.3, 1.9], yaw: 'random' });
+    if (ponds.length) {
+      const pb = new ModelBuilder(), water = new THREE.MeshStandardMaterial({ color: 0x2fa3e6, roughness: 0.08, metalness: 0.3, envMapIntensity: 1.6 });
+      for (const p of ponds) { const y = track.terrainHeight(p.x, p.z); pb.add('rim', cyl(7.6, 7.9, 0.6, 28), { p: [p.x, y + 0.2, p.z] }); pb.add('water', cyl(6.9, 6.9, 0.1, 28), { p: [p.x, y + 0.52, p.z] }); pb.add('rim', cyl(0.5, 0.7, 1.2, 10), { p: [p.x, y + 0.9, p.z] }); }
+      const g = pb.build({ rim: plastic(0xd9d2c4, 0.8), water }); ctx.group.add(g); bake.add(g);
+    }
+    // the fountains keep going until the dust gets in
+    anim.push(dt => {
+      if (rst.boomed) return;
+      for (const p of ponds) { const y = track.terrainHeight(p.x, p.z) + 1.5; for (let k = 0, n = view.fx.count(30, dt); k < n; k++) view.fx.dust(p.x + rng.range(-0.3, 0.3), y, p.z + rng.range(-0.3, 0.3), rng.range(-1.4, 1.4), 6.5 + rng() * 2.5, rng.range(-1.4, 1.4), [0.78, 0.92, 1], 0.6 + rng() * 0.5, 1.3, 0.65); }
+    });
+    // what the pilot has achieved so far
+    // the tree counter is a live board: 31 trees, until the dust gets in
+    const treeBoard = (() => {
+      const p = sc.beside(21.72, 1, 12.5), yaw = faceIn(p.i, 1, 0.45), w = 13, h = 6, up = 6.5;
+      if (!clear(p.x, p.z, 0.5)) return () => {};
+      const y0 = sc.y(p.x, p.z), f = K.signFrame(w, h, up, { color: 0x2a2026, legs: 2 }); sc.place(f, p.x, p.z, { yaw, y: y0 }); bake.add(f);
+      const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 472;
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      const q = new K.Quads(); q.panel([p.x + Math.sin(yaw) * 0.03, y0 + up, p.z + Math.cos(yaw) * 0.03], yaw, w, h, [0, 0, 1, 1]);
+      const mesh = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.45, roughness: 0.6 }));
+      mesh.matrixAutoUpdate = false; ctx.group.add(mesh);
+      { const r = atlas.add(1024, 472, K.board('PLEASE KEEP OFF THE PLANET', { bg: CREAM, fg: '#1d7a3a', size: 130, border: '#1d7a3a' })); atlas.place(r, [p.x - Math.sin(yaw) * 0.39, y0 + up, p.z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h); }
+      const g = cv.getContext('2d');
+      return dead => { K.board(dead ? 'TREES: 0' : 'TREES: 31', dead ? { bg: '#6b4a2a', fg: '#ffffff', size: 160, sub: 'TERRAFORMING: PAUSED', subFg: '#ffd23c', subScale: 0.6, lines: 1 } : { bg: '#1d7a3a', fg: '#ffffff', size: 160, sub: 'TARGET: ONE PLANET', subFg: '#c8f5b0', subScale: 0.6, lines: 1 })(g, 1024, 472); tex.needsUpdate = true; };
+    })();
+    treeBoard(false);
+    if (typeof document !== 'undefined' && document.fonts?.ready) document.fonts.ready.then(() => treeBoard(rst.boomed));
+    sign(22.5, -1, 12.5, K.board('PLEASE DO NOT BREATHE THE TREES', { bg: CREAM, fg: '#1d7a3a', size: 130, border: '#1d7a3a' }), 14, 6, 6.5, { turn: 0.45 });
+    // once the rocket has gone up, the dust gets in and the leaves brown off over a few seconds
+    const brown = new THREE.Color(0x8a5a2a), greens = leafy.map(m => m.color.clone());
+    let wilt = 0, treeDead = false;
+    anim.push(dt => {
+      const want = rst.boomed ? 1 : 0;
+      if (rst.boomed !== treeDead) { treeDead = rst.boomed; treeBoard(treeDead); }
+      if (Math.abs(want - wilt) < 0.002) return;
+      wilt += (want - wilt) * Math.min(1, dt * 0.25);
+      leafy.forEach((m, k) => m.color.copy(greens[k]).lerp(brown, wilt));
+    });
+    // the low-gravity hop over the lawn: posts and lamps along the ramp so it reads as built, not a slab
+    const rmp = track.ramps.find(r => Math.abs(r.i0 - track.indexAtCp(21.8)) < 25);
+    if (rmp) {
+      const mb = new ModelBuilder(), Q = { x: 0, y: 0, z: 0 };
+      for (const sd of [-1, 1]) for (let k = 0; k <= 4; k++) {
+        const t = k / 4, s = rmp.s0 + rmp.len * t, lift = rmp.lift * (0.35 * t + 0.65 * t * t);
+        track.pointAt(s, rmp.lat + sd * (rmp.half + 0.35), Q, 0);
+        mb.add('post', box(0.35, lift + 1.1, 0.35, 0.05, 1), { p: [Q.x, Q.y + (lift + 1.1) / 2, Q.z] });
+        mb.add('lamp', sphere(0.28, 8, 6), { p: [Q.x, Q.y + lift + 1.25, Q.z] });
+      }
+      const g = mb.build({ post: plastic(0xf2efe6, 0.5), lamp: glow(0x7fe0ff, 3) }); ctx.group.add(g); bake.add(g);
+    }
+  }
+
+  // ---- the Dust Bowl hairpin: an earlier prototype, standing where it came down — leaning hard, legs folded, still
+  // smoking — the landmark at the west end of the lap, seen from the dome exit all the way round the hairpin ----
+  {
+    const ia = track.indexAtCp(25.0), side = -1, hx = Math.hypot(track.lx[ia], track.lz[ia]) || 1, off = track.hwR[ia] + 24;
+    const x = track.px[ia] - track.lx[ia] / hx * off, z = track.pz[ia] - track.lz[ia] / hx * off;
+    if (clear(x, z, 4)) {
+      const L = 62, ship = M.megaRocket({ h: L }), yaw = Math.atan2(track.px[ia] - x, track.pz[ia] - z);   // faces the apex
+      ship.rotation.order = 'YXZ';
+      sc.place(ship, x, z, { yaw, y: track.terrainHeight(x, z) - 4 }); ship.rotation.x = -0.4; ship.rotation.z = 0.12; ship.updateMatrixWorld(true);
+      bake.add(ship); take(x, z, 16);
+      // its legs, folded under it, and a scorch ring
+      const lb = new ModelBuilder(), R = ship.userData.R ?? 3.8;
+      for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4, lx = x + Math.cos(a) * (R + 2.5), lz = z + Math.sin(a) * (R + 2.5); lb.add('leg', box(1.0, 0.8, 7, 0.1, 1), { p: [lx, track.terrainHeight(lx, lz) + 0.3, lz], r: [0.25, -a + Math.PI / 2, 0.2] }); }
+      lb.add('scorch', cyl(14, 16, 0.15, 24), { p: [x, track.terrainHeight(x, z) + 0.08, z] });
+      const lg = lb.build({ leg: plastic(0x8a8f9a, 0.55, 0.4), scorch: plastic(0x2a1c18, 0.95) }, { cast: false }); ctx.group.add(lg); bake.add(lg, false);
+      const smokeAt = new THREE.Vector3(0, 6, 0).applyMatrix4(ship.matrixWorld);
+      anim.push(dt => {
+        if (view.fx.smoke) for (let k = 0, n = view.fx.count(2.5, dt); k < n; k++) view.fx.smoke.emit({ x: smokeAt.x + rng.range(-3, 3), y: smokeAt.y, z: smokeAt.z + rng.range(-3, 3), vx: rng.range(-1, 1), vy: 3 + rng(), vz: rng.range(-1, 1), color: [0.2, 0.15, 0.13], color2: [0.55, 0.42, 0.36], size: 6 + rng() * 4, grow: 2.2, drag: 0.2, gravity: -0.15, life: 7 + rng() * 2, alpha: 0.55, fadeIn: 0.1, spin: rng.range(-0.3, 0.3), rot: rng() * 6.28 });
+        for (let k = 0, n = view.fx.count(10, dt); k < n; k++) view.fx.flame(smokeAt.x + rng.range(-2, 2), smokeAt.y - 4, smokeAt.z + rng.range(-2, 2), 0, 2 + rng() * 2, 0, [1, 0.6, 0.2], 1.2 + rng(), 0.4);
+      });
+      const sp = sc.beside(24.65, side, 14);
+      if (clear(sp.x, sp.z, 0.5)) signAt(sp.x, sp.z, faceIn(sp.i, side, 0.45), K.board('PROTOTYPE 46: LANDED', { bg: CREAM, fg: INK, size: 140, stripe: RUST_HEX, sub: '(MOSTLY)', subFg: '#16a34a', subScale: 0.75, lines: 1 }), 18, 7, 8.5, { legs: 2 });
+    }
+  }
+
   // ---- antenna masts with blinking red lights ----
   const mastSpots = [sc.beside(27.0, -1, 28), sc.beside(6.6, 1, 40), sc.beside(16.0, -1, 30), sc.beside(20.2, -1, 36), sc.beside(3.0, 1, 30)].filter(p => clear(p.x, p.z, 3) && free(p.x, p.z, 4));
-  const masts = mastSpots.map((p, k) => { const m = M.antennaMast({ h: 16 + (k % 3) * 4 }); sc.place(m, p.x, p.z, { yaw: rng() * 6.28 }); take(p.x, p.z, 5); return m.userData.light; });
+  const masts = mastSpots.map((p, k) => { const m = M.antennaMast({ h: 16 + (k % 3) * 4 }); sc.place(m, p.x, p.z, { yaw: rng() * 6.28 }); bake.add(m); take(p.x, p.z, 5); return m.userData.light; });
   anim.push((dt, time) => masts.forEach((l, k) => { l.emissiveIntensity = Math.sin(time * 3 + k * 1.7) > 0.55 ? 4 : 0.15; }));
 
   // ---- the solar field: neat rows of panels tilted toward the sun ----
@@ -641,8 +810,41 @@ function dress(ctx) {
   sc.instances(bA, rocks.filter((_, i) => i % 2 === 0), { scale: [0.6, 1.8], yaw: 'random', sink: 0.3, tints: ROCK_TINTS });
   sc.instances(bB, rocks.filter((_, i) => i % 2 === 1), { scale: [0.6, 1.6], yaw: 'random', sink: 0.4, tints: ROCK_TINTS });
   // the dust cut inside the west corner: clusters to thread between
-  const cut = [[23.55, 24], [23.75, 31], [23.95, 10.5], [24.2, 27], [24.35, 33], [24.55, 13], [24.75, 22], [24.9, 30]].map(([at, off]) => { const p = sc.beside(at, 1, off); return { x: p.x, y: track.terrainHeight(p.x, p.z), z: p.z, yaw: rng() * 6.28 }; });
-  sc.instances(bB, cut, { scale: 1.25, sink: 0.4, tints: ROCK_TINTS, solid: 2.4 });
+  // the Dust Bowl cut across the hairpin's infield: boulder clusters either side of the line, marker cones, and the sign
+  const CUT = track.def.shortcuts[0].path, cut = [], cones = [];
+  for (let k = 0; k < CUT.length - 1; k++) {
+    const [ax, az] = CUT[k], [bx, bz] = CUT[k + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
+    for (let d = 0; d < len; d += 6) {
+      const t = d / len, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      for (const sd of [-1, 1]) {
+        const cx = x + nx * sd * 7.5, cz = z + nz * sd * 7.5;
+        if (!track.ground(cx, cz, -1, hit).onRoad) cones.push({ x: cx, y: track.terrainHeight(cx, cz), z: cz, yaw: rng() * 6.28 });
+      }
+      if (k % 2 === 1 && d === 0) for (const sd of [-1, 1]) { const rx = x + nx * sd * 13, rz = z + nz * sd * 13; if (clear(rx, rz, -20) && !track.ground(rx, rz, -1, hit).onRoad) cut.push({ x: rx, y: track.terrainHeight(rx, rz), z: rz, yaw: rng() * 6.28 }); }
+    }
+  }
+  sc.instances(bB, cut, { scale: 1.3, sink: 0.4, tints: ROCK_TINTS, solid: 2.5 });
+  // rover ruts worn along the line, so the cut reads as a route
+  {
+    const pos = [], pts = [];
+    const path = [[track.px[track.indexAtCp(track.def.shortcuts[0].from)], track.pz[track.indexAtCp(track.def.shortcuts[0].from)]], ...CUT, [track.px[track.indexAtCp(track.def.shortcuts[0].to)], track.pz[track.indexAtCp(track.def.shortcuts[0].to)]]];
+    for (let k = 0; k < path.length - 1; k++) { const [ax, az] = path[k], [bx, bz] = path[k + 1], len = Math.hypot(bx - ax, bz - az); for (let d = 0; d < len; d += 2) pts.push([ax + (bx - ax) * d / len, az + (bz - az) * d / len]); }
+    for (const off of [-1.6, 1.6]) for (let k = 0; k < pts.length - 1; k++) {
+      const [ax, az] = pts[k], [bx, bz] = pts[k + 1], len = Math.hypot(bx - ax, bz - az) || 1, nx = -(bz - az) / len, nz = (bx - ax) / len, w = 0.45;
+      const A = [ax + nx * (off - w), az + nz * (off - w)], Bq = [ax + nx * (off + w), az + nz * (off + w)], C = [bx + nx * (off + w), bz + nz * (off + w)], D = [bx + nx * (off - w), bz + nz * (off - w)];
+      if ([A, Bq, C, D].some(([x, z]) => track.ground(x, z, -1, hit).onRoad)) continue;
+      const Y = ([x, z]) => [x, sc.y(x, z) + 0.06, z];
+      pos.push(...Y(A), ...Y(C), ...Y(Bq), ...Y(A), ...Y(D), ...Y(C));
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x6a2c16, roughness: 1, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+    m.renderOrder = 1; ctx.group.add(m);
+  }
+  sc.instances(partsOf(P.cone3d()), cones, { scale: 1.4 });
+  {
+    const [ax, az] = CUT[1], yaw = Math.atan2(CUT[0][0] - ax, CUT[0][1] - az) + 0.5, x = ax + Math.cos(yaw) * 9, z = az - Math.sin(yaw) * 9;
+    signAt(x, z, yaw, K.board('SHORTCUT', { bg: '#ffd23c', fg: INK, size: 160, sub: 'PAVING: NEXT YEAR', subFg: '#c1440e', subScale: 0.7, lines: 1, border: INK }), 11, 5.5, 5.5);
+  }
   // rocks beside the open edges that a kart can reach: solid so they read as real
   const edgeRocks = sc.scatter({ count: 50, min: 12, max: 40, maxSlope: 0.7, minGap: 9, where: (x, z) => { const g = track.ground(x, z, -1, hit); return (g.side > 0 ? g.edgeL : g.edgeR) === EDGE.OPEN && clear(x, z, -0.5) && !clear(x, z, 6) && free(x, z, 3); } });
   sc.instances(bA, edgeRocks, { scale: [1.0, 1.4], yaw: 'random', sink: 0.3, tints: ROCK_TINTS, solid: 1.8 });

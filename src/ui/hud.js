@@ -202,10 +202,11 @@ export class Hud {
         $.img.style.display = isCoin ? 'none' : ''; $.coinFallback.style.display = isCoin ? '' : 'none';
         if (!isCoin) $.img.src = itemIcon(shown);
         $.count.textContent = k.item && k.itemUses > 1 ? '×' + k.itemUses : '';
-        // what you are holding, by name, for as long as you hold it; what it does shows for the first few seconds
+        // what you are holding: its name AND its full description, for as long as you hold it (issue #132).
+        // Nothing may fold the description away while the item is held — no timer, no feed/banner state,
+        // no HUD variant. There is deliberately no code path from here to a name-only card.
         if (k.item && def.id !== this._infoId) {
           this._infoId = def.id; $.itemName.textContent = def.name; $.itemDesc.textContent = def.desc || '';
-          $.info.classList.remove('brief'); clearTimeout(this._nt); this._nt = setTimeout(() => $.info.classList.add('brief'), 6000);
         }
         if (!k.item) this._infoId = null;
         $.info.classList.toggle('show', !!k.item);
@@ -221,5 +222,5 @@ export class Hud {
   }
 
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
-  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._nt); clearTimeout(this._kt); clearTimeout(this._ct); }
+  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._kt); clearTimeout(this._ct); }
 }

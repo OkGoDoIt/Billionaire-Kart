@@ -117,9 +117,21 @@ export class Hud {
   }
 
   /* ---------- transient messages ---------- */
-  banner(text, cls = '', ms = 1400) {
+  /** The big centre callout. One at a time, so they rank: a lower-priority banner never covers a higher one that is
+      still up (SLIPSTREAM! cannot wipe FINAL LAP!). queue: wait for the one on screen to finish instead of being dropped
+      (ROCKET START! lands on the same frame as GO!, and follows it). Priorities: 1 small callouts, 2 laps, hits, and
+      the rocket start, 3 the countdown and the final lap, 4 the finish. */
+  banner(text, cls = '', ms = 1400, prio = 1, queue = false) {
+    const now = performance.now();
+    if (now < (this._bUntil || 0) && prio < (this._bPrio || 0)) { if (queue) this._bNext = { text, cls, ms, prio, at: now }; return; }
     const b = this.$.banner; b.className = 'hud-banner ' + cls; b.textContent = text;
-    void b.offsetWidth; b.classList.add('show'); clearTimeout(this._bt); this._bt = setTimeout(() => b.classList.remove('show'), ms);
+    void b.offsetWidth; b.classList.add('show'); clearTimeout(this._bt);
+    this._bPrio = prio; this._bUntil = now + ms;
+    this._bt = setTimeout(() => {
+      b.classList.remove('show'); b.classList.add('out'); this._bPrio = 0;
+      const next = this._bNext; this._bNext = null;
+      if (next && performance.now() - next.at < 2500) this._bt = setTimeout(() => this.banner(next.text, next.cls, next.ms, next.prio), 120);   // a queued line that waited too long is old news
+    }, ms);
   }
   feed(html, ms = 2600) {
     const f = el('div', 'hud-feed-row', html); this.$.feed.prepend(f);
@@ -147,31 +159,34 @@ export class Hud {
   /** Kart events the HUD reacts to. */
   onKartEvent(e) {
     switch (e.type) {
-      case 'lap': if (e.data > 1 && e.data <= this.race.laps) { if (e.data === this.race.laps) this.banner('FINAL LAP!', 'final', 2200); else this.banner(`LAP ${e.data}`, '', 1300); } break;
-      case 'finish': this.banner(e.data === 1 ? 'WINNER!' : 'FINISH!', 'finish', 3000); this.$.talk.classList.remove('show'); break;
+      case 'lap': if (e.data > 1 && e.data <= this.race.laps) { if (e.data === this.race.laps) this.banner('FINAL LAP!', 'final', 2200, 3); else this.banner(`LAP ${e.data}`, 'lap', 1300, 2); } break;
+      case 'finish': this.banner(e.data === 1 ? 'WINNER!' : 'FINISH!', 'finish' + (e.data === 1 ? ' win' : ''), 3000, 4); this.$.talk.classList.remove('show'); this.$.rank.classList.remove('up', 'down'); this.$.rank.classList.add('done'); this.pop(this.$.rank); break;
       case 'incoming': this.warn(e.data.type); break;
       case 'itemReady': this.pop(this.$.item); break;
       case 'miniTurbo': break;
-      case 'rocketStart': this.banner(e.data >= 1 ? 'ROCKET START!' : 'NICE START!', 'good', 1100); break;
+      case 'rocketStart': this.banner(e.data >= 1 ? 'ROCKET START!' : 'NICE START!', 'good', 1100, 2, true); break;
       case 'trickLand': this.banner('TRICK!', 'good small', 700); break;
       case 'draft': this.banner('SLIPSTREAM!', 'good small', 800); break;
       case 'absorbed': this.banner('COVERED!', 'good small', 1100); break;        // Bill's special took the hit
       case 'sputter': this.banner('POWER LOSS!', 'bad small', 900); break;       // Holmes's special
-      case 'robbed': this.banner(ITEMS.insider.hit, 'bad small', 1300); this.feed(`<b>${e.data.racer.name}</b> stole your item`); break;
+      case 'robbed': this.banner(ITEMS.insider.hit, 'bad small', 1300, 2); this.feed(`<b>${e.data.racer.name}</b> stole your item`); break;
       case 'itemUse': { const line = ITEMS[e.data]?.use; if (line) this.banner(line, 'good small', 1000); break; }
-      case 'inked': this.banner(ITEMS.smear.hit, 'bad small', 1200); break;
+      case 'inked': this.banner(ITEMS.smear.hit, 'bad small', 1200, 2); break;
       case 'shieldBlock': this.banner('BLOCKED!', 'good small', 700); break;
     }
   }
-  countdown(n) { this.banner(n === 0 ? 'GO!' : String(n), n === 0 ? 'go' : 'count', n === 0 ? 900 : 850); }
+  countdown(n) { this.banner(n === 0 ? 'GO!' : String(n), n === 0 ? 'go' : 'count', n === 0 ? 900 : 850, 3); }
 
   update(dt) {
     const k = this.kart, $ = this.$, race = this.race;
     this.t += dt;
     // rank
     if (k.rank !== this.lastRank) {
+      const up = this.lastRank && k.rank < this.lastRank, down = this.lastRank && k.rank > this.lastRank;
       this.lastRank = k.rank; $.rankN.textContent = k.rank; $.rankS.textContent = ordinalSuffix(k.rank);
-      $.rank.dataset.r = Math.min(k.rank, 4); this.pop($.rank);
+      $.rank.dataset.r = Math.min(k.rank, 4);
+      // passing someone bounces the number up with a flash; being passed knocks it down and back
+      $.rank.classList.remove('pop', 'up', 'down'); void $.rank.offsetWidth; $.rank.classList.add(up ? 'up' : down ? 'down' : 'pop');
     }
     if (k.coins !== this.lastCoins) {
       const prev = this.lastCoins;
@@ -222,5 +237,5 @@ export class Hud {
   }
 
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
-  dispose() { this.root.remove(); clearTimeout(this._bt); clearTimeout(this._wt); clearTimeout(this._kt); clearTimeout(this._ct); }
+  dispose() { this.root.remove(); clearTimeout(this._bt); this._bNext = null; clearTimeout(this._wt); clearTimeout(this._kt); clearTimeout(this._ct); }
 }

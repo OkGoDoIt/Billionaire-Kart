@@ -282,10 +282,14 @@ export class KartView {
     // drifting: sparks in the colour of the charge tier, plus tyre smoke
     if (k.drifting && k.grounded) {
       const tier = k.driftTier, col = TIER_RGB[tier];
+      // charge paused on the dirt (#147: the drift survives offroad, the charge does not
+      // grow) — flicker the sparks between the tier colour and a dull grey so the pause
+      // reads at a glance instead of looking like the drift died
+      const sparkCol = k.driftPaused && Math.sin(this.t * 26) > -0.25 ? [0.42, 0.42, 0.46] : col;
       for (let sd = 0; sd < 2; sd++) {
         const w = rear(sd);
         const n = fx.count(tier ? 70 + tier * 30 : 18, dt);
-        for (let i = 0; i < n; i++) fx.spark(w.x, w.y + 0.05, w.z, -sy * sp * 0.25 + (Math.random() - 0.5) * 5 + cy * k.driftDir * 3, 2.5 + Math.random() * (3 + tier * 1.5), -cy * sp * 0.25 + (Math.random() - 0.5) * 5 - sy * k.driftDir * 3, col, tier ? 0.2 + tier * 0.06 : 0.12, 0.25 + tier * 0.06);
+        for (let i = 0; i < n; i++) fx.spark(w.x, w.y + 0.05, w.z, -sy * sp * 0.25 + (Math.random() - 0.5) * 5 + cy * k.driftDir * 3, 2.5 + Math.random() * (3 + tier * 1.5), -cy * sp * 0.25 + (Math.random() - 0.5) * 5 - sy * k.driftDir * 3, sparkCol, tier ? 0.2 + tier * 0.06 : 0.12, 0.25 + tier * 0.06);
         if (fx.count(26, dt)) fx.dust(w.x, w.y + 0.1, w.z, -sy * 2, 0.8, -cy * 2, [0.85, 0.85, 0.88], 0.7, 0.55, 0.28);
       }
     }

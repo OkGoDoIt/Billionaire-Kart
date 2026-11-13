@@ -69,6 +69,7 @@ export class App {
     const S = this.save.settings;
     const want = S.quality === 'auto' ? (this.autoQuality || detectQuality()) : S.quality;
     if (!initial && want !== this.gfx.qualityName) this.gfx.applyQuality(want);
+    this.input.setPadBindings(S.padBinds, S.padSteer);
     if (this.session?.touch) this.session.touch.autoGo = S.autoGo;
     if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
     this.audio?.setVolumes?.(S.music, S.sfx);

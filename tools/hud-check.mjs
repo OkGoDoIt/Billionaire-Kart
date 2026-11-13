@@ -28,6 +28,36 @@ const CASES = [
   { name: 'four-players-4x3', w: 1024, h: 768, racers: 4 },
 ].filter(c => !opt.only || c.name === opt.only);
 
+/* ---------- issue #132 guard: a held item's description must always show ----------
+   Roger hit a name-only item card on his phone (Mars Colony, holding a Subpoena): the description had been
+   folded away by a 6-second wall-clock timer, and the CSS also folded it whenever the feed or a banner was
+   up, and hid it outright in compact (split-screen) panes. Three static checks fail fast, before any browser
+   work: every item must carry a name and a description; no CSS rule may hide the description span; and the
+   HUD must not regrow the fold timer. The behavioural half runs inside `stress` below: every item is loaded
+   into a real HUD and its description measured, and on the phone and desktop cases the longest description
+   must still be fully up after a 7-second hold with a feed row and a banner firing over it. */
+const guardFaults = [];
+{
+  const { ITEMS: GUARD_ITEMS } = await import(new URL('../src/race/items.js', import.meta.url));
+  for (const [id, d] of Object.entries(GUARD_ITEMS)) {
+    if (!d.name || !d.name.trim()) guardFaults.push(`items.js: ${id} has no name`);
+    if (!d.desc || !d.desc.trim()) guardFaults.push(`items.js: ${id} has no description`);
+  }
+  const css = (await readFile(join(ROOT, 'styles/hud.css'), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const chunk of css.split('}')) {
+    const i = chunk.indexOf('{'); if (i < 0) continue;
+    const sel = chunk.slice(0, i).trim(), body = chunk.slice(i + 1);
+    if (!sel.includes('.hud-item-info')) continue;
+    if (sel.includes('.brief')) guardFaults.push(`hud.css: the .brief description fold is back (${sel})`);
+    if (sel.includes('span') && /\b(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0|max-height\s*:\s*0|max-width\s*:\s*0|font-size\s*:\s*0)/.test(body))
+      guardFaults.push(`hud.css: a rule hides the held item's description (${sel})`);
+  }
+  const hudJs = await readFile(join(ROOT, 'src/ui/hud.js'), 'utf8');
+  if (/'brief'|"brief"|\.brief\b|_nt\b/.test(hudJs)) guardFaults.push('hud.js: the description fold timer (brief/_nt) is back');
+}
+if (guardFaults.length) { for (const f of guardFaults) console.log('FAIL  item-desc guard: ' + f); process.exit(1); }
+console.log('ok    item-desc guard (every item has a name + description; nothing in hud.js/hud.css can hide it)');
+
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg' };
 const server = http.createServer(async (req, res) => {
   try { let p = normalize(join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname))); if (p.endsWith('/') || p === ROOT) p = join(p, 'index.html'); const d = await readFile(p); res.writeHead(200, { 'Content-Type': MIME[extname(p)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(d); }
@@ -110,6 +140,33 @@ const stress = async () => {
   // driving the wrong way (never shown once a kart has finished, so not together with the finish banner)
   huds.forEach(h => { h.$.feed.replaceChildren(); }); load(nameItem, true, ['FINAL LAP!', 'final']); huds.forEach((h, i) => { BK.race.players[i].wrongWayT = 3; }); await settle('wrong way');
   huds.forEach((h, i) => { BK.race.players[i].wrongWayT = 0; h.$.feed.replaceChildren(); }); load(nameItem, true, 'finish'); await settle('feed + WINNER!');
+  // issue #132, behavioural half: every item, loaded for real into player 1's HUD, must show its name and its
+  // FULL description — rendered, opaque, unclipped — and (on the flagged cases) the longest description must
+  // survive a 7-second hold, outlasting the old 6-second fold, with a feed row and a wide banner over it.
+  {
+    const h = huds[0], k = BK.race.players[0];
+    const checkDesc = (item, tag) => {
+      k.item = item.id; k.itemUses = item.uses || 1; k.rouletteT = 0; h._infoId = null; h.lastItem = undefined; h.update(0);
+      const span = h.$.itemDesc, cs = getComputedStyle(span);
+      if (!h.$.info.classList.contains('show')) faults.add(`item-desc: ${tag}: info card not shown for ${item.id}`);
+      if (h.$.itemName.textContent !== item.name) faults.add(`item-desc: ${tag}: name reads "${h.$.itemName.textContent}", not "${item.name}"`);
+      if (span.textContent !== (item.desc || '')) faults.add(`item-desc: ${tag}: description text wrong for ${item.id}`);
+      if (!(span.offsetHeight > 0) || cs.opacity !== '1' || cs.visibility !== 'visible' || cs.display === 'none') faults.add(`item-desc: ${tag}: description not rendered for ${item.id}`);
+      if (span.scrollHeight > span.clientHeight + 1) faults.add(`item-desc: ${tag}: description clipped for ${item.id}`);
+    };
+    for (const item of items) checkDesc(item, 'held');
+    if (window.__BK_DESC_HOLD__) {
+      checkDesc(descItem, 'hold start');
+      h.feed(feedRows[0], 9000); h.banner('FINAL LAP!', 'final', 9000);
+      const wasFrozen = BK.race.frozen; BK.race.frozen = true;   // the sim waits; wall-clock timers (the old fold) do not
+      await wait(7000);
+      BK.race.frozen = wasFrozen;
+      const span = h.$.itemDesc, cs = getComputedStyle(span);
+      if (h.$.itemName.textContent !== descItem.name || span.textContent !== descItem.desc) faults.add('item-desc: hold: card text changed while the item was held');
+      if (!(span.offsetHeight > 0) || cs.opacity !== '1' || span.scrollHeight > span.clientHeight + 1) faults.add('item-desc: hold: description folded or clipped during a 7 s hold');
+      await window.bkShot?.('desc-hold');
+    }
+  }
   return { panes: huds.length, faults: [...faults] };
 };
 
@@ -122,6 +179,7 @@ for (const c of CASES) {
   await page.goto(`${base}?track=bliss-hills&intro=0&seed=3&r=${RACERS4.slice(0, c.racers || 1).join(',')}`, { waitUntil: 'load' });
   await page.waitForFunction('window.BK && BK.race', null, { timeout: 40000 });
   await page.exposeFunction('bkShot', tag => page.screenshot({ path: join(out, `${c.name}-${tag}.jpg`), type: 'jpeg', quality: 85 }).then(() => null));
+  if (c.name === 'phone' || c.name === 'desktop-16x9') await page.evaluate(() => { window.__BK_DESC_HOLD__ = true; });   // issue #132: the 7 s hold test runs on Roger's shape + desktop
   const res = await page.evaluate(`(${stress.toString()})()`).catch(e => ({ panes: 0, faults: ['could not run: ' + e.message] }));
   const faults = [...res.faults, ...errors.map(e => 'page error: ' + e)];
   // the same fault usually shows in every scenario and every pane: report each kind once, with how often it came up

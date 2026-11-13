@@ -27,7 +27,7 @@ export class TouchControls {
     root.innerHTML = `
       <div class="tc-zone tc-left"><div class="tc-stick"><div class="tc-knob"></div><div class="tc-tap"><img alt=""><b>TAP</b></div></div></div>
       <div class="tc-zone tc-right"><div class="tc-pedal"><i class="tc-up"><img alt=""></i><div class="tc-foot"><span>GO</span></div><i class="tc-down">BRAKE</i></div></div>
-      <div class="tc-coach"><div class="tc-coach-l"><h2>Steer</h2><p>Slide your thumb. Tap to use an item.</p></div><div class="tc-coach-r"><h2>Go</h2><p>Hold to accelerate. Pull down to brake.</p></div></div>
+      <div class="tc-coach"><div class="tc-coach-l"><h2>Steer</h2><p>Slide your thumb. Tap to use an item.</p></div><div class="tc-coach-r"><h2>Go</h2><p>Hold to accelerate. Pull down to brake. Flick up to use an item.</p></div></div>
       <div class="tc-tip"></div>
       <button class="tc-pause" aria-label="Pause">II</button>`;
     parent.appendChild(root);

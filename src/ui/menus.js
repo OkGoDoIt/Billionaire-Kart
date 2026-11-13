@@ -265,7 +265,10 @@ export class Menus {
   /* ---------- single track ---------- */
   s_tracks() {
     const A = this.app, flow = A.flow, cc = flow.cc || A.save.data.last.cc;
-    // all eight on one screen, a cup per row; the line under the title describes the track in focus
+    // one screenful: at eight tracks or fewer the grid below is the plain two
+    // rows of four; past eight it takes the 'many' layout (styles/menu.css),
+    // which fits a growing roster on the same screen instead of growing a
+    // third row off the bottom; the line under the title describes the track in focus
     const head = this.header('Choose a track', '\u00a0'), sub = head.querySelector('p');
     const cards = TRACKS.map(t => {
       const best = A.save.bestFor(t.id, flow.mode === 'timetrial' ? 'tt' : cc);
@@ -275,7 +278,7 @@ export class Menus {
       card.addEventListener('menufocus', say); card.addEventListener('pointerenter', say);
       return card;
     });
-    return { el: h('div', {}, head, h('div', { class: 'cards tracks' }, cards)) };
+    return { el: h('div', {}, head, h('div', { class: 'cards tracks' + (TRACKS.length > 8 ? ' many' : '') }, cards)) };
   }
 
   /* ---------- pause ---------- */

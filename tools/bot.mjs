@@ -32,6 +32,9 @@ catch { browser = await chromium.launch(swiftshader); }
 const mobile = !!opt.mobile;
 const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1280, height: 720 }, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
 const page = await ctx.newPage();
+/* The title tap enters full screen on touch devices, and headless Chromium on Linux refuses to resize a
+   full-screen window, so leave full screen before turning the phone. */
+const resize = async size => { await page.evaluate(() => document.fullscreenElement && document.exitFullscreen()).catch(() => {}); await page.setViewportSize(size); };
 const errors = [], fails = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
@@ -148,10 +151,10 @@ try {
     await touch('.tc-right', 'pointerdown', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(150);
     if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: re-gripping the pedal does not keep the throttle');
     // an upright phone pauses the race and asks for a turn; back on its side, Resume returns
-    await page.setViewportSize({ width: vw.height, height: vw.width }); await page.waitForTimeout(700); await expect('pause', 'phone turned upright mid-race');
+    await resize({ width: vw.height, height: vw.width }); await page.waitForTimeout(700); await expect('pause', 'phone turned upright mid-race');
     if (!(await page.evaluate("!!document.querySelector('.panel.turn')"))) fails.push('upright phone: the pause panel does not ask for a turn');
     await shot('10c-upright');
-    await page.setViewportSize(vw); await page.waitForTimeout(700);
+    await resize(vw); await page.waitForTimeout(700);
     if (await page.evaluate("!!document.querySelector('.panel.turn')")) fails.push('phone back on its side: the pause panel still asks for a turn');
     await page.locator('.panel.narrow .btn').first().tap(); await page.waitForTimeout(400);
     if (await screen()) fails.push('pause menu did not close on Resume after turning the phone back');
@@ -211,7 +214,7 @@ try {
   if (mobile && !opt.gp) {
     // every menu screen with the phone upright: nothing may spill off the sides, and nothing may be left unrendered
     await page.evaluate('BK.app.quitToMenu()'); await page.waitForFunction('BK.app.menus.screen?.spec.name === "main"', null, { timeout: 15000 });
-    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(800);
+    await resize({ width: 390, height: 844 }); await page.waitForTimeout(800);
     const flow = "BK.app.flow = { mode: 'vs', players: 1, devices: ['any'], racers: ['zuck'], cc: 100, level: 'normal' };";
     for (const [name, open] of [['main', "BK.app.menus.reset('main')"], ['players', "BK.app.menus.open('players')"], ['racers', "BK.app.flow.racers = []; BK.app.menus.open('racers', { player: 0 })"], ['setup', "BK.app.menus.open('setup')"], ['cups', "BK.app.menus.open('cups')"], ['tracks', "BK.app.menus.open('tracks')"], ['options', "BK.app.menus.open('options')"], ['howto', "BK.app.menus.open('howto')"], ['items', "BK.app.menus.open('items')"], ['records', "BK.app.menus.open('records')"]]) {
       await page.evaluate(`${flow} BK.app.menus.reset('main'); ${open}`); await page.waitForTimeout(600);

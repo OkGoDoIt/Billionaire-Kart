@@ -95,7 +95,7 @@ const GradeShader = {
         float thin = smoothstep(0.6, 1.0, 1.0 - abs(fract(u * 110.0) - 0.5) * 2.0);
         float mask = smoothstep(0.38 * uAspect / 1.78 + 0.08, 0.95 * uAspect / 1.78, r);
         float on = step(1.0 - uLines * 0.85, h);
-        c = mix(c, vec3(1.0), dash * thin * mask * on * min(1.0, uLines * 1.6) * 0.6);
+        c = mix(c, vec3(1.0), dash * thin * mask * on * min(1.0, uLines * 1.6) * 0.3);   // halved opacity (#222): the lines read as a hint of speed, not an overlay
       }
       // edge glow: a hit, the final lap, or the finish tints the rim of the frame for a moment, never the middle
       c = mix(c, uEdgeColor, uEdge * (1.0 - v) * 0.85);

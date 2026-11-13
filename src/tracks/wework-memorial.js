@@ -19,32 +19,32 @@ import { canvasTex, fitText } from '../render/textures.js';
    height-profile table (mezzanine climb 3.9%, descent 8.0%, stairs 10%). */
 function buildPath() {
   const pts = [], AT = {};
-  const push = (label, x, y, z, w) => { if (label) AT[label] = pts.length; pts.push({ p: [x, y, z], w }); };
+  const push = (label, x, y, z, w, wl = null, wr = null) => { if (label) AT[label] = pts.length; const pt = { p: [x, y, z], w }; if (wl != null) pt.wl = wl; if (wr != null) pt.wr = wr; pts.push(pt); };
   const last = () => pts[pts.length - 1].p;
   /** Straight from the last point to (x, z); y interpolated (constant grade). */
-  function line(label, x, z, y, w, step = 15) {
+  function line(label, x, z, y, w, step = 15, wl = null, wr = null) {
     const [ax, ay, az] = last(), d = Math.hypot(x - ax, z - az), n = Math.max(1, Math.round(d / step));
-    for (let k = 1; k < n; k++) pts.push({ p: [ax + (x - ax) * k / n, ay + (y - ay) * k / n, az + (z - az) * k / n], w });
-    push(label, x, y, z, w);
+    for (let k = 1; k < n; k++) { const pt = { p: [ax + (x - ax) * k / n, ay + (y - ay) * k / n, az + (z - az) * k / n], w }; if (wl != null) pt.wl = wl; if (wr != null) pt.wr = wr; pts.push(pt); }
+    push(label, x, y, z, w, wl, wr);
   }
   /** Arc by centre + on-circle mid + exit; y linear in angle (constant grade). */
-  function arc(label, cx, cz, mid, exit, y1, w) {
+  function arc(label, cx, cz, mid, exit, y1, w, wl = null, wr = null) {
     const [ax, ay, az] = last();
     const a0 = Math.atan2(az - cz, ax - cx), am = Math.atan2(mid[1] - cz, mid[0] - cx), a1 = Math.atan2(exit[1] - cz, exit[0] - cx);
     const r = Math.hypot(ax - cx, az - cz);
     const sweep = (f, t) => { let d = t - f; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
     const total = sweep(a0, am) + sweep(am, a1), steps = Math.max(2, Math.round(Math.abs(total) / (Math.PI / 8)));
-    for (let k = 1; k < steps; k++) { const f = k / steps, a = a0 + total * f; pts.push({ p: [cx + Math.cos(a) * r, ay + (y1 - ay) * f, cz + Math.sin(a) * r], w }); }
-    push(label, exit[0], y1, exit[1], w);
+    for (let k = 1; k < steps; k++) { const f = k / steps, a = a0 + total * f; const pt = { p: [cx + Math.cos(a) * r, ay + (y1 - ay) * f, cz + Math.sin(a) * r], w }; if (wl != null) pt.wl = wl; if (wr != null) pt.wr = wr; pts.push(pt); }
+    push(label, exit[0], y1, exit[1], w, wl, wr);
   }
   push('L1 entry', -71, 0, 58, 19);
   line('L1 mid W', -41, 58, 0, 19, 30);
   line('START', -12, 58, 0, 19, 30);
   line('climb begins', -10, 58, 0, 19, 30);
-  line('C1 entry', 46, 58, 2.16, 19, 14);                        // feature-ramp climb @ 3.9%
-  arc('C1 exit', 46, 36, [61.56, 51.56], [68, 36], 3.50, 16);    // r22, climbing onto the deck
-  line('C2 entry', 68, -8, 3.50, 16, 15);                        // L2: the mezzanine deck, dead level
-  arc('C2 exit', 48, -8, [62.14, -22.14], [48, -28], 0.99, 22);  // r20, far feature ramp @ 8.0%
+  line('C1 entry', 46, 58, 2.16, 19, 14, 12);                        // feature-ramp climb @ 3.9% + inside (L) approach apron wl 12 (#237 step 3)
+  arc('C1 exit', 46, 36, [61.56, 51.56], [68, 36], 3.50, 19, 12);    // r22, climbing onto the deck (w 16→19 + inside (L) apron wl 12, #237 step 3)
+  line('C2 entry', 68, -8, 3.50, 17, 15);                        // L2: the mezzanine deck, dead level (w 16→17, #237 step 3)
+  arc('C2 exit', 48, -8, [62.14, -22.14], [48, -28], 0.99, 22, 13.5);  // r20, far feature ramp @ 8.0% + inside (L) apron wl 13.5 (#237 step 3)
   line('touchdown', 35.7, -28, 0, 22, 7);
   line('L3 mid', 0, -28, 0, 22, 18);
   line('C3 entry', -40, -28, 0, 22, 20);
@@ -52,33 +52,33 @@ function buildPath() {
   line('C4 entry', -62, 0, 0, 15, 6);
   arc('L5 entry', -44, 0, [-56.73, 12.73], [-44, 18], 0, 15);    // C4 r18
   line('L5 mid', -4, 18, 0, 15, 20);
-  line('C5 entry', 36, 18, 0, 15, 20);
-  arc('L6 entry', 36, 2, [47.31, 13.31], [52, 2], 0, 14);        // C5 r16
-  line('C6 entry', 52, -14, 0, 14, 18);
-  arc('L7 entry', 65, -14, [55.81, -23.19], [65, -27], 0, 13);   // C6 eased to r13 (design doc ladder step 1)
-  line('L-A entry', 95, -27, 3, 12.5, 0.625);                    // Stair A flight 1: 30 m @ 10%
-  arc('L8 entry', 95, -40, [108, -40], [95, -53], 3, 13);        // landing r13, flat y 3
-  line('C7 entry', 63, -53, 6, 14, 0.625);                       // flight 2: 32 m, rise 3 (9.4%)
-  arc('L9 entry', 63, -40, [53.81, -49.19], [50, -40], 6, 16);   // C7 r13
-  line('C8 entry', 50, -27, 6, 16, 13);
-  arc('L10 entry', 37, -27, [46.19, -17.81], [37, -14], 6, 16);  // C8 r13 R
-  line('L10 mid', -21, -14, 6, 16, 29);
+  line('C5 entry', 36, 18, 0, 15, 20, 10.5);                       // + inside (L) approach apron wl 10.5 (#237 step 3)
+  arc('L6 entry', 36, 2, [47.31, 13.31], [52, 2], 0, 18, 13);        // C5 r16 (w 14→18 + inside (L) apron wl 13, #237 step 3)
+  line('C6 entry', 52, -14, 0, 15, 18, null, 8.5);                // service corridor (w 14→15 + inside (R) approach apron wr 8.5, #237 step 3)
+  arc('L7 entry', 65, -14, [55.81, -23.19], [65, -27], 0, 13, null, 8.5);   // C6 eased to r13 (ladder step 1) + inside (R) apron wr 8.5: knock-on clips at the C5 exit speed
+  line('L-A entry', 95, -27, 3, 13.5, 0.625);                    // Stair A flight 1: 30 m @ 10% (w 12.5→13.5, #237 step 3)
+  arc('L8 entry', 95, -40, [108, -40], [95, -53], 3, 16, 10);        // landing r13, flat y 3 (w 13→16 + inside (L) apron wl 10, #237 step 3)
+  line('C7 entry', 63, -53, 6, 14.5, 0.625);                       // flight 2: 32 m, rise 3 (9.4%) (w 14→14.5, #237 step 3)
+  arc('L9 entry', 63, -40, [53.81, -49.19], [50, -40], 6, 16, 10);   // C7 r13 + inside (L) apron wl 10
+  line('C8 entry', 50, -27, 6, 17, 13);                             // gallery dog-leg (w 16→17, #237 step 3)
+  arc('L10 entry', 37, -27, [46.19, -17.81], [37, -14], 6, 19, null, 12);  // C8 r13 R (w 16→19 + inside (R) apron wr 12, #237 step 3)
+  line('L10 mid', -21, -14, 6, 16.5, 29);                           // executive row (w 16→16.5, #237 step 3)
   line('C9 entry', -80, -14, 6, 17, 29);
   arc('L11 entry', -80, 4, [-92.73, -8.73], [-98, 4], 6, 17);    // C9 r18
-  line('C10 entry', -98, 24, 6, 16, 11);
-  arc('L12 entry', -84, 24, [-93.9, 33.9], [-84, 38], 6, 16);     // C10 eased to r14 (ladder step 2)
+  line('C10 entry', -98, 24, 6, 16, 11, 11);                        // + inside (L) approach apron wl 11 (#237 step 3)
+  arc('L12 entry', -84, 24, [-93.9, 33.9], [-84, 38], 6, 19, 12.5);     // C10 eased to r14 (ladder step 2) (w 16→19 + inside (L) apron wl 12.5, #237 step 3)
   line('L12 mid', -17, 38, 6, 16, 34);
   line('jog entry', 52, 38, 6, 14, 34);
-  arc('jog join', 52, 48, [59.07, 40.93], [62, 48], 6, 13);      // B-jog R r10
-  arc('L13 entry', 72, 48, [64.93, 55.07], [72, 58], 6, 13);     // B-jog L r10
-  line('L14 entry', 92, 58, 6, 13, 20);
-  line('L-B entry', 122, 58, 3, 12.5, 0.625);                    // Stair B flight 1 @ 10%
-  arc('L15 entry', 122, 45, [135, 45], [122, 32], 3, 13);        // landing r13, flat y 3
-  line('L16 entry', 92, 32, 0, 12.5, 0.625);                     // flight 2 @ 10%
-  line('L17 entry', 72, 32, 0, 12, 20);
-  line('L17 mid', 0, 32, 0, 12, 36);
-  line('HP entry', -71, 32, 0, 13, 36);
-  arc('wrap', -71, 45, [-84, 45], [-71, 58], 0, 19);             // reception hairpin r13
+  arc('jog join', 52, 48, [59.07, 40.93], [62, 48], 6, 15, null, 9);      // B-jog R r10 (w 13→15 + inside (R) apron wr 9, #237 step 3)
+  arc('L13 entry', 72, 48, [64.93, 55.07], [72, 58], 6, 15, 9);     // B-jog L r10 (w 13→15 + inside (L) apron wl 9, #237 step 3)
+  line('L14 entry', 92, 58, 6, 14, 20);                             // Stair B throat (w 13→14, #237 step 3)
+  line('L-B entry', 122, 58, 3, 13.5, 0.625);                    // Stair B flight 1 @ 10% (w 12.5→13.5, #237 step 3)
+  arc('L15 entry', 122, 45, [135, 45], [122, 32], 3, 16, 10);        // landing r13, flat y 3 (w 13→16 + inside (L) apron wl 10, #237 step 3)
+  line('L16 entry', 92, 32, 0, 13.5, 0.625, 10.5);                     // flight 2 @ 10% (w 12.5→13.5 + inside (L) apron wl 10.5, #237 step 3)
+  line('L17 entry', 72, 32, 0, 13, 20);                             // atrium return (w 12→13, #237 step 3)
+  line('L17 mid', 0, 32, 0, 13, 36);
+  line('HP entry', -71, 32, 0, 13, 36, 11);                         // + inside (L) approach apron wl 11 over the atrium floor (#237 step 3)
+  arc('wrap', -71, 45, [-84, 45], [-71, 58], 0, 22, 12.5);             // reception hairpin r13 (w 19→22 + inside (L) apron wl 12.5, #237 step 3: the desk island is rotated so its long axis leaves this line clear)
   // rotate so the start line is point 0 (drop the duplicated wrap entry)
   const si = AT['START'], path = [...pts.slice(si), ...pts.slice(1, si)];
   const at = {}; for (const k of Object.keys(AT)) at[k] = (AT[k] - si + pts.length - 1) % (pts.length - 1);
@@ -99,9 +99,18 @@ export default {
   terrain: false,                      // no outside exists
   tunnelShell: false,                  // the interior is built by decorate(), not the arch shell
   defaults: { edge: 'wall', shoulder: 0, outer: 0 },
-  // the opening shot: the lobby interior — gantry and start line centre-frame,
-  // the valuation board on the south wall, the balcony crossing the upper frame
-  intro: [{ pos: [-48, 2.2, 43], pos1: [-44, 2.4, 45], look: [30, 3.5, 57], look1: [30, 3.5, 57], fov: 58, dur: 3.4 }],
+  // the opening: three shots composed INSIDE the building (#193) — the generic
+  // IntroCam flyovers sit above the 12.5 m ceiling, so this track is introOnly.
+  // Every camera stays below y 11 (Floor 1) / y 11.5 (Floor 2).
+  introOnly: true,
+  intro: [
+    // a) the lobby, low, along the start straight toward the gantry and the $47B → $0 board
+    { pos: [-60, 2.5, 50], pos1: [-40, 3, 52], look: [30, 4, 60], look1: [30, 4, 60], fov: 58, dur: 3.0 },
+    // b) under the mezzanine bridge, along the return lane, glass bridge overhead
+    { pos: [40, 1.6, 32], pos1: [52, 1.8, 32], look: [80, 4, 32], look1: [80, 4, 32], fov: 56, dur: 2.8 },
+    // c) from the executive balcony over the cubicle field to the DO WHAT YOU L VE neon
+    { pos: [-20, 9.5, -12], pos1: [10, 9.5, -14], look: [0, 4, -51], look1: [0, 4, -51], fov: 56, dur: 3.0 },
+  ],
   lapNotes: [
     '<b>Lap 2.</b> The community manager has left the building.',
     '<b>Final lap.</b> Eviction complete. Thank you for being part of our journey.',
@@ -147,7 +156,7 @@ export default {
     { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.659), lat: 4.6, effect: 'bump', radius: 0.95 },
     { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.841), lat: -4.6, effect: 'bump', radius: 0.95 },
     { kind: 'static', model: 'neonO', at: AT['C3 exit'] - 0.35, lat: -6, effect: 'bump', radius: 1.9 },   // the fallen O
-    { kind: 'static', model: 'papers', at: AT['C6 entry'] - 0.5, lat: -3.5, effect: 'squash', radius: 1.6 },  // IPO paperwork
+    { kind: 'static', model: 'papers', at: AT['C6 entry'] - 0.9, lat: -6.2, effect: 'squash', radius: 1.6 },  // IPO paperwork (at -0.5→-0.9, lat -3.5→-6.2, #237 step 4: was on the racing line into C6, 9-10 hits/race at cp 39.5)
     { kind: 'static', model: 'papers', at: between('L15 entry', 'L16 entry', 0.5), lat: 4, effect: 'squash', radius: 1.6 },  // repossession paperwork
     { kind: 'patrol', model: 'bot', at: between('HP entry', 'L1 entry', 1.8), lats: [-8.4, -6.0], speed: 1.6, effect: 'spin', radius: 1.2 },  // the cleaning bot
   ],
@@ -455,7 +464,7 @@ function dressSectors(ctx, H) {
   put(hb3, 44, 12.3, 43, 20);
 
   /* ================= S11: atrium return + hairpin ================= */
-  put(W.receptionDesk(), -71, 0, 45, 0);
+  put(W.receptionDesk(), -71, 0, 45, 90);   // long axis on the hairpin's axis: the widened inside apron (wl 12.5) passes its short ends, not its lobes
   putSign(['RECEPTION — PLEASE CHECK IN WITH THE COMMUNITY MANAGER'], 3.6, .5, -71, .8, 43.25, 180, { bg: '#8a6d2f', fg: '#fff3c4', size: 70 });
   putSign(['WATCH FOR FALLING VALUATIONS'], 9.5, 1.15, 76.75, 2.75, 32, 90, { bg: '#7a1f1f', fg: '#ffe9a8', size: 95 });
   putSign(['MAIL — NO FORWARDING ADDRESS'], 8, .8, 68, 2.55, 25.5, 0, { bg: '#4a3a22', fg: '#ffe9a8', size: 90 });

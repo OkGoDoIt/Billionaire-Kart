@@ -44,7 +44,7 @@ export default {
   id: 'crypto-cove',
   name: 'Crypto Cove',
   tagline: 'Number go up. Number go splash.',
-  lapNotes: ['<b>$COVE is down 60%.</b> Still early.', '<b>Withdrawals paused.</b> Please keep racing.'],   // shown as laps two and three begin
+  lapNotes: ['<b>$COVE is down 60%.</b> Still early.', '<b>$COVE is down 99%.</b> Withdrawals paused.'],   // shown as laps two and three begin
   // the opening shot: the price chart over the bay, the rocket on its way up
   intro: [{ pos: [168, 13, 268], pos1: [136, 19, 282], look: [80, 24, 380], look1: [50, 30, 382], fov: 54, dur: 3.2 }],
   laps: 3,
@@ -213,7 +213,18 @@ function decorate(ctx) {
     y.traverse(o => { if (o.isMesh) o.castShadow = sc.shadows; });
     return { y, base: W - 0.7, ph: i * 1.3 };
   }).filter(Boolean);
-  anim.push((dt, time) => yachts.forEach(({ y, base, ph }) => { y.position.y = base + Math.sin(time * 0.7 + ph) * 0.18; y.rotation.z = Math.sin(time * 0.55 + ph) * 0.02; y.rotation.x = Math.sin(time * 0.43 + ph * 2) * 0.012; }));
+  let sinkMix = 0;
+  anim.push((dt, time) => {
+    // #121: lap 2 the fleet sits lower in the water; on the final lap the yachts go down with the market, to the mast
+    const target = view.finalLap ? 1 : (view.showLap || 1) >= 2 ? 0.13 : 0;
+    sinkMix += (target - sinkMix) * Math.min(1, dt * 0.4);
+    yachts.forEach(({ y, base, ph }, i) => {
+      const sink = 9.6 * Math.max(0, Math.min(1, sinkMix * 1.25 - i * 0.08));
+      y.position.y = base - sink + Math.sin(time * 0.7 + ph) * 0.18 * (1 - sinkMix * 0.7);
+      y.rotation.z = Math.sin(time * 0.55 + ph) * 0.02 + sink * 0.011;
+      y.rotation.x = Math.sin(time * 0.43 + ph * 2) * 0.012 + sink * 0.006;
+    });
+  });
   // marker buoys and a few dinghies of colour on the water
   const buoySpots = [[20, 70], [-50, 120], [120, 160], [-30, 260], [110, 270], [200, 360], [-90, 360], [10, 420]].filter(([x, z]) => track.terrainHeight(x, z) < W - 1);
   sc.instances(partsOf(C.buoy(0xff6a3d)), buoySpots.map(([x, z]) => ({ x, z, y: W - 0.5 })), { scale: [1, 1.4], yaw: 'random' });
@@ -381,18 +392,28 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
   const toWorld = (o, l) => { const c = Math.cos(o.yaw), s = Math.sin(o.yaw), k = o.scale ?? 1; return [o.x + (l[0] * c + l[2] * s) * k, o.y + l[1] * k, o.z + (-l[0] * s + l[2] * c) * k]; };
 
   /* ---- 1. the centerpiece: a price chart the size of a rollercoaster ---- */
+  // #121: the candles stand in their own group, pivoted at the foot of the run, so the crash
+  // director (bottom of this function) can keel the whole run over into the sea on the final lap
+  // and turn every green candle red. Same two meshes the bake used to merge: no new draw calls.
+  const PIV = cw(STEP * 0.5, 0, W - 1);
   const cb = new ModelBuilder(), hash = i => ((Math.sin(i * 127.1 + 3.7) * 43758.5453) % 1 + 1) % 1;
   let prev = CLOSES[0] - 2;
   CLOSES.forEach((c, i) => {
     const u = STEP + i * STEP, o = prev, lo = Math.min(o, c), hi = Math.max(o, c), up = c >= o;
     const h = Math.max(1.4, hi - lo);
-    cb.add(up ? 'green' : 'red', new THREE.BoxGeometry(4.2, h, 4.2), { p: cw(u, 0, lo + h / 2), r: [0, CHART_YAW, 0] });
+    const bp = cw(u, 0, lo + h / 2);
+    cb.add(up ? 'green' : 'red', new THREE.BoxGeometry(4.2, h, 4.2), { p: [bp[0] - PIV[0], bp[1] - PIV[1], bp[2] - PIV[2]], r: [0, CHART_YAW, 0] });
     const wt = hi + 1.2 + hash(i) * 3, wb = Math.max(W - 1, lo - 1 - hash(i + 9) * 2.5);
-    cb.add(up ? 'green' : 'red', new THREE.BoxGeometry(0.55, wt - wb, 0.55), { p: cw(u, 0, (wt + wb) / 2), r: [0, CHART_YAW, 0] });
+    const wq = cw(u, 0, (wt + wb) / 2);
+    cb.add(up ? 'green' : 'red', new THREE.BoxGeometry(0.55, wt - wb, 0.55), { p: [wq[0] - PIV[0], wq[1] - PIV[1], wq[2] - PIV[2]], r: [0, CHART_YAW, 0] });
     prev = c;
   });
   const candleMat = col => new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.28, roughness: 0.45 });
-  bake.builder(cb, { green: candleMat(0x22c55e), red: candleMat(0xef4444) }, true);
+  const greenMat = candleMat(0x22c55e), redMat = candleMat(0xef4444);
+  const candleGrp = cb.build({ green: greenMat, red: redMat });
+  candleGrp.position.set(PIV[0], PIV[1], PIV[2]);
+  candleGrp.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+  group.add(candleGrp);
   // the rail: a coaster track through the closes, then straight off the cliff into the sea
   const railPts = [[0, 2.4], ...CLOSES.map((c, i) => [STEP + i * STEP, c + 1.4]), [STEP * 25 + 2.5, -9]];
   const curveAt = v => new THREE.CatmullRomCurve3(railPts.map(([u, y]) => new THREE.Vector3(...cw(u, v, y))), false, 'centripetal');
@@ -414,10 +435,16 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
   let peakT = 0, peakY = -1e9; for (let k = 0; k <= 400; k++) { const y = spine.getPointAt(k / 400).y; if (y > peakY) { peakY = y; peakT = k / 400; } }
   const rocket = C.chartRocket(); group.add(rocket);
   // signs on the chart (two-faced, so they read from the promenade and the pier alike)
+  // #121: the sign believes in the pump until the crash director flips numDown on the final lap
+  // and repaints the atlas: NUMBER GO UP becomes NUMBER GO DOWN, green becomes red
+  let numDown = false;
   const sNum = atlas.add(1024, 228, (g, w, h) => {
-    g.fillStyle = '#16a34a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffffff'; g.lineWidth = 10; g.strokeRect(10, 10, w - 20, h - 20);
-    fitText(g, 'NUMBER GO UP', w * 0.44, h * 0.55, w * 0.74, 170, F, '#ffffff', { lines: 1 });
-    g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(w * 0.86, h * 0.18); g.lineTo(w * 0.96, h * 0.5); g.lineTo(w * 0.9, h * 0.5); g.lineTo(w * 0.9, h * 0.84); g.lineTo(w * 0.82, h * 0.84); g.lineTo(w * 0.82, h * 0.5); g.lineTo(w * 0.76, h * 0.5); g.closePath(); g.fill();
+    g.fillStyle = numDown ? '#b91c1c' : '#16a34a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffffff'; g.lineWidth = 10; g.strokeRect(10, 10, w - 20, h - 20);
+    fitText(g, numDown ? 'NUMBER GO DOWN' : 'NUMBER GO UP', w * 0.44, h * 0.55, w * 0.74, 170, F, '#ffffff', { lines: 1 });
+    g.fillStyle = '#ffffff'; g.beginPath();
+    if (numDown) { g.moveTo(w * 0.86, h * 0.82); g.lineTo(w * 0.96, h * 0.5); g.lineTo(w * 0.9, h * 0.5); g.lineTo(w * 0.9, h * 0.16); g.lineTo(w * 0.82, h * 0.16); g.lineTo(w * 0.82, h * 0.5); g.lineTo(w * 0.76, h * 0.5); }
+    else { g.moveTo(w * 0.86, h * 0.18); g.lineTo(w * 0.96, h * 0.5); g.lineTo(w * 0.9, h * 0.5); g.lineTo(w * 0.9, h * 0.84); g.lineTo(w * 0.82, h * 0.84); g.lineTo(w * 0.82, h * 0.5); g.lineTo(w * 0.76, h * 0.5); }
+    g.closePath(); g.fill();
   });
   atlas.place2(sNum, cw(80, -0.5, 52), CHART_YAW, 36, 8);
   for (const u of [66, 94]) { const p = cw(u, -1.2, 0); pole(p[0], p[2], W - 2, 48, 0.4); }
@@ -439,6 +466,9 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
   const by = Math.min(...[[-12, -26], [12, -26], [-12, 26], [12, 26], [0, 0]].map(([a, b]) => sc.y(BULL.x + a * Math.cos(byaw) + b * Math.sin(byaw), BULL.z - a * Math.sin(byaw) + b * Math.cos(byaw)))) - 0.5;
   sc.place(bull, BULL.x, BULL.z, { yaw: byaw, y: by, scale: BS });
   const bo = { x: BULL.x, y: by, z: BULL.z, yaw: byaw, scale: BS };
+  // the laser materials, so the lap director can dim them (the beams share two materials)
+  const beamMats = [];
+  bull.userData.beams.forEach(pv => pv.traverse(o => { if (o.isMesh && !beamMats.some(bm => bm.m === o.material)) beamMats.push({ m: o.material, o: o.material.opacity }); }));
   const sBull = atlas.add(1024, 300, (g, w, h) => { g.fillStyle = '#14161c'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffbf2e'; g.lineWidth = 10; g.strokeRect(14, 14, w - 28, h - 28); fitText(g, 'THIS IS GOOD FOR BITCOIN', w / 2, h * 0.54, w * 0.88, 150, F, '#ffbf2e'); });
   atlas.place(sBull, toWorld(bo, [0, 3.0, 12.04]), byaw, 16.4, 4.8);
   const sBull2 = atlas.add(1024, 160, signDraw('BULL MARKET (EST. TUESDAY)', { bg: '#14161c', fg: '#ffbf2e', size: 100, lines: 1 }));
@@ -701,22 +731,61 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
       }
       if (T.s >= railLen) { rocket.visible = false; T.wait = 2.6; }
     }
-    // the ticker follows the rocket's height
+    // the ticker follows the rocket's height — until the laps get to it (#121)
     T.t += dt;
     if (T.t > 0.12) {
       T.t = 0;
-      const y = rocket.position.y - 1.5, sPeak = peakT * railLen, price = priceOf(y);
-      const state = T.wait > 0 ? 'gone' : T.s >= sPeak - 3 && T.s < sPeak + 6 ? 'ath' : T.s > sPeak ? 'down' : 'up';
-      const key = state + (state === 'gone' ? Math.floor(time / 0.4) : fmt(price));
-      if (key !== T.shown) { T.shown = key; drawTicker(state, price); }
+      if (view.finalLap) {
+        // the crash: the ticker freezes at -99% and never ticks again
+        if (T.shown !== 'crash99') { T.shown = 'crash99'; drawTicker('down', 694.2); }
+      } else if ((view.showLap || 1) >= 2 && Math.floor(time * 8.3) % 4 === 0) {
+        // lap 2, the wobble: every fourth tick the ticker stutters red with a number nobody believes
+        const key = 'wob' + Math.floor(time * 8.3);
+        if (key !== T.shown) { T.shown = key; drawTicker('down', 69420 * (0.2 + 0.05 * (Math.floor(time * 8.3) * 37 % 10))); }
+      } else {
+        const y = rocket.position.y - 1.5, sPeak = peakT * railLen, price = priceOf(y);
+        const state = T.wait > 0 ? 'gone' : T.s >= sPeak - 3 && T.s < sPeak + 6 ? 'ath' : T.s > sPeak ? 'down' : 'up';
+        const key = state + (state === 'gone' ? Math.floor(time / 0.4) : fmt(price));
+        if (key !== T.shown) { T.shown = key; drawTicker(state, price); }
+      }
     }
     // the bull sweeps its lasers across the sky over the start
     bull.userData.beams.forEach((b, k) => { b.rotation.y = Math.sin(time * 0.55 + k * 0.3) * 0.32 + (k ? -0.04 : 0.04); b.rotation.x = -0.24 + Math.sin(time * 0.8) * 0.06; });
+    // #121: the lasers stutter and dim on lap 2, and go out with the bull market on the last
+    const laserLv = view.finalLap ? 0 : (view.showLap || 1) >= 2 ? 0.3 + 0.25 * Math.abs(Math.sin(time * 11)) + 0.15 * Math.abs(Math.sin(time * 23.7)) : 1;
+    for (const bm of beamMats) bm.m.opacity = bm.o * laserLv;
     // banner planes circling the bay
     for (const pl of planes) {
       const a = time * 0.05 * pl.dir + pl.ph, R = 175;
       pl.p.position.set(60 + Math.cos(a) * R, pl.alt + Math.sin(time * 0.4 + pl.ph) * 1.5, 170 + Math.sin(a) * R);
       pl.p.rotation.set(0, Math.atan2(-Math.sin(a) * pl.dir, Math.cos(a) * pl.dir), -0.12 * pl.dir);
+    }
+  });
+
+  /* ---- #121: the crash director — on the final lap the whole candle run keels over into the
+         sea, every green candle turns red, the sign admits defeat, and the golden sky goes stormy.
+         Lap 2 only wobbles (ticker, yachts, lasers, above); this is the part nobody can miss. ---- */
+  const STORM = { zenith: 0x2c333e, horizon: 0x6e7880, ground: 0x565e63, sun: 0x9aa4ae, cloud: 0x878f99, cloudShade: 0x363d46, cloudCover: 0.96, fog: 0x68727c, fogNear: 55, fogFar: 500,
+    sunLight: 0xaebac6, sunIntensity: 1.5, hemiSky: 0x6d7a89, hemiGround: 0x41454a, hemiIntensity: 0.9, exposure: 0.9, panoTint: [0.52, 0.56, 0.62] };
+  const crashAxis = new THREE.Vector3(-CHART.dz, 0, CHART.dx).normalize();   // the chart's facing axis: the run tips over sideways into the bay
+  const cGreen = new THREE.Color(0x22c55e), cRed = new THREE.Color(0xef4444);
+  const D = { t: 0, splashed: false, flipped: false };
+  anim.push(dt => {
+    D.t += ((view.finalLap ? 1 : 0) - D.t) * Math.min(1, dt * 0.5);
+    if (D.t <= 0.001) return;
+    const e = D.t * D.t * (3 - 2 * D.t);   // smoothstep: the keel starts slow, commits, settles
+    candleGrp.quaternion.setFromAxisAngle(crashAxis, -0.52 * e);
+    candleGrp.position.y = PIV[1] - 1.6 * e;
+    greenMat.color.copy(cGreen).lerp(cRed, e); greenMat.emissive.copy(cGreen).lerp(cRed, e);
+    ctx.gfx.shiftSky(STORM, Math.min(1, D.t * 1.15));
+    if (!D.flipped && D.t > 0.25) { D.flipped = true; numDown = true; atlas.paint(); }   // one canvas repaint, on the lap change only
+    if (!D.splashed && D.t > 0.55) {
+      D.splashed = true;
+      for (const u of [STEP + 18 * STEP, STEP + 21 * STEP, STEP + 24 * STEP]) {
+        const p = cw(u, 0, 0);
+        for (let k = 0; k < 40; k++) { const a = Math.random() * 6.283, sp = 3 + Math.random() * 8; fx.smoke.emit({ x: p[0], y: W + 0.4, z: p[2], vx: Math.cos(a) * sp, vy: 9 + Math.random() * 13, vz: Math.sin(a) * sp, color: [0.95, 0.97, 1], size: 2.4 + Math.random() * 3, grow: 2, drag: 0.5, gravity: 14, life: 1.8, alpha: 0.9 }); }
+        fx.burst(p[0], W + 1.5, p[2], 26, [0.85, 0.93, 1], 13, 0.6, 0.5, 4);
+      }
     }
   });
 

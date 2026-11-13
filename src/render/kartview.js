@@ -29,6 +29,16 @@ const FLAME_GEO = (() => {
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
   return g;
 })();
+/* Drift flare: a hot core with a four-point glint, sitting on each rear wheel while a drift charges. It carries the
+   tier colour at a glance from any distance, where the sparks alone read as soft dots. Made once, shared. */
+let FLARE_TEX = null;
+const flareTex = () => FLARE_TEX || (FLARE_TEX = canvasTex(64, 64, (g, w) => {
+  const c = w / 2, gr = g.createRadialGradient(c, c, 0, c, c, c);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, w);
+  for (const [sx, sy] of [[1, 0.09], [0.09, 1]]) { const s = g.createRadialGradient(c, c, 0, c, c, c); s.addColorStop(0, 'rgba(255,255,255,0.95)'); s.addColorStop(1, 'rgba(255,255,255,0)'); g.save(); g.translate(c, c); g.scale(sx, sy); g.translate(-c, -c); g.fillStyle = s; g.beginPath(); g.arc(c, c, c, 0, 7); g.fill(); g.restore(); }
+}, { repeat: false, mip: false }));
+const MT_HEX = [0x66c2ff, 0xffa040, 0xff5cf0], MT_RGB = [[0.3, 0.65, 1], [1, 0.6, 0.15], [1, 0.36, 0.95]];
 const BLOB_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
 export const TAG_LAYER = 4;
 
@@ -124,6 +134,12 @@ export class KartView {
     // spinning rainbow halo on the ground while the hype-cycle star is active — readable from any camera, at any size
     this.halo = new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     this.halo.rotation.x = -Math.PI / 2; this.halo.renderOrder = 4; this.halo.visible = false; scene.add(this.halo);
+    // drift flares on the rear wheels
+    this.flareMat = new THREE.SpriteMaterial({ map: flareTex(), color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    this.coreMat = new THREE.SpriteMaterial({ map: flareTex(), color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    // each rear wheel: a tier-coloured glow and a small white-hot core, just behind the tyre where the sparks come from
+    this.flares = rig.rearWheelsFx.flatMap(a => [this.flareMat, this.coreMat].map((m, i) => { const sp = new THREE.Sprite(m); sp.position.set(0, 0.14, -0.4); sp.visible = false; sp.renderOrder = 21 + i; sp.userData.core = i === 1; a.add(sp); return sp; }));
+    this.flareKick = 0; this.flameKick = 0; this.mtTier = 1;
     // boost glow at the exhausts
     this.flames = rig.exhausts.map(a => {
       const m = new THREE.Mesh(FLAME_GEO, new THREE.MeshBasicMaterial({ color: 0xffa040, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
@@ -140,7 +156,9 @@ export class KartView {
     switch (e.type) {
       case 'hit': b.vx += 9; b.vz += (Math.random() - 0.5) * 16; break;
       case 'land': b.vx += clamp(e.data * 0.5, 1, 7); this.susp.v -= clamp(e.data * 0.35, 1, 6); break;
-      case 'boost': b.vx -= 7; this.stretch = 1; break;
+      case 'boost': b.vx -= 7; this.stretch = 1; this.flameKick = 1; break;
+      case 'miniTurbo': this.mtTier = e.data; break;
+      case 'driftTier': this.flareKick = 1; break;
       case 'bump': b.vz += (Math.random() < 0.5 ? -1 : 1) * clamp(e.data.v, 2, 8); break;
       case 'wall': b.vz += e.data.side * 8; this.susp.v += 2; break;
       case 'hop': this.susp.v += 2.5; break;
@@ -286,12 +304,34 @@ export class KartView {
       // grow) — flicker the sparks between the tier colour and a dull grey so the pause
       // reads at a glance instead of looking like the drift died
       const sparkCol = k.driftPaused && Math.sin(this.t * 26) > -0.25 ? [0.42, 0.42, 0.46] : col;
+      // sparks are born white-hot and cool to the tier colour as they fly, so each one reads as a spark, not a soft dot
+      const core = [0.55 + sparkCol[0] * 0.45, 0.55 + sparkCol[1] * 0.45, 0.55 + sparkCol[2] * 0.45];
       for (let sd = 0; sd < 2; sd++) {
         const w = rear(sd);
-        const n = fx.count(tier ? 70 + tier * 30 : 18, dt);
-        for (let i = 0; i < n; i++) fx.spark(w.x, w.y + 0.05, w.z, -sy * sp * 0.25 + (Math.random() - 0.5) * 5 + cy * k.driftDir * 3, 2.5 + Math.random() * (3 + tier * 1.5), -cy * sp * 0.25 + (Math.random() - 0.5) * 5 - sy * k.driftDir * 3, sparkCol, tier ? 0.2 + tier * 0.06 : 0.12, 0.25 + tier * 0.06);
+        const n = fx.count(tier ? 60 + tier * 35 : 18, dt);
+        for (let i = 0; i < n; i++) {
+          const up = 2.5 + Math.random() * (3 + tier * 1.8), side = (Math.random() - 0.5) * (4 + tier * 1.5);
+          (tier ? fx.glint : fx.add).emit({ x: w.x, y: w.y + 0.05, z: w.z, vx: -sy * sp * 0.25 + side * cy + cy * k.driftDir * 3, vy: up, vz: -cy * sp * 0.25 - side * sy - sy * k.driftDir * 3, color: tier ? core : sparkCol, color2: sparkCol, size: tier ? 0.2 + tier * 0.06 : 0.1, life: 0.2 + tier * 0.05 + Math.random() * 0.1, gravity: 16, drag: 1.4, alpha: 1.4, spin: (Math.random() - 0.5) * 20 });
+        }
         if (fx.count(26, dt)) fx.dust(w.x, w.y + 0.1, w.z, -sy * 2, 0.8, -cy * 2, [0.85, 0.85, 0.88], 0.7, 0.55, 0.28);
       }
+    }
+    // drift flares: grow a size with each tier, flicker, and swell on the tier change; dull grey while the charge pauses
+    this.flareKick = Math.max(0, this.flareKick - dt * 4);
+    const flareOn = k.drifting && k.grounded && k.driftTier > 0;
+    for (const f of this.flares) f.visible = flareOn;
+    if (flareOn) {
+      const tier = k.driftTier, paused = k.driftPaused && Math.sin(this.t * 26) > -0.25, col = paused ? [0.42, 0.42, 0.46] : TIER_RGB[tier];
+      this.flareMat.color.setRGB(col[0], col[1], col[2]);
+      this.flareMat.opacity = 0.85 + Math.random() * 0.15;
+      const sz = (0.75 + tier * 0.35) * (0.85 + Math.random() * 0.3) * (1 + this.flareKick * 1.2);
+      for (const f of this.flares) { const c = f.userData.core ? 0.42 : 1; f.scale.set(sz * c, sz * c, 1); }
+      this.flareMat.rotation = this.t * 7; this.coreMat.rotation = -this.t * 5;
+    }
+    // dizzy stars circling the driver's head after a spin or tumble
+    if (k.hitT > 0 && (k.hitKind === 'spin' || k.hitKind === 'tumble' || k.hitKind === 'squash') && rig.head) {
+      rig.head.getWorldPosition(_v);
+      for (let i = 0; i < 3; i++) { const a = this.t * 7 + i * 2.094; fx.glint.emit({ x: _v.x + Math.cos(a) * 0.72, y: _v.y + 0.7 + Math.sin(a * 2) * 0.08, z: _v.z + Math.sin(a) * 0.72, color: [1, 0.95, 0.5], color2: [1, 0.8, 0.2], size: 0.34, life: 0.1, alpha: 1.3, rot: a }); }
     }
     // dust off the road
     const dustHex = k.surface.dust;
@@ -303,14 +343,17 @@ export class KartView {
     const boosting = k.boostT > 0 || k.bulletT > 0;
     const tierCol = k.boostKind === 'mini' ? null : null;
     void tierCol;
+    // a boost opens with a flare-up: the flame jumps long and settles (flameKick); a mini-turbo burns in its tier's colour
+    this.flameKick = Math.max(0, this.flameKick - dt * 3.2);
+    const mt = clamp(this.mtTier, 1, 3) - 1;
     for (let i = 0; i < 2; i++) {
       const f = this.flames[i]; f.visible = boosting;
       if (boosting) {
-        const len = 0.7 + Math.random() * 0.35 + (k.boostMul - 1) * 1.2; f.scale.set(1 + Math.random() * 0.2, len, 1 + Math.random() * 0.2);
-        f.material.color.setHex(k.starT > 0 ? 0xffffff : k.boostKind === 'mini' ? 0x66c2ff : k.boostKind === 'draft' ? 0xbfe8ff : 0xffa040);
+        const len = (0.7 + Math.random() * 0.35 + (k.boostMul - 1) * 1.2) * (1 + this.flameKick * 0.9), wid = 1 + Math.random() * 0.2 + this.flameKick * 0.35; f.scale.set(wid, len, wid);
+        f.material.color.setHex(k.starT > 0 ? 0xffffff : k.boostKind === 'mini' ? MT_HEX[mt] : k.boostKind === 'draft' ? 0xbfe8ff : 0xffa040);
         rig.exhausts[i].getWorldPosition(_v);
-        const n = fx.count(45, dt);
-        const col = k.boostKind === 'mini' ? [0.25, 0.6, 1] : [1, 0.62, 0.18];
+        const n = fx.count(45 + this.flameKick * 60, dt);
+        const col = k.boostKind === 'mini' ? MT_RGB[mt] : [1, 0.62, 0.18];
         for (let j = 0; j < n; j++) fx.flame(_v.x, _v.y, _v.z, -sy * 6 + (Math.random() - 0.5) * 2, 0.5 + Math.random(), -cy * 6 + (Math.random() - 0.5) * 2, col, 0.3 + Math.random() * 0.2, 0.16 + Math.random() * 0.1);
       }
     }
@@ -325,5 +368,5 @@ export class KartView {
     void TIER_HEX; void KART; void smoothstep;
   }
 
-  dispose(scene) { TAGS.delete(this); scene.remove(this.rig.root); scene.remove(this.blob); scene.remove(this.halo); this.halo.material.dispose(); this.paint.dispose(); this.tag.material.map.dispose(); this.tag.material.dispose(); }
+  dispose(scene) { this.flareMat.dispose(); this.coreMat.dispose(); TAGS.delete(this); scene.remove(this.rig.root); scene.remove(this.blob); scene.remove(this.halo); this.halo.material.dispose(); this.paint.dispose(); this.tag.material.map.dispose(); this.tag.material.dispose(); }
 }

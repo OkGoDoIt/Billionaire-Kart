@@ -71,6 +71,9 @@
 .hud-rank[data-r="3"] { color: #f0a25a; }
 .hud-rank[data-r="4"] { color: #fff; }
 .hud-rank.pop { animation: hud-pop 0.34s cubic-bezier(.2,1.7,.4,1); }
+.hud-rank.up { animation: hud-rank-up 0.5s cubic-bezier(.2,1.7,.4,1); }
+.hud-rank.down { animation: hud-rank-down 0.42s ease-out; }
+.hud-rank.done { filter: drop-shadow(0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.35)) drop-shadow(0 0 calc(var(--u) * 2.4) currentColor); }
 
 /* timer, top-right; minimap below it */
 .hud-time { position: absolute; right: calc(var(--edge) + var(--safe-r)); top: calc(var(--edge) + var(--safe-t)); font-size: calc(var(--u) * 4.4); opacity: 0.95; }
@@ -93,6 +96,14 @@
 .hud-banner.small { font-size: calc(var(--u) * 6.5); top: 19.5%; }
 .hud-banner.bad { color: var(--hot); }
 .hud-banner.bad.small { font-size: calc(var(--u) * 7); top: 24%; }   /* the longest of these take two lines */
+/* banners leave with a quick swell and fade instead of blinking out */
+.hud-banner.out { animation: hud-banner-out 0.18s ease-in forwards; }
+/* the countdown and GO! slam in from big; the final lap throbs hot for a couple of seconds; a win shines gold */
+.hud-banner.count.show { animation: hud-banner-slam 0.34s cubic-bezier(.2,1.5,.4,1) forwards; }
+.hud-banner.go.show { animation: hud-banner-slam 0.42s cubic-bezier(.2,1.8,.4,1) forwards; }
+.hud-banner.final.show { animation: hud-banner 0.28s cubic-bezier(.2,1.6,.4,1) forwards, hud-final 0.3s 0.28s ease-in-out 6 alternate; }
+.hud-banner.finish.show { animation: hud-banner-slam 0.5s cubic-bezier(.2,1.6,.4,1) forwards; }
+.hud-banner.finish.win.show { animation: hud-banner-slam 0.5s cubic-bezier(.2,1.6,.4,1) forwards, hud-win 0.5s 0.5s ease-in-out 5 alternate; }
 
 /* trash talk: a rival's face and a speech bubble, on the left where it cannot cover the road */
 .hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--u) * 41); display: flex; align-items: center; gap: calc(var(--u) * 2); max-width: calc(var(--u) * 58); opacity: 0; transform: translateX(calc(var(--u) * -8)) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }
@@ -138,6 +149,12 @@
 @keyframes hud-pop { 0% { transform: scale(1); } 40% { transform: scale(1.28); } 100% { transform: scale(1); } }
 @keyframes hud-spin { to { transform: rotate(360deg); } }
 @keyframes hud-pulse { from { filter: brightness(1); } to { filter: brightness(1.35); } }
+@keyframes hud-banner-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.18); } }
+@keyframes hud-banner-slam { 0% { opacity: 0; transform: translate(-50%, -50%) scale(2.1); } 55% { opacity: 1; transform: translate(-50%, -50%) scale(0.9); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes hud-final { from { filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)); } to { filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)) drop-shadow(0 0 calc(var(--u) * 2.6) rgba(255, 70, 110, 0.95)) brightness(1.2); } }
+@keyframes hud-win { from { filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)); } to { filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)) drop-shadow(0 0 calc(var(--u) * 3) rgba(255, 214, 80, 0.95)) brightness(1.25); } }
+@keyframes hud-rank-up { 0% { transform: scale(1); } 35% { transform: scale(1.42) rotate(-5deg); filter: brightness(1.5) drop-shadow(0 0 calc(var(--u) * 2.4) rgba(110, 255, 190, 0.95)); } 100% { transform: scale(1); } }
+@keyframes hud-rank-down { 0% { transform: none; } 18% { transform: scale(0.8) translateX(calc(var(--u) * -1.4)); filter: drop-shadow(0 0 calc(var(--u) * 2) rgba(255, 60, 90, 0.95)); } 42% { transform: scale(0.94) translateX(calc(var(--u) * 1.1)); } 68% { transform: translateX(calc(var(--u) * -0.5)); } 100% { transform: none; } }
 @keyframes hud-banner { from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 @keyframes hud-warn { from { transform: translateX(-50%) scale(0.92); } to { transform: translateX(-50%) scale(1.08); } }
 @keyframes hud-feed { from { opacity: 0; transform: translateY(calc(var(--u) * -1)); } to { opacity: 1; transform: none; } }
@@ -147,3 +164,7 @@
 @keyframes hud-coin-pop-down { 0% { opacity: 0; transform: translate(0, calc(var(--u) * -1.6)) scale(0.7); } 14% { opacity: 1; transform: translate(0, 0) scale(1.08); } 26% { transform: translate(0, calc(var(--u) * 0.6)) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(0, calc(var(--u) * 3.4)) scale(1); } }
 
 @media (prefers-reduced-motion: reduce) { .hud-item.pop, .hud-rank.pop, .hud-pill.pop, .hud-coins.glow, .hud-coin-pop.show { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .hud-rank.up, .hud-rank.down, .hud-banner.out { animation: none; }
+  .hud-banner.count.show, .hud-banner.go.show, .hud-banner.final.show, .hud-banner.finish.show, .hud-banner.finish.win.show { animation: hud-banner 0.2s ease-out forwards; }
+}

@@ -11,6 +11,17 @@ import { makeRng, fbm } from '../core/util.js';
 
 const hex = c => '#' + new THREE.Color(c).getHexString();
 
+/** Generated art for this track (prompts in assets/tracks/singularity-speedway/prompts.md), loaded as image textures. */
+const ART = 'assets/tracks/singularity-speedway/', rackTex = {};
+function artTex(file, wrap) {
+  const t = new THREE.TextureLoader().load(ART + file);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = wrap; t.anisotropy = 8;
+  return t;
+}
+
+/** Nothing to draw: for solid posts whose look is built elsewhere. */
+export function hidden() { return new THREE.Group(); }
+
 /* ---------- the Singularity ---------- */
 const orbVert = /* glsl */`
   varying vec3 vN; varying vec3 vV; varying vec3 vP;
@@ -151,6 +162,103 @@ export function singularity({ r = 21, ringIn = 24.5, ringOut = 30, ringTilt = 0.
   return grp;
 }
 
+/** The Singularity's face: a chatbot's friendly face painted on a cap of the orb, dark features on the white-hot core.
+    Turn it with lookAt (its +Z is the middle of the face). userData.setMood('happy' | 'think' | 'evil'),
+    userData.update(dt, time) blinks. Redraws its canvas only when the mood or the blink changes. */
+export function chatFace(r = 21) {
+  const W = 1024, H = 640, PHI = 1.9, THETA = 1.25;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const geo = new THREE.SphereGeometry(r * 1.045, 48, 32, Math.PI / 2 - PHI / 2, PHI, Math.PI / 2 - THETA / 2, THETA);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false });
+  const mesh = new THREE.Mesh(geo, mat); mesh.renderOrder = 1;
+  const grp = new THREE.Group(); grp.add(mesh);
+  // the cap spans PHI x THETA radians; draw in "face units" where the canvas middle is the middle of the face
+  const X = u => W / 2 + u * W / 2, Y = v => H / 2 - v * H / 2;   // u, v in -1..1
+  const pill = (cx, cy, w, h) => { g.beginPath(); g.roundRect(X(cx) - w / 2, Y(cy) - h / 2, w, h, Math.min(w, h) / 2); g.fill(); };
+  let mood = 'happy', shut = false, key = '';
+  const paint = () => {
+    const k = mood + shut; if (k === key) return; key = k;
+    g.clearRect(0, 0, W, H);
+    const ink = '#1b0d3f';
+    if (mood === 'evil') {
+      // red eyes under angry brows, and a wide grin full of teeth
+      for (const s of [-1, 1]) {
+        g.fillStyle = ink; g.beginPath(); g.moveTo(X(s * 0.12), Y(0.36)); g.lineTo(X(s * 0.5), Y(0.5)); g.lineTo(X(s * 0.52), Y(0.4)); g.lineTo(X(s * 0.12), Y(0.27)); g.closePath(); g.fill();
+        g.fillStyle = '#ff1a3a'; g.beginPath(); g.ellipse(X(s * 0.3), Y(0.16), 70, shut ? 10 : 58, 0, 0, 7); g.fill();
+        g.fillStyle = '#ffe2e6'; g.beginPath(); g.ellipse(X(s * 0.3), Y(0.16), 22, shut ? 4 : 20, 0, 0, 7); g.fill();
+      }
+      g.fillStyle = ink; g.beginPath(); g.moveTo(X(-0.55), Y(-0.22)); g.quadraticCurveTo(X(0), Y(-0.62), X(0.55), Y(-0.22)); g.quadraticCurveTo(X(0), Y(-0.92), X(-0.55), Y(-0.22)); g.fill();
+      g.fillStyle = '#ffffff'; for (let k = 0; k < 9; k++) { const u = -0.4 + k * 0.1, t = (u + 0.55) / 1.1, top = -0.22 - 0.8 * t * (1 - t) - 0.01; g.beginPath(); g.moveTo(X(u - 0.045), Y(top)); g.lineTo(X(u + 0.045), Y(top)); g.lineTo(X(u), Y(top - 0.09)); g.fill(); }
+      return void (tex.needsUpdate = true);
+    }
+    g.fillStyle = 'rgba(255,92,200,0.35)'; for (const s of [-1, 1]) { g.beginPath(); g.ellipse(X(s * 0.6), Y(0.0), 80, 42, 0, 0, 7); g.fill(); }
+    g.fillStyle = ink;
+    const ey = mood === 'think' ? 0.38 : 0.3, ex = mood === 'think' ? 0.07 : 0;
+    for (const s of [-1, 1]) {
+      if (shut) { g.lineWidth = 30; g.strokeStyle = ink; g.lineCap = 'round'; g.beginPath(); g.arc(X(s * 0.33 + ex), Y(ey) + 30, 64, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
+      else { pill(s * 0.33 + ex, ey, 104, 220); g.fillStyle = '#ffffff'; g.beginPath(); g.arc(X(s * 0.33 + ex) + 20, Y(ey) - 56, 20, 0, 7); g.fill(); g.fillStyle = ink; }
+    }
+    g.lineWidth = 40; g.lineCap = 'round'; g.strokeStyle = ink; g.beginPath();
+    if (mood === 'think') { g.moveTo(X(-0.16), Y(-0.3)); g.lineTo(X(0.2), Y(-0.26)); }
+    else g.arc(X(0), Y(0.12), 250, Math.PI * 0.2, Math.PI * 0.8);
+    g.stroke();
+    tex.needsUpdate = true;
+  };
+  paint();
+  let blinkT = 2.5;
+  grp.userData.setMood = m => { mood = m; paint(); };
+  grp.userData.update = dt => { blinkT -= dt; const s = blinkT < 0.14; if (s !== shut) { shut = s; paint(); } if (blinkT < 0) blinkT = 2.6 + Math.random() * 2.4; };
+  return grp;
+}
+
+/** A Dyson swarm under construction around a small star: the AI's next data center. Not fogged.
+    userData.setBuilt(f) closes the shell (0..1: the fraction of panels in place), userData.update(time) turns it. */
+export function dysonSphere({ R = 240, panels = 460, text = 'MINIMUM VIABLE COMPUTE' } = {}) {
+  const grp = new THREE.Group(), rng = makeRng(23);
+  // the star
+  const starM = new THREE.MeshBasicMaterial({ color: 0xfff1c8, fog: false });
+  const star = new THREE.Mesh(new THREE.SphereGeometry(R * 0.62, 40, 28), starM); grp.add(star);
+  const haloTex = canvasTex(256, 256, (g, w) => { const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gr.addColorStop(0, 'rgba(255,240,200,1)'); gr.addColorStop(0.3, 'rgba(255,190,110,0.5)'); gr.addColorStop(0.65, 'rgba(255,110,90,0.12)'); gr.addColorStop(1, 'rgba(255,80,120,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, w); }, { repeat: false, mip: false });
+  const haloM = new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  const halo = new THREE.Sprite(haloM); halo.scale.setScalar(R * 4.2); halo.renderOrder = -1; grp.add(halo);
+  // the panels: solar-and-server tiles on a Fibonacci sphere, each with a glowing frame
+  const panelTex = artTex('panel.webp', THREE.ClampToEdgeWrapping);
+  const pm = new THREE.MeshStandardMaterial({ map: panelTex, emissiveMap: panelTex, emissive: 0xffffff, emissiveIntensity: 1.1, roughness: 0.4, metalness: 0.5, side: THREE.DoubleSide }); pm.fog = false;
+  const size = R * Math.sqrt(4 * Math.PI / panels) * 0.62;
+  const im = new THREE.InstancedMesh(new THREE.CircleGeometry(size, 6), pm, panels); im.frustumCulled = false; grp.add(im);
+  const list = [], up = new THREE.Vector3(0, 1, 0);
+  for (let k = 0; k < panels; k++) {
+    const yy = 1 - (k + 0.5) / panels * 2, rr = Math.sqrt(1 - yy * yy), a = k * 2.399963;
+    const n = new THREE.Vector3(Math.cos(a) * rr, yy, Math.sin(a) * rr);
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(n, new THREE.Vector3(), up));
+    // build order: bands from the equator out, with some scatter, so it closes like a construction site
+    list.push({ p: n.clone().multiplyScalar(R), q, ord: Math.min(0.999, Math.abs(yy) * 0.75 + rng() * 0.3) });
+  }
+  const M = new THREE.Matrix4(), S = new THREE.Vector3();
+  const setBuilt = f => {
+    list.forEach((o, k) => { M.compose(o.p, o.q, S.setScalar(o.ord < f ? 1 : 0.0001)); im.setMatrixAt(k, M); });
+    im.instanceMatrix.needsUpdate = true;
+    const lit = Math.max(0.04, 1 - Math.max(0, f - 0.8) * 4.8);   // closed, the star is gone
+    starM.color.setRGB(1, 0.945, 0.784).multiplyScalar(2.2 * lit); haloM.opacity = 0.85 * lit;
+  };
+  setBuilt(0.55);
+  // construction rings and the name band round the equator
+  const ringM = glow(0xff5cc8, 2.4); ringM.fog = false;
+  const rings = [0.25, -0.5, 1.1].map((tilt, k) => { const m = new THREE.Mesh(new THREE.TorusGeometry(R * (1.18 + k * 0.08), R * 0.006, 6, 160), ringM); m.rotation.set(Math.PI / 2 + tilt, 0, k * 0.7); grp.add(m); return m; });
+  const band = canvasTex(4096, 256, (g, w, h) => {
+    g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd23c'; g.fillRect(0, 10, w, 10); g.fillRect(0, h - 20, w, 10);
+    let fs = 190; const font = () => { g.font = `${fs}px "Luckiest Guy", "Arial Black", sans-serif`; }; font();
+    while (g.measureText(text).width > w * 0.42 && fs > 40) { fs -= 6; font(); }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let k = 0; k < 2; k++) { g.fillStyle = '#ffd23c'; g.fillText(text, w * (0.25 + k * 0.5), h / 2 + 8); g.fillStyle = '#ff5cc8'; g.beginPath(); g.arc(w * (0.5 + k * 0.5) - (k ? 30 : 0), h / 2, 22, 0, 7); g.fill(); }
+  }, { repeat: true, aniso: 4 });
+  const bm = new THREE.MeshBasicMaterial({ map: band, side: THREE.FrontSide, fog: false });
+  const bandMesh = new THREE.Mesh(new THREE.CylinderGeometry(R * 1.06, R * 1.06, R * 0.24, 128, 1, true), bm); grp.add(bandMesh);
+  grp.userData = { setBuilt, update: time => { im.rotation.y = time * 0.01; bandMesh.rotation.y = -time * 0.02; rings.forEach((r, k) => { r.rotation.z = time * 0.006 * (k + 1); }); } };
+  return grp;
+}
+
 /** The great accretion disc: a vast thin annulus around the whole spiral. */
 export function accretionDisc({ inner = 58, outer = 105 } = {}) {
   const m = discMaterial({ inner, outer, gain: 1.05, streaks: 14, speed: 0.06, hot: 0xffd2a0, mid: 0xff6a6a, cool: 0xc04cff, edge: 0x3a2aa0 });
@@ -160,36 +268,10 @@ export function accretionDisc({ inner = 58, outer = 105 } = {}) {
 }
 
 /* ---------- server monoliths ---------- */
-const monoTex = {};
-function monolithTextures(v) {
-  if (monoTex[v]) return monoTex[v];
-  const rng = makeRng(31 + v * 7), cols = 14, rows = 44;
-  const palette = [['#35e0ff', '#ffffff', '#7a6bff'], ['#ff5cc8', '#ffd2f0', '#7a6bff'], ['#9dff7a', '#35e0ff', '#ffffff']][v % 3];
-  const lit = [];
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (rng() < (r % 6 === 5 ? 0 : 0.42)) lit.push([c, r, palette[Math.floor(rng() * palette.length)], rng()]);
-  const draw = emissive => (g, w, h) => {
-    g.fillStyle = emissive ? '#000' : '#0b0d1c'; g.fillRect(0, 0, w, h);
-    const cw = w / cols, ch = h / rows;
-    if (!emissive) {
-      g.strokeStyle = 'rgba(120,130,200,0.25)'; g.lineWidth = 2;
-      for (let r = 0; r <= rows; r += 6) { g.beginPath(); g.moveTo(0, r * ch); g.lineTo(w, r * ch); g.stroke(); }
-      g.strokeRect(3, 3, w - 6, h - 6);
-    }
-    for (const [c, r, col, k] of lit) {
-      g.fillStyle = emissive ? col : '#1d2240';
-      g.globalAlpha = emissive ? 0.45 + k * 0.55 : 1;
-      g.fillRect(c * cw + cw * 0.28, r * ch + ch * 0.32, cw * 0.44, ch * 0.3);
-    }
-    g.globalAlpha = 1;
-    if (emissive) { g.fillStyle = palette[0]; g.fillRect(0, 0, w, 3); g.fillRect(0, h - 3, w, 3); }
-  };
-  monoTex[v] = { map: canvasTex(256, 512, draw(false), { repeat: false, aniso: 4 }), emissive: canvasTex(256, 512, draw(true), { repeat: false, aniso: 4 }) };
-  return monoTex[v];
-}
-/** A tall dark server slab, h metres tall, covered in tiny status lights. */
+/** A tall server slab, h metres tall: blade servers and status lights (generated art) on every face. */
 export function monolith(v = 0, { h = 40, w = 10, d = 4 } = {}) {
-  const t = monolithTextures(v);
-  const mat = new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emissive, emissive: 0xffffff, emissiveIntensity: 2.2, roughness: 0.35, metalness: 0.6 });
+  const rack = rackTex[v] || (rackTex[v] = (() => { const t = artTex('rack.webp', THREE.RepeatWrapping); t.repeat.set(1, 3); return t; })());
+  const mat = new THREE.MeshStandardMaterial({ map: rack, emissiveMap: rack, emissive: [0xffffff, 0xffc4ec, 0xc4f6ff][v % 3], emissiveIntensity: 1.25, roughness: 0.35, metalness: 0.5 });
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   const grp = new THREE.Group(); grp.add(mesh);
   const b = new ModelBuilder();
@@ -308,6 +390,32 @@ export function planet({ r = 380 } = {}) {
   grp.add(new THREE.Mesh(new THREE.SphereGeometry(r, 72, 48), m));
   const atm = shellMaterial(0x5fd8ff, 3.0, 0.7); atm.fog = false;
   const a = new THREE.Mesh(new THREE.SphereGeometry(r * 1.04, 64, 40), atm); a.renderOrder = 1; grp.add(a);
+  // the paperclip conversion: grey wire spreading over the world from one spot, with a hot front. convert(f), f in 0..1
+  const cv = tex.image, g = cv.getContext('2d'), W = cv.width, H = cv.height, orig = g.getImageData(0, 0, W, H);
+  const clip = document.createElement('canvas'); clip.width = W; clip.height = H;
+  { const c = clip.getContext('2d'); c.fillStyle = '#8a8f9c'; c.fillRect(0, 0, W, H); c.strokeStyle = '#c9ced8'; c.lineWidth = 2.2; c.lineCap = 'round';
+    const rr = makeRng(5);
+    for (let k = 0; k < 900; k++) { c.save(); c.translate(rr() * W, rr() * H); c.rotate(rr() * Math.PI); const L = 9 + rr() * 6, w = 3.2;
+      c.beginPath(); c.moveTo(-L, -w); c.lineTo(L, -w); c.arc(L, 0, w, -Math.PI / 2, Math.PI / 2); c.lineTo(-L + 2, w); c.arc(-L + 2, 0, w * 0.6, Math.PI / 2, -Math.PI / 2, false); c.lineTo(L - 3, -w * 0.2); c.stroke(); c.restore(); }
+    c.fillStyle = 'rgba(40,44,56,0.25)'; for (let k = 0; k < 2400; k++) c.fillRect(rr() * W, rr() * H, 2, 2); }
+  const clipData = clip.getContext('2d').getImageData(0, 0, W, H).data;
+  const seed = [Math.cos(0.4) * Math.cos(2.2), Math.sin(0.4), Math.cos(0.4) * Math.sin(2.2)];   // where it starts
+  let shown = -1;
+  grp.userData.convert = f => {
+    if (Math.abs(f - shown) < 0.004) return; shown = f;
+    const img = g.createImageData(W, H), d = img.data, o = orig.data, cosR = Math.cos(f * Math.PI * 1.02), front = 0.05;
+    for (let y = 0; y < H; y++) {
+      const lat = (y / H - 0.5) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
+      for (let x = 0; x < W; x++) {
+        const lon = x / W * Math.PI * 2, dot = cl * Math.cos(lon) * seed[0] + sl * seed[1] + cl * Math.sin(lon) * seed[2], k = (y * W + x) * 4;
+        if (f <= 0 || dot < cosR - front) { d[k] = o[k]; d[k + 1] = o[k + 1]; d[k + 2] = o[k + 2]; }
+        else if (dot < cosR) { const t = (cosR - dot) / front; d[k] = 255; d[k + 1] = 120 + 100 * t; d[k + 2] = 60 + 60 * t; }   // the front, glowing
+        else { d[k] = clipData[k]; d[k + 1] = clipData[k + 1]; d[k + 2] = clipData[k + 2]; }
+        d[k + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0); tex.needsUpdate = true;
+  };
   return grp;
 }
 /** A grey cratered moon. Not fogged. */
@@ -348,7 +456,7 @@ function plate(tex, w, h) {
 }
 
 /** Two emitter posts about 5 m apart with a beam between them, each post wearing a GUARDRAIL plate; userData.setActive toggles the beam. */
-export function laserGate() {
+export function laserGate(label = ['GUARDRAIL', '(BETA)']) {
   const grp = new THREE.Group(), b = new ModelBuilder(), half = 2.6;
   for (const sx of [-1, 1]) {
     b.add('post', cyl(0.22, 0.32, 1.5, 10), { p: [sx * half, 0.75, 0] });
@@ -356,7 +464,7 @@ export function laserGate() {
     b.add('lens', sphere(0.26, 12, 10), { p: [sx * half, 1.15, 0] });
     b.add('ring', torus(0.32, 0.05, 6, 16), { p: [sx * half, 1.5, 0], r: [Math.PI / 2, 0, 0] });
     b.add('post', cyl(0.05, 0.05, 0.5, 6), { p: [sx * half, 1.75, 0] });
-    const pl = plate(plateTex(['GUARDRAIL', '(BETA)'], '#ffd23c', '#1a1d29'), 1.7, 0.64); pl.position.set(sx * half, 2.3, 0); grp.add(pl);
+    const pl = plate(plateTex(label, '#ffd23c', '#1a1d29'), 1.7, 0.64); pl.position.set(sx * half, 2.3, 0); grp.add(pl);
   }
   grp.add(b.build({ post: MAT.dark, lens: glow(0xff2a6a, 3), ring: glow(0xff5cc8, 2.5) }));
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xff3a7a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });

@@ -214,7 +214,7 @@ export class Track {
       const lats = r.lats || Array.from({ length: n }, (_, k) => (n === 1 ? 0 : lerp(-hw, hw, k / (n - 1))) + (r.lat ?? 0));
       return { i, s: i * this.ds, lats };
     });
-    this.obstacleDefs = (def.obstacles || []).map((o, k) => ({ id: k, kind: o.kind || 'patrol', model: o.model || 'barrel', radius: o.radius ?? 1.4, effect: o.effect || 'spin', speed: o.speed ?? 6, period: o.period ?? 4, duty: o.duty ?? 0.5, phase: o.phase ?? 0, orbit: o.orbit ?? 4, a: { s: this.sAtCp(o.at ?? o.from), lat: o.lat ?? (o.lats ? o.lats[0] : 0) }, b: { s: this.sAtCp(o.to ?? o.at ?? o.from), lat: o.lats ? o.lats[1] : (o.lat2 ?? o.lat ?? 0) }, lift: o.lift ?? 0 }));
+    this.obstacleDefs = (def.obstacles || []).map((o, k) => ({ id: k, kind: o.kind || 'patrol', model: o.model || 'barrel', radius: o.radius ?? 1.4, effect: o.effect || 'spin', speed: o.speed ?? 6, period: o.period ?? 4, duty: o.duty ?? 0.5, phase: o.phase ?? 0, orbit: o.orbit ?? 4, a: { s: this.sAtCp(o.at ?? o.from), lat: o.lat ?? (o.lats ? o.lats[0] : 0) }, b: { s: this.sAtCp(o.to ?? o.at ?? o.from), lat: o.lats ? o.lats[1] : (o.lat2 ?? o.lat ?? 0) }, lift: o.lift ?? 0, fromLap: o.fromLap ?? 0 }));
     this.coinSpots = [];
     for (const c of def.coins || []) {
       const i0 = this.indexAtCp(c.from), i1 = this.indexAtCp(c.to ?? c.from);

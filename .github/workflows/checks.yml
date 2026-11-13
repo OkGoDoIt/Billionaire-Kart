@@ -1,0 +1,57 @@
+# Runs the headless sim and the browser bot on every pull request to main and every push to main (#91).
+# The bot walks the menus, races on autopilot, and fails on page errors, unrendered text, or screens that overflow.
+# Bot screenshots are uploaded as an artifact when anything fails, so a red check can be diagnosed from the run page.
+name: Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sim-and-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Sim
+        run: node tools/sim.mjs --quick
+
+      - name: Bot, desktop
+        if: ${{ !cancelled() }}
+        run: node tools/bot.mjs --out bot-shots/desktop
+
+      - name: Bot, mobile
+        if: ${{ !cancelled() }}
+        run: node tools/bot.mjs --mobile --out bot-shots/mobile
+
+      - name: Upload bot screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-screenshots
+          path: bot-shots/
+          if-no-files-found: ignore
+          retention-days: 14

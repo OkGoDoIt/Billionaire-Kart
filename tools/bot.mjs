@@ -24,8 +24,11 @@ const server = http.createServer(async (req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 let browser;
-try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] }); }
-catch { browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] }); }
+/* On a Linux CI runner there is no GPU and no Chrome channel: go straight to bundled Chromium with software GL. */
+const swiftshader = { headless: true, args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] };
+if (process.env.CI || process.platform === 'linux') browser = await chromium.launch(swiftshader);
+else try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] }); }
+catch { browser = await chromium.launch(swiftshader); }
 const mobile = !!opt.mobile;
 const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1280, height: 720 }, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
 const page = await ctx.newPage();

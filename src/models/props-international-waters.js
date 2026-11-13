@@ -424,8 +424,8 @@ export function teakMat() {
 
 /** Hull section numbers at z: half-beam w, keel k, deck top. */
 function station(z, o) {
-  const { L, B, D, keel = -3.4, stern = 0.88, rakeFrom = 0.45, sheer = 0, rakeTo = 1.4 } = o, h = L / 2, t = z / h;
-  let w = t <= 0 ? B * (1 - (1 - stern) * t * t) : B * Math.pow(Math.max(0, 1 - Math.pow(t, 2.4)), 0.62);
+  const { L, B, D, keel = -3.4, stern = 0.88, rakeFrom = 0.45, sheer = 0, rakeTo = 1.4, bowP = 2.4 } = o, h = L / 2, t = z / h;
+  let w = t <= 0 ? B * (1 - (1 - stern) * t * t) : B * Math.pow(Math.max(0, 1 - Math.pow(t, bowP)), 0.62);
   w = Math.max(w, 0.06);
   const top = D + sheer * Math.max(0, t) ** 2;
   let k = keel;
@@ -485,7 +485,7 @@ function hull(b, o) {
       b.add('gold', stripGeo(sts, st => [st.top - 0.75, st.top - 1.15].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; })));
       if (o.windows) {
         const ws = sts.filter(st => st.z >= o.windows[0] && st.z <= o.windows[1]);
-        if (ws.length > 1) b.add('glass', stripGeo(ws, st => [st.top - 3.0, st.top - 4.6].map(y => { const p = sectionPt(st, uAt(st, y), 0.06); return [p[0] * s, y]; })));
+        if (ws.length > 1) b.add('glass', stripGeo(ws, st => [st.top - 1.6, st.top - 2.9].map(y => { const p = sectionPt(st, uAt(st, y), 0.06); return [p[0] * s, y]; })));
       }
     }
     if (z0 > -h + 0.1) b.add('cut', fanGeo(full(station(z0, o)), z0));
@@ -523,89 +523,139 @@ function tier(b, { x = 0, z0, z1, y0, y1, w, nose = 0.3, tail = 0.9, glassH = 0.
     { z: z1, w: ww * nose, h: h * 0.9, y: y - h * 0.04, x, n: 3 },
   ];
   b.add(mat, loft(secs(w, hh, yc), 28, 5));
-  b.add('glass', loft(secs(w + 0.14, hh * glassH, yc + hh * 0.12), 28, 5));
+  const gs = secs(w + 0.14, hh * glassH, yc + hh * 0.12); gs[0].z += 0.9; gs[0].w = (w + 0.14) * tail * 0.92;
+  b.add('glass', loft(gs, 28, 5));
 }
 
 /**
- * The gigayacht the lap runs through and along. Returns a Group with the bow
- * along +X and port toward -Z (hull frame turned a quarter), waterline y = 0.
- * cut = [z0, z1, top] (hull frame) is the beach-club drive-through; superX is
- * the superstructure lane in hull X; name goes down both sides of the bow.
- * userData.radar spins.
+ * A superyacht the lap races across: the road runs down her centreline from the
+ * aft deck, through the main-deck salon (twin glass-walled saloons either side,
+ * the upper decks carried overhead) and over the foredeck to a ramp at the bow.
+ * Hull frame: bow +Z, port +X, waterline y = 0, the road at deck height D on X = 0.
+ * o: { L, B, D, name, boot (color), salon: [z0, z1], uppers: [[z0, z1, h]...], helipad: z or null, dishes, accent }
+ * Returns a Group; userData: { radar, station(z), spin: [] }.
  */
-export function gigayacht({ L = 156, B = 18, D = 11.9, cut = null, superX = [-17, -4], name = 'SOVEREIGN IMMUNITY', nameZ = [-2, 60], club = 'BEACH CLUB' } = {}) {
-  const outer = new THREE.Group(), grp = new THREE.Group(); outer.add(grp); grp.rotation.y = Math.PI / 2;
-  const b = new ModelBuilder();
-  const o = { L, B, D, keel: -3.6, stern: 0.86, rakeFrom: 0.5, cut, windows: [-66, 64] };
+export function hopYacht({ L = 74, B = 12, D = 10.5, name = 'YACHT', boot = 0xc8323a, salon = [-20, 12], uppers = [[-16, 6, 3], [-10, 1, 2.4]], helipad = null, lane = 7.6, mast = true, header = null } = {}) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  const o = { L, B, D, keel: -3.2, stern: 0.9, rakeFrom: 0.42, bowP: 4.5, rakeTo: 1.6, windows: [-L * 0.42, L * 0.36] };
   hull(b, o);
-  // superstructure: four tiers stepping back, on the starboard lane
-  const sx = (superX[0] + superX[1]) / 2, sw = (superX[1] - superX[0]) / 2;
-  tier(b, { x: sx, z0: -62, z1: 30, y0: D - 0.05, y1: D + 3.5, w: sw, nose: 0.35 });
-  tier(b, { x: sx + 0.4, z0: -50, z1: 22, y0: D + 3.5, y1: D + 6.7, w: sw - 0.9, nose: 0.3 });
-  tier(b, { x: sx + 0.6, z0: -36, z1: 16, y0: D + 6.7, y1: D + 9.7, w: sw - 1.8, nose: 0.28, glassH: 0.62 });
-  tier(b, { x: sx + 0.8, z0: -22, z1: 8, y0: D + 9.7, y1: D + 11.9, w: sw - 2.6, nose: 0.3, glassH: 0.55 });
-  // the hardtop on the sundeck, on four slim posts
-  b.add('house', box(sw * 2 - 4.6, 0.45, 20, 0.2, 2), { p: [sx + 0.8, D + 15.6, -20] });
-  for (const px of [-1, 1]) for (const pz of [-28, -12]) b.add('chrome', cyl(0.12, 0.12, 3.6, 8), { p: [sx + 0.8 + px * (sw - 3.4), D + 13.75, pz] });
-  // balconies: white rails round each tier's aft deck
-  for (const [y, z0, z1, ww] of [[D + 3.5, -62, -50, sw], [D + 6.7, -50, -36, sw - 0.9], [D + 9.7, -36, -22, sw - 1.8]]) {
-    for (const s of [1, -1]) b.add('chrome', box(0.1, 0.1, z1 - z0, 0.03, 1), { p: [sx + s * (ww - 0.2), y + 1.05, (z0 + z1) / 2] });
-    b.add('chrome', box(ww * 2 - 0.4, 0.1, 0.1, 0.03, 1), { p: [sx, y + 1.05, z0 + 0.3] });
+  // a second, lower row of hull windows on the taller hulls
+  if (false) for (const s of [1, -1]) {
+    const sts = range(-L * 0.4, L * 0.3, 24).map(z => station(z, o));
+    b.add('glass', stripGeo(sts, st => [st.top - 6.0, st.top - 7.0].map(y => { const p = sectionPt(st, uAt(st, y), 0.06); return [p[0] * s, y]; })));
   }
-  // the infinity pool on the second tier's aft deck, glowing turquoise
-  b.add('pool', box(sw * 2 - 4, 0.3, 9, 0.1, 1), { p: [sx, D + 6.75, -44] });
-  // the mast: swept back, radar domes, an antenna crown
-  b.add('house', loft([{ z: -2.4, w: 0.9, h: 0.3, y: D + 12.1 }, { z: -1, w: 0.7, h: 3.2, y: D + 15 }, { z: 0.6, w: 0.45, h: 5.2, y: D + 17 }], 12, 3), { p: [sx + 0.8, 0, -6] });
-  b.add('house', sphere(1.25, 16, 10), { p: [sx + 3.2, D + 19.4, -6.5] });
-  b.add('house', sphere(1.05, 16, 10), { p: [sx - 1.6, D + 19.2, -6.5] });
-  b.add('chrome', cyl(0.07, 0.07, 6, 6), { p: [sx + 0.8, D + 23.5, -5.6] });
-  // the beach club inside the drive-through: lit strips and portholes of light
-  if (cut) {
-    const [z0, z1, top] = cut, zc = (z0 + z1) / 2, w = station(zc, o).w;
-    for (const s of [1, -1]) {
-      b.add('neon', box(0.25, 0.25, z1 - z0 - 1, 0.05, 1), { p: [s * (w - 1.5), top - 0.4, zc] });
-      b.add('neon', box(w * 2 - 3, 0.2, 0.2, 0.05, 1), { p: [0, top - 0.3, s > 0 ? z0 + 0.6 : z1 - 0.6] });
-    }
-  }
-  // the bow: a cantilevered helipad where the road leaves the ship
-  b.add('pad', cyl(12.5, 12.5, 0.6, 40), { p: [1, D - 0.35, L / 2 - 9] });
-  b.add('gold', torus(12.4, 0.22, 6, 48), { p: [1, D - 0.02, L / 2 - 9], r: [Math.PI / 2, 0, 0] });
-  for (let k = 0; k < 20; k++) { const a = (k / 20) * Math.PI * 2; b.add('lamp', sphere(0.28, 8, 6), { p: [1 + Math.cos(a) * 12.4, D + 0.12, L / 2 - 9 + Math.sin(a) * 12.4] }); }
-  for (const s of [1, -1]) b.add('chrome', box(0.5, 0.5, 15, 0.1, 1), { p: [1 + s * 6, D - 4.4, L / 2 - 8], r: [-0.5, 0, 0] });
-  grp.add(b.build({
-    hull: WHITE, bottom: paint(0x10233f, { rough: 0.35, clear: 0.5 }), boot: paint(0xd9a63a, { rough: 0.3, metal: 0.5, clear: 0.6 }), gold: GOLDP,
-    glass: SMOKE, deck: teakMat(), cut: plastic(0xe9dcc4, 0.6), ceiling: new THREE.MeshStandardMaterial({ color: 0xf3e6cc, emissive: 0xffd9a0, emissiveIntensity: 0.55, roughness: 0.6 }),
-    house: WHITE, chrome: CHROME, pool: new THREE.MeshStandardMaterial({ color: 0x0aa7c6, emissive: 0x29d9f0, emissiveIntensity: 0.9, roughness: 0.1 }),
-    neon: glow(0xffc88a, 2.2), pad: plastic(0x2b3440, 0.7), lamp: glow(0xffd23c, 2.6),
-  }));
-  // the radar bar, spinning
-  const radar = new ModelBuilder();
-  radar.add('dark', box(5.5, 0.3, 0.5, 0.1, 1), { p: [0, 0, 0] });
-  const rg = radar.build({ dark: MAT.dark }); rg.position.set(sx + 0.8, D + 20.6, -5.4); grp.add(rg);
-  outer.userData.radar = rg;
-  // her name down both sides of the bow, in letters taller than a kart is long
-  const tex = canvasTex(2048, 256, (g, W, H) => {
-    g.clearRect(0, 0, W, H);
-    fitText(g, name, W / 2, H / 2 + 6, W - 40, H * 0.86, 230, FONT, { fill: '#10233f' });
-  }, { repeat: false, aniso: 8 });
-  const nameMat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  // the salon: two saloons either side of the road, glass to the sea outside and glass to the road inside
+  // (the inner windows show the generated salon interior), the ceiling slab carrying the upper decks over the road
+  const [z0, z1] = salon, sh = 5.2, outW = station((z0 + z1) / 2, o).w * 0.96, len = z1 - z0, zc = (z0 + z1) / 2;
+  const roomW = outW - lane, roomX = lane + roomW / 2;
   for (const s of [1, -1]) {
-    const len = nameZ[1] - nameZ[0], zc = (nameZ[0] + nameZ[1]) / 2, st = station(zc, o);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(len, len / 8), nameMat);
-    m.position.set(s * (st.w * 1.035 + 0.12), D - 4.6, zc); m.rotation.y = s * Math.PI / 2; m.renderOrder = 2;
-    grp.add(m);
+    b.add('house', box(roomW, sh, len, 0.7, 3), { p: [s * roomX, D + sh / 2, zc] });
+    b.add('glass', box(roomW, sh * 0.62, len - 1.2, 0.5, 2), { p: [s * (roomX + 0.12), D + sh * 0.52, zc] });
   }
-  // the club sign over each mouth of the drive-through
-  if (cut) {
-    const [z0, z1, top] = cut, zc = (z0 + z1) / 2, st = station(zc, o);
+  b.add('house', box(outW * 2, 0.8, len + 0.6, 0.35, 2), { p: [0, D + sh + 0.3, zc] });
+  b.add('ceiling', box(lane * 2 - 0.1, 0.1, len - 0.4, 0.04, 1), { p: [0, D + sh - 0.15, zc] });
+  for (let z = z0 + 2.5; z < z1 - 1.5; z += 3.5) for (const x of [-3.5, 0, 3.5]) b.add('chand', cyl(0.32, 0.32, 0.08, 10), { p: [x, D + sh - 0.22, z] });
+  // the upper decks, stepping back, full width over the salon
+  let y = D + sh + 0.6;
+  uppers.forEach(([a, c, h], k) => { tier(b, { x: 0, z0: a, z1: c, y0: y - 0.05, y1: y + h, w: outW - 1.1 - k * 1.3, nose: 0.3, glassH: 0.58 }); y += h; });
+  // rails round the upper decks' aft ends
+  { let yy = D + sh + 0.6; uppers.forEach(([a, , h], k) => { const ww = outW - 1.1 - k * 1.3; b.add('chrome', box(ww * 2 - 0.4, 0.08, 0.08, 0.03, 1), { p: [0, yy + 1.0, a - 2.5] }); for (const s of [1, -1]) b.add('chrome', box(0.08, 0.08, 3, 0.03, 1), { p: [s * (ww - 0.3), yy + 1.0, a - 1] }); yy += h; }); }
+  // the mast: swept back, radar domes
+  if (mast) {
+    const zc = (uppers[uppers.length - 1][0] + uppers[uppers.length - 1][1]) / 2;
+    b.add('house', loft([{ z: -2.0, w: 0.7, h: 0.3, y: y + 0.2 }, { z: -0.8, w: 0.55, h: 2.4, y: y + 2.4 }, { z: 0.5, w: 0.35, h: 3.8, y: y + 3.8 }], 12, 3), { p: [0, 0, zc] });
+    b.add('house', sphere(0.95, 14, 10), { p: [1.9, y + 5.2, zc - 0.4] });
+    b.add('house', sphere(0.8, 14, 10), { p: [-1.6, y + 5.0, zc - 0.4] });
+  }
+  // aft deck: a pool to port, sun loungers to starboard; foredeck: sunpads or a helipad
+  const aft = (-L / 2 + z0) / 2, sideC = lane + (station(aft, o).w - lane) / 2;
+  b.add('pool', box(station(aft, o).w - lane - 1.4, 0.3, Math.min(9, (z0 + L / 2) * 0.55), 0.1, 1), { p: [sideC, D + 0.02, aft] });
+  b.add('chrome', box(station(aft, o).w - lane - 0.8, 0.35, Math.min(9, (z0 + L / 2) * 0.55) + 0.6, 0.12, 1), { p: [sideC, D - 0.05, aft] });
+  for (let k = 0; k < 4; k++) {
+    const z = aft - 4.5 + k * 3;
+    b.add('cushion', box(1.0, 0.32, 2.0, 0.14, 2), { p: [-sideC, D + 0.16, z] });
+    b.add('cushion', box(1.0, 0.32, 0.9, 0.14, 2), { p: [-sideC, D + 0.42, z - 0.9], r: [-0.55, 0, 0] });
+  }
+  const fore = (z1 + L * 0.38) / 2, fw = station(fore, o).w;
+  if (helipad != null) {
+    b.add('pad', cyl(Math.min(9.5, fw), Math.min(9.5, fw), 0.3, 40), { p: [0, D - 0.12, helipad] });
+    b.add('lamp', torus(Math.min(9.3, fw - 0.2), 0.14, 6, 48), { p: [0, D + 0.05, helipad], r: [Math.PI / 2, 0, 0] });
+  } else for (const s of [1, -1]) b.add('cushion', box(fw - lane - 1.2, 0.4, 5, 0.18, 2), { p: [s * (lane + (fw - lane) / 2), D + 0.2, fore] });
+  grp.add(b.build({
+    hull: WHITE, bottom: paint(0x10233f, { rough: 0.35, clear: 0.5 }), boot: paint(boot, { rough: 0.3, clear: 0.6 }), gold: GOLDP,
+    glass: SMOKE, deck: teakMat(), cut: WHITE, house: WHITE, chrome: CHROME,
+    ceiling: new THREE.MeshStandardMaterial({ color: 0x7a5236, roughness: 0.55 }),
+    chand: glow(0xffe2a8, 2.2), pool: new THREE.MeshStandardMaterial({ color: 0x0aa7c6, emissive: 0x29d9f0, emissiveIntensity: 0.8, roughness: 0.1 }),
+    cushion: plastic(0xf3ead2, 0.8), pad: plastic(0x2b3440, 0.7), lamp: glow(0xffd23c, 2.4),
+  }));
+  // the inner windows: the salon interior, seen from the road through floor-to-ceiling glass
+  if (typeof Image !== 'undefined') {
+    const tex = salonTex(), tile = 9.4, reps = Math.max(1, Math.round((len - 1.4) / tile));
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.35 });
     for (const s of [1, -1]) {
-      const sign = boardMesh([club, 'MEMBERS AND KARTS ONLY'], 17, 2.6, { bg: '#10233f', fg: '#f6e7c1', accent: '#e9b443' });
-      sign.position.set(s * (st.w * 1.035 + 0.3), top + 1.6, zc); sign.rotation.y = s * Math.PI / 2;
-      grp.add(sign);
+      const g = new THREE.PlaneGeometry(len - 1.4, sh - 0.9); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * reps);
+      const m = new THREE.Mesh(g, mat); m.position.set(s * (lane - 0.03), D + sh / 2 - 0.05, zc); m.rotation.y = -s * Math.PI / 2; grp.add(m);
     }
   }
-  outer.userData.station = z => station(z, o);
-  return outer;
+  if (header) {   // over the salon's aft entrance, facing the karts coming aboard
+    const tex = canvasTex(1024, 192, (g, W, H) => {
+      g.fillStyle = '#10233f'; g.fillRect(0, 0, W, H); g.fillStyle = '#e9b443'; g.fillRect(0, 8, W, 6); g.fillRect(0, H - 14, W, 6);
+      fitText(g, header, W / 2, H / 2 + 4, W - 60, H * 0.62, H * 0.6, FONT, { fill: '#f6e7c1' });
+    }, { repeat: false, aniso: 8 });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(lane * 2 - 0.6, (lane * 2 - 0.6) * 192 / 1024), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6 }));
+    m.position.set(0, D + sh + 0.3, z0 - 0.36); m.rotation.y = Math.PI; grp.add(m);
+  }
+  // her name down both sides, under the gold sheer line
+  const tex = canvasTex(2048, 256, (g, W, H) => { g.clearRect(0, 0, W, H); fitText(g, name, W / 2, H / 2 + 6, W - 40, H * 0.86, 230, FONT, { fill: '#10233f', stroke: '#f7f6f2', lw: 10 }); }, { repeat: false, aniso: 8 });
+  const nameMat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const nz0 = -L * 0.3, nz1 = L * 0.24, nl = nz1 - nz0, nzc = (nz0 + nz1) / 2;
+  const nh = Math.min(nl / 8, D - 3.0 - 2.4), ny = 1.95 + nh / 2;
+  const nGeo = new THREE.PlaneGeometry(nl, nh, 40, 1);
+  for (const s of [1, -1]) {
+    // bend the name round the hull: each column sits on the hull side at its own z
+    const g = nGeo.clone(), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const zz = nzc + p.getX(i) * s, yy = ny + p.getY(i), st = station(zz, o); const sp = sectionPt(st, uAt(st, yy), 0.1); p.setXYZ(i, s * sp[0], yy, zz); }
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, nameMat); m.renderOrder = 2; grp.add(m);
+  }
+  grp.userData.station = z => station(z, o);
+  grp.userData.o = o;
+  return grp;
+}
+
+let salonTexCache = null;
+/** The generated salon interior (assets/tracks/international-waters/salon.webp), tiling along the windows. */
+function salonTex() {
+  if (!salonTexCache) { salonTexCache = new THREE.TextureLoader().load('assets/tracks/international-waters/salon.webp'); salonTexCache.colorSpace = THREE.SRGBColorSpace; salonTexCache.wrapS = THREE.RepeatWrapping; salonTexCache.anisotropy = 8; }
+  return salonTexCache;
+}
+
+/** White foam round a hull at the waterline: a ribbon a little outside the hull's waterline outline, in hull frame. */
+export function foamRing(o, width = 1.6) {
+  const pts = [], h = o.L / 2;
+  for (let k = 0; k <= 60; k++) { const z = -h + (o.L * k) / 60, st = station(Math.min(z, h - 0.5), o); pts.push([sectionPt(st, uAt(st, 0))[0], z]); }
+  const ring = [...pts.map(([x, z]) => [x, z]), ...pts.slice().reverse().map(([x, z]) => [-x, z])];
+  const pos = [], uv = [], idx = [];
+  ring.forEach(([x, z], i) => {
+    const [px, pz] = ring[(i + 1) % ring.length], [qx, qz] = ring[(i - 1 + ring.length) % ring.length];
+    let nx = pz - qz, nz = -(px - qx); const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
+    if (nx * x + nz * z < 0) { nx = -nx; nz = -nz; }
+    pos.push(x - nx * 0.3, 0, z - nz * 0.3, x + nx * width, 0, z + nz * width); uv.push(i / 8, 0, i / 8, 1);
+    const a = i * 2, c = ((i + 1) % ring.length) * 2; idx.push(a, c, a + 1, a + 1, c, c + 1);
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+let foamTex = null;
+/** Soft broken white foam, fading outward (v = 0 at the hull, 1 at the edge). */
+export function foamMaterial() {
+  if (!foamTex) foamTex = canvasTex(256, 64, (g, W, H) => {
+    g.clearRect(0, 0, W, H);
+    for (let i = 0; i < 260; i++) { const x = Math.random() * W, y = Math.pow(Math.random(), 1.6) * H, r = 2 + Math.random() * 6; g.fillStyle = `rgba(255,255,255,${0.55 * (1 - y / H)})`; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+    const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  }, { aniso: 4 });
+  return new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, opacity: 0.85 });
 }
 
 /**

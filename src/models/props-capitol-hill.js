@@ -674,3 +674,258 @@ export function ballroomSite() {
   grp.add(new THREE.Mesh(merged, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.12 })));
   return grp;
 }
+
+/* ================= round 2 (#140): the destruction becomes the hero, the pool goes green =====
+   Roger, playtesting: "The White House track doesn't actually show the destroyed ballroom...
+   Same with the reflecting pool that's supposed to be green with algae." From the road, #129's
+   demolished wing hid behind the Avenue grandstands and the pool rendered swimming-pool blue.
+   These props fix the sightlines: everything tall enough to read over the stands, and the
+   pool's surface itself carrying the joke (the MKW water-frame principle). */
+
+/** Two merged faces of one textured panel (the ballroomSite board trick): one draw call. */
+function panelPair(w, h, tex, y) {
+  const face = new THREE.PlaneGeometry(w, h), back = new THREE.PlaneGeometry(w, h);
+  face.translate(0, y, 0.09); back.rotateY(Math.PI); back.translate(0, y, -0.09);
+  const pos = [], nor = [], uv = [], idx = []; let o = 0;
+  for (const g of [face, back]) {
+    const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, I = g.index.array;
+    for (let i = 0; i < P.count; i++) { pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(N.getX(i), N.getY(i), N.getZ(i)); uv.push(U.getX(i), U.getY(i)); }
+    for (let i = 0; i < I.length; i++) idx.push(I[i] + o);
+    o += P.count;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.12 }));
+}
+
+const _sv = new THREE.Vector3(), _sq = new THREE.Quaternion(), _se = new THREE.Euler();
+/** Add a centred geometry to bucket `mat` as part of a rigid assembly: rotate by R, place at R·p + T. */
+function rigid(b, mat, geo, p, R, T) {
+  _sv.set(p[0], p[1], p[2]).applyEuler(_se.set(R[0], R[1], R[2]));
+  b.add(mat, geo, { p: [_sv.x + T[0], _sv.y + T[1], _sv.z + T[2]], r: R });
+}
+
+/**
+ * The wrecking-ball crane: 27 m of rust-red steel standing west of the site, its ball on a
+ * 13.5 m chain over the demolished half. The swing group hangs from the jib tip; the track
+ * animates userData.swing. Built merged per material plus the swing group: five draw calls.
+ */
+export function wreckCrane() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('site', box(4.4, 1.2, 4.4, 0.08, 1), { p: [0, 0.6, 0] });                              // base slab
+  b.add('site', box(3.2, 1.5, 3.2, 0.08, 1), { p: [0, 1.95, 0] });                             // ballast stack
+  b.add('crane', box(1.3, 26, 1.3, 0.06, 1), { p: [0, 15.2, 0] });                             // mast
+  b.add('crane', box(1.3, 26, 1.3, 0.06, 1), { p: [0, 15.2, 0], r: [0, Math.PI / 4, 0] });     // mast, crossed (lattice read)
+  b.add('crane', box(2.1, 1.9, 2.1, 0.1, 1), { p: [0.7, 27.9, 0] });                           // cab
+  b.add('crane', cyl(0.16, 0.16, 3.6, 6), { p: [0, 29.8, 0] });                                // apex post
+  b.add('crane', box(31, 0.9, 0.9, 0.06, 1), { p: [4.5, 28.7, 0] });                           // jib and counter-jib
+  b.add('site', box(2.4, 3.2, 2.0, 0.06, 1), { p: [-10.6, 26.6, 0] });                         // counterweight
+  b.add('gold', cyl(0.05, 0.05, 20.4, 5), { p: [9.4, 29.6, 0], r: [0, 0, -1.47] });             // tie bars
+  b.add('gold', cyl(0.05, 0.05, 11.2, 5), { p: [-5.4, 29.6, 0], r: [0, 0, 1.47] });
+  grp.add(b.build({ site: plastic(0x8f8a7c, 0.9), crane: paint(0xc1440e, { rough: 0.55, clear: 0.2 }), gold: gold() }));
+  const swing = new THREE.Group(); swing.position.set(16.5, 28.3, 0);
+  const sb = new ModelBuilder();
+  sb.add('chain', cyl(0.07, 0.07, 13.5, 5), { p: [0, -6.75, 0] });
+  sb.add('chain', box(0.7, 0.8, 0.7, 0.06, 1), { p: [0, -13.2, 0] });                           // connector block
+  sb.add('ball', sphere(1.8, 14, 10), { p: [0, -15.2, 0] });                                   // the ball: 3.6 m of dark steel
+  swing.add(sb.build({ chain: plastic(0x3a3e46, 0.5, 0.6), ball: plastic(0x23262c, 0.42, 0.7) }));
+  grp.add(swing);
+  grp.userData.swing = swing;
+  return grp;
+}
+
+const LETTER_GRIDS = {
+  B: ['##.', '#.#', '##.', '#.#', '##.'], A: ['.#.', '#.#', '###', '#.#', '#.#'],
+  L: ['#..', '#..', '#..', '#..', '###'], R: ['##.', '#.#', '##.', '#.#', '#.#'],
+  O: ['.#.', '#.#', '#.#', '#.#', '.#.'], M: ['#.#', '###', '#.#', '#.#', '#.#'],
+};
+/** Stamp one block letter into bucket 'gold', rotated by R and shifted by T about its base centre. */
+function stampLetter(b, grid, u, cx, y0, z, T, R) {
+  _sq.setFromEuler(_se.set(R[0], R[1], R[2]));
+  const c = new THREE.Vector3(cx, y0, z), v = new THREE.Vector3();
+  grid.forEach((rowStr, row) => {
+    [...rowStr].forEach((ch, col) => {
+      if (ch !== '#') return;
+      v.set(cx + (col - 1) * u, y0 + (4 - row) * u + u / 2, z).sub(c).applyQuaternion(_sq).add(c);
+      b.add('gold', box(u * 0.92, u * 0.92, u * 0.85), { p: [v.x + T[0], v.y + T[1], v.z + T[2]], r: R });
+    });
+  });
+}
+
+/**
+ * Gold rooftop letters spelling BALLROOM on a sign rail over the ballroom wing, in ballroomSite
+ * local coordinates (the track adds this to the site group): posts rise from the entablature,
+ * the rail runs in front of the pediment, and the word is failing — the first O slumps, the
+ * second O is down on the rail, and the M has toppled forward off the end. One gold draw call
+ * plus the rail bucket.
+ */
+export function ballroomRoofLetters() {
+  const grp = new THREE.Group(), b = new ModelBuilder(), BASE = 0.6;
+  const railY = BASE + 9.62, z = 4.35, u = 0.38, y0 = railY + 0.14;
+  b.add('gold', box(11.8, 0.2, 1.05, 0.04, 1), { p: [7.65, BASE + 8.6, 3.95] });                // mounting ledge, sitting on the entablature
+  for (const x of [2.3, 13.0]) b.add('gold', cyl(0.09, 0.09, 0.95, 6), { p: [x, BASE + 9.15, z] });
+  b.add('gold', box(11.5, 0.17, 0.17, 0.04, 1), { p: [7.65, railY, z] });                       // the rail
+  const word = 'BALLROOM', pitch = 1.42, cx0 = 2.67;
+  [...word].forEach((ch, i) => {
+    const cx = cx0 + i * pitch;
+    if (i <= 4) stampLetter(b, LETTER_GRIDS[ch], u, cx, y0, z, [0, 0, 0], [0, 0, 0]);           // B A L L R: still proud
+    else if (i === 5) stampLetter(b, LETTER_GRIDS[ch], u, cx, y0, z, [0.12, -0.3, 0], [0, 0, -0.42]);   // first O: slumped
+    else if (i === 6) stampLetter(b, LETTER_GRIDS[ch], u, cx, y0, z, [0.3, 0.3, 0], [0, 0, -1.35]);     // second O: down on the rail
+    else stampLetter(b, LETTER_GRIDS[ch], u, cx, y0, z, [0.35, -0.81, -1.32], [1.3, 0, 0.15]);          // M: face-up on the ledge below
+  });
+  grp.add(b.build({ gold: gold() }));
+  return grp;
+}
+
+/**
+ * The collapsed roof section, in ballroomSite local coordinates: a marble roof slab that has
+ * crashed from the standing wing's roofline down across the break, gold trim on its low edge,
+ * rebar poking out of the torn end. The track adds it to the site group.
+ */
+export function collapsedRoof() {
+  const grp = new THREE.Group(), b = new ModelBuilder(), BASE = 0.6;
+  const R = [0.52, 0, 0.1], T = [4.4, BASE + 7.7, 1.2];
+  rigid(b, 'marble', box(10.5, 0.5, 6.8, 0.1, 1), [0.25, -0.25, 0], R, T);                      // the slab
+  rigid(b, 'gold', box(10.5, 0.55, 0.35, 0.05, 1), [0.25, -0.28, 3.3], R, T);                   // gold trim on the low edge
+  rigid(b, 'marbleD', box(10.5, 0.75, 0.55, 0.08, 1), [0.25, -0.38, -3.2], R, T);               // the torn edge
+  rigid(b, 'gold', box(2.3, 0.42, 0.55, 0.06, 1), [-2.6, 0.22, 1.1], R, T);                     // a cornice chunk riding it down
+  rigid(b, 'gold', box(1.6, 0.4, 0.5, 0.06, 1), [2.8, 0.2, -1.4], R, T);
+  for (const x of [-3.4, -0.6, 2.2]) rigid(b, 'site', cyl(0.05, 0.05, 1.7, 5), [x, 0.15, -3.6], R, T);   // rebar poking out of the torn edge
+  grp.add(b.build({ marble: marble(), marbleD: marbleD(), gold: gold(), site: plastic(0x9b968a, 0.9) }));
+  return grp;
+}
+
+/** A gold chandelier, crashed: rings tilted, stem snapped into two pieces, candles everywhere. */
+export function crashedChandelier() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('gold', torus(1.7, 0.1, 8, 22), { p: [0, 0.25, 0], r: [Math.PI / 2 + 0.5, 0, 0.2] });
+  b.add('gold', torus(1.05, 0.08, 8, 18), { p: [0.3, 0.75, 0.2], r: [Math.PI / 2 - 0.35, 0.2, 0] });
+  b.add('gold', cyl(0.08, 0.08, 1.1, 6), { p: [-0.9, 0.5, -0.4], r: [0.4, 0, 1.15] });           // the stem, snapped sideways
+  b.add('gold', cyl(0.08, 0.08, 0.7, 6), { p: [1.3, 0.2, 0.7], r: [1.2, 0, -0.5] });
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; b.add('gold', sphere(0.19, 8, 6), { p: [Math.cos(a) * 1.7, 0.55 + Math.sin(a) * 0.85, Math.sin(a) * 1.7 * 0.45], r: [0.5, 0, 0] }); }
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + 0.5; b.add('gold', sphere(0.16, 8, 6), { p: [0.3 + Math.cos(a) * 1.05, 0.95 + Math.sin(a) * 0.4, 0.2 + Math.sin(a) * 1.05 * 0.45] }); }
+  b.add('gold', sphere(0.24, 9, 7), { p: [0.1, 0.12, 0.1] });                                   // finial, in the dirt of it
+  grp.add(b.build({ gold: gold() }));
+  return grp;
+}
+
+function fallenBoardTex() {
+  return canvasTex(1024, 364, (g, w, h) => {
+    g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#d4af37'; g.lineWidth = 12; g.strokeRect(10, 10, w - 20, h - 20);
+    g.strokeStyle = '#12142b'; g.lineWidth = 3; g.strokeRect(28, 28, w - 56, h - 56);
+    textFit(g, 'COMING SOON', w / 2, 74, w - 140, 62, 62, SITE_SANS, { fill: '#8a6d1f' });
+    textFit(g, 'A BALLROOM', w / 2, 186, w - 110, 138, 138, SITE_FONT, { fill: '#12142b' });
+    textFit(g, 'PAID FOR BY (REDACTED)', w / 2, 298, w - 140, 56, 56, SITE_SANS, { fill: '#b3122a' });
+    // the correction, in spray paint: SOON is crossed out and the verdict scrawled over the middle
+    g.strokeStyle = 'rgba(200,20,30,0.9)'; g.lineWidth = 17; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(w * 0.16, 42); g.lineTo(w * 0.84, 108); g.moveTo(w * 0.16, 108); g.lineTo(w * 0.84, 42); g.stroke();
+    g.save(); g.translate(w / 2, h * 0.56); g.rotate(-0.045);
+    textFit(g, "IT'S GONE", 0, 0, w * 0.8, 120, 120, SITE_FONT, { fill: 'rgba(200,20,30,0.92)' });
+    g.restore();
+  }, { repeat: false, aniso: 8 });
+}
+
+/**
+ * The site board, half fallen: one post snapped, the panel leaning back against the hoarding,
+ * its promise corrected in spray paint. In ballroomSite local coordinates; the track adds it
+ * to the site group, just in front of the front hoarding.
+ */
+export function fallenBoard() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('site', box(0.3, 3.6, 0.3, 0.05, 1), { p: [-3.6, 1.15, 0], r: [0.52, 0, 0] });           // the leaning post
+  b.add('site', box(0.3, 1.15, 0.3, 0.05, 1), { p: [3.6, 0.5, 0.3], r: [0.25, 0, -0.35] });     // the snapped one
+  grp.add(b.build({ site: plastic(0x9b968a, 0.9) }));
+  const panel = panelPair(9.6, 3.4, fallenBoardTex(), 0);
+  panel.position.set(0, 2.1, 0.35); panel.rotation.x = -0.46;
+  grp.add(panel);
+  return grp;
+}
+
+/** One jagged chunk of demolished marble, for instanced rubble spill. About 1.5 m across. */
+export function rubbleChunk() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('marbleD', box(1.35, 0.7, 0.95, 0.08, 1), { p: [0, 0.3, 0], r: [0.15, 0.5, 0.08] });
+  b.add('site', box(0.85, 0.5, 0.7, 0.06, 1), { p: [0.55, 0.18, 0.32], r: [0, 1.1, 0.3] });
+  b.add('marble', box(0.5, 0.95, 0.45, 0.06, 1), { p: [-0.5, 0.4, -0.22], r: [0.4, 0.2, 0.45] });
+  b.add('gold', box(0.7, 0.16, 0.3, 0.04, 1), { p: [0.1, 0.62, 0.42], r: [0.2, 0.8, 0] });       // a glint of gold trim in the debris
+  grp.add(b.build({ marble: marble(), marbleD: marbleD(), site: plastic(0x9b968a, 0.9), gold: gold() }));
+  return grp;
+}
+
+/** A flat algae mat for the reflecting pool: a matte green disc, instanced at several scales. */
+export function algaePatch(color = 0x4a8028) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('mat', cyl(1, 1, 0.07, 11), { p: [0, 0.035, 0] });
+  b.add('mat', cyl(0.55, 0.62, 0.1, 9), { p: [0.4, 0.05, 0.25] });                             // a thicker scum lump on it
+  grp.add(b.build({ mat: plastic(color, 0.95) }));
+  return grp;
+}
+
+/** A long scum strip for the pool edges. */
+export function algaeStrip(color = 0x639c33) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('mat', box(7, 0.07, 1.15, 0.03, 1), { p: [0, 0.035, 0] });
+  grp.add(b.build({ mat: plastic(color, 0.95) }));
+  return grp;
+}
+
+/** A duck. Origin at the waterline; the track bobs it. About 1.4 m long. */
+export function duck() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('white', sphere(0.55, 10, 8), { p: [0, 0.3, 0], s: [1, 0.72, 1.35] });                  // body
+  b.add('white', sphere(0.3, 9, 7), { p: [0, 0.78, 0.52] });                                   // head
+  b.add('white', cone(0.2, 0.5, 7), { p: [0, 0.48, -0.66], r: [-0.95, 0, 0] });                // tail, tipped up
+  b.add('bill', box(0.34, 0.09, 0.32, 0.03, 1), { p: [0, 0.7, 0.86] });                        // the bill
+  grp.add(b.build({ white: plastic(0xf7f5ee, 0.5), bill: paint(0xf08c1a, { rough: 0.45, clear: 0.3 }) }));
+  return grp;
+}
+
+function poolSignTex() {
+  return canvasTex(1024, 300, (g, w, h) => {
+    g.fillStyle = '#14401c'; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < 46; k++) {                                                                   // algae blobs in the green
+      g.fillStyle = `rgba(${40 + (k * 37) % 50},${110 + (k * 53) % 60},40,0.35)`;
+      g.beginPath(); g.arc((k * 197) % w, (k * 89) % h, 14 + (k * 29) % 40, 0, 7); g.fill();
+    }
+    g.strokeStyle = '#d4af37'; g.lineWidth = 10; g.strokeRect(9, 9, w - 18, h - 18);
+    textFit(g, 'REFLECTING POOL', w / 2, 78, w - 90, 92, 92, SITE_FONT, { fill: '#f2efe6' });
+    textFit(g, 'NOW WITH 100% MORE ALGAE', w / 2, 168, w - 90, 68, 68, SITE_FONT, { fill: '#ffd23c' });
+    textFit(g, 'PLEASE DO NOT REFLECT · NO LIFEGUARD ON DUTY (BUDGET CUTS)', w / 2, 248, w - 110, 40, 40, SITE_SANS, { fill: '#cfe8c8' });
+  }, { repeat: false, aniso: 8 });
+}
+
+/** The pool's north-end sign, 18 m wide: the algae joke at the scale the approach run can read. */
+export function poolSign() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  for (const x of [-7.6, 7.6]) b.add('site', box(0.38, 9.9, 0.38, 0.05, 1), { p: [x, 4.95, -0.4] });
+  b.add('site', box(17.4, 0.5, 0.4, 0.05, 1), { p: [0, 4.55, -0.4] });                          // bottom rail
+  grp.add(b.build({ site: plastic(0x6b6f78, 0.6, 0.4) }));
+  grp.add(panelPair(18, 5, poolSignTex(), 7.3));
+  return grp;
+}
+
+function poolSignSmallTex() {
+  return canvasTex(768, 256, (g, w, h) => {
+    g.fillStyle = '#14401c'; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < 26; k++) {
+      g.fillStyle = `rgba(${40 + (k * 41) % 50},${110 + (k * 47) % 60},40,0.35)`;
+      g.beginPath(); g.arc((k * 173) % w, (k * 71) % h, 10 + (k * 23) % 30, 0, 7); g.fill();
+    }
+    g.strokeStyle = '#d4af37'; g.lineWidth = 9; g.strokeRect(8, 8, w - 16, h - 16);
+    textFit(g, 'NO REFLECTING', w / 2, 88, w - 70, 96, 96, SITE_FONT, { fill: '#f2efe6' });
+    textFit(g, 'THE ALGAE LIVE HERE NOW', w / 2, 188, w - 70, 54, 54, SITE_FONT, { fill: '#ffd23c' });
+  }, { repeat: false, aniso: 8 });
+}
+
+/** The far-side sign, standing in the water on long posts: it rises out of the algae. */
+export function poolSignSmall() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  for (const x of [-3.3, 3.3]) b.add('site', box(0.3, 7.9, 0.3, 0.05, 1), { p: [x, 3.95, -0.35] });
+  grp.add(b.build({ site: plastic(0x6b6f78, 0.6, 0.4) }));
+  grp.add(panelPair(8.4, 2.8, poolSignSmallTex(), 6.4));
+  return grp;
+}

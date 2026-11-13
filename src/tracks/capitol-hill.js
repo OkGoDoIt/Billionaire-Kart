@@ -156,7 +156,7 @@ export default {
     groundTexture: 'meadow', groundScale: 0.35,                                           // one mown lawn everywhere (the blotchy default read as gravel up close)
     shoulder: 0x6aae4e,                                                                   // the verge is lawn too: one green from the kerb to the woods
     terrain: { low: 0x5aa64a, high: 0x7fc25a, dry: 0x8cbf5a, rock: 0xb8b0a4, sand: 0x66aa4c, dirt: 0x62a84b },   // "sand" is what the low ground near the pool level gets: lawn here too
-    water: 0x5fb7d8,
+    water: 0x527a2c,   // #140: the reflecting pool is GREEN with algae — murky swamp green, not the old swimming-pool blue Roger called out
     wall: 0xf2efe6, wallStripe: 0xd4af37,
     tunnelLight: 0xffc860, portal: 0xe9e3d3,
     ads: ['THOUGHTS AND PRAYERS', 'PORK BARREL BBQ', 'SUPER PAC SNACKS', 'BIPARTISAN NAP TIME', 'THE SWAMP WATER CO', 'I YIELD TO MY DONORS', 'EARMARK ERASERS', 'REVOLVING DOOR CO', 'RED TAPE DISPENSARY', 'I DO NOT RECALL', 'TERM LIMITS: IN COMMITTEE', 'INSIDER TRADING: MEMBERS ONLY'],
@@ -197,13 +197,49 @@ export default {
       taken.push([cx, cz, 30], [cx + (track.px[i1] - cx) * 0.7, cz, 26], [cx - (track.px[i1] - cx) * 0.7, cz, 26]);
     }
 
-    // the ballroom construction zone (#113): a half-demolished wing on the north lawn of the Avenue,
-    // angled toward the start straight so the chase camera faces the crane, the chandelier and the
-    // site board for the whole run from hairpin three onto the Avenue (and down it, past the grid)
+    // the ballroom construction zone (#113), ROUND 2 (#140): from the road, #113's demolished wing
+    // hid behind the Avenue grandstands — only the board and the crane jib read — so round 2 takes
+    // the destruction to skyline scale. The site grows 1.25x; a collapsed roof slab crashes across
+    // the standing wing with a gold chandelier wrecked on it; gold BALLROOM letters fail along a
+    // rooftop rail (one O slumped, one down, the M face-up on the ledge); the second site board
+    // has fallen against the hoarding, corrected in spray paint; rubble spills across the slab;
+    // and a 27 m wrecking-ball crane west of the site swings its ball over the ruins while
+    // demolition dust drifts over the scene. Dressing only: nothing here touches the road.
     {
-      const SX = -24, SZ = -40;
-      sc.place(C.ballroomSite(), SX, SZ, { yaw: -0.38, y: sc.y(SX, SZ) - 0.35 });
-      taken.push([SX, SZ, 17]);
+      const SX = -24, SZ = -40, SY = sc.y(SX, SZ) - 0.35;
+      const site = C.ballroomSite();
+      site.add(C.ballroomRoofLetters());
+      site.add(C.collapsedRoof());
+      const chand = C.crashedChandelier(); chand.position.set(2.6, 9.0, 1.9); chand.rotation.set(0.4, 0.5, 0.25); site.add(chand);
+      const fb = C.fallenBoard(); fb.position.set(-3, 0.55, 10.1); site.add(fb);
+      sc.place(site, SX, SZ, { yaw: -0.38, y: SY, scale: 1.25 });
+      taken.push([SX, SZ, 26]);
+      // the wrecking crane, west of the site, its jib reaching over the demolished half
+      const wc = C.wreckCrane(), swing = wc.userData.swing;
+      sc.place(wc, -53, -35, { yaw: 0.14, y: sc.y(-53, -35) - 0.3 });
+      taken.push([-53, -35, 10]);
+      // rubble spill across the slab, in site world space (rotY -0.38, scale 1.25 about SX,SZ)
+      const cyw = Math.cos(-0.38), syw = Math.sin(-0.38);
+      const rubble = [];
+      for (let k = 0; k < 26; k++) {
+        const lx = k < 15 ? rng.range(-12.5, 12.5) : rng.range(-12.5, -0.5), lz = k < 15 ? rng.range(4.4, 6.9) : rng.range(-3, 3);
+        rubble.push({ x: SX + 1.25 * (cyw * lx + syw * lz), z: SZ + 1.25 * (-syw * lx + cyw * lz), y: SY + 0.78, yaw: rng.range(0, 6.28) });
+      }
+      sc.instances(partsOf(C.rubbleChunk()), rubble, { scale: [0.7, 1.7] });
+      // the swing, and dust: two tan puffs a frame, one at the ball, one over the ruins
+      const dustA = [SX + 1.25 * (cyw * -6 + syw * 0), SY + 9, SZ + 1.25 * (-syw * -6 + cyw * 0)];
+      anim.push((dt, time) => {
+        swing.rotation.z = Math.sin(time * 0.55) * 0.32;
+        swing.rotation.x = Math.sin(time * 0.37 + 1.0) * 0.09;
+        if (view.fx) {
+          let n = view.fx.count(22, dt);
+          while (n-- > 0) {
+            const at = n % 2 ? dustA : [-36.7, 11.5, -37.3];
+            view.fx.spark(at[0] + rng.range(-3, 3), at[1] + rng.range(-1.5, 1.5), at[2] + rng.range(-3, 3),
+              rng.range(-0.5, 0.5), rng.range(0.25, 0.8), rng.range(-0.5, 0.5), [0.84, 0.78, 0.64], rng.range(1.6, 2.8), 2.6);
+          }
+        }
+      });
     }
 
     // the obelisk in the middle of the bend; a ring of flags on its plinth
@@ -274,6 +310,30 @@ export default {
     for (let z = POOL.z0 + 2; z < POOL.z1 - 1; z += 4) balSpots.push({ x: POOL.x1 + 1.6, z, y: sc.y(POOL.x1 + 1.6, z), yaw: Math.PI / 2 });
     for (const zz of [POOL.z0 - 1.6, POOL.z1 + 1.6]) for (let x = POOL.x1 - 2; x > POOL.x0 + 2; x -= 4) if (!reach(x, zz, 0.5)) balSpots.push({ x, z: zz, y: sc.y(x, zz), yaw: 0 });
     sc.instances(bal, balSpots, { sink: 0.05, cast: false });
+
+    // the reflecting pool, ROUND 2 (#140): it rendered swimming-pool blue and Roger called it.
+    // The water is murky green now (look.water), and the surface itself carries the joke (the
+    // MKW water-frame principle): algae mats in three greens, scum strips along both edges,
+    // resident ducks, and signage at both reading distances — a pool-scale board at the north
+    // end facing the approaching road, and a smaller one standing IN the water on the far side.
+    {
+      const WY = track.water + 0.07, matSpots = [];
+      for (let k = 0; k < 46; k++) matSpots.push({ x: rng.range(POOL.x0 + 2.5, POOL.x1 - 2.5), z: rng.range(POOL.z0 + 3, POOL.z1 - 3), y: WY, yaw: rng.range(0, 6.28) });
+      sc.instances(partsOf(C.algaePatch(0x3e7a24)), matSpots.slice(0, 16), { scale: [1.3, 4.4], cast: false });
+      sc.instances(partsOf(C.algaePatch(0x639c33)), matSpots.slice(16, 32), { scale: [1.1, 3.6], cast: false });
+      sc.instances(partsOf(C.algaePatch(0x8aa832)), matSpots.slice(32), { scale: [0.9, 2.8], cast: false });
+      const strips = [];
+      for (let z = POOL.z0 + 6; z < POOL.z1 - 4; z += 11) { strips.push({ x: POOL.x0 + 1.15, z, y: WY, yaw: Math.PI / 2 }); strips.push({ x: POOL.x1 - 1.15, z: z + 5, y: WY, yaw: Math.PI / 2 }); }
+      sc.instances(partsOf(C.algaeStrip()), strips, { scale: [0.8, 1.25], cast: false });
+      const duckProto = C.duck(), ducks = [];
+      for (const [dx, dz, dyaw] of [[183, 104, 2.6], [194.5, 152, -0.7], [178.5, 196, 1.4]]) {
+        const d = duckProto.clone(); sc.place(d, dx, dz, { yaw: dyaw, y: track.water - 0.06 }); ducks.push(d);
+      }
+      anim.push((dt, time) => ducks.forEach((d, n) => { d.position.y = track.water - 0.06 + Math.sin(time * 0.9 + n * 2.1) * 0.055; d.rotation.z = Math.sin(time * 0.7 + n * 1.7) * 0.05; }));
+      sc.place(C.poolSign(), (POOL.x0 + POOL.x1) / 2, POOL.z0 - 8, { yaw: Math.PI });
+      sc.place(C.poolSignSmall(), POOL.x1 - 4.5, 150, { yaw: -Math.PI / 2, y: POOL.depth });
+      taken.push([(POOL.x0 + POOL.x1) / 2, POOL.z0 - 8, 11]);
+    }
 
     // the Mall: protest signs and clipped topiary to thread between on the shortcut (solid)
     const mallSpots = [[118, 160], [104, 176], [130, 182], [114, 198], [100, 212], [134, 208], [120, 222], [108, 154], [138, 160], [126, 236]];
@@ -374,6 +434,7 @@ const CANNON = { x: 121, z: 114 };        // beside the Climb, aimed at the dome
 const LECTERN = { x: -238, z: 124 };      // beyond hairpin one
 const MAZE = { x: -222, z: 18 };          // beyond hairpin three
 const BOARDS = [
+  [2.3, 1, 20, 'DEMOLITION VIEWING: NEXT LEFT', '#d4af37', '#12142b'],
   [1.3, 1, 24, 'THOUGHTS AND PRAYERS (AND NOTHING ELSE)', '#1f3f8a', '#ffffff'], [3.4, 1, 22, 'YOUR CALL IS IMPORTANT TO OUR DONORS', '#ffffff', '#b3122a'],
   [4.2, -1, 18, 'TERM LIMITS: STILL IN COMMITTEE', '#d4af37', '#12142b'], [8.6, 1, 20, 'BIPARTISAN AGREEMENT: NAP TIME', '#b3122a', '#ffffff'],
   [9.8, 1, 24, 'DOES TIKTOK USE WIFI?', '#12142b', '#ffd23c'], [12.9, -1, 22, 'THE INTERNET IS A SERIES OF TUBES', '#ffffff', '#1f3f8a'],

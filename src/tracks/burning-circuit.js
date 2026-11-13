@@ -1,6 +1,7 @@
 /* Burning Circuit: a billionaires' art festival on a dry lake bed at dusk.
    Esplanade start, a banked bowl around the Figure, a fire slalom into a jump
    through a ring of fire, a dune ridge, and a boardwalk over the camp. */
+import * as THREE from 'three';
 import { fbm, smoothstep } from '../core/util.js';
 import { Scenery, partsOf } from '../render/scenery.js';
 import { makeGroundHit, EDGE } from '../track/track.js';
@@ -13,6 +14,12 @@ const JETS = { x0: 100, x1: 186, z0: -292, z1: -100 };   // the private jet park
 const inJets = (x, z, m = 0) => x > JETS.x0 - m && x < JETS.x1 + m && z > JETS.z0 - m && z < JETS.z1 + m;
 const CENTRE = { x: 0, z: -205 };
 const TEMPLE = { x: -22, z: -168 };
+/** A thin box from a to b (for nets and rigging). */
+function strutGeo(a, b, w) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], len = Math.hypot(dx, dy, dz) || 1e-3;
+  return new THREE.BoxGeometry(w, len, w).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx / len, dy / len, dz / len))).translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+}
+const DUNE = { x: -38, z: -344, top: 15.5 };   // the big dune inside the dune loop: the boost cut goes up its face and off its lee
 
 export default {
   id: 'burning-circuit',
@@ -41,18 +48,18 @@ export default {
     { p: [79.4, 0, -81] },                    // 11 fire slalom straight
     { p: [80, 0, -180] },                     // 12 ring of fire
     { p: [80, 0, -280] },                     // 13 landing
-    { p: [70, 2.5, -310], w: 18 },            // 14 dunes: left
-    { p: [38, 5.5, -323], w: 18 },            // 15
-    { p: [9.5, 8, -330], w: 18 },           // 16 right
-    { p: [-7, 10, -366], w: 18 },              // 17
-    { p: [-28, 12.8, -391], w: 18 },          // 18 long left over the crest
-    { p: [-60, 15.5, -391], w: 18 },            // 19 crest
-    { p: [-80, 14, -366], w: 18 },            // 20
-    { p: [-95, 10, -310] },                   // 21 down to the boardwalk
-    { p: [-108, 7, -250], w: 16 },            // 22 boardwalk over the camp
-    { p: [-128, 6.5, -190], w: 16 },          // 23
-    { p: [-132, 5.5, -130], w: 16 },          // 24
-    { p: [-132, 2, -62] },                    // 25 camp corner (shortcut on the inside)
+    { p: [70, 2.5, -310], w: 18 },            // 14 dunes: left, climbing
+    { p: [38, 6, -323], w: 18 },              // 15
+    { p: [9.5, 8.5, -330], w: 18 },           // 16 right
+    { p: [-7, 11, -366], w: 18 },             // 17
+    { p: [-28, 14, -391], w: 18 },            // 18 long left over the crest
+    { p: [-60, 16.5, -391], w: 18 },          // 19 crest
+    { p: [-80, 15, -366], w: 18 },            // 20
+    { p: [-95, 14.5, -310] },                 // 21 the dune lip: off the plank, over the camp
+    { p: [-108, 11, -250], w: 16 },           // 22 boardwalk over the camp
+    { p: [-128, 8.5, -190], w: 16 },          // 23
+    { p: [-132, 6, -130], w: 16 },            // 24
+    { p: [-132, 2, -62] },                    // 25 camp corner
     { p: [-118.8, 0.3, -13.2] },              // 26
     { p: [-50, 0, 0] },                       // 27 Esplanade
   ],
@@ -60,19 +67,26 @@ export default {
     { from: 26.6, to: 1.4, side: 'R', edge: 'wall' },        // grandstand wall along the Esplanade
     { from: 2, to: 8, side: 'L', outer: 9 },                  // keep clear of the Figure's base
     { from: 12.4, to: 12.75, edge: 'wall' },                  // fenced at the ring of fire
-    { from: 13.3, to: 21.4, outer: 30, shoulder: 5 },         // soft dunes either side
-    { from: 21.75, to: 24.4, edge: 'wall' },                  // boardwalk rails
-    { from: 24.6, to: 26.6, side: 'L', outer: 40, shoulder: 5 }, // cut through the camp with a boost
+    { from: 13.3, to: 21.0, outer: 30, shoulder: 5 },         // soft dunes either side
+    { from: 15.8, to: 20.95, side: 'L', outer: 34, shoulder: 5, hoarding: false }, // the dune cut: over the big dune inside the loop
+    { from: 21.0, to: 24.4, edge: 'wall' },                   // the plank and the boardwalk rails
+    { from: 24.6, to: 26.6, side: 'L', outer: 40, shoulder: 5 }, // room to run wide through the camp corner
   ],
-  bridges: [{ from: 21.75, to: 24.4 }],
-  ramps: [{ at: 12.55, len: 9, lift: 2.2 }],
+  shortcuts: [
+    { name: 'dune cut', from: 15.95, to: 20.8, boost: true, path: [[0, -338], [-14, -344], [-30, -345], [-46, -343], [-62, -338], [-76, -330], [-86, -322]] },
+  ],
+  zones: [{ from: 13.25, to: 21.0, skin: 'sand' }, { from: 21.0, to: 24.4, skin: 'wood' }, { from: 24.4, to: 26.75, skin: 'dirt' }],
+  bridges: [{ from: 21.0, to: 24.4 }],
+  gaps: [{ from: 21.45, to: 21.68 }],
+  ramps: [{ at: 12.55, len: 9, lift: 2.2 }, { at: 21.25, len: 9, lift: 1.8 }],
   boosts: [
     { at: 0.55, lat: 0, w: 5 },
     { at: 12.9, lat: 0, w: 8, len: 10 },
     { at: 17.4, lat: 3, w: 4.5 },
+    { at: 21.03, lat: 0, w: 8, len: 9 },   // onto the plank: speed for the gap
     { at: 23.4, lat: -3, w: 4.5 },
   ],
-  itemRows: [{ at: 1.3 }, { at: 10.8 }, { at: 15.6 }, { at: 22.6 }, { at: 26.5, n: 3 }],
+  itemRows: [{ at: 1.3 }, { at: 10.8 }, { at: 15.6 }, { at: 22.6 }],
   coins: [
     { from: 0.15, to: 0.45, n: 4, lat: 4 },
     { from: 3.4, to: 6.4, n: 6, lat: 5 },
@@ -80,22 +94,24 @@ export default {
     { from: 12.63, to: 12.78, n: 3, lat: 0, air: 3 },
     { from: 14.4, to: 15.2, n: 4, lat: [-4, 4] },
     { from: 18.2, to: 19.4, n: 4, lat: [5, -3] },
+    ...[[16.62, 23, 0.4], [16.69, 32, 1.4], [16.72, 40, 2.4]].map(([at, lat, air]) => ({ from: at, to: at, n: 1, lat, air })),   // up the big dune on the cut
+    ...[[21.52, 3.6], [21.62, 4.4], [21.72, 4.0]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 0, air })),   // over the gap
     { from: 22.8, to: 23.6, n: 4, lat: 3 },
     { from: 25.1, to: 25.8, n: 4, lat: 8 },
   ],
   obstacles: [
     // fire slalom: three gates 7 m wide, phases alternating, the gap swapping sides
-    { kind: 'timed', model: 'flame', at: 11.5, lat: -5, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 11.5, lat: 2, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 11.85, lat: -2, period: 3, duty: 0.45, phase: 1.5, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 11.85, lat: 5, period: 3, duty: 0.45, phase: 1.5, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 12.2, lat: -5, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 12.2, lat: 2, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.3 },
+    { kind: 'timed', model: 'flame', at: 11.5, lat: -5, period: 3, duty: 0.34, phase: 0, effect: 'spin', radius: 1.3 },
+    { kind: 'timed', model: 'flame', at: 11.5, lat: 2, period: 3, duty: 0.34, phase: 0, effect: 'spin', radius: 1.3 },
+    { kind: 'timed', model: 'flame', at: 11.85, lat: -2, period: 3, duty: 0.34, phase: 1.5, effect: 'spin', radius: 1.3 },
+    { kind: 'timed', model: 'flame', at: 11.85, lat: 5, period: 3, duty: 0.34, phase: 1.5, effect: 'spin', radius: 1.3 },
+    { kind: 'timed', model: 'flame', at: 12.2, lat: -5, period: 3, duty: 0.34, phase: 0, effect: 'spin', radius: 1.3 },
+    { kind: 'timed', model: 'flame', at: 12.2, lat: 2, period: 3, duty: 0.34, phase: 0, effect: 'spin', radius: 1.3 },
     // art cars crawling out across the Esplanade and the Bowl exit
     { kind: 'patrol', model: 'artcar', at: 1.75, lats: [-8, -3], speed: 3.5, effect: 'spin', radius: 2.0 },
     { kind: 'patrol', model: 'artcar', at: 8.6, lats: [7.5, 1], speed: 3, effect: 'spin', radius: 2.0 },
-    // an LED bus crawling laterally across the wide dune climb, in no hurry at all
-    { kind: 'patrol', model: 'ledbus', at: 15.9, lats: [5.5, -5.5], speed: 2.2, effect: 'spin', radius: 2.1 },
+    // an LED bus crawling about on the left of the wide dune climb, in no hurry at all (the right is always clear)
+    { kind: 'patrol', model: 'ledbus', at: 15.9, lats: [7.6, 3.4], speed: 1.8, effect: 'spin', radius: 2.1 },
     // dust devils waiting on the outside of the dune corners
     { kind: 'orbit', model: 'dustdevil', at: 14.05, lat: -6.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
     { kind: 'orbit', model: 'dustdevil', at: 19.4, lat: -6.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
@@ -109,6 +125,9 @@ export default {
       const ridge = smoothstep(-285, -345, z);
       const crest = 11 + Math.sin(x * 0.035 + z * 0.012) * 4 + (fbm(x * 0.02, z * 0.02, 3, 5) - 0.5) * 8;
       h += ridge * Math.max(0, crest);
+      // the big dune inside the loop: a long windward face from the east, a short steep lee to the west
+      { const u = DUNE.x - x, v = z - DUNE.z, f = u < 0 ? smoothstep(-34, 0, u) : 1 - smoothstep(0, 13, u), g = 1 - smoothstep(16, 34, Math.abs(v));
+        h = h * (1 - f * g) + DUNE.top * f * g; }
       // rocky foothills rising beyond the playa
       const d = Math.hypot((x - CENTRE.x) * 0.82, (z - CENTRE.z) * 0.92);
       h += smoothstep(225, 380, d) * (34 + (fbm(x * 0.01, z * 0.01, 4, 2) - 0.5) * 30);
@@ -162,10 +181,12 @@ export default {
     const taken = [];                                    // footprints of the gags, so the camps keep off them
     const take = (x, z, r) => taken.push({ x, z, r });
     // spots the gags will stand on, kept clear of the camps up front
-    for (const [at, side, off, r] of [[5.6, -1, 26, 14], [4.9, -1, 15, 10], [14.6, -1, 35, 14], [18.1, -1, 34, 10], [20.45, -1, 46, 22], [19.75, -1, 33, 8], [22.85, -1, 13, 14], [23.6, -1, 18, 10], [25.45, -1, 15, 10], [25.15, -1, 15, 9], [26.15, -1, 16, 12], [25.75, -1, 26, 12], [2.3, -1, 19, 12], [7.2, -1, 20, 12], [10.7, -1, 19, 12], [15.6, 1, 38, 12], [17.1, 1, 38, 12], [21.2, 1, 37, 12], [24.6, -1, 19, 12], [14.35, -1, 39, 12], [19.85, -1, 38, 12], [21.0, -1, 36, 10]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
+    for (const [at, side, off, r] of [[5.6, -1, 26, 14], [4.9, -1, 15, 10], [14.6, -1, 35, 14], [18.1, -1, 34, 10], [20.45, -1, 46, 22], [19.75, -1, 33, 8], [22.85, -1, 13, 14], [23.6, -1, 18, 10], [25.45, -1, 15, 10], [25.15, -1, 15, 9], [26.15, -1, 16, 12], [25.75, -1, 26, 12], [2.3, -1, 19, 12], [7.2, -1, 20, 12], [10.7, -1, 19, 12], [21.2, 1, 37, 12], [24.6, -1, 19, 12], [14.35, -1, 39, 12], [19.85, -1, 38, 12], [21.0, -1, 36, 10]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
     // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
     const bake = B.makeBaker(ctx.group, sc.shadows), atlas = B.makeAtlas(ctx.group, { glow: 0.4 });
+    /** Small repeated props baked into the shared material buckets (no shadows): far fewer draw calls than instancing each kind. */
+    const bakeAll = (proto, list, scale = 1) => { for (const p of list) bake.add(sc.place(proto.clone(), p.x, p.z, { yaw: p.yaw || 0, y: p.y, scale }), false); };
     /** Yaw that faces the road at sample i from `side`, turned toward oncoming karts by k. */
     const faceIn = (i, side, k = 0.5) => Math.atan2(-side * track.lx[i] - track.tx[i] * k, -side * track.lz[i] - track.tz[i] * k);
     /** A lettered board on legs at (x, z), facing yaw; up is the panel centre above the ground. */
@@ -181,6 +202,28 @@ export default {
       const p = sc.beside(at, side, off), yaw = opts.yaw ?? faceIn(p.i, side, opts.turn ?? 0.5), rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
       if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return null;
       signAt(p.x, p.z, yaw, draw, w, h, up, opts); return p;
+    };
+    // painted posters (generated art, tools/gen-posters.mjs): one 2x2 atlas image, one mesh for all of them
+    const posters = (() => {
+      const tex = new THREE.TextureLoader().load('assets/posters/burning-circuit.webp'); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      const q = new B.Quads();
+      return {
+        place(k, c, yaw, w, h) { const u0 = (k % 2) / 2, v1 = 1 - Math.floor(k / 2) / 2; q.panel(c, yaw, w, h, [u0 + 0.002, v1 - 0.498, u0 + 0.498, v1 - 0.002]); },
+        flush() { if (q.empty) return; const m = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.6 })); m.matrixAutoUpdate = false; ctx.group.add(m); },
+      };
+    })();
+    /** Poster k on a board at (x, z) facing yaw, with a lettered back. */
+    const posterAt = (x, z, yaw, k, back, { w = 15, h = 10, up = 9, legs = 2 } = {}) => {
+      const y0 = sc.y(x, z), f = B.signFrame(w, h, up, { color: 0x3a2c34, legs }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f); take(x, z, w * 0.55);
+      posters.place(k, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h);
+      const r = atlas.add(768, 512, B.board(back, { bg: '#1a1d29', fg: '#ffd23c', size: 120, stripe: '#ff6a2a' }));
+      atlas.place(r, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
+    };
+    /** The same beside the road at control point `at`, if the spot is clear for its full width. */
+    const poster = (at, side, off, k, back, opts = {}) => {
+      const w = opts.w ?? 15, p = sc.beside(at, side, off), yaw = faceIn(p.i, side, opts.turn ?? 0.45), rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
+      if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return null;
+      posterAt(p.x, p.z, yaw, k, back, opts); return p;
     };
     const STYLE = {
       sun: { bg: '#ffd23c', fg: '#1a1d29' }, hot: { bg: '#ff4fa8', fg: '#ffffff' }, ink: { bg: '#1a1d29', fg: '#ffd23c' }, sky: { bg: '#46d6ff', fg: '#1a1d29' },
@@ -230,21 +273,21 @@ export default {
     }
 
     // string lights down both sides of the Esplanade
-    const poleParts = partsOf(B.lightPole()), allPoles = [];
+    const allPoles = [];
     for (const [side, off] of [[1, 13.5], [-1, 2.2]]) {
       const row = sc.along({ from: 26.3, to: 2.1, side, offset: off, spacing: 13 }).filter(p => !standSpots.some(s => near(p.x, p.z, s, side > 0 ? 17 : 19)));
       allPoles.push(...row);
       let run = [];
-      const flush = () => { if (run.length > 1) ctx.group.add(B.stringLights(run.map(p => ({ x: p.x, y: p.y + 6.4, z: p.z })))); run = []; };
+      const flush = () => { if (run.length > 1) bake.add(B.stringLights(run.map(p => ({ x: p.x, y: p.y + 6.4, z: p.z }))), false); run = []; };
       row.forEach((p, k) => { if (k && Math.hypot(p.x - row[k - 1].x, p.z - row[k - 1].z) > 20) flush(); run.push(p); }); flush();
     }
-    sc.instances(poleParts, allPoles, {});
+    bakeAll(B.lightPole(), allPoles);
     // a row of portable toilets behind the grandstands, as is tradition
     const loo = sc.beside(0.55, -1, 24), dx = Math.cos(loo.along), dz = -Math.sin(loo.along);
     void dx; void dz;
     const loos = []; for (let k = 0; k < 12; k++) { const t = (k - 5.5) * 1.75; loos.push({ x: loo.x + Math.sin(loo.along) * t, z: loo.z + Math.cos(loo.along) * t, y: 0, yaw: loo.yaw }); }
     loos.forEach(p => { p.y = sc.y(p.x, p.z); });
-    sc.instances(partsOf(B.portaloo()), loos, { tints: [0x2f7be0, 0x2f7be0, 0x2fb36b, 0xff8a3c] });
+    sc.instances(partsOf(B.portaloo()), loos, { tints: [0x2f7be0, 0x2f7be0, 0x2fb36b, 0xff8a3c], cast: false });
 
     // ---- the Figure, in the middle of the Bowl ----
     const FIG_YAW = -1.2;                                   // faces the Esplanade
@@ -343,7 +386,7 @@ export default {
     bake.add(sc.place(B.temple({ h: 16 }), TEMPLE.x, TEMPLE.z, { yaw: 0.35 }));
     const lanterns = []; for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; lanterns.push({ x: TEMPLE.x + Math.cos(a) * 17, z: TEMPLE.z + Math.sin(a) * 17, yaw: a }); }
     lanterns.forEach(p => { p.y = sc.y(p.x, p.z); });
-    sc.instances(partsOf(B.glowCube(0xffb45a, { h: 3, size: 0.8 })), lanterns, {});
+    bakeAll(B.glowCube(0xffb45a, { h: 3, size: 0.8 }), lanterns);
     // the temple circle: eight founders, sitting very still, manifesting
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2 + 0.4, x = TEMPLE.x + Math.cos(a) * 12.5, z = TEMPLE.z + Math.sin(a) * 12.5;
@@ -371,9 +414,9 @@ export default {
       }
       const chairs = [];
       for (let k = 0; k < 10; k++) { const th = Math.PI - 0.75 + (k % 5) * 0.375, r = 17.5 + Math.floor(k / 5) * 2.3, x = OD.x + Math.cos(th) * r, z = OD.z + Math.sin(th) * r; chairs.push({ x, z, y: sc.y(x, z), yaw: Math.atan2(-Math.cos(th), -Math.sin(th)) + (rng() - 0.5) * 0.3 }); }
-      sc.instances(partsOf(B.foldingChair()), chairs, { tints: [0xff8a3c, 0xff4fa8, 0x46d6ff, 0xffd23c, 0x7dff6a] });
+      sc.instances(partsOf(B.foldingChair()), chairs, { tints: [0xff8a3c, 0xff4fa8, 0x46d6ff, 0xffd23c, 0x7dff6a], cast: false });
       const odRing = []; for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2 + 0.5, x = OD.x + Math.cos(a) * 16.5, z = OD.z + Math.sin(a) * 16.5; odRing.push({ x, z, y: sc.y(x, z), yaw: a }); }
-      sc.instances(partsOf(B.glowCube(0xff4fa8, { h: 2.6, size: 0.7 })), odRing, {});
+      bakeAll(B.glowCube(0xff4fa8, { h: 2.6, size: 0.7 }), odRing);
 
       // EL PULPO MECÁNICO: breathes fire on the hour, insurance pending. Parked past
       // the landing so the ring jump aims you straight at it.
@@ -472,7 +515,7 @@ export default {
     const domeS = domeSpots.filter(d => !d.big), domeL = domeSpots.filter(d => d.big);
     sc.instances(partsOf(B.dome(3.6)), domeS, { scale: [0.85, 1.2], sink: 0.1 });
     sc.instances(partsOf(B.dome(6.5, { door: 0xff7ad0 })), domeL, { scale: [0.9, 1.25], sink: 0.2 });
-    sc.instances(partsOf(B.lightTower({ h: 14 })), towers, {});
+    sc.instances(partsOf(B.lightTower({ h: 14 })), towers, { cast: false });
 
     // ---- the luxury camp: big domes, silver trailers in rows, palms in planters ----
     const luxDomes = [[30, -128, 10], [34, -178, 8], [28, -226, 11.5], [48, -262, 7]];
@@ -482,7 +525,7 @@ export default {
     const luxYurts = [], acs = [];
     for (let k = 0; k < 10; k++) { const x = 46.5, z = -112 - k * 16.5; if (clear(x, z, 5) && !luxDomes.some(([dx2, dz2, r]) => near(x, z, { x: dx2, z: dz2 }, r + 5)) && Math.abs(z + 200) > 8) { luxYurts.push({ x, z, y: sc.y(x, z), yaw: Math.PI / 2 }); acs.push({ x: x + 5.1, z: z + 1.5, y: sc.y(x + 5.1, z + 1.5), yaw: Math.PI / 2 }); } }
     sc.instances(partsOf(B.yurt()), luxYurts, { scale: 1.7, tints: [0xffffff, 0xf6e7d0], sink: 0.05 });
-    sc.instances(partsOf(B.acUnit()), acs, {});
+    sc.instances(partsOf(B.acUnit()), acs, { cast: false });
     {
       const pts = []; for (let z = -106; z > -280; z -= 3.2) { if (Math.abs(z + 200) < 4.5) continue; const x = 55.5; if (clear(x, z, 0.3)) pts.push([x, sc.y(x, z), z]); }
       const runs = []; let run = []; pts.forEach((p, k) => { if (k && Math.abs(p[2] - pts[k - 1][2]) > 4) { runs.push(run); run = []; } run.push(p); }); runs.push(run);
@@ -502,7 +545,7 @@ export default {
     sc.instances(partsOf(B.trailer()), trailers, { tints: [0xff8a3c, 0x46d6ff, 0xff4fa8, 0xffd23c] });
     const palms = [];
     for (let k = 0; k < 12; k++) { const x = 16 + (k % 2) * 22, z = -104 - Math.floor(k / 2) * 30; if (clear(x, z, 3) && !luxDomes.some(([dx2, dz2, r]) => near(x, z, { x: dx2, z: dz2 }, r + 3))) palms.push({ x, z, y: sc.y(x, z), yaw: 0 }); }
-    sc.instances(partsOf(B.planter()), palms, {});
+    sc.instances(partsOf(B.planter()), palms, { cast: false });
     sc.instances(partsOf(P.palm(3, { h: 7.5 })), palms.map(p => ({ ...p, y: p.y + 1.1 })), { scale: [0.9, 1.1], yaw: 'random' });
 
     // ---- the jet park beside the fire slalom: a runway, a row of private jets, and the sign ----
@@ -516,7 +559,7 @@ export default {
       for (let z = -100; z > -290; z -= 12) rw.add('line', box(0.6, 0.06, 6, 0.02, 1), { p: [rx, sc.y(rx, z) + 0.15, z] });
       for (const sx of [-9, 9]) for (let z = -98; z > -292; z -= 8) rw.add('lamp', box(0.3, 0.3, 0.3, 0.05, 1), { p: [rx + sx, sc.y(rx + sx, z) + 0.2, z] });
       const g = rw.build({ tar: plastic(0x3a3540, 0.9), line: plastic(0xf4f4f0, 0.6), lamp: glow(0x46d6ff, 2.2) }, { cast: false }); ctx.group.add(g); bake.add(g, false);
-      signAt(142, -214, -0.4, B.board('LEAVE NO TRACE', { bg: '#ffffff', fg: '#1a6b2a', size: 200, lines: 1, stripe: '#1a6b2a' }), 32, 7.5, 15, { frame: 0x1a1d29, legs: 3 });
+      posterAt(142, -214, -0.4, 3, 'CARBON NEUTRAL (VIBES)', { w: 27, h: 18, up: 14, legs: 3 });
       signAt(112, -262, -0.75, B.board('CARBON OFFSET BY VIBES', { bg: '#7dff6a', fg: '#1a1d29', size: 140 }), 14, 5, 7.5, { frame: 0x1a1d29 });
     }
     // fire jets in the slalom: product placement
@@ -551,11 +594,86 @@ export default {
       if (clear(p.x, p.z, 4)) { const yaw = faceIn(p.i, -1, 0.6); bake.add(sc.place(B.iceShack(), p.x, p.z, { yaw })); take(p.x, p.z, 8); }
       sign(14.35, -1, 39, B.board('DUST IS FREE.', { bg: '#46d6ff', fg: '#1a1d29', size: 150, sub: 'ICE IS $40.', subFg: '#b0102c', subScale: 0.8, lines: 1 }), 18, 7, 9, { turn: 0.6 });
       const dishes = sc.along({ from: 20.0, to: 20.9, side: -1, offset: 38, spacing: 8 }).filter(q => clear(q.x, q.z, 3)).map(q => ({ ...q, yaw: q.yaw + Math.PI + rng.range(-0.3, 0.3) }));
-      sc.instances(partsOf(B.satDish()), dishes, { scale: [1.2, 1.6] });
+      sc.instances(partsOf(B.satDish()), dishes, { scale: [1.2, 1.6], cast: false });
       dishes.forEach(q => take(q.x, q.z, 5));
       const d = sc.beside(20.45, -1, 52); if (clear(d.x, d.z, 8)) sc.place(B.dome(6, { door: 0x46d6ff }), d.x, d.z, { yaw: d.yaw, y: d.y - 0.3 });
       sign(19.85, -1, 38, B.board('DIGITAL DETOX CAMP', { bg: '#ffffff', fg: '#7b5cff', size: 150, border: '#7b5cff' }), 20, 6.5, 11, { turn: 0.6 });
       sign(21.0, -1, 36, B.board('WIFI PASSWORD: NAMASTE123', { bg: '#7b5cff', fg: '#ffffff', size: 120 }), 16, 5.2, 8, { turn: 0.6 });
+    }
+
+    // ---- the dune cut: whip flags up the big dune's face, two boards flanking the line, a warning on the crest ----
+    {
+      const CUT = track.def.shortcuts[0].path, flags = [];
+      for (let k = 0; k < CUT.length - 1; k++) {
+        const [ax, az] = CUT[k], [bx, bz] = CUT[k + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
+        for (let d = 0; d < len; d += 8) for (const sd of [-1, 1]) {
+          const x = ax + (bx - ax) * d / len + nx * sd * 8, z = az + (bz - az) * d / len + nz * sd * 8;
+          if (!track.ground(x, z, -1, hit).onRoad) flags.push({ x, y: sc.y(x, z), z, yaw: rng() * 6.28 });
+        }
+      }
+      const mb = new ModelBuilder();
+      mb.add('pole', cyl(0.06, 0.08, 5.2, 5), { p: [0, 2.6, 0] });
+      mb.add('flag', box(0.05, 1.1, 1.6, 0.02, 1), { p: [0, 4.6, 0.8] });
+      bakeAll(mb.build({ pole: plastic(0x3a2c34, 0.6, 0.3), flag: plastic(0xff4fa8, 0.5) }), flags);
+      const beside = (k, sd, off) => { const [ax, az] = CUT[k], [bx, bz] = CUT[k + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len; return { x: ax + nx * sd * off, z: az + nz * sd * off, yaw: Math.atan2(ax - bx, az - bz) }; };
+      for (const [k, sd, text, st] of [[1, -1, 'CHEF-LED VISION QUEST', 'paper'], [4, 1, 'PLAYA NAME: CHIEF VIBES OFFICER', 'violet']]) {
+        const q = beside(k, sd, 15); if (!clear(q.x, q.z, 0)) continue;
+        signAt(q.x, q.z, q.yaw - sd * 0.5, B.board(text, { ...STYLE[st], size: 130 }), 16, 5.4, 8);
+      }
+      const c = beside(3, 1, 11);
+      signAt(c.x, c.z, c.yaw - 0.4, B.board('TRESPASSERS WILL BE GIFTED', { bg: '#ffd23c', fg: '#1a1d29', size: 130, border: '#1a1d29' }), 12, 4.2, 4.6, { frame: 0x1a1d29 });
+    }
+
+    // ---- the plank: off the dune lip, over the camp, onto the boardwalk. Below the gap, the safety net (pending) ----
+    {
+      const gs0 = track.indexAtCp(21.42), gs1 = track.indexAtCp(21.72), gi = Math.round((gs0 + gs1) / 2);
+      const hx = Math.hypot(track.lx[gi], track.lz[gi]) || 1, lxn = track.lx[gi] / hx, lzn = track.lz[gi] / hx;
+      const tl = Math.hypot(track.tx[gi], track.tz[gi]) || 1, txn = track.tx[gi] / tl, tzn = track.tz[gi] / tl;
+      const cx = track.px[gi], cz = track.pz[gi], gy = track.terrainHeight(cx, cz), half = (gs1 - gs0) * track.ds / 2 + 3, wide = track.hwL[gi] + 4;
+      // the net: two poles each side, a sagging mesh with a kart-sized hole torn in the middle
+      const nb = new ModelBuilder(), at = (u, v, y) => [cx + txn * u + lxn * v, y, cz + tzn * u + lzn * v];
+      for (const u of [-half, half]) for (const v of [-wide, wide]) { const p = at(u, v, gy); nb.add('pole', cyl(0.18, 0.22, 6, 6), { p: [p[0], gy + 3, p[2]] }); }
+      const sag = (u, v) => gy + 5.2 - 2.4 * (1 - (u / half) ** 2) * (1 - (v / wide) ** 2);
+      const hole = (u, v) => Math.hypot(u * 1.2, v + 1.5) < 4.2;
+      for (let k = -6; k <= 6; k++) {
+        const u = k / 6 * half; let prev = null;
+        for (let j = -10; j <= 10; j++) { const v = j / 10 * wide, p = at(u, v, sag(u, v)); if (prev && !hole(u, v)) nb.add('net', strutGeo(prev, p, 0.06)); prev = p; }
+      }
+      for (let j = -10; j <= 10; j++) {
+        const v = j / 10 * wide; let prev = null;
+        for (let k = -6; k <= 6; k++) { const u = k / 6 * half, p = at(u, v, sag(u, v)); if (prev && !hole(u, v)) nb.add('net', strutGeo(prev, p, 0.06)); prev = p; }
+      }
+      const g = nb.build({ pole: plastic(0x3a2c34, 0.6, 0.3), net: plastic(0xfff0d0, 0.7) }); ctx.group.add(g); bake.add(g, false);
+      const sp = at(-half - 5, -wide - 6, 0);
+      signAt(sp[0], sp[2], Math.atan2(-txn, -tzn) + 0.4, B.board('SAFETY NET', { bg: '#fff6e6', fg: '#c2410c', size: 150, sub: 'FUNDING ROUND: PENDING', subFg: '#1a1d29', subScale: 0.6, lines: 1 }), 12, 5, Math.max(6, track.py[gs0] - gy - 1), { frame: 0x3a2c34 });
+      // the judges, on the far side of the gap: a scorecard on stilts, at eye level for the karts in the air
+      const jp = at(half + 4, wide + 7, 0);
+      signAt(jp[0], jp[2], Math.atan2(-txn, -tzn) - 0.45, B.board('JUDGES: 10/10', { bg: '#ffffff', fg: '#1a1d29', size: 150, sub: '(ALL INVESTORS)', subFg: '#c2410c', subScale: 0.65, lines: 1, border: '#1a1d29' }), 11, 4.6, Math.max(6, track.py[gs1] - gy + 1), { frame: 0x3a2c34 });
+      for (let k = 0; k < 3; k++) { const q = at(half + 1 + k * 1.6, wide + 4.5, 0), m = B.person({ seated: true }); sc.place(m, q[0], q[2], { yaw: Math.atan2(-lxn, -lzn), y: sc.y(q[0], q[2]) }); bake.add(m); }
+      // over the landing, the boardwalk's welcome arch
+      const li = track.indexAtCp(21.95), lw = track.hwL[li] + track.hwR[li] + 2.5, ly = track.py[li], la = Math.atan2(track.tx[li], track.tz[li]);
+      const ab = new ModelBuilder(), lr = [Math.cos(la), -Math.sin(la)];
+      for (const sx of [-1, 1]) ab.add('post', box(0.7, 9, 0.7, 0.1, 1), { p: [track.px[li] + lr[0] * sx * lw / 2, ly + 4.5, track.pz[li] + lr[1] * sx * lw / 2] });
+      ab.add('post', box(lw + 1.6, 3.4, 0.35, 0.05, 1), { p: [track.px[li], ly + 9.6, track.pz[li]], r: [0, la, 0] });
+      const ag = ab.build({ post: plastic(0x7c4f2e, 0.6, 0.3) }); ctx.group.add(ag); bake.add(ag);
+      const ar = atlas.add(1280, 300, B.board('STUCK THE LANDING (SPIRITUALLY)', { bg: '#1a1d29', fg: '#ffd23c', size: 150, lines: 1, border: '#ff6a2a', pad: 0.04 }));
+      const fy = la + Math.PI;
+      atlas.both(ar, [track.px[li] + Math.sin(fy) * 0.19, ly + 9.6, track.pz[li] + Math.cos(fy) * 0.19], fy, lw + 1.2, 3.1, 0.38);
+    }
+
+    // ---- the boardwalk: festival lights on both rails, so it reads as a pier lit up over the camp ----
+    {
+      const i0 = track.indexAtCp(21.75), i1 = track.indexAtCp(24.35), step = Math.round(12 / track.ds), poles = [];
+      for (const sd of [1, -1]) {
+        const run = [];
+        for (let i = i0; i <= i1; i += step) {
+          const hx = Math.hypot(track.lx[i], track.lz[i]) || 1, off = (sd > 0 ? track.hwL[i] : track.hwR[i]) + 0.55;
+          const p = { x: track.px[i] + track.lx[i] / hx * off * sd, y: track.py[i] + 0.9, z: track.pz[i] + track.lz[i] / hx * off * sd, yaw: track.yaw[i] };
+          poles.push(p); run.push({ x: p.x, y: p.y + 5.2, z: p.z });
+        }
+        if (run.length > 1) bake.add(B.stringLights(run, { sag: 0.9 }), false);
+      }
+      bakeAll(B.lightPole({ h: 5.4 }), poles);
     }
 
     // ---- under the boardwalk: a spiritual journey, with a term sheet ----
@@ -585,7 +703,7 @@ export default {
         sign(25.1, -1, 19, B.board('GIFT ECONOMY', { bg: '#ff4fa8', fg: '#ffffff', size: 150, sub: 'CARD ONLY', subFg: '#ffd23c', subScale: 0.8, lines: 1 }), 16, 6.4, 8.5, { turn: 0.5 });
       }
       const bikes = sc.along({ from: 25.95, to: 26.4, side: -1, offset: 14, spacing: 1.1 }).filter(q => clear(q.x, q.z, 1));
-      sc.instances(partsOf(B.bicycle()), bikes, { tints: [0xff6a2a, 0x46d6ff, 0xffd23c, 0xff4fa8, 0x7dff6a] });
+      sc.instances(partsOf(B.bicycle()), bikes, { tints: [0xff6a2a, 0x46d6ff, 0xffd23c, 0xff4fa8, 0x7dff6a], cast: false });
       bikes.forEach(q => take(q.x, q.z, 2));
       sign(26.15, -1, 19, B.board('BIKES', { bg: '#ffd23c', fg: '#1a1d29', size: 150, sub: '$900/DAY', subFg: '#b0102c', subScale: 0.95, lines: 1 }), 16, 8, 8.5, { turn: 0.5 });
       const l = sc.beside(25.75, -1, 26);
@@ -607,15 +725,15 @@ export default {
       ...sc.along({ from: 2.2, to: 7.8, side: -1, offset: 15, spacing: 20 }),
       ...sc.along({ from: 13.6, to: 20.6, side: 1, offset: 33, spacing: 22 }),
     ].filter(p => clear(p.x, p.z, 0.8) && !reserved(p.x, p.z));
-    cubeCols.forEach((c, k) => sc.instances(partsOf(B.glowCube(c, { h: 4.5 + k * 0.6 })), cubeRows.filter((_, i) => i % 4 === k), {}));
+    cubeCols.forEach((c, k) => bakeAll(B.glowCube(c, { h: 4.5 + k * 0.6 }), cubeRows.filter((_, i) => i % 4 === k)));
     const farTowers = sc.scatter({ count: 14, min: 24, max: 120, minGap: 40, maxSlope: 0.2, where: (x, z) => flat(x, z) && !reserved(x, z) && clear(x, z, 3) });
-    sc.instances(partsOf(B.lightTower({ h: 18 })), farTowers, {});
+    sc.instances(partsOf(B.lightTower({ h: 18 })), farTowers, { cast: false });
 
     // ---- the dunes and the foothills ----
     const rocks = sc.scatter({ count: 110, min: 45, max: 260, maxSlope: 1.4, minGap: 12, where: (x, z, h) => h > 7 && Math.hypot((x - CENTRE.x) * 0.82, (z - CENTRE.z) * 0.92) > 250 });
     sc.instances(partsOf(P.rock(2, { r: 4 })), rocks, { scale: [1, 3], yaw: 'random', sink: 1.2, tints: [0xb08f9a, 0xa38290, 0xc09aa0, 0x9a7f8c] });
     const pebbles = sc.scatter({ count: 70, min: 34, max: 120, maxSlope: 0.8, minGap: 6, where: (x, z, h) => h > 4 && clear(x, z, 2) && z > -300 });
-    sc.instances(partsOf(P.rock(5, { r: 1.4 })), pebbles, { scale: [0.6, 1.6], yaw: 'random', sink: 0.3, tints: [0xc4a898, 0xb89a8c, 0xd0b4a0] });
+    sc.instances(partsOf(P.rock(5, { r: 1.4 })), pebbles, { scale: [0.6, 1.6], yaw: 'random', sink: 0.3, tints: [0xc4a898, 0xb89a8c, 0xd0b4a0], cast: false });
 
     // arrow boards on the outside of every real corner
     for (const c of track.corners) {
@@ -631,12 +749,17 @@ export default {
     // billboards where you are looking anyway
     const BOARDS = [
       [2.3, -1, 19, 'OUT OF OFFICE SINCE 1998', 'sun', '- LARRY & SERGEY'], [7.2, -1, 20, 'MY SHAMAN TAKES EQUITY', 'hot'],
-      [10.7, -1, 19, 'BURNING MAN IS SILICON VALLEY', 'ink', '- ELON MUSK'], [15.6, 1, 38, 'CHEF-LED VISION QUEST', 'paper'],
-      [17.1, 1, 38, 'PLAYA NAME: CHIEF VIBES OFFICER', 'violet'], [21.2, 1, 37, 'NO SPECTATORS (EXCEPT INVESTORS)', 'red'],
-      [23.6, -1, 20, 'FOUND MYSELF. RAISED A SERIES B.', 'sky'], [24.6, -1, 19, 'RADICAL SELF-RELIANCE (CATERED)', 'fire'],
+      [10.7, -1, 19, 'BURNING MAN IS SILICON VALLEY', 'ink', '- ELON MUSK'],
+      [21.2, 1, 37, 'NO SPECTATORS (EXCEPT INVESTORS)', 'red'],
+      [23.6, -1, 20, 'FOUND MYSELF. RAISED A SERIES B.', 'sky'],
     ];
     for (const [at, side, off, text, st, sub] of BOARDS) sign(at, side, off, B.board(text, { ...STYLE[st], size: 130, sub, subFg: sub ? STYLE[st].fg : null, subScale: 0.55 }), 20, 6.6, 10, { turn: 0.45 });
 
+    // the painted posters: the gig poster round the Bowl, the valet stand on the slalom, the playa's terms by the camp
+    poster(6.3, -1, 22, 0, 'NO REQUESTS');
+    poster(10.35, 1, 18, 2, 'KEYS LEFT IN IGNITION', { turn: 0.35 });
+    poster(24.6, -1, 19, 1, 'RADICAL SELF-RELIANCE (CATERED)');
+    posters.flush();
     bake.flush();
     atlas.flush();
 

@@ -24,7 +24,7 @@ export class App {
     this.input = new Input();
     this.menus = new Menus(this);
     this.audio = new AudioEngine(this.save);
-    this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = [];
+    this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = []; this._turnOk = false;
     this.curtain = el('div', 'curtain'); document.body.appendChild(this.curtain);
     this.rng = makeRng(Date.now() & 0xffff);
     this.input.onMenu = (a, d) => this.onMenu(a, d);
@@ -83,11 +83,22 @@ export class App {
       else if (!on && document.fullscreenElement) document.exitFullscreen?.();
     } catch { /* not supported here */ }
   }
-  /** True while a touch-screen race is on and the phone is upright. */
-  mustTurn() { return !!this.session?.touch && !this.attract && this.session.race.state !== 'done' && matchMedia('(orientation: portrait)').matches; }
+  /** True while a touch-driven race is on, the phone is upright, and the player has not chosen to race upright anyway. */
+  mustTurn() {
+    if (!this.session?.touch || this.attract || this.session.race.state === 'done') return false;
+    if (this.save.settings.pausePortrait === false) return false;   // the Options switch: never pause for portrait
+    if (this._turnOk) return false;                                 // resumed upright: sticks until the phone has been sideways and back
+    if (this._nonTouchPlayer()) return false;                       // a controller or keyboard player is not holding the screen to steer
+    return matchMedia('(orientation: portrait)').matches;
+  }
+  /** The controls actually in use are a gamepad or a keyboard, not the on-screen ones. lastDevice alone
+      cannot say so: it starts life as 'kb' and touch never overwrites it. A connected pad, a pad that has
+      driven the menus, or a real key press are the honest signals. */
+  _nonTouchPlayer() { return this.input.lastDevice.startsWith('pad') || this.input.pads().length > 0 || this.input.kbUsed; }
   /** Where the browser allows it (Android, in full screen), hold the screen sideways for the race; elsewhere the pause panel asks. */
   _lockLandscape(on) { try { if (on) screen.orientation?.lock?.('landscape')?.catch(() => {}); else screen.orientation?.unlock?.(); } catch { /* not supported here */ } }
   _onTurn() {
+    if (!matchMedia('(orientation: portrait)').matches) this._turnOk = false;   // sideways again: the upright prompt re-arms
     const turn = this.mustTurn();
     document.body.classList.toggle('must-turn', turn);
     if (!this.session?.touch || this.attract) return;
@@ -150,7 +161,7 @@ export class App {
     this._race({ trackId: g.tracks[g.index], cc: g.cc, level: g.level, players: this._players(), grid: g.grid, order: g.order, mode: 'race' }, `${g.cup.name} · Race ${g.index + 1} of ${g.tracks.length}`);
   }
   _race(config, cupLine = '') {
-    this.lastConfig = config; this.lastCupLine = cupLine;
+    this.lastConfig = config; this.lastCupLine = cupLine; this._turnOk = false;
     this.menus.close(); this._wake(true); this._lockLandscape(true);
     return this.transition(() => {
       this._clearScene();
@@ -189,7 +200,11 @@ export class App {
 
   /* ---------- pause ---------- */
   pause() { if (!this.session || this.attract || this.session.paused) return; this.session.setPaused(true); this.session.touch?.setVisible(false); this.menus.reset('pause'); }
-  resume() { if (this.mustTurn()) return; this.menus.close(); this.session?.setPaused(false); this.session?.touch?.setVisible(this.session.phase !== 'intro'); }
+  resume() {
+    if (this.mustTurn()) this._turnOk = true;   // resuming while upright: race on upright, and do not pause again until the phone has been sideways and back
+    this.menus.close(); this.session?.setPaused(false); this.session?.touch?.setVisible(this.session.phase !== 'intro');
+    document.body.classList.toggle('must-turn', this.mustTurn());
+  }
 
   /* ---------- results ---------- */
   _finishRace(session, results) {

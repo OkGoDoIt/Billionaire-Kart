@@ -15,12 +15,24 @@ export const DEVICE_LABEL = { kb: 'Keyboard', kb1: 'Keyboard (WASD)', kb2: 'Keyb
 /* ---------- gamepad bindings ----------
    One mapping for every connected pad (per-player maps are out of scope).
    Each action owns a list of standard-mapping button indices: the first is
-   the primary (the one the Controller panel remaps), the rest are shipped
-   "also" buttons. The defaults below are exactly the indices this file used
-   when they were hardcoded — remap them and the race/menu groups swap
-   primaries among themselves, so two actions in a group never share one. */
-export const BUTTON_NAMES = ['A · Cross', 'B · Circle', 'X · Square', 'Y · Triangle', 'LB', 'RB', 'LT', 'RT', 'Back · Share', 'Start · Menu', 'Left stick click', 'Right stick click', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', 'Home', 'Touchpad'];
-export const buttonName = n => BUTTON_NAMES[n] || `Button ${n}`;
+   the primary (the one the Controller panel shows and remaps), the rest are
+   shipped "also" buttons — they keep working but are never shown in the UI
+   (issue #194: the panel shows ONE friendly name per action). The defaults
+   below are exactly the indices this file used when they were hardcoded.
+   Remapping trades primaries within a group, so two actions in a group
+   never share a primary.
+   Menus have no bindings of their own: confirm is the Accelerate button and
+   back is the Brake button — which is what the shipped defaults always did
+   (A confirms, B goes back). Saves written by the v1 panel (#187) may carry
+   confirm/back entries; sanitizePadBindings ignores them. */
+const BUTTON_NAMES_XB = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Menu', 'Left stick click', 'Right stick click', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', 'Guide', 'Touchpad'];
+const BUTTON_NAMES_PS = ['Cross', 'Circle', 'Square', 'Triangle', 'L1', 'R1', 'L2', 'R2', 'Share', 'Options', 'L3', 'R3', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', 'PS', 'Touchpad'];
+/** Which naming family a pad uses, from its Gamepad id: PlayStation pads get
+    the shapes, everything else gets Xbox-style letters (Switch Pro included). */
+export const padFamily = id => /dual|playstation|sony|wireless controller/i.test(id || '') ? 'ps' : 'xb';
+/** The one friendly name for a button — never a raw index, never two naming
+    systems at once. */
+export const buttonName = (n, family = 'xb') => (family === 'ps' ? BUTTON_NAMES_PS : BUTTON_NAMES_XB)[n] || 'Button';
 export const PAD_ACTIONS = [
   { id: 'accelerate', label: 'Accelerate', group: 'race' },
   { id: 'brake', label: 'Brake / reverse', group: 'race' },
@@ -28,10 +40,8 @@ export const PAD_ACTIONS = [
   { id: 'item', label: 'Use item', group: 'race' },
   { id: 'rear', label: 'Look behind', group: 'race' },
   { id: 'pause', label: 'Pause', group: 'menu' },
-  { id: 'confirm', label: 'Menu: confirm', group: 'menu' },
-  { id: 'back', label: 'Menu: back', group: 'menu' },
 ];
-export const PAD_DEFAULTS = { accelerate: [0], brake: [1], drift: [5, 2], item: [4, 3], rear: [11, 13], pause: [9], confirm: [0], back: [1] };
+export const PAD_DEFAULTS = { accelerate: [0], brake: [1], drift: [5, 2], item: [4, 3], rear: [11, 13], pause: [9] };
 export const PAD_STEER_SOURCES = [['both', 'Left stick + D-pad'], ['stick', 'Left stick'], ['dpad', 'D-pad']];
 export const defaultPadBindings = () => Object.fromEntries(PAD_ACTIONS.map(a => [a.id, [...PAD_DEFAULTS[a.id]]]));
 const padGroup = id => PAD_ACTIONS.find(a => a.id === id)?.group;
@@ -54,8 +64,8 @@ export function sanitizePadBindings(raw) {
     "also" of another action simply leaves that action; one of this action's
     own "also" buttons swaps with its primary. The old primary is otherwise
     freed — it never lingers as an "also", or a remap would not stop the old
-    button working. Buttons owned by the other group (race vs menu) are left
-    alone — A is both Accelerate and Menu confirm, and that is deliberate. */
+    button working. Buttons owned by the other group are left alone (Pause
+    lives in its own group, so it never steals a racing button by swapping). */
 export function applyPadBind(bindings, action, index) {
   const list = bindings[action];
   if (!list || list[0] === index) return { changed: false, swapped: null, droppedFrom: null };
@@ -71,8 +81,9 @@ export function applyPadBind(bindings, action, index) {
   bindings[action] = [index, ...tail].slice(0, 3);
   return { changed: true, swapped, droppedFrom };
 }
-/** "RB (also X)" — the binding as one line of player-facing text. */
-export const describePadBind = (bindings, action) => { const l = bindings[action] || []; return l.length ? buttonName(l[0]) + (l.length > 1 ? ` (also ${l.slice(1).map(buttonName).join(', ')})` : '') : '—'; };
+/** The binding as one friendly name — the primary only. The "also" buttons
+    keep working underneath, but no UI lists them (issue #194). */
+export const describePadBind = (bindings, action, family = 'xb') => { const l = bindings[action] || []; return l.length ? buttonName(l[0], family) : '—'; };
 const MENU_KEYS = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Enter: 'confirm', Space: 'confirm', Escape: 'back', Backspace: 'back', KeyP: 'pause' };
 
 export class Input {
@@ -178,9 +189,11 @@ export class Input {
       const prev = this.padPrev[i], dev = 'pad' + i;
       const b = n => !!gp.buttons[n]?.pressed;
       const has = a => this.padBinds[a].some(n => b(n));
-      /* directions are the D-pad and the left stick, as shipped; confirm/back/pause follow the bindings;
-         alt/alt2 stay on X/Y exactly as before (nothing remaps them) */
-      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: has('confirm'), back: has('back'), pause: has('pause'), alt: b(2), alt2: b(3) };
+      /* directions are the D-pad and the left stick, as shipped; pause follows its binding;
+         confirm and back DERIVE from the Accelerate and Brake buttons — menus have no
+         bindings of their own, and the derivation is exactly the shipped behaviour
+         (A confirms, B goes back). alt/alt2 stay on X/Y as before (nothing remaps them) */
+      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: has('accelerate'), back: has('brake'), pause: has('pause'), alt: b(2), alt2: b(3) };
       let anyDir = false;
       for (const k in now) {
         if (now[k] && !prev[k]) { this.lastDevice = dev; this.onAnyInput?.(); this._menu(k, dev); if (['up', 'down', 'left', 'right'].includes(k)) this.padRepeat[i] = 0.38; }

@@ -399,13 +399,11 @@ export class Menus {
     };
     const tips = touch ? [
       ['Drift for speed', 'Steer hard through a turn and the kart hops into a drift. Sparks go blue, orange, then purple. Straighten up to boost.'],
-      ['Start with a rocket', 'Press the right side just after the 2 appears.'],
       ['Collect coins', 'Each coin makes you faster, up to ten.'],
       ['Follow closely', 'Tuck in behind a kart to slingshot past.'],
       ['Throw it backward', 'Use an item while braking to send it behind you.'],
     ] : [
       ['Drift for speed', 'Hold drift through a turn. Sparks go blue, orange, then purple. Let go to boost.'],
-      ['Start with a rocket', 'Hold accelerate just after the 2 appears.'],
       ['Trick off ramps', 'Press drift as you leave a ramp for a boost.'],
       ['Collect coins', 'Each coin makes you faster, up to ten.'],
       ['Follow closely', 'Tuck in behind a kart to slingshot past.'],

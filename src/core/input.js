@@ -85,12 +85,12 @@ export class Input {
     this.tilt = { enabled: false, value: 0, available: false };
     this.onMenu = null;                    // (action, device) => void
     this.onAnyInput = null;                // first interaction (to unlock audio)
-    this.lastDevice = 'kb'; this.padPrev = [{}, {}, {}, {}]; this.padRepeat = [0, 0, 0, 0];
+    this.lastDevice = 'kb'; this.kbUsed = false; this.padPrev = [{}, {}, {}, {}]; this.padRepeat = [0, 0, 0, 0];
     this.states = [blank(), blank(), blank(), blank()];
 
     addEventListener('keydown', e => {
       if (e.repeat) { if (MENU_KEYS[e.code] && ['up', 'down', 'left', 'right'].includes(MENU_KEYS[e.code])) this._menu(MENU_KEYS[e.code], 'kb'); return; }
-      this.keys.add(e.code); this.lastDevice = 'kb'; this.onAnyInput?.();
+      this.keys.add(e.code); this.lastDevice = 'kb'; this.kbUsed = true; this.onAnyInput?.();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && !(e.target instanceof HTMLInputElement)) e.preventDefault();
       if (MENU_KEYS[e.code]) this._menu(MENU_KEYS[e.code], this._kbDeviceFor(e.code));
       if (e.code === 'KeyR') this._menu('reset', 'kb');

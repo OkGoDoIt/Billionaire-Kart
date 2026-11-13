@@ -284,9 +284,10 @@ export class Menus {
   /* ---------- pause ---------- */
   s_pause() {
     const A = this.app, turn = A.mustTurn();
-    // a phone held upright cannot race: say so in place of Resume, and keep the rest of the menu
+    // a phone held upright races best sideways: say so, but Resume stays on the panel — a player who can
+    // only hold the device upright (a controller cradle, say) races on, and the prompt stays away for the race
     const el = h('div', {}, h('div', { class: 'panel narrow' + (turn ? ' turn' : '') },
-      turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), h('p', { class: 'turn-sub' }, 'The race is paused.')] : [h('h1', {}, 'Paused'), this.btn('Resume', () => A.resume(), { def: true })],
+      turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), h('p', { class: 'turn-sub' }, 'The race is paused.'), this.btn('Resume anyway', () => A.resume(), { def: true })] : [h('h1', {}, 'Paused'), this.btn('Resume', () => A.resume(), { def: true })],
       this.btn('Restart race', () => A.restartRace()), this.btn('How to play', () => this.open('howto')), this.btn('Options', () => this.open('options')), this.btn('Quit to menu', () => A.quitToMenu(), { cls: 'danger' })));
     return { el, onBack: () => { A.resume(); return false; }, onAction: a => { if (a === 'pause') { A.resume(); return true; } } };
   }
@@ -389,7 +390,7 @@ export class Menus {
       document.fullscreenEnabled && fullScreenRow(),
       installRow(),
       padRow(),
-      cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff),
+      cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff), cycle('Pause in portrait', 'pausePortrait', onoff),
       touch && cycle('Automatic accelerate', 'autoGo', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
     return { el, onClose: () => fsOff?.() };
   }

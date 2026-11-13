@@ -227,8 +227,8 @@ export class RaceView {
   }
   /** Dust thrown out along the ground in a ring, for a heavy landing. s: 0..1. */
   _dustRing(p, rgb, s) {
-    const n = Math.round(10 + s * 14);
-    for (let i = 0; i < n * this.fx.density; i++) { const a = (i / n) * 6.283 + Math.random() * 0.3, v = 4 + s * 5 + Math.random() * 2; this.fx.smoke.emit({ x: p.x + Math.cos(a) * 0.8, y: p.y + 0.15, z: p.z + Math.sin(a) * 0.8, vx: Math.cos(a) * v, vy: 0.6 + Math.random() * 0.8, vz: Math.sin(a) * v, color: rgb, size: 0.9 + s * 0.6, life: 0.6 + s * 0.3, grow: 2, drag: 3.2, gravity: -0.6, alpha: 0.55, spin: (Math.random() - 0.5) * 2 }); }
+    const n = Math.round(8 + s * 10);
+    for (let i = 0; i < n * this.fx.density; i++) { const a = (i / n) * 6.283 + Math.random() * 0.3, v = 4 + s * 5 + Math.random() * 2; this.fx.smoke.emit({ x: p.x + Math.cos(a) * 0.8, y: p.y + 0.15, z: p.z + Math.sin(a) * 0.8, vx: Math.cos(a) * v, vy: 0.6 + Math.random() * 0.8, vz: Math.sin(a) * v, color: rgb, size: 0.55 + s * 0.35, life: 0.45 + s * 0.2, grow: 1.6, drag: 3.2, gravity: -0.6, alpha: 0.32, spin: (Math.random() - 0.5) * 2 }); }
   }
   /** Fireworks over a podium finish: a few bursts high ahead of the kart, one after another. */
   _fireworks(p, yaw, n) {

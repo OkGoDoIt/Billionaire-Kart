@@ -31,10 +31,12 @@
 .hud-item.has .hud-item-coin { display: block; }
 .hud-item-count { position: absolute; right: calc(var(--u) * -1); bottom: calc(var(--u) * -0.6); font-size: calc(var(--u) * 6.2); color: var(--gold); }
 .hud-item.pop { animation: hud-pop 0.32s cubic-bezier(.2,1.6,.4,1); }
-.hud-item-info { position: absolute; left: calc(var(--edge) + var(--safe-l) + calc(var(--u) * 19.5)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 1.5)); max-width: calc(var(--u) * 44); font-family: var(--body); background: rgba(11,13,32,0.78); padding: calc(var(--u) * 0.9) calc(var(--u) * 2) calc(var(--u) * 1.1); border-radius: calc(var(--u) * 2.4); opacity: 0; transform: translateX(calc(var(--u) * -1.5)); transition: opacity 0.2s, transform 0.2s; }
+.hud-item-info { position: absolute; left: calc(var(--edge) + var(--safe-l) + calc(var(--u) * 19.5)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 1.5)); max-width: calc(var(--u) * 31 - var(--edge) - var(--safe-l)); font-family: var(--body); background: rgba(11,13,32,0.78); padding: calc(var(--u) * 0.9) calc(var(--u) * 2) calc(var(--u) * 1.1); border-radius: calc(var(--u) * 2.4); opacity: 0; transform: translateX(calc(var(--u) * -1.5)); transition: opacity 0.2s, transform 0.2s; }
 .hud-item-info.show { opacity: 1; transform: none; }
 .hud-item-info b { display: block; font-weight: 700; font-size: calc(var(--u) * 3.5); line-height: 1.15; color: var(--gold); max-width: calc(var(--u) * 26); }
-.hud-item-info span { display: block; font-weight: 500; font-size: calc(var(--u) * 3); line-height: 1.22; max-width: calc(var(--u) * 40); }
+.hud-item-info span { display: block; font-weight: 500; font-size: calc(var(--u) * 3); line-height: 1.22; }
+/* The card's right edge stops at 50.5u from the pane's left, short of the centre lane (banners start at 51u, the feed at
+   53.5u), so the item card, the feed, and every banner can all be up at once without touching, at any screen shape. */
 /* The held item's description is never folded away (issue #132): while an item is held, its name and its full
    description stay rendered and readable. The race feed and the banners have their own lanes at the top of the
    screen; they do not borrow this one, and neither does a timer. hud-check guards this: it fails if any rule
@@ -113,7 +115,7 @@
 .hud-talk div::before { content: ""; position: absolute; left: calc(var(--u) * -1.9); top: 50%; width: calc(var(--u) * 2.6); height: calc(var(--u) * 2.6); background: #fff; border-left: calc(var(--u) * 0.55) solid var(--ink); border-bottom: calc(var(--u) * 0.55) solid var(--ink); transform: translateY(-50%) rotate(45deg); border-radius: 0 0 0 calc(var(--u) * 0.5); }
 .hud-talk b { display: block; position: relative; font-family: var(--display); font-size: calc(var(--u) * 2.7); letter-spacing: 0.03em; color: var(--hot); line-height: 1.1; padding-top: calc(var(--u) * 0.2); }
 .hud-talk span { display: block; position: relative; font-weight: 700; font-size: calc(var(--u) * 3.3); line-height: 1.16; }
-.hud.hud-touch .hud-talk { top: calc(var(--u) * 43); }
+.hud.hud-touch .hud-talk { top: calc(var(--u) * 45.5); }   /* clear of the held-item card, which wraps taller now that it stays out of the centre lane */
 .hud-compact .hud-talk { max-width: calc(var(--u) * 54); }
 
 /* incoming-item warning, bottom-centre */

@@ -459,6 +459,9 @@ const USE_SOUND = { boost: 'boost', boost3: 'boost', golden: 'boost', leak: 'lea
 const SYNTH = {
   ui_move: a => a.tone({ type: 'triangle', f: 660, f1: 880, dur: 0.06, vol: 0.12 }),
   ui_select: a => { a.tone({ type: 'triangle', f: 660, dur: 0.08, vol: 0.16 }); a.tone({ type: 'triangle', f: 990, dur: 0.14, vol: 0.16, delay: 0.07 }); },
+  // checker wipe: a rising rush as the tiles flip in, a softer falling one as they flip away
+  wipe_cover: a => { a.noise({ dur: 0.32, vol: 0.13, type: 'bandpass', f: 500, f1: 3200, q: 1.2, attack: 0.05 }); a.tone({ type: 'triangle', f: 220, f1: 520, dur: 0.28, vol: 0.05, attack: 0.04 }); },
+  wipe_reveal: a => a.noise({ dur: 0.36, vol: 0.09, type: 'bandpass', f: 3000, f1: 700, q: 1, attack: 0.03 }),
   ui_back: a => a.tone({ type: 'triangle', f: 520, f1: 330, dur: 0.12, vol: 0.14 }),
   ui_start: a => a.arp([72, 76, 79, 84], { step: 0.06, dur: 0.2, vol: 0.18 }),
   coin: (a, v, p, o) => { const r = o.rate || 1; a.tone({ type: 'square', f: 988 * r, dur: 0.07, vol: 0.1 * v }); a.tone({ type: 'square', f: 1319 * r, dur: 0.22, vol: 0.1 * v, delay: 0.07 }); },

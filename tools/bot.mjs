@@ -36,7 +36,7 @@ const page = await ctx.newPage();
    full-screen window, so leave full screen before turning the phone. */
 const resize = async size => { await page.evaluate(() => document.fullscreenElement && document.exitFullscreen()).catch(() => {}); await page.setViewportSize(size); };
 const errors = [], fails = [];
-page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+page.on('pageerror', e => errors.push('pageerror: ' + e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 4).map(l => l.trim()).join(' <- ')));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 const shot = async name => { await page.screenshot({ path: join(out, name + '.jpg'), type: 'jpeg', quality: 85 }); };
 const key = async (k, wait = 260) => { await page.keyboard.press(k); await page.waitForTimeout(wait); };
@@ -134,19 +134,26 @@ try {
     await page.evaluate("BK.race.items.give(BK.race.players[0], 'boost')"); await page.waitForTimeout(200);
     await touch('.tc-left', 'pointerdown', 2, vw.width * 0.25, vw.height * 0.5); await page.waitForTimeout(60); await touch('.tc-left', 'pointerup', 2, vw.width * 0.25, vw.height * 0.5); await page.waitForTimeout(400);
     if (await page.evaluate('BK.race.players[0].item')) fails.push('touch: a tap on the left side did not use the item');
+    await page.evaluate("BK.race.items.give(BK.race.players[0], 'leak')"); await page.waitForTimeout(200);
     await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 + 60); await page.waitForTimeout(150);
     if (await page.evaluate(`${T}.brake`) !== 1) fails.push('touch: pulling the right thumb down does not brake');
     await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(900);
     if (await page.evaluate(`${T}.brake`) !== 0) fails.push('touch: sliding the right thumb back up does not release the brake');
     if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: the pedal does not take over again after braking');
+    if (!(await page.evaluate('BK.race.players[0].item'))) fails.push('touch: letting off the brake used the item');
     // flick up on the pedal: a fast upward swipe fires the item; two moves, because the pedal judges the flick from recent motion
     await page.evaluate("BK.race.items.give(BK.race.players[0], 'boost')"); await page.waitForTimeout(200);
     await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 - 10); await page.waitForTimeout(60);
     await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 - 70); await page.waitForTimeout(400);
     if (await page.evaluate('BK.race.players[0].item')) fails.push('touch: a flick up on the right side did not use the item');
+    // a second flick on the same touch works too (the kart is held on the pedal the whole race)
+    await page.evaluate("BK.race.items.give(BK.race.players[0], 'leak')"); await page.waitForTimeout(100);
+    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 - 80); await page.waitForTimeout(60);
+    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 - 140); await page.waitForTimeout(250);
+    if (await page.evaluate('BK.race.players[0].item')) fails.push('touch: a second flick up on the same touch did not use the item');
     // the grace latch: a quick lift of the pedal thumb must not cut the throttle, and re-gripping keeps it
-    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(100);
-    await touch('.tc-right', 'pointerup', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(120);
+    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 - 130); await page.waitForTimeout(100);
+    await touch('.tc-right', 'pointerup', 1, vw.width * 0.8, vw.height * 0.6 - 130); await page.waitForTimeout(120);
     if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: a quick lift of the right thumb cuts the throttle (no grace latch)');
     await touch('.tc-right', 'pointerdown', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(150);
     if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: re-gripping the pedal does not keep the throttle');

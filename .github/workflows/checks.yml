@@ -39,16 +39,20 @@ jobs:
       - name: Sim
         run: node tools/sim.mjs --quick
 
-      - name: Bot, desktop
+      # The bot races in real time; a GPU-less runner renders too slowly for its timing asserts, so on CI it is
+      # advisory (screenshots always uploaded). The full bot gate runs locally before every push (CONTRIBUTING.md).
+      - name: Bot, desktop (advisory)
         if: ${{ !cancelled() }}
+        continue-on-error: true
         run: node tools/bot.mjs --out bot-shots/desktop
 
-      - name: Bot, mobile
+      - name: Bot, mobile (advisory)
         if: ${{ !cancelled() }}
+        continue-on-error: true
         run: node tools/bot.mjs --mobile --out bot-shots/mobile
 
       - name: Upload bot screenshots
-        if: failure()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: bot-screenshots

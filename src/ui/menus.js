@@ -4,7 +4,7 @@ import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { CUPS, cupTracks } from '../content/cups.js';
 import { CLASSES } from '../race/kart.js';
-import { DEVICE_LABEL } from '../core/input.js';
+import { DEVICE_LABEL, PAD_ACTIONS, PAD_STEER_SOURCES, buttonName, describePadBind, defaultPadBindings, applyPadBind } from '../core/input.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
 import { installCard, installButton, installPanel, onInstallChange } from './install.js';
@@ -374,6 +374,8 @@ export class Menus {
       document.addEventListener('fullscreenchange', sync); fsOff = () => document.removeEventListener('fullscreenchange', sync);
       return row;
     };
+    // the controller mapping lives on its own screen (below); this row is the door
+    const padRow = () => h('div', { class: 'opt', 'data-f': true, onclick: () => this.open('pad') }, h('span', {}, 'Controller'), h('div', { class: 'opt-ctl' }, h('b', {}, 'Buttons…')));
     // installing is a row too, wherever the browser allows it; the label says what tapping does here
     const installRow = () => {
       const spec = installButton(); if (!spec) return null;
@@ -386,9 +388,83 @@ export class Menus {
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
       document.fullscreenEnabled && fullScreenRow(),
       installRow(),
+      padRow(),
       cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff),
       touch && cycle('Automatic accelerate', 'autoGo', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
     return { el, onClose: () => fsOff?.() };
+  }
+
+  /* ---------- controller buttons ---------- */
+  s_pad() {
+    const A = this.app, S = A.save.settings, input = A.input;
+    const persist = () => { S.padBinds = JSON.parse(JSON.stringify(input.padBinds)); S.padSteer = input.padSteer; A.save.write(); A.applySettings(); };
+    const status = h('p', { class: 'pad-status' });
+    const readout = h('div', { class: 'pad-readout' }, 'Press any button on your controller…');
+    let capturing = null, sawRelease = false, prev = new Set(), raf = 0, hitTimer = 0;
+    const rows = new Map();
+    const labelOf = id => PAD_ACTIONS.find(a => a.id === id).label;
+    const drawRow = a => {
+      const r = rows.get(a.id); if (!r) return;
+      r.binds.replaceChildren(...input.padBinds[a.id].map((n, i) => h('span', { class: 'bind-chip' + (i ? ' alt' : '') }, `${buttonName(n)} · ${n}`)));
+      r.el.classList.toggle('capturing', capturing === a.id);
+      r.cap.textContent = capturing === a.id ? 'Press a button… (Esc or tap to cancel)' : 'Remap';
+    };
+    const drawAll = () => { for (const a of PAD_ACTIONS) drawRow(a); };
+    const startCapture = id => { capturing = id; sawRelease = prev.size === 0; readout.textContent = `Press the button for ${labelOf(id)}…`; drawAll(); };
+    const endCapture = msg => { capturing = null; if (msg) readout.textContent = msg; drawAll(); };
+    const doBind = (id, n) => {
+      const res = applyPadBind(input.padBinds, id, n);
+      let msg = `${labelOf(id)} is now ${buttonName(n)} (button ${n}).`;
+      if (res.swapped) msg += ` Swapped with ${labelOf(res.swapped)}.`;
+      if (res.droppedFrom) msg += ` Button ${n} no longer also works for ${labelOf(res.droppedFrom)}.`;
+      persist(); A.audio?.ui('select'); endCapture(msg);
+    };
+    const showPress = n => {
+      const acts = PAD_ACTIONS.filter(a => input.padBinds[a.id].includes(n)).map(a => a.label);
+      readout.textContent = `Button ${n} · ${buttonName(n)} — ${acts.length ? acts.join(' · ') : 'not bound to anything'}`;
+      clearTimeout(hitTimer);
+      for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.toggle('hit', input.padBinds[a.id].includes(n));
+      hitTimer = setTimeout(() => { for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.remove('hit'); }, 700);
+    };
+    /* While the panel is open it polls the pads itself: menu navigation only
+       reports the mapped actions, but discovery needs every raw button. */
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      let pad = null; const pressed = new Set();
+      for (const gp of gps) { if (!gp || !gp.connected) continue; pad = pad || gp; gp.buttons.forEach((btn, i) => { if (btn.pressed || btn.value > 0.5) pressed.add(i); }); }
+      const sTxt = pad ? `Connected: ${pad.id.replace(/\s*\(.*?\)\s*/g, '').trim().slice(0, 42) || 'Controller'}` : 'No controller connected — plug one in or pair it, then press any button.';
+      if (status.textContent !== sTxt) status.textContent = sTxt;
+      const fresh = [...pressed].filter(i => !prev.has(i));
+      if (capturing) {
+        if (!pressed.size) sawRelease = true;               // the press that opened capture must clear first
+        else if (sawRelease && fresh.length) doBind(capturing, fresh[0]);
+      } else if (fresh.length) showPress(fresh[fresh.length - 1]);
+      prev = pressed;
+    };
+    const list = h('div', { class: 'pad-rows' }, PAD_ACTIONS.map(a => {
+      const binds = h('span', { class: 'binds' }), cap = h('span', { class: 'pad-cap' }, 'Remap');
+      const el = h('div', { class: 'pad-row', 'data-f': true, onclick: () => { if (capturing) endCapture('Remap cancelled.'); else startCapture(a.id); } },
+        h('span', { class: 'pad-label' }, a.label), binds, cap);
+      rows.set(a.id, { el, binds, cap });
+      return el;
+    }));
+    // steering source, shaped like the Options cycles
+    const steerVal = h('b', {}, PAD_STEER_SOURCES.find(([id]) => id === input.padSteer)[1]);
+    const setSteer = d => { const i = PAD_STEER_SOURCES.findIndex(([id]) => id === input.padSteer); const n = PAD_STEER_SOURCES[(i + d + PAD_STEER_SOURCES.length) % PAD_STEER_SOURCES.length]; input.padSteer = n[0]; steerVal.textContent = n[1]; persist(); A.audio?.ui('move'); };
+    const steerRow = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: () => setSteer(1) }, h('span', {}, 'Steering'), h('div', { class: 'opt-ctl' }, steerVal));
+    steerRow.addEventListener('adjust', e => setSteer(e.detail));
+    const el = h('div', {}, this.header('Controller', 'Press buttons to see what they do. Pick an action, then press the button you want for it.'),
+      h('div', { class: 'panel pad' }, status, readout, list, steerRow,
+        h('p', { class: 'pad-note' }, 'One mapping covers every controller. Keyboard and touch controls are unchanged. RT and LT always double as the gas and brake pedals.'),
+        h('div', { class: 'foot' }, this.btn('Reset to defaults', () => { input.padBinds = defaultPadBindings(); input.padSteer = 'both'; steerVal.textContent = PAD_STEER_SOURCES[0][1]; persist(); endCapture('Shipped defaults restored.'); A.audio?.ui('back'); }), this.btn('Done', () => this.back(), { cls: 'go', def: true }))));
+    drawAll();
+    return {
+      el, onOpen: () => { raf = requestAnimationFrame(tick); }, onClose: () => { cancelAnimationFrame(raf); clearTimeout(hitTimer); },
+      /* while capturing, pad presses belong to the capture (the poll above), not to menu navigation;
+         a keyboard Esc still cancels */
+      onAction: (a, dev) => { if (!capturing) return false; if (a === 'back' && !String(dev).startsWith('pad')) endCapture('Remap cancelled.'); return true; },
+    };
   }
 
   /* ---------- how to play ---------- */
@@ -396,9 +472,14 @@ export class Menus {
     const touch = matchMedia('(pointer: coarse)').matches;
     const key = (...k) => h('span', { class: 'keys' }, k.map(x => h('kbd', {}, x)));
     // each action, and how to do it on each kind of control; the screen shows one kind at a time
+    // the controller column is read from the live bindings, so it stays true after a remap
+    const B = this.app.input.padBinds, D = a => describePadBind(B, a), withTrig = (a, idx, word) => B[a].includes(idx) ? D(a) : `${D(a)} or ${word}`;
+    const padRows = [['Steer', this.app.input.padSteer === 'dpad' ? 'D-pad' : this.app.input.padSteer === 'stick' ? 'Left stick' : 'Left stick or D-pad'],
+      ['Accelerate', withTrig('accelerate', 7, 'right trigger')], ['Drift and hop', D('drift')], ['Use item', D('item')],
+      ['Brake and reverse', withTrig('brake', 6, 'left trigger')], ['Look behind', D('rear')], ['Pause', D('pause')]];
     const HOW = {
       kb: [['Steer', [key('A', 'D'), 'or', key('←', '→')]], ['Accelerate', [key('W'), 'or', key('↑')]], ['Drift and hop', key('Space')], ['Use item', [key('E'), 'or', key('Enter')]], ['Brake and reverse', [key('S'), 'or', key('↓')]], ['Look behind', key('Q')], ['Pause', key('Esc')]],
-      pad: [['Steer', 'Left stick'], ['Accelerate', 'A or right trigger'], ['Drift and hop', 'Right bumper or X'], ['Use item', 'Left bumper or Y'], ['Brake and reverse', 'B or left trigger'], ['Look behind', 'Press the right stick'], ['Pause', 'Start']],
+      pad: padRows,
     };
     const tips = touch ? [
       ['Drift for speed', 'Steer hard through a turn and the kart hops into a drift. Sparks go blue, orange, then purple. Straighten up to boost.'],
@@ -429,7 +510,7 @@ export class Menus {
       controls,
       h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1]))))),
       installPanel()),
-      h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true }), this.btn('See the items', () => this.open('items'))));
+      h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true }), this.btn('Controller buttons', () => this.open('pad')), this.btn('See the items', () => this.open('items'))));
     return { el };
   }
 

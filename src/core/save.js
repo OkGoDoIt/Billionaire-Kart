@@ -1,7 +1,7 @@
 /* Saved data: settings, unlocks, trophies, best times. One localStorage key. */
 const KEY = 'billionaire-kart-v2';
 const DEFAULTS = {
-  settings: { music: 0.7, sfx: 0.9, quality: 'auto', shake: true, autoGo: false, tilt: false, autoTrick: false, smartSteer: false, hudMap: true },
+  settings: { music: 0.7, sfx: 0.9, quality: 'auto', shake: true, autoGo: false, tilt: false, autoTrick: false, smartSteer: false, hudMap: true, padBinds: null, padSteer: 'both' },   // padBinds null = the shipped controller mapping (src/core/input.js)
   last: { racer: ['elon', 'sam', 'zuck', 'bezos'], cc: 100, level: 'normal', cup: 'seed', track: 'silicon-valley' },
   trophies: {},      // `${cupId}:${cc}` -> { rank, points, stars }
   best: {},          // `${trackId}:${cc}` -> { race, lap, racer }

@@ -364,20 +364,23 @@ const PROPS = {
   },
 };
 
-/** A logo worn on the back of the outfit (#153): a woven patch or a print,
-    bent to follow the shell and tilted with the back's lean, so it reads as
-    part of the clothes from the chase camera rather than a sticker. */
-function backPrint(ctx, y, w, h, mat, lift = 0.012) {
+/** A logo flown behind the seat (#153 round 3): a short pole with a cross-bar and a
+    cloth banner, standing clear of the seat back and out to the side of the head, so
+    the mark reads from the chase camera. A print on the torso hides behind the seat
+    back; this one does not. The cloth ripples a little, like it is moving. */
+function banner(ctx, mat, { x = -0.46, top = 1.36, w = 0.6, h = 0.5, backing = null } = {}) {
   const { b, Bk } = ctx;
+  const z = Bk(0.5) - 0.2;
   const geo = new THREE.PlaneGeometry(w, h, 8, 1);
   const p = geo.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i);
-    p.setZ(i, -0.028 * (x / (w / 2)) ** 2);   // the back wraps away at the sides; the print follows it forward
-  }
+  for (let i = 0; i < p.count; i++) p.setZ(i, 0.035 * Math.sin(p.getX(i) / w * 7 + 0.6));
   geo.computeVertexNormals();
-  const slope = (Bk(y + h / 2) - Bk(y - h / 2)) / h;
-  b.add(mat, geo, { p: [0, y, Bk(y) - lift], r: [Math.atan(slope), PI, 0] });
+  const cy = top - 0.03 - h / 2;
+  b.add('steel', cyl(0.014, 0.014, top - 0.2, 6), { p: [x, 0.2 + (top - 0.2) / 2, z] });
+  b.add('steel', cyl(0.011, 0.011, w + 0.06, 6), { p: [x, top - 0.015, z], r: [0, 0, PI / 2] });
+  b.add('steel', sphere(0.028, 8, 6), { p: [x, top + 0.02, z] });
+  if (backing) b.add(backing, geo, { p: [x, cy, z - 0.004], r: [0, PI, 0] });
+  b.add(mat, geo, { p: [x, cy, z - (backing ? 0.012 : 0)], r: [0, PI, 0] });
 }
 
 /* ---------- outfits ---------- */
@@ -613,13 +616,12 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     b.add('lid', box(0.62, 0.6, 0.032, 0.014, 2), { p: [0, 0.37, -0.456] });
     b.add('apple', new THREE.PlaneGeometry(0.32, 0.32), { p: [0, 0.38, -0.474], r: [0, PI, 0] });
   }
-  // the Microsoft men wear their eras on their backs (#153): Bill's is the
-  // waving 1992 flag on a stitched woven patch, Satya's the flat modern grid
-  // printed straight on the suit — same placement, different decade. Zuck's
-  // grey tee gets the loop printed across the back.
-  if (racer.id === 'bill') backPrint(c, 0.59, 0.42, 0.315, 'win31');
-  if (racer.id === 'satya') backPrint(c, 0.58, 0.31, 0.31, 'win11');
-  if (racer.id === 'zuck') backPrint(c, 0.6, 0.42, 0.21, 'meta');
+  // the Microsoft men and Zuck fly their eras on a banner behind the seat (#153):
+  // Bill's is the waving 1992 flag on a stitched cream cloth, Satya's the flat
+  // modern grid on white, Zuck's the loop on white: same pole, different decade.
+  if (racer.id === 'bill') banner(c, 'win31', { w: 0.64, h: 0.48 });
+  if (racer.id === 'satya') banner(c, 'win11', { w: 0.52, h: 0.52, backing: 'cloth' });
+  if (racer.id === 'zuck') banner(c, 'meta', { w: 0.66, h: 0.33, backing: 'cloth' });
   if (racer.id === 'thiel') {
     // the seeing stone, held up on a short staff behind his shoulder, glowing —
     // so he reads from the chase camera by more than the kart's pedestal orb
@@ -650,6 +652,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), flame: glow(0xff8a1e, 3.2), flame2: glow(0x9fd4ff, 3.4), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
     bot: plastic(0xf2f4f7, 0.3), eye: glow(0x5ce1ff, 2.2), orb: glow(0x7b6cff, 3.2),
     lid: plastic(0x33363c, 0.32, 0.85),
+    cloth: doubleSided(0xf4f4ee, 0.8),
     apple: cached('applemat', () => new THREE.MeshStandardMaterial({ map: appleLogo(), emissiveMap: appleLogo(), emissive: 0xffffff, emissiveIntensity: 1.35, transparent: true, alphaTest: 0.35, roughness: 0.4 })),
     win31: cached('win31mat', () => new THREE.MeshStandardMaterial({ map: win31Flag(), roughness: 0.85 })),
     win11: cached('win11mat', () => new THREE.MeshStandardMaterial({ map: win11Grid(), emissiveMap: win11Grid(), emissive: 0xffffff, emissiveIntensity: 0.3, transparent: true, alphaTest: 0.35, roughness: 0.45 })),

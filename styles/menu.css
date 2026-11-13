@@ -2,6 +2,10 @@
    desktop get the same layout. */
 .menu-layer { position: absolute; inset: 0; z-index: 10; pointer-events: none; --u: min(1vw, 1.78vh); font-size: calc(var(--u) * 1.75); color: #fff; }
 .menu-screen { position: absolute; inset: 0; pointer-events: auto; display: flex; flex-direction: column; align-items: center; padding: calc(var(--u) * 3 + var(--safe-t)) calc(var(--u) * 4 + var(--safe-r)) calc(var(--u) * 3 + var(--safe-b)) calc(var(--u) * 4 + var(--safe-l)); overflow: hidden auto; animation: menu-in 0.22s ease-out; background: linear-gradient(180deg, rgba(11,13,32,0.78), rgba(11,13,32,0.5) 32%, rgba(11,13,32,0.5) 70%, rgba(11,13,32,0.78)); }   /* dark enough that nothing in the scene behind competes with the words */
+/* while a screen has more below the fold, a fade at its bottom edge says so; menus.js adds the element
+   and the more-below class, and takes the class away at the end of the scroll */
+.scroll-fade { flex: none; align-self: stretch; height: calc(var(--u) * 7); margin-top: calc(var(--u) * -7); margin-left: calc(var(--u) * -4 - var(--safe-l)); margin-right: calc(var(--u) * -4 - var(--safe-r)); position: sticky; bottom: calc(var(--u) * -3 - var(--safe-b)); background: linear-gradient(180deg, rgba(11,13,32,0), rgba(11,13,32,0.85)); pointer-events: none; opacity: 0; transition: opacity 0.25s; z-index: 5; }
+.menu-screen.more-below .scroll-fade { opacity: 1; }
 .menu-screen h1, .menu-screen h2, .menu-screen h3 { font-family: var(--display); font-weight: normal; margin: 0; letter-spacing: 0.02em; paint-order: stroke fill; -webkit-text-stroke: 0.14em var(--ink); }
 .menu-screen h1 { font-size: calc(var(--u) * 5); line-height: 1.05; }
 .menu-screen p { margin: 0; }
@@ -73,6 +77,13 @@
 .chips { display: flex; gap: calc(var(--u) * 1.6); }
 .chip { font: inherit; font-weight: 700; font-size: calc(var(--u) * 2.3); color: #fff; background: rgba(18,20,43,0.9); border: calc(var(--u) * 0.4) solid #fff; border-radius: calc(var(--u) * 4); padding: calc(var(--u) * 1.1) calc(var(--u) * 3.2); cursor: pointer; box-shadow: 0 calc(var(--u) * 0.6) 0 rgba(0,0,0,0.4); }
 .chip.sel { background: var(--gold); color: var(--ink); border-color: var(--ink); }
+/* what the chosen rival level means, under its chips */
+.lv-desc { font-size: calc(var(--u) * 1.9); line-height: 1.25; opacity: 0.92; margin-top: calc(var(--u) * 0.8); text-shadow: 0 1px 3px rgba(0,0,0,0.6); text-align: center; max-width: 46em; }
+/* the setup screen was already exactly full at desktop size, so the line pays for itself out of this screen's own spacing */
+.screen-setup .menu-head { margin-bottom: calc(var(--u) * 1.4); }
+.screen-setup .sub-h { margin-top: calc(var(--u) * 1.6) !important; margin-bottom: calc(var(--u) * 0.8) !important; }
+.screen-setup .chip { padding-top: calc(var(--u) * 0.85); padding-bottom: calc(var(--u) * 0.85); }
+.screen-setup .foot { margin-top: calc(var(--u) * 1.6); }
 .cup { border-color: var(--cc); min-height: calc(var(--u) * 36); }
 .cup ol { margin: calc(var(--u) * 1.6) 0 0; padding-left: 1.3em; font-weight: 600; font-size: calc(var(--u) * 2.1); line-height: 1.5; }
 .cup li.soon { opacity: 0.45; font-weight: 400; }
@@ -120,9 +131,9 @@
 .racer-card h2 { font-size: calc(var(--u) * 3.6); line-height: 1.1; }
 .r-title { font-weight: 700; color: var(--gold); font-size: calc(var(--u) * 2); }
 .r-quote { font-style: italic; font-weight: 500; font-size: calc(var(--u) * 1.8); line-height: 1.25; margin-top: calc(var(--u) * 0.3) !important; }
-.r-bio { font-size: calc(var(--u) * 1.65); line-height: 1.28; opacity: 0.88; margin-top: calc(var(--u) * 0.9) !important; }
+.r-bio { font-size: calc(var(--u) * 1.65); line-height: 1.28; opacity: 0.88; margin-top: calc(var(--u) * 0.9) !important; min-height: calc(var(--u) * 6.34); }   /* three lines for every racer, so the card is one height and the tiles never shift */
 /* the racer's special: what is different about driving them, under the stats it explains */
-.r-special { font-size: calc(var(--u) * 1.55); line-height: 1.24; margin-top: calc(var(--u) * 0.8) !important; padding-left: calc(var(--u) * 1); border-left: calc(var(--u) * 0.4) solid var(--gold); }
+.r-special { font-size: calc(var(--u) * 1.55); line-height: 1.24; margin-top: calc(var(--u) * 0.8) !important; padding-left: calc(var(--u) * 1); border-left: calc(var(--u) * 0.4) solid var(--gold); min-height: calc(var(--u) * 3.85); }   /* two lines for every racer, like the bio's three: the card is one height and the tiles never shift */
 .r-special b { color: var(--gold); font-weight: 700; margin-right: 0.2em; }
 .r-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(var(--u) * 1.4); margin-top: calc(var(--u) * 1.1); }
 .stat { display: flex; flex-direction: column; gap: calc(var(--u) * 0.35); font-weight: 600; font-size: calc(var(--u) * 1.5); min-width: 0; }

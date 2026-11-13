@@ -15,7 +15,7 @@ export const ITEMS = {
   subpoena:  { id: 'subpoena',  name: 'Subpoena',           img: 'green',     shield: true, hit: 'YOU’VE BEEN SERVED!', desc: 'Fires straight ahead and bounces off walls until it serves somebody.' },
   subpoena3: { id: 'subpoena3', name: 'Class Action',       img: 'green',     uses: 3, base: 'subpoena', shield: true, hit: 'YOU’VE BEEN SERVED!', desc: 'Three subpoenas circle your kart. Fire them one at a time. Settle for nothing.' },
   tweet:     { id: 'tweet',     name: 'Viral Tweet',        img: 'red',       shield: true, hit: 'RATIOED!', desc: 'Homes in on the racer ahead of you and ratios them.' },
-  antitrust: { id: 'antitrust', name: 'Antitrust Suit',     img: 'blue',      hit: 'BROKEN UP!', use: 'SEE YOU IN COURT!', desc: 'Flies to first place and breaks them up. Regulators hate a winner.' },
+  antitrust: { id: 'antitrust', name: 'Antitrust Suit',     img: 'blue',      hit: 'BROKEN UP!', use: 'SEE YOU IN COURT!', desc: 'Flies to first place, circles its victim twice, then breaks them up. Regulators hate a winner.' },
   star:      { id: 'star',      name: 'Hype Cycle',         img: 'star',      hit: 'RUN OVER BY THE HYPE!', use: 'PEAK HYPE!', desc: 'Invincible and faster for a few seconds. Bump rivals to spin them out. Do not ask about revenue.' },
   crash:     { id: 'crash',     name: 'Market Crash',       img: 'lightning', hit: 'MARKET CRASH! −40%', use: 'SOLD THE TOP!', desc: 'Shrinks and slows every rival and shakes loose their items. You sold yesterday.' },
   pr:        { id: 'pr',        name: 'PR Blitz',           img: 'horn',      hit: 'SPUN!', use: 'WE TAKE THIS VERY SERIOUSLY!', desc: 'A shockwave of spin. Nearby rivals spin out and incoming items vanish.' },
@@ -41,6 +41,12 @@ const TABLE = [
 ];
 
 const SHOT_R = 0.75;
+/* The Antitrust Suit's strike telegraph (MK8's Spiny Shell): once it arrives it
+   ORBITS its victim twice over BLUE_HOVER_T seconds before slamming down, so
+   first place always gets a fair, unmissable warning. */
+const BLUE_HOVER_T = 1.4;      // hover seconds; the orbit rate below is two full circles in this window
+const BLUE_ORBIT_R = 3.1;      // metres from the victim's centre — close enough to loom in their chase view
+const BLUE_HOVER_H = 4.8;      // metres above the victim while circling
 let uid = 1;
 
 export class ItemSystem {
@@ -277,13 +283,13 @@ export class ItemSystem {
     }
   }
 
-  _explode(x, y, z, owner) {
+  _explode(x, y, z, owner, withItem = 'pinkslip') {
     const race = this.race, R = 7;
     race.emit('explosion', { x, y, z, r: R, by: owner });
     for (const k of race.karts) {
       if (k.rescueT > 0 || k.ghostT > 0 || k.invincible) continue;
       const d = Math.hypot(k.x - x, k.z - z);
-      if (d < R && Math.abs(k.y - y) < 5 && k.hurt(d < R * 0.6 ? 'tumble' : 'spin', owner)) race.emit('kartHit', { by: owner, victim: k, with: 'pinkslip' });
+      if (d < R && Math.abs(k.y - y) < 5 && k.hurt(d < R * 0.6 ? 'tumble' : 'spin', owner)) race.emit('kartHit', { by: owner, victim: k, with: withItem });
     }
     for (const h of this.hazards) if (Math.hypot(h.x - x, h.z - z) < R * 0.8) h.dead = true;
   }
@@ -374,33 +380,88 @@ export class ItemSystem {
     }
   }
 
+  /* The Antitrust Suit, in phases (MK8's Spiny Shell):
+     fly    — cruise above the centre line toward whoever leads RIGHT NOW
+              (the target is re-read every step, so a lead change re-targets it);
+     hover  — committed to one kart: it spirals onto a circle around them and
+              orbits twice over BLUE_HOVER_T while tracking their movement;
+     dive   — a short slam onto the point locked at the end of the hover. */
   _blue(s, dt) {
     const race = this.race, tr = race.track, P = this._p || (this._p = { x: 0, y: 0, z: 0 });
-    let t = race.order[0];
-    if (!t || t.finished) { s.dead = true; return; }
+    if (s.phase !== 'fly') return this._blueStrike(s, dt);
+    // the leader among karts still racing: a finished kart is out of the
+    // standings for targeting, so a suit airborne when the leader crosses the
+    // line re-targets the new leader instead of fizzling on a done kart
+    const t = race.order.find(k => !k.finished);
+    if (!t) { s.dead = true; return; }
     s.target = t;
-    if (s.phase === 'fly') {
-      // cruise above the centre line toward the leader
-      s.s = mod(s.s + s.speed * dt, tr.length);
-      tr.pointAt(s.s, 0, P, 5.5);
-      const k = 1 - Math.exp(-9 * dt);
-      const px = s.x, pz = s.z;
-      s.x += (P.x - s.x) * k; s.y += (P.y - s.y) * k; s.z += (P.z - s.z) * k;
-      s.yaw = Math.atan2(s.x - px, s.z - pz);
-      const d = loopDelta(s.s, t.s, tr.length);
-      if (Math.abs(d) < 26 || (d < 0 && d > -60)) { s.phase = 'hover'; s.t = 1.15; t.emit('incoming', s); race.emit('blueArrive', { shot: s, target: t }); }
-      else if (!s.warned && Math.abs(d) < 160) { s.warned = true; t.emit('incoming', s); }
-    } else if (s.phase === 'hover') {
+    // cruise above the centre line toward the leader
+    s.s = mod(s.s + s.speed * dt, tr.length);
+    tr.pointAt(s.s, 0, P, 5.5);
+    const k = 1 - Math.exp(-9 * dt);
+    const px = s.x, pz = s.z;
+    s.x += (P.x - s.x) * k; s.y += (P.y - s.y) * k; s.z += (P.z - s.z) * k;
+    s.yaw = Math.atan2(s.x - px, s.z - pz);
+    const d = loopDelta(s.s, t.s, tr.length);
+    if (Math.abs(d) < 26 || (d < 0 && d > -60)) {
+      // arrival: commit to this leader and open the telegraph — the orbit, the
+      // target ring (raceview reads s.m*), the feed callout (session, on blueArrive)
+      s.phase = 'hover'; s.t = BLUE_HOVER_T; s.hoverTarget = t; s.hoverFrac = 0; s.locked = false;
+      s.hx = t.x; s.hz = t.z; s.hy = t.y; s.ang = Math.atan2(s.x - t.x, s.z - t.z);
+      s.r0 = Math.max(BLUE_ORBIT_R, Math.hypot(s.x - t.x, s.z - t.z));   // spirals in from wherever it arrived, never inside the orbit radius
+      s.ey = s.y; s.mx = t.x; s.mz = t.z; s.my = t.y;
+      t.emit('incoming', s); race.emit('blueArrive', { shot: s, target: t });
+    }
+    else if (!s.warned && Math.abs(d) < 160) { s.warned = true; t.emit('incoming', s); }
+  }
+
+  _blueStrike(s, dt) {
+    const race = this.race, t = s.hoverTarget;
+    if (s.phase === 'hover') {
+      // committed: only an invalid victim (finished, or being rescued) sends
+      // the suit back to travel toward the new leader
+      if (!t || t.finished || t.rescueT > 0) {
+        s.phase = 'fly'; s.hoverTarget = null; s.warned = false; s.locked = false;
+        const g = race.track.ground(s.x, s.z, s.hint, this.hit, s.y); s.hint = g.i; s.s = g.s;
+        return;
+      }
       s.t -= dt;
-      const k = 1 - Math.exp(-8 * dt);
-      s.x += (t.x - s.x) * k; s.z += (t.z - s.z) * k; s.y += (t.y + 6.5 - s.y) * k; s.yaw += dt * 7;
-      if (s.t <= 0.34 && !s.locked) { s.locked = true; s.lx = t.x + t.vx * 0.2; s.lz = t.z + t.vz * 0.2; s.ly = t.y; }
-      if (s.t <= 0) { s.phase = 'dive'; s.t = 0.2; }
+      const el = BLUE_HOVER_T - s.t;
+      s.hoverFrac = clamp(el / BLUE_HOVER_T, 0, 1);
+      // circle the victim twice; the circle's centre tracks their movement,
+      // led a touch along their heading so it rides with them, not behind them
+      s.ang += dt * (Math.PI * 4 / BLUE_HOVER_T);
+      const k = 1 - Math.exp(-12 * dt);
+      s.hx += (t.x + Math.sin(t.yaw) * t.speed * 0.07 - s.hx) * k;
+      s.hz += (t.z + Math.cos(t.yaw) * t.speed * 0.07 - s.hz) * k;
+      s.hy += (t.y - s.hy) * k;
+      const b = Math.min(1, el / 0.3), e = b * b * (3 - 2 * b);   // spiral in over the first 0.3 s
+      const r = BLUE_ORBIT_R + (s.r0 - BLUE_ORBIT_R) * (1 - e);
+      s.x = s.hx + Math.sin(s.ang) * r; s.z = s.hz + Math.cos(s.ang) * r;
+      s.y = s.ey + (s.hy + BLUE_HOVER_H - s.ey) * e;
+      s.yaw = Math.atan2(t.x - s.x, t.z - s.z);                  // the briefcase faces its victim
+      s.mx = s.hx; s.mz = s.hz; s.my = s.hy;                     // the target ring rides under the victim
+      if (s.t <= 0) {
+        s.locked = true; s.lx = t.x + t.vx * 0.2; s.lz = t.z + t.vz * 0.2; s.ly = t.y;
+        s.mx = s.lx; s.mz = s.lz; s.my = s.ly;
+        s.phase = 'dive'; s.t = 0.2;
+        race.emit('blueStrike', { shot: s, target: t });
+      }
     } else {
       s.t -= dt;
       const k = 1 - Math.exp(-22 * dt);
       s.x += (s.lx - s.x) * k; s.z += (s.lz - s.z) * k; s.y += (s.ly + 0.4 - s.y) * k;
-      if (s.t <= 0) { this._explode(s.lx, s.ly, s.lz, s.owner); race.emit('blueHit', { x: s.lx, y: s.ly, z: s.lz }); s.dead = true; }
+      if (s.t <= 0) {
+        const hitsBefore = t && !t.finished ? t.stats.hitsTaken : -1;
+        this._explode(s.lx, s.ly, s.lz, s.owner, 'antitrust');
+        race.emit('blueHit', { x: s.lx, y: s.ly, z: s.lz });
+        // MK8: the victim's held item is destroyed by the strike. Nearby racers
+        // only take the blast, exactly as before — their items survive it.
+        if (t && hitsBefore >= 0 && t.stats.hitsTaken > hitsBefore && t.item) {
+          t.item = null; t.itemUses = 0; t.goldenActive = false; t.goldenT = 0; t.rouletteT = 0; t.emit('itemGone');
+        }
+        s.dead = true;
+      }
     }
   }
 

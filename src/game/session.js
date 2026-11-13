@@ -100,6 +100,8 @@ export class RaceSession {
         if (hv) { hv.banner(ITEMS[w]?.hit || HIT_LINES[w] || 'HIT!', 'bad small', 1300); if (by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer) hv.talk(by.racer, pick(by.racer.barks.taunt)); } }
         if (hb && by !== victim) { this._hitStop(0.05); hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer) hb.talk(victim.racer, pick(victim.racer.barks.hit)); }
       } else if (e.type === 'steal') { const h = this.hudOf.get(e.data.by); if (h) h.feed(`You stole ${ITEMS[e.data.id].name} from <b>${e.data.from.racer.name}</b>`); }
+      // the suit has arrived over the leader: their feed says so, in terms — the hover is the warning window
+      else if (e.type === 'blueArrive') { const h = this.hudOf.get(e.data.target); if (h) h.feed('<b>ANTITRUST SUIT</b> — INBOUND! It is circling you…', 3400); }
       app.audio?.raceEvent(e, this.race);
     }
   }

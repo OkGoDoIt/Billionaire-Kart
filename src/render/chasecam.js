@@ -69,8 +69,12 @@ export class ChaseCam {
     const boost = k.bulletT > 0 ? 1 : k.boostT > 0 ? clamp((k.boostMul - 1) / 0.34, 0.35, 1) : 0;
     this.kick = damp(this.kick, boost, boost > this.kick ? 9 : 3, dt);
     const surge = spring(this.surge, 60, 14, dt), punch = spring(this.punchS, 90, 19, dt), roll = spring(this.roll, 120, 9, dt), dip = spring(this.dipS, 140, 15, dt);
-    // speed lines: any boost draws them, harder boosts more; a slipstream that is building draws a few
-    this.lines = Math.min(1, this.kick * clamp(speedN * 1.25, 0, 1) + (k.drafting && k.draftT > 0.3 ? 0.25 : 0));
+    // speed lines (#222): only while boosting or at ~95%+ of top speed — at ordinary race speeds they
+    // showed in nearly every frame and looked busy. A near-top-speed cruise draws a few on its own, a
+    // building slipstream adds a few while gated in, and the strength fades in over ~0.2 s (fast out).
+    const boosting = k.boostT > 0 || k.bulletT > 0, fast = speedN >= 0.95;
+    const wantLines = (boosting || fast) ? Math.min(1, Math.max(boosting ? this.kick * clamp(speedN * 1.25, 0, 1) : 0, clamp((speedN - 0.95) * 3, 0, 0.45)) + (k.drafting && k.draftT > 0.3 ? 0.25 : 0)) : 0;
+    this.lines = damp(this.lines, Math.min(1, wantLines), wantLines > this.lines ? 12 : 7, dt);
     // narrow split-screen views sit a bit further back
     const tall = (aspect < 1.2 ? 1.18 : 1) * (this.pullBack || 1);
     const dist = (this.dist + speedN * 0.7 - this.kick * 0.5 + surge) * tall * (k.shrinkT > 0 ? 0.8 : 1);

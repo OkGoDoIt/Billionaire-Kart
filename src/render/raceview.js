@@ -158,7 +158,7 @@ export class RaceView {
           case 'driftTier': if (e.data > 0) { const col = TIER_FX[e.data - 1]; fx.burst(p.x, p.y + 0.3, p.z, 10 + e.data * 6, col, 6 + e.data, 0.3, 0.3, 3); fx.ring(p.x, p.y + 0.3, p.z, 12, col, 4 + e.data, 0.35, 0.22); } break;
           case 'trick': fx.ring(p.x, p.y + 0.5, p.z, 14, [1, 1, 0.6], 7, 0.4, 0.4); break;
           case 'trickLand': fx.burst(p.x, p.y + 0.3, p.z, 18, [0.4, 0.9, 1], 8, 0.3, 0.45); break;
-          case 'rocketStart': fx.puff(p.x, p.y + 0.2, p.z, 14, [1, 1, 1], 7, 1.6, 0.8, 0.6); cam?.addShake(0.4); break;
+          case 'rocketStart': fx.puff(p.x, p.y + 0.2, p.z, 14, [1, 1, 1], 9, 1.1, 0.8, 0.35); cam?.addShake(0.4); break;   // thinner, wider smoke (#222): the kart stays visible through the launch puff
           case 'burnout': fx.puff(p.x, p.y + 0.2, p.z, 18, [0.25, 0.25, 0.28], 3, 1.8, 1.2, 0.7); break;
           case 'coin': fx.burst(p.x, p.y + 1.2, p.z, 8, [1, 0.85, 0.2], 4, 0.25, 0.4, 3); break;
           case 'dropCoins': fx.confetti(p.x, p.y + 1, p.z, 10, [[1, 0.8, 0.15]], 6, p.y); break;
@@ -187,12 +187,12 @@ export class RaceView {
     for (const e of race.events) {
       const d = e.data;
       switch (e.type) {
-        case 'boxBreak': { const b = d.box; fx.confetti(b.x, b.y, b.z, 18, CONFETTI, 7, b.y - 1.2); fx.burst(b.x, b.y, b.z, 10, [1, 1, 1], 6, 0.3, 0.35); const o = this.boxes.find(x => x.b === b); if (o) o.pop = 0; break; }
+        case 'boxBreak': { const b = d.box; fx.confetti(b.x, b.y, b.z, 18, CONFETTI, 7, b.y - 1.2); fx.burst(b.x, b.y, b.z, 10, [1, 1, 1], 6, 0.3, 0.35); const o = this.boxes.find(x => x.b === b); if (o) o.pop = 0; if (d.kart?.isPlayer) this.cams.find(c => c.kart === d.kart)?.punch(0.2); break; }
         case 'coinTaken': break;
         case 'explosion': this._explosion(d.x, d.y, d.z, d.r); break;
         case 'shock': fx.ring(d.x, d.y + 0.6, d.z, 40, [1, 0.85, 0.3], 30, 0.9, 0.4); fx.ring(d.x, d.y + 1.2, d.z, 30, [1, 1, 1], 22, 0.6, 0.35); this._shakeNear(d.x, d.z, 0.6, 40); break;
-        case 'count': this._startLights(e.data); break;
-        case 'go': this._startLights(0); break;
+        case 'count': this._startLights(e.data); for (const c of this.cams) if (c.kart?.isPlayer) c.punch(0.15); break;   // a small kick per beat (#222); no timing hint, the rocket start stays secret (#169)
+        case 'go': this._startLights(0); for (const c of this.cams) if (c.kart?.isPlayer) c.punch(0.35); break;
         case 'lightning': this.flash = 1; this.gfx.post.flashColor.setRGB(0.85, 0.9, 1); for (const v of this.karts) if (v.kart !== d.by) fx.burst(v.pos.x, v.pos.y + 1.5, v.pos.z, 14, [0.7, 0.85, 1], 10, 0.4, 0.5); for (const c of this.cams) c.addShake(0.5); break;
         case 'shotGone': case 'hazardGone': { const t = this.things.get(d.id); if (t) { fx.burst(d.x, d.y + 0.4, d.z, 10, [1, 1, 1], 6, 0.25, 0.3); this.root.remove(t); this.things.delete(d.id); } break; }
         case 'shotBounce': fx.burst(d.x, d.y, d.z, 6, [1, 0.9, 0.6], 5, 0.2, 0.25, 1); break;
@@ -318,7 +318,9 @@ export class RaceView {
     this.flash = Math.max(0, this.flash - dt * 2.6); gfx.post.flash = this.flash * 0.75;
     this.edge = Math.max(0, (this.edge || 0) - dt * (this.edgeDecay || 2.4)); gfx.post.edge = this.edge;
     gfx.post.lines += ((this.spectate || !this.cams[0] ? 0 : this.cams[0].lines) - gfx.post.lines) * Math.min(1, dt * 8);
-    if (this._pending?.length) for (let i = this._pending.length - 1; i >= 0; i--) { const f = this._pending[i]; if (this.time < f.at) continue; this._pending.splice(i, 1); f.x = f.k.x + Math.sin(f.k.yaw + f.a) * f.d; f.y = f.k.y + f.h; f.z = f.k.z + Math.cos(f.k.yaw + f.a) * f.d; this.fx.burst(f.x, f.y, f.z, 60, f.col, 9, 0.85, 0.9, 1); for (let j = 0; j < 30 * this.fx.density; j++) { const u = Math.random() * 6.283, w = Math.random() * 2 - 1, r = Math.sqrt(1 - w * w), v = 6 + Math.random() * 3; this.fx.glint.emit({ x: f.x, y: f.y, z: f.z, vx: Math.cos(u) * r * v, vy: w * v + 1, vz: Math.sin(u) * r * v, color: [1, 1, 1], color2: f.col, size: 0.8, life: 0.7 + Math.random() * 0.4, gravity: 4, drag: 1.6, alpha: 1.3, spin: 6 }); } }
+    if (this._pending?.length) for (let i = this._pending.length - 1; i >= 0; i--) { const f = this._pending[i]; if (this.time < f.at) continue; this._pending.splice(i, 1); f.x = f.k.x + Math.sin(f.k.yaw + f.a) * f.d; f.y = f.k.y + f.h; f.z = f.k.z + Math.cos(f.k.yaw + f.a) * f.d; // a dark smoke puff behind the shell first (#222): the additive sparks are faint against a daylight sky and need something to read against
+      this.fx.smoke.emit({ x: f.x, y: f.y, z: f.z, vx: 0, vy: 0.4, vz: 0, color: [0.25, 0.25, 0.3], size: 2, life: 0.9, grow: 2.2, drag: 1.5, alpha: 0.35, spin: 0.4 });
+      this.fx.burst(f.x, f.y, f.z, 60, f.col, 9, 0.85, 0.9, 1); for (let j = 0; j < 30 * this.fx.density; j++) { const u = Math.random() * 6.283, w = Math.random() * 2 - 1, r = Math.sqrt(1 - w * w), v = 6 + Math.random() * 3; this.fx.glint.emit({ x: f.x, y: f.y, z: f.z, vx: Math.cos(u) * r * v, vy: w * v + 1, vz: Math.sin(u) * r * v, color: [1, 1, 1], color2: f.col, size: 0.8, life: 0.7 + Math.random() * 0.4, gravity: 4, drag: 1.6, alpha: 1.3, spin: 6 }); } }
   }
 
   /** Mirror hazards and projectiles with models. */

@@ -1,21 +1,22 @@
 /* Mars Colony: the third stop of the second cup. A billionaire's half-built
    colony on a rust plateau: Main Street between the habitat domes, a glass
-   airlock tube, a climb along the canyon rim, the long low-gravity jump across
-   the canyon, a banked bowl inside a crater with a rim hop, and a fast S-bend
-   through the solar field back home. */
+   airlock tube, a climb along the canyon rim, a dive across the launchpad
+   apron and straight through the rocket's launch mount, the long low-gravity
+   jump across the canyon, a banked bowl inside a crater with a rim hop, and a
+   fast S-bend through the solar field back home. */
 import { clamp, fbm, ridged, smoothstep } from '../core/util.js';
 import { Scenery, partsOf } from '../render/scenery.js';
 import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
 import * as M from '../models/props-mars-colony.js';
 import * as K from '../models/props-burning-circuit.js';   // the sign kit (atlas, baker, boards) lives there
-import { ModelBuilder, cyl, box, plastic } from '../models/build.js';
+import { ModelBuilder, cyl, box, sphere, plastic } from '../models/build.js';
 
 /* The canyon the jump crosses: a winding cut along the east side of the rim road. */
 const CANYON = [[330, -10], [270, -100], [242, -165], [240, -215], [258, -262], [260, -320], [216, -371], [176, -392], [148, -386]];
 const CRATER = { x: 176, z: -470, r: 62 };     // crater bowl; the road circles its inside
 const COLONY = { x: 10, z: -40, r: 150 };      // plateau the colony stands on
-const ROCKET = { x: 158, z: -300 };            // launch pad on the rim mesa, beside the run-up
+const ROCKET = { x: 165, z: -300 };            // launch pad on the rim mesa; the road now threads its mount
 const EARTH = { x: 300, y: 165, z: -1060 };    // hangs in the sky ahead of the jump
 
 function canyonDist(x, z) {
@@ -52,69 +53,73 @@ export default {
     { p: [160, 19.5, -108] },          // 4 out of the tube onto the rim road
     { p: [194, 23, -142] },            // 5 rim: right
     { p: [185, 27, -198] },            // 6 left
-    { p: [210, 30, -234] },            // 7 right
-    { p: [216, 31, -278] },            // 8 run-up
-    { p: [216, 31.5, -340], w: 19 },   // 9 ramp and the canyon gap
-    { p: [216, 30, -415], w: 19 },     // 10 landing deck
-    { p: [216, 28.5, -470], w: 19, bank: 4 }, // 11 into the crater bowl
-    { p: [204, 27.5, -498], w: 19, bank: 8 }, // 12
-    { p: [176, 26.5, -510], w: 19, bank: 9 }, // 13
-    { p: [148, 26, -498], w: 19, bank: 8 }, // 14
-    { p: [136, 26, -470], w: 19, bank: 4 }, // 15 bowl exit
-    { p: [138, 27, -428] },            // 16 crater rim (hop)
-    { p: [102, 24.5, -385] },            // 17 solar field S-bend
-    { p: [60, 21.5, -350] },             // 18
-    { p: [62, 18, -292] },             // 19
-    { p: [20, 15.5, -250] },             // 20
-    { p: [-40, 13.5, -215] },            // 21
-    { p: [-100, 14.5, -178] },           // 22 left
-    { p: [-115, 16.5, -118] },         // 23
-    { p: [-110, 17.5, -55] },          // 24 final corner
-    { p: [-96, 18, -12] },             // 25
-    { p: [-55, 18, 0] },               // 26 Main Street
+    { p: [200, 30, -231] },            // 7 right, starting the swing toward the pad
+    { p: [196, 30.5, -250] },          // 8 swing west off the rim road, onto the pad approach
+    { p: [164, 30.5, -280] },          // 9 across the apron, lining up on the rocket
+    { p: [169, 30.5, -306], w: 21 },   // 10 through the launch mount, then the drift out
+    { p: [216, 31.5, -340], w: 20 },   // 11 ramp and the canyon gap
+    { p: [216, 30, -415], w: 19 },     // 12 landing deck
+    { p: [216, 28.5, -470], w: 19, bank: 4 }, // 13 into the crater bowl
+    { p: [204, 27.5, -498], w: 19, bank: 8 }, // 14
+    { p: [176, 26.5, -510], w: 19, bank: 9 }, // 15
+    { p: [148, 26, -498], w: 19, bank: 8 }, // 16
+    { p: [136, 26, -470], w: 19, bank: 4 }, // 17 bowl exit
+    { p: [138, 27, -428] },            // 18 crater rim (hop)
+    { p: [102, 24.5, -385] },            // 19 solar field S-bend
+    { p: [60, 21.5, -350] },             // 20
+    { p: [62, 18, -292] },             // 21
+    { p: [20, 15.5, -250] },             // 22
+    { p: [-40, 13.5, -215] },            // 23
+    { p: [-100, 14.5, -178] },           // 24 left
+    { p: [-115, 16.5, -118] },         // 25
+    { p: [-110, 17.5, -55] },          // 26 final corner
+    { p: [-96, 18, -12] },             // 27
+    { p: [-55, 18, 0] },               // 28 Main Street
   ],
   sides: [
-    { from: 25.6, to: 1.6, edge: 'wall' },                    // Main Street: walls both sides
-    { from: 4.2, to: 8.6, side: 'L', outer: 28, shoulder: 5 }, // plateau side of the rim road
+    { from: 27.6, to: 1.6, edge: 'wall' },                    // Main Street: walls both sides
+    { from: 4.2, to: 7.9, side: 'L', outer: 28, shoulder: 5 }, // plateau side of the rim road
     { from: 4.4, to: 7.45, side: 'R', edge: 'wall' },          // canyon side: barrier
-    { from: 7.45, to: 8.05, side: 'R', edge: 'void' },         // a short open drop where the canyon comes closest
-    { from: 8.05, to: 8.6, side: 'R', edge: 'wall' },
-    { from: 8.75, to: 10.6, edge: 'wall' },                    // launch deck and landing deck
-    { from: 21.2, to: 23.1, side: 'L', outer: 34, shoulder: 5, hoarding: false }, // dust cut inside the west corner (needs a boost)
+    { from: 7.9, to: 10.55, edge: 'wall' },                    // the launch complex: apron, mount corridor, drift out
+    { from: 10.55, to: 10.85, side: 'R', edge: 'void' },       // a short open drop where the rejoin runs along the canyon shoulder
+    { from: 10.75, to: 12.6, edge: 'wall' },                   // launch deck and landing deck
+    { from: 23.2, to: 25.1, side: 'L', outer: 34, shoulder: 5, hoarding: false }, // dust cut inside the west corner (needs a boost)
   ],
-  zones: [{ from: 25.6, to: 1.6, skin: 'metal' }, { from: 1.6, to: 3.7, skin: 'metal' }, { from: 8.75, to: 10.6, skin: 'metal' }],
+  zones: [{ from: 27.6, to: 1.6, skin: 'metal' }, { from: 1.6, to: 3.7, skin: 'metal' }, { from: 7.9, to: 12.6, skin: 'metal' }],
   tunnels: [{ from: 1.75, to: 3.6, through: false }],
-  bridges: [{ from: 8.75, to: 10.6 }],
-  gaps: [{ from: 9.14, to: 9.68 }],
+  bridges: [{ from: 10.75, to: 12.6 }],
+  gaps: [{ from: 11.14, to: 11.68 }],
   ramps: [
-    { at: 9.0, len: 10, lift: 2.4 },
-    { at: 15.75, len: 8, lift: 1.6, lat: -4.5, w: 7 },
+    { at: 11.0, len: 10, lift: 2.4 },
+    { at: 17.75, len: 8, lift: 1.6, lat: -4.5, w: 7 },
   ],
   boosts: [
     { at: 0.5, lat: 0, w: 5 },
-    { at: 8.2, lat: 0, w: 6 },
-    { at: 8.65, lat: 0, w: 6 },
-    { at: 10.2, lat: 0, w: 8, len: 12 },
-    { at: 16.8, lat: -2.5, w: 6 },
+    { at: 8.55, lat: 0, w: 6 },
+    { at: 10.2, lat: 0, w: 6 },
+    { at: 10.65, lat: 0, w: 6 },
+    { at: 12.2, lat: 0, w: 8, len: 12 },
+    { at: 18.8, lat: -2.5, w: 6 },
   ],
-  itemRows: [{ at: 2.4 }, { at: 6.1 }, { at: 11.5 }, { at: 17.5 }, { at: 23.0, n: 3 }],
+  itemRows: [{ at: 2.4 }, { at: 6.1 }, { at: 13.5 }, { at: 19.5 }, { at: 25.0, n: 3 }],
   coins: [
     { from: 0.15, to: 0.45, n: 4, lat: 4 },
     { from: 5.3, to: 5.8, n: 5, lat: [5, -4] },
-    ...[[9.2, 4.5], [9.3, 6.2], [9.4, 7.4], [9.5, 8.1], [9.6, 8]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 0, air })),   // on the arc over the canyon
-    { from: 12.4, to: 13.8, n: 6, lat: 5 },
-    { from: 16.25, to: 16.6, n: 3, lat: -3 },
-    { from: 19.2, to: 19.8, n: 4, lat: [4, -4] },
-    { from: 20.3, to: 20.9, n: 4, lat: 4 },
-    { from: 21.8, to: 22.4, n: 4, lat: [18, 18] },   // the dust cut
+    { from: 8.7, to: 9.9, n: 5, lat: 0 },   // across the apron and through the mount, on the centreline
+    ...[[11.2, 4.5], [11.3, 6.2], [11.4, 7.4], [11.5, 8.1], [11.6, 8]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 0, air })),   // on the arc over the canyon
+    { from: 14.4, to: 15.8, n: 6, lat: 5 },
+    { from: 18.25, to: 18.6, n: 3, lat: -3 },
+    { from: 21.2, to: 21.8, n: 4, lat: [4, -4] },
+    { from: 22.3, to: 22.9, n: 4, lat: 4 },
+    { from: 23.8, to: 24.4, n: 4, lat: [18, 18] },   // the dust cut
   ],
   obstacles: [
     // rovers crawl across part of Main Street and the solar field road
     { kind: 'patrol', model: 'rover', at: 1.0, lats: [6.2, 8.2], speed: 3.5, effect: 'spin', radius: 1.8 },
-    { kind: 'patrol', model: 'rover', at: 20.6, lats: [-8.5, -5], speed: 3, effect: 'spin', radius: 1.8 },
+    { kind: 'patrol', model: 'rover', at: 22.6, lats: [-8.5, -5], speed: 3, effect: 'spin', radius: 1.8 },
     // dust devils on the outside of the rim road and the crater bowl
     { kind: 'orbit', model: 'dustdevil', at: 5.6, lat: 11.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
-    { kind: 'orbit', model: 'dustdevil', at: 13.3, lat: -10.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
+    { kind: 'orbit', model: 'dustdevil', at: 15.3, lat: -10.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
     // cargo waiting at the airlock
     { kind: 'static', model: 'crate', at: 1.5, lat: 5.6, effect: 'bump' },
     { kind: 'static', model: 'crate', at: 1.62, lat: -5.6, effect: 'bump' },
@@ -140,8 +145,8 @@ export default {
       const mesa = smoothstep(205, 300, ed);
       const rr = ridged(x * 0.006, z * 0.006, 4, 9);
       h += mesa * (18 + rr * 34 + smoothstep(0.45, 0.6, fbm(x * 0.01, z * 0.01, 2, 4)) * 14);
-      // the launch pad
-      const pad = 1 - smoothstep(18, 34, Math.hypot(x - ROCKET.x, z - ROCKET.z));
+      // the launch pad: a wide flat apron now that the road crosses it
+      const pad = 1 - smoothstep(26, 48, Math.hypot(x - ROCKET.x, z - ROCKET.z));
       h = h * (1 - pad) + 30.5 * pad;
       // the canyon, cut last so it stays deep
       const c = canyonDist(x, z), fade = 1 - smoothstep(0.9, 1.0, c.t);
@@ -161,7 +166,7 @@ export default {
   CRATER, COLONY,
   models: { rover: M.robotaxi, dustdevil: M.dustdevil, crate: M.oxyCrate },
   // the opening shot: the rocket on the pad tries to light, hops, and gives up — an aborted ignition, so the real launch (and the bang) is saved for the final lap
-  intro: [{ pos: [262, 46, -196], pos1: [252, 52, -212], look: [158, 72, -300], look1: [158, 76, -300], fov: 48, dur: 3.6 }],
+  intro: [{ pos: [262, 46, -196], pos1: [252, 52, -212], look: [165, 72, -300], look1: [165, 76, -300], fov: 48, dur: 3.6 }],
 
   /** Dress the course. ctx: { THREE, track, group, gfx, anim, view } */
   decorate(ctx) { dress(ctx); },
@@ -211,7 +216,7 @@ function dress(ctx) {
   };
   const RUST_HEX = '#c1440e', INK = '#1f1418', CREAM = '#f2efe6';
   // spots the gags will stand on, kept clear of the domes, rocks, and solar panels
-  for (const [at, side, off, r] of [[0.55, 1, 9, 13], [4.3, 1, 32, 10], [7.0, 1, 36, 20], [18.6, -1, 22, 16], [17.6, 1, 20, 12], [24.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [8.3, 1, 35, 11], [11.9, -1, 18, 11], [16.4, 1, 18, 11], [19.9, -1, 20, 11], [23.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
+  for (const [at, side, off, r] of [[0.55, 1, 9, 13], [4.3, 1, 32, 10], [7.0, 1, 36, 20], [20.6, -1, 22, 16], [19.6, 1, 20, 12], [26.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [9.4, 1, 26, 13], [13.9, -1, 18, 11], [18.4, 1, 18, 11], [21.9, -1, 20, 11], [25.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
   // ---- start/finish on Main Street: gantry, grandstands, a pale-suited crowd ----
   const g0 = sc.beside(0, 1, -track.hwL[0]);
@@ -239,7 +244,7 @@ function dress(ctx) {
     });
     bake.add(g);
   };
-  sc.along({ from: 25.75, to: 1.2, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
+  sc.along({ from: 27.75, to: 1.2, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: PALE_SUITS, cast: false });
   {
     const CROWD = ['I SOLD MY HOUSE FOR THIS', 'WHERE IS THE AIR?', 'IS THIS THE BETA?', 'I MISS TREES', 'WHEN DO WE GO HOME?', 'SEND OXYGEN'];
@@ -300,9 +305,9 @@ function dress(ctx) {
   }
   // lamps and flags down Main Street
   const board = sc.beside(0.55, 1, 9), inFront = p => p.x > board.x - 45 && p.x < board.x + 14;   // nothing tall between the grid and the countdown board
-  const lamps = sc.along({ from: 25.7, to: 1.6, side: 1, offset: 1.6, spacing: 16 }).filter(p => !inFront(p));
+  const lamps = sc.along({ from: 27.7, to: 1.6, side: 1, offset: 1.6, spacing: 16 }).filter(p => !inFront(p));
   sc.instances(partsOf(M.lampPost()), lamps, {});
-  const flags = sc.along({ from: 25.7, to: 1.5, side: 1, offset: 4.5, spacing: 16, phase: 8 }).filter(p => !inFront(p));
+  const flags = sc.along({ from: 27.7, to: 1.5, side: 1, offset: 4.5, spacing: 16, phase: 8 }).filter(p => !inFront(p));
   sc.instances(partsOf(M.colonyFlag()), flags.map(p => ({ ...p, yaw: p.along + Math.PI / 2 })), {});
 
   // ---- habitat domes around the colony, linked by glass tubes ----
@@ -366,25 +371,63 @@ function dress(ctx) {
   // ---- the centrepiece: a megarocket on the pad whose story is the race — lap 1 it cannot get off the ground,
   // lap 2 the engines stay lit and go nowhere, and on the final lap it launches and comes apart ----
   const padY = track.terrainHeight(ROCKET.x, ROCKET.z) - 0.1, MOUNT = 9;
+  // The road threads the launch mount, so the whole complex is built in the road's own frame at the
+  // spline sample nearest the rocket (local +z = direction of travel, local x = lateral).
+  let ci = 0, cd0 = Infinity;
+  for (let i = 0; i < track.N; i++) { const d = (track.px[i] - ROCKET.x) ** 2 + (track.pz[i] - ROCKET.z) ** 2; if (d < cd0) { cd0 = d; ci = i; } }
+  const padYaw = Math.atan2(track.tx[ci], track.tz[ci]);
+  const sideW = track.lx[ci] < 0 ? 1 : -1;                 // the side of the road facing west, the colony side
   {
-    const tw = M.launchTower({ h: 96 }); sc.place(tw, ROCKET.x - 13, ROCKET.z, { yaw: Math.PI / 2, y: padY }); bake.add(tw);
-    const mb = new ModelBuilder();   // the launch mount: a ring table on six legs, with a blast deflector
-    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; mb.add('leg', box(1.6, MOUNT, 1.6, 0.2, 1), { p: [ROCKET.x + Math.cos(a) * 7, padY + MOUNT / 2, ROCKET.z + Math.sin(a) * 7] }); }
-    mb.add('ring', cyl(8.4, 8.4, 1.6, 24), { p: [ROCKET.x, padY + MOUNT - 0.6, ROCKET.z] });
-    mb.add('scorch', cyl(13, 15, 0.2, 24), { p: [ROCKET.x, padY + 0.12, ROCKET.z] });
-    const g = mb.build({ leg: plastic(0xb8bcc6, 0.7), ring: plastic(0x6b6f78, 0.5, 0.5), scorch: plastic(0x2a1c18, 0.95) }); ctx.group.add(g); bake.add(g);
+    // the launch tower on the west apron, arms reaching toward the rocket over the road's edge
+    const tp = sc.beside(track.cp[ci], sideW, 13);
+    const tw = M.launchTower({ h: 96 });
+    sc.place(tw, tp.x, tp.z, { yaw: Math.atan2(ROCKET.x - tp.x, ROCKET.z - tp.z), y: padY }); bake.add(tw); take(tp.x, tp.z, 11);
+    // the mount: two rows of legs either side of the road, a frame and ring table over the corridor,
+    // blast wedges flanking the trench line, lightning masts, and the scorch disc centred under the
+    // rocket — the road runs through the flame trench now
+    const mb = new ModelBuilder(), LEG = plastic(0xb8bcc6, 0.7), BEAM = plastic(0x8a8f9a, 0.55, 0.4);
+    for (const sx of [-1, 1]) for (const zz of [-10, 0, 10]) mb.add('leg', box(1.8, MOUNT, 1.8, 0.2, 1), { p: [sx * 13.5, MOUNT / 2, zz] });
+    for (const zz of [-10, 10]) mb.add('beam', box(29.5, 1.4, 2.6, 0.1, 1), { p: [0, MOUNT - 1.5, zz] });
+    for (const sx of [-1, 1]) mb.add('beam', box(2.6, 1.4, 17.4, 0.1, 1), { p: [sx * 13.5, MOUNT - 1.5, 0] });
+    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) mb.add('beam', box(6, 1.0, 1.8, 0.1, 1), { p: [sx * 8.3, MOUNT - 1.1, sz * 8.3], r: [0, sx * sz * Math.PI / 4, 0] });
+    mb.add('ring', cyl(9.8, 9.8, 1.6, 24), { p: [0, MOUNT - 0.8, 0] });
+    for (const sx of [-1, 1]) for (const zz of [-5.5, 5.5]) mb.add('wedge', box(3.6, 1.3, 6, 0.1, 1), { p: [sx * 12.6, 0.65, zz], r: [0, 0, sx * 0.45] });
+    for (const [mx, mz] of [[19, -16], [-19, 16]]) { mb.add('leg', cyl(0.16, 0.3, 26, 6), { p: [mx, 13, mz] }); mb.add('tip', sphere(0.35, 8, 6), { p: [mx, 26.2, mz] }); }
+    mb.add('scorch', cyl(13, 15, 0.2, 24), { p: [0, 0.12, 0] });
+    const g = mb.build({ leg: LEG, beam: BEAM, ring: plastic(0x6b6f78, 0.5, 0.5), wedge: plastic(0x6b6f78, 0.6, 0.3), tip: plastic(0xff2a1a, 0.4), scorch: plastic(0x2a1c18, 0.95) });
+    g.position.set(ROCKET.x, padY, ROCKET.z); g.rotation.y = padYaw; bake.add(g);
+    // the service arm: plugged into the rocket from the tower across the apron edge on laps 1-2,
+    // and swung clear the moment the rocket actually goes (a proxy: it has lifted, or it is gone)
+    const armPivot = new THREE.Group(); armPivot.position.set(tp.x, padY + 24, tp.z); ctx.group.add(armPivot);
+    const armYaw0 = Math.atan2(ROCKET.x - tp.x, ROCKET.z - tp.z), armLen = Math.hypot(ROCKET.x - tp.x, ROCKET.z - tp.z) - 5.5;
+    const ab = new ModelBuilder();
+    ab.add('arm', box(1.2, 1.7, armLen, 0.15, 1), { p: [0, 0, armLen / 2] });
+    ab.add('cab', box(2.6, 2.4, 3.2, 0.15, 1), { p: [0, -0.4, armLen - 1] });
+    armPivot.add(ab.build({ arm: plastic(0xe8e2d6, 0.55), cab: plastic(0xc1440e, 0.55) }));
+    armPivot.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    let swing = 0;
+    anim.push(dt => {
+      const clear = rocket.position.y > padY + MOUNT + 4 || !rocket.visible;
+      swing += ((clear ? 1 : 0) - swing) * Math.min(1, dt * 1.4);
+      armPivot.rotation.y = armYaw0 + swing * 0.95;
+    });
+    // the countdown gantry over the road at the pad entry
+    const gi = track.indexAtCp(8.45), gp = sc.beside(8.45, 1, -track.hwL[gi]);
+    const gg = P.gantry(track.hwL[gi] + track.hwR[gi] + 1.5, 'LAUNCH COMPLEX', { color: 0xc1440e, color2: 0xf2efe6 });
+    sc.place(gg, gp.x, gp.z, { yaw: gp.along, y: gp.roadY }); bake.add(gg);
   }
   const rocket = M.megaRocket({ h: 74 }); sc.place(rocket, ROCKET.x, ROCKET.z, { y: padY + MOUNT, yaw: 0.6 });
   const rocketY = rocket.position.y;
   // debris: a few chunk shapes, three of each, hidden until the bang
   const debris = rocket.userData.chunks.map(([geo, mat]) => { const m = new THREE.InstancedMesh(geo, mat, 3); m.frustumCulled = false; m.visible = false; ctx.group.add(m); return m; });
   const bits = []; debris.forEach((m, k) => { for (let j = 0; j < 3; j++) bits.push({ m, j, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3() }); });
-  // the banner, and a counter that never gets far
-  signAt(173, -276, 0.85, K.board('RAPID UNSCHEDULED DISASSEMBLY', { bg: CREAM, fg: INK, size: 150, stripe: RUST_HEX, sub: '(A SUCCESS)', subFg: '#16a34a', subScale: 0.75 }), 30, 11, 17, { frame: 0x2a2026, legs: 3 });
+  // the banner greets you on the canyon side of the pad entry; the counter watches the mount exit
+  sign(8.3, -sideW, 15, K.board('RAPID UNSCHEDULED DISASSEMBLY', { bg: CREAM, fg: INK, size: 150, stripe: RUST_HEX, sub: '(A SUCCESS)', subFg: '#16a34a', subScale: 0.75 }), 30, 11, 17, { legs: 3, frame: 0x2a2026 });
   const counter = (() => {
     const cv = document.createElement('canvas'); cv.width = 768; cv.height = 384;
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const x = 176, z = -314, yaw = 1.05, y0 = sc.y(x, z), w = 15, h = 7.5;
+    const iN = track.indexAtCp(10.6), sideN = track.lz[iN] < 0 ? 1 : -1, cpN = sc.beside(10.6, sideN, 14);
+    const x = cpN.x, z = cpN.z, yaw = faceIn(cpN.i, sideN, 0.5), y0 = sc.y(x, z), w = 15, h = 7.5;
     const f = K.signFrame(w, h, 9, { color: 0x2a2026 }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f); take(x, z, 9);
     const q = new K.Quads(); q.panel([x + Math.sin(yaw) * 0.03, y0 + 9, z + Math.cos(yaw) * 0.03], yaw, w, h, [0, 0, 1, 1]);
     const mesh = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ color: 0x000000, map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 0.5 }));
@@ -463,8 +506,10 @@ function dress(ctx) {
         else fx.dust(ROCKET.x + rng.range(-9, 9), padY + 1.5, ROCKET.z + rng.range(-9, 9), rng.range(-13, 13), rng.range(0, 5), rng.range(-13, 13), [0.93, 0.62, 0.42], 9 + rng() * 6, 3.2, 0.55);
       }
     } else {
-      // the final lap: it launches as the leader comes down the rim road toward the run-up, so the climb and
-      // the bang happen where the road faces the pad; a slow field gets the fallback timer instead
+      // the final lap: it launches as the leader swings onto the pad approach (the mount crossing is at
+      // lap fraction ~0.31, so the trigger sits ~80 m of road before it), and the climb carries the
+      // rocket up through the pass as the field threads the mount behind the leader; a slow field
+      // gets the fallback timer instead
       rst.tF += dt;
       const progF = clamp((view.showProgress || 0) * laps - (laps - 1), 0, 1);
       if (!rst.boomed && rst.tL < 0 && (progF >= 0.26 || rst.tF > 25)) rst.tL = 0;
@@ -514,10 +559,10 @@ function dress(ctx) {
     for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, c = new THREE.Vector3(Math.sin(a) * pl.z, pl.y, Math.cos(a) * pl.z).applyMatrix4(st.matrixWorld); atlas.place(r, [c.x, c.y, c.z], yaw + a, pl.w, pl.h); }
     bake.add(st);
   }
-  const signP = sc.beside(10.75, -1, 26);
+  const signP = sc.beside(12.75, -1, 26);
   sc.place(M.hiringSign('NOW HIRING: EXTREMELY HARDCORE', { w: 30, h: 7, legs: 7 }), signP.x, signP.z, { yaw: signP.yaw + 0.35, y: signP.y - 0.3 });
   take(signP.x, signP.z, 18);
-  const lander2 = sc.beside(19.6, 1, 46);
+  const lander2 = sc.beside(21.6, 1, 46);
   if (clear(lander2.x, lander2.z, 8)) { sc.place(M.lander({ h: 8 }), lander2.x, lander2.z, { yaw: 0.6 }); take(lander2.x, lander2.z, 12); }
 
   // ---- the rim road: an angular truck nose-down in a crater, and the flag ----
@@ -551,7 +596,7 @@ function dress(ctx) {
 
   // ---- the solar field: the company store, and a recruitment poster ----
   {
-    const p = sc.beside(18.6, -1, 22);
+    const p = sc.beside(20.6, -1, 22);
     if (clear(p.x, p.z, 8)) {
       const yaw = faceIn(p.i, -1, 0.35), st = M.companyStore({ w: 18, d: 10 }); sc.place(st, p.x, p.z, { yaw, y: p.y - 0.2 }); bake.add(st); take(p.x, p.z, 15);
       const fx = Math.sin(yaw), fz = Math.cos(yaw), r = atlas.add(1024, 400, K.board('COMPANY STORE', { bg: '#e9e4d8', fg: RUST_HEX, size: 170, sub: 'PAID IN COMPANY SCRIP ONLY', subFg: INK, subScale: 0.5, lines: 1 }));
@@ -559,11 +604,11 @@ function dress(ctx) {
       const pr = atlas.add(512, 360, (g, w, h) => { g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); const rows = [['AIR', '40 SCRIP'], ['WATER', '90 SCRIP'], ['RIDE HOME', 'N/A']]; rows.forEach(([a, b2], k) => { K.fitText(g, a, w * 0.3, h * (0.2 + k * 0.3), w * 0.5, 64, K.SANS, '#ffffff', { lines: 1 }); K.fitText(g, b2, w * 0.74, h * (0.2 + k * 0.3), w * 0.44, 64, K.SANS, k === 2 ? '#ff3b30' : '#38ff74', { lines: 1 }); }); });
       atlas.place(pr, [p.x + fx * 0.36 + Math.cos(yaw) * 5, p.y + 2.4, p.z + fz * 0.36 - Math.sin(yaw) * 5], yaw, 3.4, 2.4);
     }
-    sign(17.6, 1, 20, K.board('NO UNIONS ON MARS', { bg: RUST_HEX, fg: '#ffffff', size: 150, sub: '(NO AIR EITHER)', subFg: '#ffd23c', subScale: 0.75, lines: 1 }), 20, 8, 10, { turn: 0.5 });
+    sign(19.6, 1, 20, K.board('NO UNIONS ON MARS', { bg: RUST_HEX, fg: '#ffffff', size: 150, sub: '(NO AIR EITHER)', subFg: '#ffd23c', subScale: 0.75, lines: 1 }), 20, 8, 10, { turn: 0.5 });
   }
 
   // ---- the way back into town: the population sign ----
-  sign(24.3, -1, 18, (g, w, h) => {
+  sign(26.3, -1, 18, (g, w, h) => {
     g.fillStyle = '#1d5a3a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffffff'; g.lineWidth = 12; g.strokeRect(14, 14, w - 28, h - 28);
     K.fitText(g, 'WELCOME TO MARS COLONY', w / 2, h * 0.2, w * 0.86, 90, K.SANS, '#ffffff', { lines: 1 });
     K.fitText(g, 'POPULATION: 1 MILLION (PROJECTED)', w / 2, h * 0.47, w * 0.86, 76, K.SANS, '#ffffff', { lines: 1 });
@@ -571,7 +616,7 @@ function dress(ctx) {
   }, 22, 9.5, 9.5, { turn: 0.5 });
 
   // ---- antenna masts with blinking red lights ----
-  const mastSpots = [sc.beside(25.0, -1, 28), sc.beside(6.6, 1, 40), sc.beside(14.0, -1, 30), sc.beside(18.2, -1, 36), sc.beside(3.0, 1, 30)].filter(p => clear(p.x, p.z, 3) && free(p.x, p.z, 4));
+  const mastSpots = [sc.beside(27.0, -1, 28), sc.beside(6.6, 1, 40), sc.beside(16.0, -1, 30), sc.beside(20.2, -1, 36), sc.beside(3.0, 1, 30)].filter(p => clear(p.x, p.z, 3) && free(p.x, p.z, 4));
   const masts = mastSpots.map((p, k) => { const m = M.antennaMast({ h: 16 + (k % 3) * 4 }); sc.place(m, p.x, p.z, { yaw: rng() * 6.28 }); take(p.x, p.z, 5); return m.userData.light; });
   anim.push((dt, time) => masts.forEach((l, k) => { l.emissiveIntensity = Math.sin(time * 3 + k * 1.7) > 0.55 ? 4 : 0.15; }));
 
@@ -596,7 +641,7 @@ function dress(ctx) {
   sc.instances(bA, rocks.filter((_, i) => i % 2 === 0), { scale: [0.6, 1.8], yaw: 'random', sink: 0.3, tints: ROCK_TINTS });
   sc.instances(bB, rocks.filter((_, i) => i % 2 === 1), { scale: [0.6, 1.6], yaw: 'random', sink: 0.4, tints: ROCK_TINTS });
   // the dust cut inside the west corner: clusters to thread between
-  const cut = [[21.55, 24], [21.75, 31], [21.95, 10.5], [22.2, 27], [22.35, 33], [22.55, 13], [22.75, 22], [22.9, 30]].map(([at, off]) => { const p = sc.beside(at, 1, off); return { x: p.x, y: track.terrainHeight(p.x, p.z), z: p.z, yaw: rng() * 6.28 }; });
+  const cut = [[23.55, 24], [23.75, 31], [23.95, 10.5], [24.2, 27], [24.35, 33], [24.55, 13], [24.75, 22], [24.9, 30]].map(([at, off]) => { const p = sc.beside(at, 1, off); return { x: p.x, y: track.terrainHeight(p.x, p.z), z: p.z, yaw: rng() * 6.28 }; });
   sc.instances(bB, cut, { scale: 1.25, sink: 0.4, tints: ROCK_TINTS, solid: 2.4 });
   // rocks beside the open edges that a kart can reach: solid so they read as real
   const edgeRocks = sc.scatter({ count: 50, min: 12, max: 40, maxSlope: 0.7, minGap: 9, where: (x, z) => { const g = track.ground(x, z, -1, hit); return (g.side > 0 ? g.edgeL : g.edgeR) === EDGE.OPEN && clear(x, z, -0.5) && !clear(x, z, 6) && free(x, z, 3); } });
@@ -621,9 +666,9 @@ function dress(ctx) {
   // ---- billboards where you are looking anyway ----
   const BOARDS = [
     [1.35, 1, 18, 'FUNDING SECURED', INK, '#38ff74'], [4.2, -1, 18, 'FULL SELF-LANDING: NEXT YEAR', CREAM, RUST_HEX],
-    [8.3, 1, 35, 'TICKET TO MARS: $500K', '#1f6bff', '#ffffff', 'RETURN TRIP: SOLD OUT'], [11.9, -1, 18, 'EARTH: HAD ITS CHANCE', '#2f7fe0', '#ffffff'],
-    [16.4, 1, 18, 'BREATHING IS NOW A SUBSCRIPTION', '#ffd23c', INK], [19.9, -1, 20, 'WORK FROM DOME: MANDATORY', '#ffffff', '#1f6bff'],
-    [23.6, -1, 18, 'MARS: NO REGULATORS', RUST_HEX, '#ffffff', '(OR ATMOSPHERE)'],
+    [8.3, 1, 35, 'TICKET TO MARS: $500K', '#1f6bff', '#ffffff', 'RETURN TRIP: SOLD OUT'], [13.9, -1, 18, 'EARTH: HAD ITS CHANCE', '#2f7fe0', '#ffffff'],
+    [18.4, 1, 18, 'BREATHING IS NOW A SUBSCRIPTION', '#ffd23c', INK], [21.9, -1, 20, 'WORK FROM DOME: MANDATORY', '#ffffff', '#1f6bff'],
+    [25.6, -1, 18, 'MARS: NO REGULATORS', RUST_HEX, '#ffffff', '(OR ATMOSPHERE)'],
   ];
   for (const [at, side, off, text, bg, fg, sub] of BOARDS) sign(at, side, off, K.board(text, { bg, fg, size: 130, sub, subFg: fg, subScale: 0.6 }), 20, 6.6, 10, { turn: 0.45 });
 

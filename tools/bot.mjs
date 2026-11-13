@@ -120,6 +120,8 @@ try {
     if (await page.evaluate('BK.race.players[0].speed') > 1) fails.push('touch: the kart drove off without the pedal being held');
     await touch('.tc-right', 'pointerdown', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(2600); await shot('10-driving');
     if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: holding the right side does not accelerate');
+    // hold produces speed, not just a throttle flag; poll, because a loaded machine advances the race slowly
+    await page.waitForFunction('BK.race.players[0].speed > 3', null, { timeout: 8000 }).catch(() => fails.push('touch: holding the right side does not produce speed'));
     await touch('.tc-left', 'pointerdown', 2, vw.width * 0.2, vw.height * 0.7); await touch('.tc-left', 'pointermove', 2, vw.width * 0.2 + 40, vw.height * 0.7); await page.waitForTimeout(150);
     if (!(await page.evaluate(`${T}.steer`) > 0.3)) fails.push('touch: sliding the left thumb does not steer');
     await touch('.tc-left', 'pointerup', 2, vw.width * 0.2 + 40, vw.height * 0.7);
@@ -129,6 +131,19 @@ try {
     await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 + 60); await page.waitForTimeout(150);
     if (await page.evaluate(`${T}.brake`) !== 1) fails.push('touch: pulling the right thumb down does not brake');
     await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(900);
+    if (await page.evaluate(`${T}.brake`) !== 0) fails.push('touch: sliding the right thumb back up does not release the brake');
+    if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: the pedal does not take over again after braking');
+    // flick up on the pedal: a fast upward swipe fires the item; two moves, because the pedal judges the flick from recent motion
+    await page.evaluate("BK.race.items.give(BK.race.players[0], 'boost')"); await page.waitForTimeout(200);
+    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 - 10); await page.waitForTimeout(60);
+    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 - 70); await page.waitForTimeout(400);
+    if (await page.evaluate('BK.race.players[0].item')) fails.push('touch: a flick up on the right side did not use the item');
+    // the grace latch: a quick lift of the pedal thumb must not cut the throttle, and re-gripping keeps it
+    await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(100);
+    await touch('.tc-right', 'pointerup', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(120);
+    if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: a quick lift of the right thumb cuts the throttle (no grace latch)');
+    await touch('.tc-right', 'pointerdown', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(150);
+    if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: re-gripping the pedal does not keep the throttle');
     // an upright phone pauses the race and asks for a turn; back on its side, Resume returns
     await page.setViewportSize({ width: vw.height, height: vw.width }); await page.waitForTimeout(700); await expect('pause', 'phone turned upright mid-race');
     if (!(await page.evaluate("!!document.querySelector('.panel.turn')"))) fails.push('upright phone: the pause panel does not ask for a turn');
@@ -153,9 +168,14 @@ try {
   if (await screen()) fails.push('pause menu did not close on Resume');
   // let an AI driver finish a shortened race for us
   await page.evaluate(`(async () => { const { AIDriver } = await import('./src/race/ai.js'); const { makeRng } = await import('./src/core/util.js'); const s = BK.session; s.race.laps = 1; s.autopilots = s.race.players.map(k => new AIDriver(k, 'hard', makeRng(5))); })()`);
-  await page.waitForFunction('BK.app.menus.screen?.spec.name === "results"', null, { timeout: 120000 });
+  // a Quick Race ends on the podium now (#92); the full table is one confirm past it
+  await page.waitForFunction('BK.app.menus.screen?.spec.name === "racePodium"', null, { timeout: 120000 });
+  await page.waitForTimeout(1500); await shot('13-podium');
+  if (!(await page.evaluate("!!BK.app.showroom?.podium && BK.app.showroom.slots.length === 3"))) fails.push('quick race podium: the showroom is not showing a three-kart podium');
+  await tapOrKey('.screen-racePodium .btn.go', 'Enter');
+  await page.waitForFunction('BK.app.menus.screen?.spec.name === "results"', null, { timeout: 30000 });
   await page.waitForTimeout(1200); await shot('13-results');
-  const res = await page.evaluate('BK.race.results().map(r => r.racer.id + ":" + r.time.toFixed(1)).join(" ")');
+  const res = await page.evaluate('[...document.querySelectorAll(".screen-results .res-row")].map(r => r.textContent.trim().replace(/\\s+/g, " ")).join(" | ")');
   console.log('results:', res);
 
   if (opt.gp) {
@@ -176,7 +196,14 @@ try {
     await page.waitForFunction('BK.app.menus.screen?.spec.name === "cupResults"', null, { timeout: 30000 }).catch(() => fails.push('no cup results screen after the last race'));
     await page.waitForTimeout(2500); await shot('22-podium');
     console.log('cup totals:', await page.evaluate('JSON.stringify(BK.app.gp.totals)'));
-    await key('Enter', 1200); await expect('main', 'after the podium');
+    // the podium screen offers a way back in, not just a way out (#146): the default button runs the same cup again from race 1
+    const exits = await page.evaluate(`[...document.querySelectorAll('.screen-cupResults .foot .btn .btn-label')].map(e => e.textContent)`);
+    if (JSON.stringify(exits) !== JSON.stringify(['Race this cup again', 'Change racer', 'Continue'])) fails.push(`cup results exits: ${exits.join(' / ')}`);
+    await key('Enter', 1200);
+    await page.waitForFunction('BK.app.gp && BK.app.gp.index === 0 && BK.session && !BK.app.menus.screen', null, { timeout: 30000 }).catch(() => fails.push('Race this cup again did not start a fresh cup'));
+    const fresh = await page.evaluate('JSON.stringify(BK.app.gp.totals)');
+    if (Object.values(JSON.parse(fresh)).some(v => v !== 0)) fails.push(`cup restart kept the old standings: ${fresh}`);
+    console.log('cup restarted, totals:', fresh);
   }
   if (mobile && !opt.gp) {
     // every menu screen with the phone upright: nothing may spill off the sides, and nothing may be left unrendered

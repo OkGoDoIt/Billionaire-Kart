@@ -20,6 +20,8 @@ import { ModelBuilder, box, cyl, plastic, glow } from '../models/build.js';
 const GAP_FROM = 41.0, GAP_TO = 41.44, COIN_AIR = 4.5;   // the Leap: a 22 m gap off the crest
 const ADS = ['AGI ACHIEVED INTERNALLY', 'COMPUTE OR DIE', 'YOU ARE THE TRAINING DATA', 'SCALE IS ALL YOU NEED', 'HUMAN IN THE LOOP (FOR NOW)', 'PAPERCLIPS MAXIMIZED', 'TRAINED ON YOUR GROUP CHAT', 'THE LINE GOES UP', 'PROMPT ENGINEER WANTED', 'DOOM: 12%'];
 const FACTORY = { x: 165, y: 5, z: -275, yaw: 0 };          // the paperclip maximizer, north of everything
+const LAB_PARODIES = ['CLOSED AI', 'AUNTROPIC', 'GOOGOL', 'WHY AI', 'BETA'];   // the podium, until the final lap
+const LEADER_PARODY = { elon: 'MELON', sam: 'SAM 2.0', zuck: 'ZUCKERBORG', bezos: 'PRIME BEZOS', jensen: 'THE JACKET', satya: 'MR. TEAMS', dario: 'SAFETY DARIO', demis: 'DR. DEMIS', trump: 'THE DONALD', cook: 'TIM APPLE', larrysergey: 'PAGE & BRIN', bill: 'BILL G.', thiel: 'THE SEER', holmes: 'LADY VAPOR', ellison: 'LARRY E.', murdoch: 'RUPERT M.' };
 
 export default {
   id: 'singularity-speedway',
@@ -178,6 +180,7 @@ function decorate(ctx) {
   anim.push((dt, time) => { orb.userData.update(time); disc.userData.update(time); });
 
   const atlas = makeAtlas(THREE, ctx.group);
+  const lapFx = { names: [...LAB_PARODIES], conv: 'NOW CONVERTING: EVERYTHING' };   // the podium cards and the factory sign read this; the final lap rewrites it and repaints
   neonRoad(THREE, view);
   const yawOf = (nx, nz) => Math.atan2(nx, nz);
   /** Facing for a board beside the road: toward the road, turned `ang` radians toward the karts coming at it. */
@@ -221,7 +224,130 @@ function decorate(ctx) {
 
   /* ----- the landmarks (their spots, so the drifting scenery keeps clear of them) ----- */
   anchors.push({ x: FACTORY.x, z: FACTORY.z, r: 200 });
-  landmarks({ THREE, ctx, tr, I, at, edge, faceRoad, boardYaw, facing, atlas, fixed, anchors, rng, ox, oy, oz });
+  landmarks({ THREE, ctx, tr, I, at, edge, faceRoad, boardYaw, facing, atlas, fixed, anchors, rng, ox, oy, oz, lapFx });
+
+  /* ----- lap by lap: the forecast counts down, the lattice spreads, the sky goes red alert ----- */
+  {
+    const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+    // the benchmarks board: a floating forecast over the infield, east of the orb, facing the climb
+    const bench = liveSign(THREE, ctx.group, 1400, 390, [ox + 54, oy + 15, oz + 8], 1.02, 36, 10, { intensity: 1.15 });
+    const drawBench = rem => bench.draw((g, w, h) => {
+      g.fillStyle = '#07060f'; g.fillRect(0, 0, w, h);
+      g.strokeStyle = rem < 0 ? '#ff2a3c' : '#ff5cc8'; g.lineWidth = 10; g.strokeRect(8, 8, w - 16, h - 16);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillStyle = '#35e0ff'; g.font = `54px ${FONT}`; g.fillText('OFFICIAL BENCHMARK FORECAST', w / 2, 58, w - 80);
+      if (rem < 0) {
+        g.fillStyle = '#ff2a3c'; g.font = `bold 150px ${MONO}`; g.fillText('AGI ACHIEVED', w / 2, 178, w - 60);
+        g.fillStyle = '#ffffff'; g.font = `64px ${SANS}`; g.fillText('(INTERNALLY)', w / 2, 302, w - 80);
+      } else {
+        g.fillStyle = '#ffd23c'; g.font = `bold 158px ${MONO}`; g.fillText(rem === 1 ? 'AGI IN 1 LAP' : `AGI IN ${rem} LAPS`, w / 2, 208, w - 60);
+      }
+    });
+    drawBench(2);
+    { // neon uprights at the board's ends, baked with the other fixed parts
+      const bx = ox + 54, by = oy + 15, bz = oz + 8, rx = Math.cos(1.02), rz = -Math.sin(1.02);
+      for (const s of [-1, 1]) fixed.add('neon', box(0.35, 11.6, 0.35, 0.1, 1), { p: [bx + rx * s * 18.4, by, bz + rz * s * 18.4], r: [0, 1.02, 0] });
+    }
+
+    // the infield slab, far below the orb, and the grey paperclip lattice spreading over it
+    const slabY = oy - 25;
+    const slab = new THREE.Mesh(new THREE.CylinderGeometry(30, 31, 1.6, 44), plastic(0x272344, 0.55, 0.5));
+    slab.position.set(ox, slabY, oz); ctx.group.add(slab);
+    const latIM = new THREE.InstancedMesh(S.paperclipGeometry(7, 0.3, 40, 5), new THREE.MeshStandardMaterial({ color: 0x9aa0ad, metalness: 0.8, roughness: 0.42, emissive: 0x23252e, emissiveIntensity: 0.5 }), 195);
+    latIM.frustumCulled = false; ctx.group.add(latIM);
+    const pieces = [];
+    for (let ring = 0; ring < 6; ring++) {
+      const rr = 3.5 + ring * 4.4, n = 10 + ring * 9;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + ring * 0.7 + rng.range(-0.1, 0.1), rad = rr + rng.range(-1.6, 1.6);
+        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2 + rng.range(-0.35, 0.35), rng() * Math.PI * 2, rng.range(-0.2, 0.2), 'YXZ'));
+        pieces.push({ x: ox + Math.cos(a) * rad, z: oz + Math.sin(a) * rad, y: slabY + 1.15 + rng.range(0, 1.0), q, ord: Math.min(0.97, Math.max(0, Math.pow(rad / 30, 1.3) * 0.95 + rng.range(-0.04, 0.04))) });
+      }
+    }
+    const LM = new THREE.Matrix4(), LV = new THREE.Vector3(), LS = new THREE.Vector3();
+    const drawLattice = g => {
+      pieces.forEach((p, k) => { const s = Math.max(0.001, sstep(p.ord, p.ord + 0.07, g)); LM.compose(LV.set(p.x, p.y, p.z), p.q, LS.setScalar(s)); latIM.setMatrixAt(k, LM); });
+      latIM.instanceMatrix.needsUpdate = true;
+    };
+    drawLattice(0.16);
+
+    // conversion at road level (Roger's playtest note: the maximizer's work must be impossible
+    // to miss, not background signage). Eight server racks stand beside the road at driver
+    // height; lap by lap they lean, sink, and are REPLACED by standing paperclips in the exact
+    // same spots, small clips spill across the shoulders, and on the final lap three colossal
+    // paperclips hang flat over the road itself — the start straight and both final-straight
+    // light rings — while the rings turn alert red. Two instanced meshes total: swaps and
+    // growth only, matrices rewritten when the conversion state moves, never per frame.
+    const victims = [[0.55, 1], [3.3, -1], [8.2, 1], [15.8, -1], [21.3, 1], [28.6, -1], [40.6, 1], [46.9, -1]].map(([cp, side]) => {
+      const i = I(cp), lat = side * (edge(i, side) + 4.5), base = at(i, lat, 0);
+      return { base, yaw: faceRoad(i, side), side, i, lat };
+    });
+    const rackIM = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x232842, metalness: 0.3, roughness: 0.5, emissive: 0x35e0ff, emissiveIntensity: 0.35 }), victims.length);
+    rackIM.frustumCulled = false; ctx.group.add(rackIM);
+    const convIM = new THREE.InstancedMesh(S.paperclipGeometry(1, 0.03, 40, 5), S.clipMaterial(0.5), 3 + victims.length + victims.length * 3);
+    convIM.frustumCulled = false; ctx.group.add(convIM);
+    const overhead = [0.35, 49.45, 50.3].map(cp => { const i = I(cp); return { i, yaw: tr.yaw[i] }; });
+    const spills = [];
+    for (const v of victims) for (let k = 0; k < 3; k++) {
+      const along = rng.range(-7, 7), lat = v.side * (edge(v.i, v.side) + rng.range(2, 9));
+      const p = at(v.i, lat, 0);
+      p.x += tr.tx[v.i] * along; p.y += tr.ty[v.i] * along; p.z += tr.tz[v.i] * along;
+      spills.push({ p, yaw: rng() * Math.PI * 2, tilt: rng.range(-0.4, 0.4), len: rng.range(1.2, 2.4), ord: rng.range(0.45, 0.95) });
+    }
+    const CQ = new THREE.Quaternion(), CE = new THREE.Euler();
+    const drawConv = c => {
+      const vanish = 1 - sstep(0.72, 0.95, c), lean = c * 0.45, sink = c * 1.1, sy = (1 - c * 0.25) * Math.max(0.001, vanish);
+      victims.forEach((v, k) => {
+        CE.set(0, v.yaw, v.side * lean, 'YXZ'); CQ.setFromEuler(CE);
+        LM.compose(LV.set(v.base.x, v.base.y + 1.7 * sy - sink, v.base.z), CQ, LS.set(1.7, 3.4 * sy, 1.0)); rackIM.setMatrixAt(k, LM);
+        const s = Math.max(0.001, 3.6 * sstep(0.35, 0.9, c));
+        CE.set(0, v.yaw + 0.3, 0, 'YXZ'); CQ.setFromEuler(CE);
+        LM.compose(LV.set(v.base.x, v.base.y + s / 2, v.base.z), CQ, LS.setScalar(s)); convIM.setMatrixAt(3 + k, LM);
+      });
+      rackIM.instanceMatrix.needsUpdate = true;
+      const op = sstep(0.5, 1, c);
+      overhead.forEach((o, k) => {
+        const s = Math.max(0.001, 30 * op), p = at(o.i, 0, 22 - 9 * op);
+        CE.set(-Math.PI / 2 + (1 - op) * 0.6, o.yaw, 0, 'YXZ'); CQ.setFromEuler(CE);
+        LM.compose(LV.set(p.x, p.y, p.z), CQ, LS.setScalar(s)); convIM.setMatrixAt(k, LM);
+      });
+      spills.forEach((sp, k) => {
+        const s = Math.max(0.001, sp.len * sstep(sp.ord, sp.ord + 0.25, c));
+        CE.set(-Math.PI / 2 + sp.tilt, sp.yaw, 0, 'YXZ'); CQ.setFromEuler(CE);
+        LM.compose(LV.set(sp.p.x, sp.p.y + 0.3, sp.p.z), CQ, LS.setScalar(s)); convIM.setMatrixAt(3 + victims.length + k, LM);
+      });
+      convIM.instanceMatrix.needsUpdate = true;
+    };
+    drawConv(0);
+
+    // red alert: the sky preset the final lap eases into
+    const ALERT = { zenith: 0x14030a, horizon: 0xc21736, ground: 0x3d0a18, sun: 0xff7a5c, cloud: 0x9c3044, cloudShade: 0x38101f, cloudCover: 0.7, fog: 0x8c1f36, fogNear: 160, fogFar: 900, sunLight: 0xff8a66, sunIntensity: 2.2, hemiSky: 0xff9a80, hemiGround: 0x38182a, panoTint: [0.95, 0.5, 0.45] };
+    let boardKey = '', alert = 0, growth = 0.16, conv = 0, flipped = false;
+    anim.push((dt, time) => {
+      const lap = view.showLap || 1, laps = view.race?.laps ?? 3, fin = !!view.finalLap || lap >= laps;
+      const key = fin ? 'fin' : 'r' + (laps - lap);
+      if (key !== boardKey) {   // canvas redraws and material swaps only when the lap changes
+        boardKey = key; drawBench(fin ? -1 : laps - lap);
+        gates.forEach(g => g.children.forEach(m => { const mt = m.material; if (mt?.emissive) { if (mt.userData.origEmissive === undefined) mt.userData.origEmissive = mt.emissive.getHex(); mt.emissive.setHex(fin ? 0xff2a3c : mt.userData.origEmissive); } }));
+      }
+      if (fin && !flipped) {
+        let lead = null, best = -Infinity;
+        for (const k of view.race?.karts || []) if (Number.isFinite(k.progress) && k.progress > best) { best = k.progress; lead = k; }
+        if (lead && (best > 0 || (view.showProgress || 0) > 0.02)) {   // in a one-lap dev race the flag falls at the grid: wait for a real leader
+          flipped = true;
+          const par = LEADER_PARODY[lead.racer?.id] || 'THE LEADER';
+          lapFx.names = [par, par, par, par, par]; lapFx.conv = 'NOW CONVERTING: YOU'; atlas.paint();
+        }
+      }
+      alert += ((fin ? 1 : 0) - alert) * Math.min(1, dt * 0.45);
+      if (alert > 0.002) ctx.gfx.shiftSky(ALERT, alert * (0.93 + 0.07 * Math.sin(time * 3.7)));
+      const gt = laps <= 1 ? 1 : 0.16 + 0.84 * Math.pow((Math.min(lap, laps) - 1) / (laps - 1), 1.2);
+      if (Math.abs(gt - growth) > 0.0004) { growth += (gt - growth) * Math.min(1, dt * 0.8); drawLattice(growth); }
+      const ct = laps <= 1 ? 1 : Math.pow((Math.min(lap, laps) - 1) / (laps - 1), 1.3);
+      if (Math.abs(ct - conv) > 0.0004) { conv += (ct - conv) * Math.min(1, dt * 0.8); drawConv(conv); }
+    });
+  }
 
   /* ----- server monoliths drifting in the dark (instanced: one draw per variant and part) ----- */
   const clearOfMarks = (x, z, m) => anchors.every(a => Math.hypot(x - a.x, z - a.z) > a.r + m);
@@ -589,7 +715,7 @@ function countdownBoard(ctx, fixed, i0, at, facing) {
 }
 
 /* ---------- the landmark gags round the lap ---------- */
-function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed, anchors, rng, ox, oy, oz }) {
+function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed, anchors, rng, ox, oy, oz, lapFx }) {
   const anim = ctx.anim;
   /** A local frame at (x,y,z) turned by yaw: maps local [lx,ly,lz] to world [x,y,z]. */
   const frame = (x, y, z, yaw) => { const c = Math.cos(yaw), s = Math.sin(yaw); return (lx, ly, lz) => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c]; };
@@ -605,7 +731,7 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
       fitText(g, 'PAPERCLIP MAXIMIZER INC.', w / 2, h / 2 + 10, w - 120, 200, FONT, '#ffd23c', { lines: 1 });
     });
     atlas.place(title, W(0, 39.5, zf), F.yaw, 140, 17.2);
-    const conv = atlas.add(1600, 150, signDraw('NOW CONVERTING: EVERYTHING', { bg: '#ffd23c', fg: '#12142b', size: 120, lines: 1, border: '#12142b' }));
+    const conv = atlas.add(1600, 150, (g, w, h) => signDraw(lapFx.conv, { bg: '#ffd23c', fg: '#12142b', size: 120, lines: 1, border: '#12142b' })(g, w, h));
     atlas.place(conv, W(0, 5.6, zf), F.yaw, 116, 10.9);
     const counter = liveSign(THREE, ctx.group, 1024, 200, W(0, 21, zf), F.yaw, 96, 18.75, { intensity: 1.2 });
     let made = 41337421906, shown = -1, tick = 0;
@@ -667,15 +793,15 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
     const i = I(4.5), p = at(i, edge(i, 1) + 30, -3), yaw = boardYaw(i, 1, 0.5);
     const pod = S.podium({ n: 5, w: 7, h: 9, d: 7 }); pod.position.copy(p); pod.rotation.y = yaw; ctx.group.add(pod);
     const W = frame(p.x, p.y, p.z, yaw);
-    ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'xAI', 'META'].forEach((name, k) => {
+    for (let k = 0; k < 5; k++) {
       const r = atlas.add(320, 420, g => {
         const w = 320, h = 420; g.fillStyle = '#f4f4f8'; g.fillRect(0, 0, w, h);
         g.fillStyle = '#7a6bff'; g.fillRect(0, h - 120, w, 120);
         fitText(g, '#1', w / 2, 150, w - 30, 250, FONT, '#e8a800', { lines: 1 });
-        fitText(g, name, w / 2, h - 58, w - 30, 74, SANS, '#ffffff', { lines: 1 });
+        fitText(g, lapFx.names[k], w / 2, h - 58, w - 30, 74, SANS, '#ffffff', { lines: 1 });
       });
       atlas.place(r, W((k - 2) * 7.4, 4.5, 3.52), yaw, 6.4, 8.4);
-    });
+    }
     const title = atlas.add(1400, 300, g => {
       const w = 1400, h = 300; g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.strokeRect(6, 6, w - 12, h - 12);
       fitText(g, 'AI BENCHMARK RESULTS', w / 2, 112, w - 80, 140, FONT, '#ffd23c', { lines: 1 });

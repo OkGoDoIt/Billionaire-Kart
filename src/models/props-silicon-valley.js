@@ -223,3 +223,32 @@ export function clockRim(r = 3) {
   const b = new ModelBuilder(); b.add('rim', torus(r, r * 0.08, 8, 40), {}); b.add('rim', cyl(r * 0.08, r * 0.08, 0.5, 8), { r: [Math.PI / 2, 0, 0] });
   return b.build({ rim: plastic(0x1a1d29, 0.4, 0.3) });
 }
+
+/* ---------- the landmarks (playtest dressing): the tower, the garage ---------- */
+/* (The Golden Gate is no longer a prop: since #168 the lap drives over its deck, and the towers,
+   cables and girders are built from the track's own samples in silicon-valley.js decorate().) */
+
+/** A Hoover Tower: tapered sandstone shaft, glass observation band, terracotta pyramid cap. y = 0 at the base. */
+export function hooverTower({ H = 27 } = {}) {
+  const b = new ModelBuilder(), SD = 'sand', TC = 'terra', GL = 'glass', CC = 'conc';
+  b.add(CC, bx(13, 1.2, 13), { p: [0, 0.6, 0] });
+  b.add(SD, cyl(2.7, 3.4, H, 4), { p: [0, H / 2 + 1.2, 0], r: [0, Math.PI / 4, 0] });
+  b.add(SD, bx(8.2, 1.0, 8.2), { p: [0, H + 1.7, 0] });
+  b.add(SD, bx(9.0, 2.6, 9.0), { p: [0, H + 3.5, 0] });
+  b.add(GL, bx(9.25, 1.3, 9.25), { p: [0, H + 3.5, 0] });
+  b.add(TC, cone(6.3, 6.5, 4), { p: [0, H + 8.05, 0], r: [0, Math.PI / 4, 0] });
+  b.add(TC, cyl(0.1, 0.28, 3.6, 6), { p: [0, H + 12.9, 0] });
+  return b.build({ sand: plastic(0xe2cfa3, 0.8, 0), terra: plastic(0xa04a34, 0.7, 0), glass: plastic(0x1a1d29, 0.5, 0.2), conc: plastic(0x8b93a6, 0.8, 0) });
+}
+
+/** A suburban garage with a pitched pyramid roof and a paneled door, facing +Z. y = 0 at the slab. */
+export function garage() {
+  const b = new ModelBuilder(), WL = 'wall', RF = 'roof', DR = 'door', CC = 'conc';
+  b.add(WL, bx(9.5, 4.4, 7), { p: [0, 2.2, 0] });
+  b.add(RF, cone(5.9, 2.6, 4), { p: [0, 5.7, 0], r: [0, Math.PI / 4, 0], s: [1.22, 1, 0.9] });
+  b.add(DR, bx(6.6, 3.1, 0.18), { p: [0, 1.65, 3.55] });
+  for (const y of [1.0, 1.9, 2.8]) b.add(CC, bx(6.6, 0.09, 0.06), { p: [0, y, 3.66] });
+  b.add(CC, bx(7.2, 0.12, 8.5), { p: [0, 0.06, 7.6] });                                  // the driveway
+  b.add(DR, bx(1.5, 1.1, 0.12), { p: [-3.4, 2.9, 3.53] });                               // a side window
+  return b.build({ wall: plastic(0xe2cfa3, 0.8, 0), roof: plastic(0xa04a34, 0.7, 0), door: plastic(0xb9bfca, 0.4, 0.7), conc: plastic(0x8b93a6, 0.8, 0) });
+}

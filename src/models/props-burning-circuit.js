@@ -674,3 +674,118 @@ export function superyacht({ L = 56 } = {}) {
   g.userData.name = { x: W * 0.74 + 0.1, y: 10.1, z: -H * 0.25 + L * 0.04, w: L * 0.46, h: 2.6 };   // on the middle deck, where it shows over a dune
   return g;
 }
+
+/* ---------- the content round: art cars, the dome queue, the gate ---------- */
+
+/** A folding camp chair (tintable fabric). Front faces +Z, seat about 0.46 m up. */
+export function foldingChair() {
+  const b = new ModelBuilder(), FAB = tintable(0xff8a3c, 0.85);
+  b.add('fab', box(0.55, 0.05, 0.5, 0.02, 1), { p: [0, 0.46, 0] });
+  b.add('fab', box(0.55, 0.52, 0.05, 0.02, 1), { p: [0, 0.8, -0.27], r: [-0.12, 0, 0] });
+  for (const sx of [-1, 1]) {
+    strut(b, 'leg', [sx * 0.24, 0, 0.22], [sx * 0.24, 0.48, -0.04], 0.035);
+    strut(b, 'leg', [sx * 0.24, 0, -0.22], [sx * 0.24, 0.48, 0.08], 0.035);
+    strut(b, 'leg', [sx * 0.24, 0.44, -0.22], [sx * 0.24, 1.02, -0.31], 0.035);
+  }
+  return b.build({ fab: FAB, leg: MAT.dark });
+}
+
+/** El Pulpo homage: a riveted mechanical octopus riding a flatbed, eight tentacles
+    raised, flame nozzles at the tips. About 12 m across, head top ~7 m, facing +Z.
+    userData.flames = [[x, y, z, dx, dz], ...] nozzle tips with outward directions (local). */
+export function pulpo() {
+  const b = new ModelBuilder();
+  b.add('deck', box(7.6, 0.5, 6.4, 0.1, 1), { p: [0, 0.85, 0] });
+  b.add('dark', box(6.8, 0.7, 5.6, 0.08, 1), { p: [0, 0.45, 0] });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.add('tyre', cyl(0.62, 0.62, 0.4, 12), { p: [sx * 3.1, 0.62, sz * 2.2], r: [0, 0, Math.PI / 2] });
+  b.add('drum', cyl(2.5, 2.9, 1.6, 14), { p: [0, 1.9, 0] });
+  b.add('head', sphere(2.55, 18, 12), { p: [0, 4.3, 0], s: [1, 0.92, 1] });
+  b.add('band', torus(2.52, 0.14, 6, 24), { p: [0, 3.05, 0], r: [Math.PI / 2, 0, 0] });
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; b.add('band', sphere(0.11, 6, 5), { p: [Math.cos(a) * 2.72, 1.9, Math.sin(a) * 2.72] }); }
+  for (const sx of [-1, 1]) {
+    strut(b, 'dark', [sx * 0.9, 5.2, 1.6], [sx * 1.25, 6.1, 2.15], 0.16);
+    b.add('eye', sphere(0.42, 10, 8), { p: [sx * 1.3, 6.25, 2.3] });
+    b.add('dark', sphere(0.18, 8, 6), { p: [sx * 1.3, 6.25, 2.68] });
+  }
+  const flames = [];
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + 0.39, ca = Math.cos(a), sa = Math.sin(a);
+    const raised = k % 3 === 0;                       // every third arm rears up, El Pulpo style
+    const r1 = raised ? 4.6 : 5.6, y1 = raised ? 3.4 : 0.7, r2 = raised ? 5.4 : 6.1, y2 = raised ? 6.4 : 2.6;
+    limb(b, 'skin', [ca * 2.2, 1.6, sa * 2.2], [ca * r1, y1, sa * r1], 0.52, 0.34, 7);
+    limb(b, 'skin', [ca * r1, y1, sa * r1], [ca * r2, y2, sa * r2], 0.34, 0.16, 7);
+    b.add('nozzle', cone(0.3, 0.7, 8), { p: [ca * r2, y2 + 0.3, sa * r2] });
+    flames.push([ca * r2, y2 + 0.65, sa * r2, ca, sa]);
+    for (let s2 = 1; s2 <= 3; s2++) { const t = s2 / 4; b.add('band', sphere(0.13, 6, 5), { p: [ca * (2.2 + (r1 - 2.2) * t), 1.6 + (y1 - 1.6) * t - 0.32, sa * (2.2 + (r1 - 2.2) * t)] }); }
+  }
+  b.add('dark', cyl(0.06, 0.06, 2.2, 5), { p: [0, 7.6, -0.6] });
+  b.add('flag', box(1.3, 0.8, 0.05, 0.02, 1), { p: [0.68, 8.2, -0.6] });
+  const g = b.build({ deck: WOOD_DARK, dark: MAT.dark, tyre: MAT.rubber, drum: plastic(0x8a5a34, 0.5, 0.7), head: plastic(0xa06838, 0.45, 0.7), band: plastic(0xd8b04a, 0.3, 0.9), eye: glow(0xffd28a, 3), skin: plastic(0x9a6238, 0.5, 0.65), nozzle: plastic(0x3a3440, 0.4, 0.7), flag: paint(0xe23b3b, { rough: 0.7 }) });
+  g.userData.flames = flames;
+  return g;
+}
+
+/** Robot Heart homage: a cream bus with a giant glowing heart over the cab.
+    About 9 m long, facing +Z; the heart hangs in front of the top of the cab. */
+export function heartBus() {
+  const b = new ModelBuilder();
+  b.add('dark', box(2.5, 0.6, 8.6, 0.15, 2), { p: [0, 0.8, 0] });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.add('tyre', cyl(0.55, 0.55, 0.45, 14), { p: [sx * 1.28, 0.55, sz * 2.9], r: [0, 0, Math.PI / 2] });
+  b.add('body', box(2.5, 2.1, 8.8, 0.5, 3), { p: [0, 2.15, 0] });
+  for (const sx of [-1, 1]) b.add('win', box(0.08, 0.7, 6.8, 0.05, 1), { p: [sx * 1.26, 2.6, -0.3] });
+  b.add('win', box(2.0, 0.75, 0.08, 0.05, 1), { p: [0, 2.6, 4.41] });
+  b.add('trim', box(2.56, 0.14, 8.86, 0.04, 1), { p: [0, 1.25, 0] });
+  b.add('trim2', box(2.56, 0.14, 8.86, 0.04, 1), { p: [0, 3.15, 0] });
+  b.add('dark', box(2.3, 0.12, 7.6, 0.04, 1), { p: [0, 3.32, -0.3] });
+  strut(b, 'dark', [0, 3.35, 3.1], [0, 5.3, 4.45], 0.13);
+  for (const sx of [-1, 1]) strut(b, 'dark', [sx * 0.9, 3.35, 2.6], [sx * 0.55, 5.6, 4.5], 0.08);
+  const heartPts = (k) => { const pts = []; for (let i = 0; i < 40; i++) { const t = (i / 40) * Math.PI * 2; pts.push([16 * Math.sin(t) ** 3 * k, (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * k, 0]); } return pts; };
+  b.add('neon', tube(heartPts(0.085), 0.13, 80, 6, true), { p: [0, 6.6, 4.55] });
+  b.add('neon2', tube(heartPts(0.066), 0.1, 80, 6, true), { p: [0, 6.72, 4.63] });
+  for (const sx of [-1, 1]) b.add('lamp', sphere(0.2, 8, 6), { p: [sx * 0.85, 1.5, 4.42] });
+  return b.build({ dark: MAT.dark, tyre: MAT.rubber, body: plastic(0xf2ead8, 0.6), win: glow(0xffd28a, 1.6), trim: glow(0xff4fa8, 2.6), trim2: glow(0x46d6ff, 2.6), neon: glow(0xff3b5c, 3.5), neon2: glow(0xffd23c, 3), lamp: glow(0xfff4d6, 3) });
+}
+
+/** A shark mutant vehicle: a low car wearing a very committed shark. About 8 m long, nose +Z. */
+export function sharkCar() {
+  const b = new ModelBuilder();
+  b.add('dark', box(2.2, 0.5, 7.4, 0.12, 2), { p: [0, 0.62, 0] });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.add('tyre', cyl(0.5, 0.5, 0.4, 12), { p: [sx * 1.12, 0.5, sz * 2.5], r: [0, 0, Math.PI / 2] });
+  b.add('skin', loft([{ z: -3.9, w: 0.12, h: 0.2, y: 2.0, n: 2.6 }, { z: -2.6, w: 0.75, h: 0.8, y: 1.95, n: 2.8 }, { z: 0, w: 1.05, h: 1.0, y: 1.9, n: 3 }, { z: 2.2, w: 0.95, h: 0.9, y: 1.85, n: 3 }, { z: 3.4, w: 0.6, h: 0.6, y: 1.8, n: 2.8 }, { z: 4.05, w: 0.16, h: 0.25, y: 1.75, n: 2.4 }], 18, 3));
+  b.add('belly', loft([{ z: -2.6, w: 0.7, h: 0.3, y: 1.35, n: 2.6 }, { z: 0, w: 1.0, h: 0.35, y: 1.3, n: 2.8 }, { z: 2.6, w: 0.8, h: 0.3, y: 1.35, n: 2.6 }], 16, 2));
+  b.add('skin', box(0.14, 1.9, 1.1, 0.04, 1), { p: [0, 3.1, -3.6], r: [0.5, 0, 0] });
+  b.add('skin', box(0.14, 1.3, 0.9, 0.04, 1), { p: [0, 3.15, -0.7], r: [-0.35, 0, 0] });
+  for (const sx of [-1, 1]) b.add('skin', box(1.15, 0.12, 0.8, 0.04, 1), { p: [sx * 1.25, 1.55, 0.6], r: [0, 0, sx * 0.5] });
+  b.add('mouth', box(1.15, 0.34, 0.1, 0.03, 1), { p: [0, 1.5, 3.72], r: [0.35, 0, 0] });
+  for (let k = 0; k < 7; k++) b.add('tooth', cone(0.07, 0.22, 5), { p: [(k - 3) * 0.17, 1.36, 3.78], r: [Math.PI + 0.35, 0, 0] });
+  for (const sx of [-1, 1]) b.add('eye', sphere(0.13, 8, 6), { p: [sx * 0.62, 2.15, 3.15] });
+  for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) b.add('dark', box(0.05, 0.5, 0.09, 0.02, 1), { p: [sx * 1.0, 1.9, 2.2 - k * 0.28], r: [0, 0, 0.3] });
+  return b.build({ dark: MAT.dark, tyre: MAT.rubber, skin: plastic(0x7e93a8, 0.5), belly: plastic(0xe8edf2, 0.6), mouth: plastic(0x5e1220, 0.7), tooth: plastic(0xffffff, 0.4), eye: plastic(0x10131a, 0.25) });
+}
+
+/** An LED-covered shuttle bus for the patrols: a dark bus wrapped in light panels. About 8 m long, facing +Z. */
+export function ledBus() {
+  const b = new ModelBuilder();
+  b.add('dark', box(2.4, 0.55, 7.8, 0.15, 2), { p: [0, 0.75, 0] });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.add('tyre', cyl(0.52, 0.52, 0.42, 12), { p: [sx * 1.22, 0.52, sz * 2.6], r: [0, 0, Math.PI / 2] });
+  b.add('body', box(2.4, 2.0, 8.0, 0.4, 3), { p: [0, 2.05, 0] });
+  for (const sx of [-1, 1]) for (let k = 0; k < 5; k++) b.add('p' + k, box(0.07, 0.5, 1.15, 0.03, 1), { p: [sx * 1.21, 2.45, -2.9 + k * 1.45] });
+  for (const sx of [-1, 1]) for (let k = 0; k < 5; k++) b.add('p' + ((k + 2) % 5), box(0.07, 0.5, 1.15, 0.03, 1), { p: [sx * 1.21, 1.6, -2.9 + k * 1.45] });
+  b.add('win', box(1.9, 0.7, 0.08, 0.04, 1), { p: [0, 2.5, 4.01] });
+  b.add('bar', box(2.46, 0.16, 8.06, 0.04, 1), { p: [0, 3.12, 0] });
+  for (const sx of [-1, 1]) b.add('lamp', sphere(0.19, 8, 6), { p: [sx * 0.8, 1.45, 4.02] });
+  const mats = { dark: MAT.dark, tyre: MAT.rubber, body: plastic(0x232838, 0.5), win: glow(0xbfe8ff, 1.8), bar: glow(0xffffff, 2.4), lamp: glow(0xfff4d6, 3) };
+  [0xff4fa8, 0x46d6ff, 0xffd23c, 0x7dff6a, 0xff7a1e].forEach((c, k) => { mats['p' + k] = glow(c, 2.8); });
+  return b.build(mats);
+}
+
+/** A greeter booth: a little hut with a counter and a glowing trim strip. Front faces +Z. */
+export function greeterBooth() {
+  const b = new ModelBuilder();
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.add('post', box(0.22, 2.6, 0.22, 0.04, 1), { p: [sx * 1.5, 1.3, sz * 1.1] });
+  b.add('roof', box(3.9, 0.18, 3.1, 0.06, 1), { p: [0, 2.75, 0] });
+  b.add('counter', box(3.1, 0.14, 0.7, 0.04, 1), { p: [0, 1.05, 1.15] });
+  b.add('back', box(3.2, 1.6, 0.12, 0.04, 1), { p: [0, 0.95, -1.15] });
+  b.add('trim', box(3.94, 0.3, 0.1, 0.03, 1), { p: [0, 2.5, 1.52] });
+  return b.build({ post: WOOD_DARK, roof: plastic(0xff8a3c, 0.7), counter: WOOD_PALE, back: plastic(0xf3ead8, 0.85), trim: glow(0xffd23c, 2.2) });
+}

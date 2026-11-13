@@ -4,9 +4,10 @@ import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { CUPS, cupTracks } from '../content/cups.js';
 import { CLASSES } from '../race/kart.js';
-import { DEVICE_LABEL } from '../core/input.js';
+import { DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindings, applyPadBind, padFamily } from '../core/input.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
+import { installCard, installButton, installPanel, onInstallChange } from './install.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
 
 const h = (tag, attrs = {}, ...kids) => {
@@ -16,14 +17,42 @@ const h = (tag, attrs = {}, ...kids) => {
   return e;
 };
 const hex = n => '#' + n.toString(16).padStart(6, '0');
+
+/* The Controller panel's pad picture (issue #194): one generic gamepad, drawn
+   once. Every physical button is a [data-btn] group in standard-mapping order;
+   pressing it adds .lit. Face buttons carry an Xbox letter (.tx) and a
+   PlayStation shape (.sh); CSS shows one set per naming family (.fam-ps). */
+const PAD_SVG = `<svg class="pad-svg" viewBox="0 0 360 216" role="img" aria-label="Controller diagram">
+  <g class="pb" data-btn="6"><rect x="56" y="12" width="58" height="18" rx="9"/><text data-txt="6" x="85" y="25.5">LT</text></g>
+  <g class="pb" data-btn="7"><rect x="246" y="12" width="58" height="18" rx="9"/><text data-txt="7" x="275" y="25.5">RT</text></g>
+  <g class="pb" data-btn="4"><rect x="56" y="34" width="58" height="17" rx="8.5"/><text data-txt="4" x="85" y="46.5">LB</text></g>
+  <g class="pb" data-btn="5"><rect x="246" y="34" width="58" height="17" rx="8.5"/><text data-txt="5" x="275" y="46.5">RB</text></g>
+  <path class="pad-body" d="M104 54h152c30 0 46 16 54 44l12 50c5 21-5 38-24 42-15 3-28-4-37-19l-13-22H112l-13 22c-9 15-22 22-37 19-19-4-29-21-24-42l12-50c8-28 24-44 54-44z"/>
+  <g class="pb" data-btn="10"><circle cx="106" cy="100" r="18"/><circle class="inner" cx="106" cy="100" r="8"/></g>
+  <g class="pb" data-btn="8"><circle cx="150" cy="74" r="8"/></g>
+  <g class="pb" data-btn="9"><circle cx="210" cy="74" r="8"/></g>
+  <g class="pb" data-btn="16"><circle cx="180" cy="100" r="10"/></g>
+  <g class="pb" data-btn="3"><circle cx="264" cy="76" r="15"/><text class="tx" x="264" y="80.5">Y</text><g class="sh"><path d="M264 69.5 270.5 80.5 257.5 80.5Z"/></g></g>
+  <g class="pb" data-btn="2"><circle cx="236" cy="104" r="15"/><text class="tx" x="236" y="108.5">X</text><g class="sh"><rect x="230" y="98" width="12" height="12"/></g></g>
+  <g class="pb" data-btn="1"><circle cx="292" cy="104" r="15"/><text class="tx" x="292" y="108.5">B</text><g class="sh"><circle cx="292" cy="104" r="6"/></g></g>
+  <g class="pb" data-btn="0"><circle cx="264" cy="132" r="15"/><text class="tx" x="264" y="136.5">A</text><g class="sh"><path d="M258.5 126.5 269.5 137.5M269.5 126.5 258.5 137.5"/></g></g>
+  <g class="pb" data-btn="11"><circle cx="214" cy="148" r="16"/><circle class="inner" cx="214" cy="148" r="7"/></g>
+  <rect class="pad-deco" x="142" y="139" width="15" height="15"/>
+  <g class="pb" data-btn="12"><rect x="142" y="122" width="15" height="17" rx="2"/></g>
+  <g class="pb" data-btn="13"><rect x="142" y="154" width="15" height="17" rx="2"/></g>
+  <g class="pb" data-btn="14"><rect x="125" y="139" width="17" height="15" rx="2"/></g>
+  <g class="pb" data-btn="15"><rect x="157" y="139" width="17" height="15" rx="2"/></g>
+</svg>`;
+const DIAGRAM_TEXT = { xb: { 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT' }, ps: { 4: 'L1', 5: 'R1', 6: 'L2', 7: 'R2' } };
+const STEER_CHOICES = [['stick', 'Left stick'], ['both', 'Stick + D-pad'], ['dpad', 'D-pad']];
 /* Cup art: a gold, silver, or bronze trophy for a podium finish, and a three-star rating. */
 const trophyImg = rank => rank >= 1 && rank <= 3 ? h('img', { class: 'trophy', src: `assets/ui/trophy-${['gold', 'silver', 'bronze'][rank - 1]}.webp`, alt: '' }) : null;
 const starRow = n => h('span', { class: 'star-row', role: 'img', 'aria-label': `${n} of 3 stars` }, [0, 1, 2].map(i => h('img', { class: i < n ? '' : 'off', src: 'assets/ui/star.webp', alt: '' })));
 /* The larger of the two areas a panel leaves free: beside it (landscape) or above it (portrait). The 3D scene is framed there. */
 const freeRect = panel => { const r = panel.getBoundingClientRect(), W = innerWidth, H = innerHeight; return r.left * H >= W * r.top ? { left: 0, top: 0, width: r.left, height: H } : { left: 0, top: 0, width: W, height: r.top }; };
 const PLAYER_COLORS = ['#ff4d6d', '#38b6ff', '#ffd23c', '#2ee6a6'];
-const LEVELS = [['easy', 'Relaxed'], ['normal', 'Competitive'], ['hard', 'Ruthless']];
-const CC_LIST = [50, 100, 150];
+const LEVELS = [['easy', 'Relaxed', 'Rivals top out at 93% speed, hold a loose line, and sit on their items. They never take a shortcut.'], ['normal', 'Competitive', 'Rivals run at nearly full speed, hold a tidy line, and use their items in good time. Now and then, one takes a shortcut.'], ['hard', 'Ruthless', 'Rivals run at full speed, hold the tightest line, take shortcuts, and fire items the moment they land.']];
+const CC_LIST = [50, 100, 150, 200];
 const STAT_LABELS = [['speed', 'Speed'], ['accel', 'Acceleration'], ['handling', 'Handling'], ['weight', 'Weight']];
 
 export class Menus {
@@ -53,15 +82,38 @@ export class Menus {
   close() { if (this.screen) { this.screen.el.remove(); this.screen.onClose?.(); } this.screen = null; this.focusEl = null; this.stack.length = 0; }
   reset(name, params = {}) { this.stack.length = 0; this._mount({ name, params }); }
   _mount(spec) {
+    // Screen changes in menu-land wear the checker wipe (#92) as a flourish over the
+    // change: the checkerboard sweeps in and out while the mount itself stays
+    // synchronous — input and anything sampling screen state never wait on an
+    // animation. Scene changes are the ones that swap under full cover, via
+    // App.transition. Screens over a live race (pause, results) get no wipe.
+    const A = this.app;
+    if (A.wipe && this.screen && this.screen.spec.name !== spec.name && (!A.session || A.attract)) A.wipe.through(null, { cover: 200, reveal: 240 });
+    this._doMount(spec);
+  }
+  _doMount(spec) {
     if (this.screen) { this.screen.el.remove(); this.screen.onClose?.(); }
     const def = this['s_' + spec.name](spec.params || {});
     def.spec = spec; def.el.classList.add('menu-screen', 'screen-' + spec.name);
     this.layer.appendChild(def.el); this.screen = def; this.focusEl = null;
+    this._scrollHint(def);
     const first = def.el.querySelector('[data-f][data-default]') || def.el.querySelector('[data-f]');
     if (first) this.focus(first, false);
     def.onOpen?.(); def.onLayout?.();
     this.app.showroom?.setShown(!!def.stage);   // the turntable karts appear only on screens that place them
     if (def.onLayout) requestAnimationFrame(() => { if (this.screen === def) def.onLayout(); });   // again once fonts and images have settled the layout
+  }
+  /* One scroll check for every screen, run where screens mount: while more content sits below the fold,
+     the screen wears a fade at its bottom edge; at the end of the scroll, the fade is gone. */
+  _scrollHint(def) {
+    const sc = def.el;
+    sc.appendChild(h('div', { class: 'scroll-fade', 'aria-hidden': 'true' }));
+    const check = () => sc.classList.toggle('more-below', sc.scrollHeight - sc.scrollTop - sc.clientHeight > 4);
+    check(); requestAnimationFrame(check);
+    sc.addEventListener('scroll', check, { passive: true });
+    addEventListener('resize', check);
+    const prevClose = def.onClose;
+    def.onClose = () => { removeEventListener('resize', check); prevClose?.(); };
   }
   focus(el, sound = true) {
     if (this.focusEl === el) return;
@@ -115,14 +167,34 @@ export class Menus {
   s_main() {
     const A = this.app;
     const start = mode => { A.flow = { mode, players: 1 }; this.open('players'); };
+    const row = h('div', { class: 'row' }, this.btn('How to play', () => this.open('howto'), { cls: 'small' }), this.btn('Options', () => this.open('options'), { cls: 'small' }), this.btn('Records', () => this.open('records'), { cls: 'small' }));
+    /* install guidance (src/ui/install.js): a persistent button in the row and a one-time
+       hint card under the nav, each present only where installing is actually possible;
+       both redraw if the browser hands us its install prompt while the menu is up */
+    const slot = h('div', { class: 'install-slot' });
+    let installBtnEl = null;
+    /* short landscape (a phone on its side) has no spare width in the button row or height
+       in the column: there the hint card floats over the scene instead (install.css) and
+       carries the action on its own — Options keeps its Install row at every size */
+    const shortLandscape = matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
+    const drawInstall = () => {
+      const spec = shortLandscape ? null : installButton();
+      if (spec && !installBtnEl) { installBtnEl = this.btn(spec.label, () => spec.act(), { cls: 'small' }); row.appendChild(installBtnEl); row.classList.add('has-install'); }
+      if (!spec && installBtnEl) { installBtnEl.remove(); installBtnEl = null; row.classList.remove('has-install'); }
+      const card = installCard();
+      slot.replaceChildren(...(card ? [card] : []));
+    };
     const el = h('div', {},
       h('div', { class: 'logo small' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c)))),
       h('nav', { class: 'main-nav' },
         this.btn('Grand Prix', () => start('gp'), { cls: 'big c1', def: true, sub: 'Four races, one trophy' }),
         this.btn('Quick Race', () => start('vs'), { cls: 'big c2', sub: 'Any track, your rules' }),
         this.btn('Time Trial', () => { A.flow = { mode: 'timetrial', players: 1, devices: ['any'] }; this.open('racers', { player: 0 }); }, { cls: 'big c3', sub: 'Just you and the clock' }),
-        h('div', { class: 'row' }, this.btn('How to play', () => this.open('howto'), { cls: 'small' }), this.btn('Options', () => this.open('options'), { cls: 'small' }), this.btn('Records', () => this.open('records'), { cls: 'small' }))));
-    return { el, onBack: () => { this.reset('title'); return false; } };
+        row),
+      slot);
+    drawInstall();
+    const offInstall = onInstallChange(drawInstall);
+    return { el, onClose: offInstall, onBack: () => { this.reset('title'); return false; } };
   }
 
   /* ---------- how many players, and who holds what ---------- */
@@ -204,12 +276,13 @@ export class Menus {
   s_setup() {
     const A = this.app, flow = A.flow, last = A.save.data.last;
     flow.cc = flow.cc || last.cc; flow.level = flow.level || last.level;
-    const ccBtns = CC_LIST.map(cc => { const b = h('button', { class: 'card cc', 'data-f': true, 'data-default': cc === flow.cc, onclick: () => { flow.cc = cc; mark(); this.focus(next); } }, h('div', { class: 'cc-n' }, CLASSES[cc].label), h('div', { class: 'cc-l' }, CLASSES[cc].name), h('div', { class: 'cc-d' }, cc === 50 ? 'Gentle pace' : cc === 100 ? 'The standard' : 'Fast and frantic')); b.dataset.cc = cc; return b; });
+    const ccBtns = CC_LIST.map(cc => { const b = h('button', { class: 'card cc', 'data-f': true, 'data-default': cc === flow.cc, onclick: () => { flow.cc = cc; mark(); this.focus(next); } }, h('div', { class: 'cc-n' }, CLASSES[cc].label), h('div', { class: 'cc-l' }, CLASSES[cc].name), h('div', { class: 'cc-d' }, cc === 50 ? 'Gentle pace' : cc === 100 ? 'The standard' : cc === 150 ? 'Fast and frantic' : 'Growth at all costs')); b.dataset.cc = cc; return b; });
     const lvBtns = LEVELS.map(([id, label]) => { const b = h('button', { class: 'chip', 'data-f': true, onclick: () => { flow.level = id; mark(); } }, label); b.dataset.lv = id; return b; });
-    const mark = () => { for (const b of ccBtns) b.classList.toggle('sel', +b.dataset.cc === flow.cc); for (const b of lvBtns) b.classList.toggle('sel', b.dataset.lv === flow.level); };
+    const lvDesc = h('p', { class: 'lv-desc' });
+    const mark = () => { for (const b of ccBtns) b.classList.toggle('sel', +b.dataset.cc === flow.cc); for (const b of lvBtns) b.classList.toggle('sel', b.dataset.lv === flow.level); lvDesc.textContent = LEVELS.find(l => l[0] === flow.level)[2]; };
     const next = this.btn('Next', () => { last.cc = flow.cc; last.level = flow.level; A.save.write(); this.open(flow.mode === 'gp' ? 'cups' : 'tracks'); }, { cls: 'go' });
     mark();
-    const el = h('div', {}, this.header('Engine class'), h('div', { class: 'cards three' }, ccBtns), h('h3', { class: 'sub-h' }, 'Rivals'), h('div', { class: 'chips' }, lvBtns), h('div', { class: 'foot' }, next));
+    const el = h('div', {}, this.header('Engine class'), h('div', { class: 'cards four' }, ccBtns), h('h3', { class: 'sub-h' }, 'Rivals'), h('div', { class: 'chips' }, lvBtns), lvDesc, h('div', { class: 'foot' }, next));
     return { el };
   }
 
@@ -230,7 +303,10 @@ export class Menus {
   /* ---------- single track ---------- */
   s_tracks() {
     const A = this.app, flow = A.flow, cc = flow.cc || A.save.data.last.cc;
-    // all eight on one screen, a cup per row; the line under the title describes the track in focus
+    // one screenful: at eight tracks or fewer the grid below is the plain two
+    // rows of four; past eight it takes the 'many' layout (styles/menu.css),
+    // which fits a growing roster on the same screen instead of growing a
+    // third row off the bottom; the line under the title describes the track in focus
     const head = this.header('Choose a track', '\u00a0'), sub = head.querySelector('p');
     const cards = TRACKS.map(t => {
       const best = A.save.bestFor(t.id, flow.mode === 'timetrial' ? 'tt' : cc);
@@ -240,15 +316,16 @@ export class Menus {
       card.addEventListener('menufocus', say); card.addEventListener('pointerenter', say);
       return card;
     });
-    return { el: h('div', {}, head, h('div', { class: 'cards tracks' }, cards)) };
+    return { el: h('div', {}, head, h('div', { class: 'cards tracks' + (TRACKS.length > 8 ? ' many' : '') }, cards)) };
   }
 
   /* ---------- pause ---------- */
   s_pause() {
     const A = this.app, turn = A.mustTurn();
-    // a phone held upright cannot race: say so in place of Resume, and keep the rest of the menu
+    // a phone held upright races best sideways: say so, but Resume stays on the panel — a player who can
+    // only hold the device upright (a controller cradle, say) races on, and the prompt stays away for the race
     const el = h('div', {}, h('div', { class: 'panel narrow' + (turn ? ' turn' : '') },
-      turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), h('p', { class: 'turn-sub' }, 'The race is paused.')] : [h('h1', {}, 'Paused'), this.btn('Resume', () => A.resume(), { def: true })],
+      turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), h('p', { class: 'turn-sub' }, 'The race is paused.'), this.btn('Resume anyway', () => A.resume(), { def: true })] : [h('h1', {}, 'Paused'), this.btn('Resume', () => A.resume(), { def: true })],
       this.btn('Restart race', () => A.restartRace()), this.btn('How to play', () => this.open('howto')), this.btn('Options', () => this.open('options')), this.btn('Quit to menu', () => A.quitToMenu(), { cls: 'danger' })));
     return { el, onBack: () => { A.resume(); return false; }, onAction: a => { if (a === 'pause') { A.resume(); return true; } } };
   }
@@ -258,9 +335,29 @@ export class Menus {
     const A = this.app;
     const rows = results.map((r, i) => {
       const total = gp ? gp.totals[r.racer.id] : null;
-      return h('div', { class: 'res-row' + (r.isPlayer ? ' me' : ''), style: `--d:${i * 70}ms;--rc:${hex(r.racer.color)}` + (r.isPlayer ? `;--pc:${PLAYER_COLORS[r.playerIndex]}` : '') },
+      // A kart classified on an estimate never crossed the line: the cell says DNF and labels the
+      // estimate as one, instead of dressing a guess up as a finish time (#144). A finisher's cell
+      // carries their best lap under the total (#143).
+      const lapsDone = r.kart.lapTimes.length;
+      const time = r.estimated
+        ? h('span', { class: 'res-time dnf' }, h('b', {}, 'DNF'), h('small', { class: 'res-best' }, `${lapsDone ? `${lapsDone} lap${lapsDone > 1 ? 's' : ''} done` : 'on lap 1'} · est. ${fmtTime(r.time)}`))
+        : h('span', { class: 'res-time' }, fmtTime(r.time), isFinite(r.bestLap) && h('small', { class: 'res-best' }, `Best lap ${fmtTime(r.bestLap).slice(0, -2)}`));
+      return h('div', { class: 'res-row' + (r.isPlayer ? ' me' : '') + (r.estimated ? ' dnf' : ''), style: `--d:${i * 70}ms;--rc:${hex(r.racer.color)}` + (r.isPlayer ? `;--pc:${PLAYER_COLORS[r.playerIndex]}` : '') },
         h('b', { class: 'res-rank' }, String(r.rank)), h('img', { src: r.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, r.racer.name, r.isPlayer && h('em', {}, results.filter(x => x.isPlayer).length > 1 ? `P${r.playerIndex + 1}` : 'You')),
-        h('span', { class: 'res-time' }, fmtTime(r.time)), gp && h('span', { class: 'res-pts' }, `+${r.points}`), gp && h('span', { class: 'res-total' }, String(total)));
+        time, gp && h('span', { class: 'res-pts' }, `+${r.points}`), gp && h('span', { class: 'res-total' }, String(total)));
+    });
+    // The payoff strip: each human's race in numbers, from the stats the race already kept (#143).
+    // Top speed in honest mph: kart speed is m/s; 2.23694 is MPH_PER_MS in ui/hud.js (PR #160), so the strip matches the speedometer.
+    const humans = results.filter(r => r.isPlayer);
+    const strips = humans.map(r => {
+      const s = r.stats || {}, parts = [];
+      if (s.hitsGiven) parts.push(`Hostile takeovers: ${s.hitsGiven} served`);
+      if (s.hitsTaken) parts.push(`Lawsuits weathered: ${s.hitsTaken}`);
+      parts.push(`Drifts: ${s.drifts || 0}`, `Boosts: ${s.boosts || 0}`);
+      if (s.overtakes) parts.push(`Overtakes: ${s.overtakes}`);
+      parts.push(`Top speed: ${Math.round((s.topSpeed || 0) * 2.23694)} mph`, `Coins banked: ${s.coins || 0}`);
+      return h('div', { class: 'res-strip', style: humans.length > 1 ? `--pc:${PLAYER_COLORS[r.playerIndex]}` : '' },
+        h('b', {}, humans.length > 1 ? `${r.racer.name} in numbers` : 'Your race in numbers'), h('span', {}, parts.join(' · ')));
     });
     const buttons = gp
       ? [this.btn(gp.last ? 'See final standings' : 'Next race', () => A.gpNext(), { cls: 'go', def: true })]
@@ -269,11 +366,28 @@ export class Menus {
       h('h1', {}, track.name), gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
+      strips.length && h('div', { class: 'res-strips' }, strips),
       // the winner's line and the last finisher's: each stays in one piece, side by side when both fit
       h('p', { class: 'res-quote' }, h('span', {}, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`),
         results.length > 2 && h('span', {}, h('b', {}, results[results.length - 1].racer.name + ': '), `“${results[results.length - 1].racer.barks.lose}”`)),
       h('div', { class: 'foot' }, buttons)));
     return { el, onBack: () => false };
+  }
+
+  /* ---------- single-race podium (the cup finish, borrowed for a Quick Race) ---------- */
+  s_racePodium({ results, track, records, best }) {
+    const A = this.app;
+    const top3 = [...results].sort((a, b) => a.rank - b.rank).slice(0, 3);
+    const multi = results.filter(r => r.isPlayer).length > 1;
+    const head = best === 1 ? 'You win!' : best === 2 ? 'Second place' : best === 3 ? 'Third place' : `${best}${ordinalSuffix(best)} place`;
+    const el = h('div', {}, h('div', { class: 'panel cupres' },
+      h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, track.name))),
+      records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
+      h('div', { class: 'res-table final' }, top3.map((r, i) => h('div', { class: 'res-row' + (r.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(r.racer.color)}` + (r.isPlayer ? `;--pc:${PLAYER_COLORS[r.playerIndex]}` : '') },
+        h('b', { class: 'res-rank' }, String(r.rank)), h('img', { src: r.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, r.racer.name, r.isPlayer && h('em', {}, multi ? `P${r.playerIndex + 1}` : 'You')), h('span', { class: 'res-time' }, fmtTime(r.time))))),
+      h('p', { class: 'res-quote' }, h('span', {}, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`)),
+      h('div', { class: 'foot' }, this.btn('Full results', () => A.showResults(), { cls: 'go', def: true }))));
+    return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 
   s_cupResults({ cup, standings, playerRanks, stars }) {
@@ -282,7 +396,7 @@ export class Menus {
     const el = h('div', {}, h('div', { class: 'panel cupres' },
       h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
-      h('div', { class: 'foot' }, this.btn('Continue', () => A.quitToMenu(), { cls: 'go', def: true }))));
+      h('div', { class: 'foot' }, this.btn('Race this cup again', () => A.restartCup(), { cls: 'go', def: true }), this.btn('Change racer', () => A.backToRacers()), this.btn('Continue', () => A.quitToMenu()))));
     return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 
@@ -315,13 +429,118 @@ export class Menus {
       document.addEventListener('fullscreenchange', sync); fsOff = () => document.removeEventListener('fullscreenchange', sync);
       return row;
     };
+    // the controller mapping lives on its own screen (below); this row is the door
+    const padRow = () => h('div', { class: 'opt', 'data-f': true, onclick: () => this.open('pad') }, h('span', {}, 'Controller'), h('div', { class: 'opt-ctl' }, h('b', {}, 'Buttons…')));
+    // installing is a row too, wherever the browser allows it; the label says what tapping does here
+    const installRow = () => {
+      const spec = installButton(); if (!spec) return null;
+      const row = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: () => { spec.act(); A.audio?.ui('move'); } }, h('span', {}, 'Install app'), h('div', { class: 'opt-ctl' }, h('b', {}, spec.label === 'Install app' ? 'Install' : 'Guide')));
+      row.addEventListener('adjust', () => { spec.act(); A.audio?.ui('move'); });
+      return row;
+    };
     const el = h('div', {}, this.header('Options'), h('div', { class: 'panel options' },
       stepper('Music', 'music', pct), stepper('Sound effects', 'sfx', pct),
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
-      !touch && document.fullscreenEnabled && fullScreenRow(),
-      cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff),
+      document.fullscreenEnabled && fullScreenRow(),
+      installRow(),
+      padRow(),
+      cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff), cycle('Pause in portrait', 'pausePortrait', onoff),
       touch && cycle('Automatic accelerate', 'autoGo', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
     return { el, onClose: () => fsOff?.() };
+  }
+
+  /* ---------- controller buttons ----------
+     One diagram, six rows, one name per button (issue #194). Pressing a
+     physical button lights it on the diagram and names it in the readout;
+     tapping a row (or focusing it and pressing confirm) makes the row itself
+     listen for the next press — there are no per-row Remap links. Menus
+     derive confirm/back from the Accelerate/Brake buttons, so they are not
+     rows of their own. The "also" buttons keep working but are never shown. */
+  s_pad() {
+    const A = this.app, S = A.save.settings, input = A.input;
+    const persist = () => { S.padBinds = JSON.parse(JSON.stringify(input.padBinds)); S.padSteer = input.padSteer; A.save.write(); A.applySettings(); };
+    let fam = 'xb';   // naming family of the connected pad; Xbox-style until a PlayStation pad shows up
+    const readout = h('div', { class: 'pad-readout' }, 'Press any button on your controller — it lights up here.');
+    const diagram = h('div', { class: 'pad-diagram-wrap', html: PAD_SVG });
+    const btnEls = new Map(), txtEls = new Map();
+    diagram.querySelectorAll('[data-btn]').forEach(el => btnEls.set(+el.dataset.btn, el));
+    diagram.querySelectorAll('[data-txt]').forEach(el => txtEls.set(+el.dataset.txt, el));
+    let capturing = null, sawRelease = false, prev = new Set(), raf = 0, flashN = -1, flashUntil = 0;
+    const rows = new Map();
+    const labelOf = id => PAD_ACTIONS.find(a => a.id === id).label;
+    const drawRow = a => {
+      const r = rows.get(a.id); if (!r) return;
+      r.el.classList.toggle('capturing', capturing === a.id);
+      r.name.textContent = capturing === a.id ? 'Press a button…' : buttonName(input.padBinds[a.id][0], fam);
+      r.name.classList.toggle('listening', capturing === a.id);
+    };
+    const drawAll = () => { for (const a of PAD_ACTIONS) drawRow(a); };
+    const setFamily = f => {
+      if (f === fam && diagram.classList.contains('fam-set')) return;
+      fam = f; diagram.classList.add('fam-set'); diagram.classList.toggle('fam-ps', fam === 'ps');
+      for (const [n, el] of txtEls) el.textContent = DIAGRAM_TEXT[fam][n] || el.textContent;
+      drawAll();
+    };
+    const startCapture = id => { capturing = id; sawRelease = prev.size === 0; readout.textContent = `Press the button for ${labelOf(id)} — or tap the row again to cancel.`; drawAll(); };
+    const endCapture = msg => { capturing = null; if (msg) readout.textContent = msg; drawAll(); };
+    const doBind = (id, n) => {
+      const res = applyPadBind(input.padBinds, id, n);
+      let msg = `${labelOf(id)} is now the ${buttonName(n, fam)} button.`;
+      if (res.swapped) msg += ` It swapped with ${labelOf(res.swapped)}.`;
+      persist(); A.audio?.ui('select'); endCapture(msg);
+    };
+    const showPress = n => {
+      const acts = PAD_ACTIONS.filter(a => input.padBinds[a.id].includes(n)).map(a => a.label);
+      readout.textContent = `${buttonName(n, fam)} — ${acts.length ? acts.join(' · ') : 'not used'}`;
+      flashN = n; flashUntil = performance.now() + 650;
+    };
+    /* Tapping a button on the diagram does what pressing it does — and while a
+       row is listening, tapping the diagram is a way to bind without a pad. */
+    for (const [n, el] of btnEls) el.addEventListener('click', () => { if (capturing) doBind(capturing, n); else showPress(n); });
+    /* While the panel is open it polls the pads itself: menu navigation only
+       reports the mapped actions, but discovery needs every raw button. */
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      let pad = null; const pressed = new Set();
+      for (const gp of gps) { if (!gp || !gp.connected) continue; pad = pad || gp; gp.buttons.forEach((btn, i) => { if (btn.pressed || btn.value > 0.5) pressed.add(i); }); }
+      if (pad) setFamily(padFamily(pad.id));
+      const fresh = [...pressed].filter(i => !prev.has(i));
+      if (capturing) {
+        if (!pressed.size) sawRelease = true;               // the press that opened capture must clear first
+        else if (sawRelease && fresh.length) doBind(capturing, fresh[0]);
+      } else if (fresh.length) showPress(fresh[fresh.length - 1]);
+      /* the diagram and the rows light up live, for exactly as long as the press lasts */
+      const lit = capturing ? new Set() : new Set([...pressed, ...(performance.now() < flashUntil ? [flashN] : [])]);
+      for (const [n, el] of btnEls) el.classList.toggle('lit', lit.has(n));
+      for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.toggle('hit', !capturing && [...pressed].some(n => input.padBinds[a.id].includes(n)));
+      prev = pressed;
+    };
+    const list = h('div', { class: 'pad-rows' }, PAD_ACTIONS.map(a => {
+      const name = h('span', { class: 'bind-name' });
+      const el = h('div', { class: 'pad-row', 'data-f': true, onclick: () => { if (capturing === a.id) endCapture('Tap an action, then press the button for it.'); else if (!capturing) startCapture(a.id); } },
+        h('span', { class: 'pad-label' }, a.label), name);
+      rows.set(a.id, { el, name });
+      return el;
+    }));
+    // steering: three plain choices, the current one filled in
+    const segBtns = new Map();
+    const drawSteer = () => { for (const [id, b] of segBtns) b.classList.toggle('sel', input.padSteer === id); };
+    const steerRow = h('div', { class: 'pad-steer' }, h('span', { class: 'pad-label' }, 'Steering'),
+      h('div', { class: 'seg' }, STEER_CHOICES.map(([id, label]) => { const b = h('button', { class: 'seg-btn', 'data-f': true, onclick: () => { input.padSteer = id; persist(); drawSteer(); A.audio?.ui('move'); } }, label); segBtns.set(id, b); return b; })));
+    const el = h('div', {}, this.header('Controller', 'Tap an action, then press the button for it.'),
+      h('div', { class: 'panel pad' }, diagram, readout, list, steerRow,
+        h('p', { class: 'pad-note' }, 'The triggers always work as the gas and brake pedals too.'),
+        h('div', { class: 'foot' }, this.btn('Reset to defaults', () => { input.padBinds = defaultPadBindings(); input.padSteer = 'both'; drawSteer(); persist(); endCapture('Back to the standard layout.'); A.audio?.ui('back'); }), this.btn('Done', () => this.back(), { cls: 'go' }))));
+    drawAll(); drawSteer();
+    return {
+      /* no data-default button on this screen: initial focus lands on the first
+         row, so the mount-time scrollIntoView keeps the diagram in view */
+      el, onOpen: () => { raf = requestAnimationFrame(tick); }, onClose: () => { cancelAnimationFrame(raf); },
+      /* while capturing, pad presses belong to the capture (the poll above), not to menu navigation;
+         a keyboard Esc still cancels */
+      onAction: (a, dev) => { if (!capturing) return false; if (a === 'back' && !String(dev).startsWith('pad')) endCapture('Remap cancelled.'); return true; },
+    };
   }
 
   /* ---------- how to play ---------- */
@@ -329,19 +548,22 @@ export class Menus {
     const touch = matchMedia('(pointer: coarse)').matches;
     const key = (...k) => h('span', { class: 'keys' }, k.map(x => h('kbd', {}, x)));
     // each action, and how to do it on each kind of control; the screen shows one kind at a time
+    // the controller column is read from the live bindings, so it stays true after a remap
+    const B = this.app.input.padBinds, gp0 = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(g => g && g.connected), D = a => describePadBind(B, a, padFamily(gp0?.id)), withTrig = (a, idx, word) => B[a].includes(idx) ? D(a) : `${D(a)} or ${word}`;
+    const padRows = [['Steer', this.app.input.padSteer === 'dpad' ? 'D-pad' : this.app.input.padSteer === 'stick' ? 'Left stick' : 'Left stick or D-pad'],
+      ['Accelerate', withTrig('accelerate', 7, 'right trigger')], ['Drift and hop', D('drift')], ['Use item', D('item')],
+      ['Brake and reverse', withTrig('brake', 6, 'left trigger')], ['Look behind', D('rear')], ['Pause', D('pause')]];
     const HOW = {
       kb: [['Steer', [key('A', 'D'), 'or', key('←', '→')]], ['Accelerate', [key('W'), 'or', key('↑')]], ['Drift and hop', key('Space')], ['Use item', [key('E'), 'or', key('Enter')]], ['Brake and reverse', [key('S'), 'or', key('↓')]], ['Look behind', key('Q')], ['Pause', key('Esc')]],
-      pad: [['Steer', 'Left stick'], ['Accelerate', 'A or right trigger'], ['Drift and hop', 'Right bumper or X'], ['Use item', 'Left bumper or Y'], ['Brake and reverse', 'B or left trigger'], ['Look behind', 'Press the right stick'], ['Pause', 'Start']],
+      pad: padRows,
     };
     const tips = touch ? [
       ['Drift for speed', 'Steer hard through a turn and the kart hops into a drift. Sparks go blue, orange, then purple. Straighten up to boost.'],
-      ['Start with a rocket', 'Press the right side just after the 2 appears.'],
       ['Collect coins', 'Each coin makes you faster, up to ten.'],
       ['Follow closely', 'Tuck in behind a kart to slingshot past.'],
       ['Throw it backward', 'Use an item while braking to send it behind you.'],
     ] : [
       ['Drift for speed', 'Hold drift through a turn. Sparks go blue, orange, then purple. Let go to boost.'],
-      ['Start with a rocket', 'Hold accelerate just after the 2 appears.'],
       ['Trick off ramps', 'Press drift as you leave a ramp for a boost.'],
       ['Collect coins', 'Each coin makes you faster, up to ten.'],
       ['Follow closely', 'Tuck in behind a kart to slingshot past.'],
@@ -362,8 +584,9 @@ export class Menus {
     }
     const el = h('div', {}, this.header('How to play'), h('div', { class: 'howto' + (touch ? ' touch' : '') },
       controls,
-      h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1])))))),
-      h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true }), this.btn('See the items', () => this.open('items'))));
+      h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1]))))),
+      installPanel()),
+      h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true }), this.btn('Controller buttons', () => this.open('pad')), this.btn('See the items', () => this.open('items'))));
     return { el };
   }
 
@@ -386,7 +609,7 @@ export class Menus {
   s_records() {
     const A = this.app, st = A.save.data.stats;
     const rows = TRACKS.map(t => h('tr', {}, h('th', {}, t.name), ...CC_LIST.map(cc => h('td', {}, A.save.bestFor(t.id, cc)?.race ? fmtTime(A.save.bestFor(t.id, cc).race) : '–')), h('td', {}, A.save.bestFor(t.id, 'tt')?.race ? fmtTime(A.save.bestFor(t.id, 'tt').race) : '–')));
-    const el = h('div', {}, this.header('Records', `${st.races} races · ${st.wins} wins`), h('div', { class: 'panel records' },
+    const el = h('div', {}, this.header('Records', `${st.races} races · ${st.wins} wins · ${st.coins} coins banked · ${st.hitsGiven} hostile takeovers`), h('div', { class: 'panel records' },
       h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Track'), ...CC_LIST.map(cc => h('th', {}, CLASSES[cc].label)), h('th', {}, 'Time trial'))), h('tbody', {}, rows))));
     return { el };
   }

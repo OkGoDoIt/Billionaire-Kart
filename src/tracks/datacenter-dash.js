@@ -264,6 +264,7 @@ export default {
 
 const TOWERS = [{ x: 252, z: -168 }, { x: 106, z: -262 }];
 const PIPE_X = [2, 8, 14];
+const RACK_TILE = 4.8;   // metres of rack front per repeat of the rack texture (four 1.2 m cabinets)
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif', SANS = '"Arial Black", "Helvetica Neue", Arial, sans-serif', MONO = '"Courier New", Courier, monospace';
 const BOARDS = [
   [6.6, -1, 16, 'YOUR LAKE, NOW IN THE CLOUD', '#1f6bff', '#ffffff'], [16.3, -1, 16, 'CARBON NEUTRAL BY 2099', '#16a34a', '#ffffff'],
@@ -474,12 +475,12 @@ function rackKit(THREE) {
   for (const t of frames) t.wrapT = THREE.ClampToEdgeWrapping;
   const mat = new THREE.MeshStandardMaterial({ map: rackTex, emissiveMap: frames[0], emissive: 0xffffff, emissiveIntensity: 2.6, roughness: 0.5, metalness: 0.3 });
   /* The painted rack front (assets/tracks/datacenter-dash/rack-front.webp, prompt in tools/prompts/datacenter-dash.md):
-     two copies stacked in the cabinet band so the units keep their proportions on a 3 m rack, and the blink frames
+     drawn over the cabinet band (4.8 m of rack per repeat, so the units keep their painted proportions), and the blink frames
      rebuilt from its own status lights, so the LEDs that flash are the ones painted on the servers. */
   const img = new Image();
   img.onload = () => {
-    const g = rackTex.image.getContext('2d'), half = FR / 2;
-    g.drawImage(img, 0, 0, RW, half); g.drawImage(img, 0, half, RW, half);
+    const g = rackTex.image.getContext('2d');
+    g.drawImage(img, 0, 0, RW, FR);   // one cabinet height per rack: chunky 1.2 m cabinets at their painted proportions
     rackTex.needsUpdate = true;
     const src = g.getImageData(0, 0, RW, FR).data;
     const led = (r, gg, b) => (gg > 170 && r < 140 && gg - r > 70) || (r > 215 && gg > 110 && gg < 195 && b < 90);   // green, cyan, amber
@@ -817,7 +818,7 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
   const DV = { x: 128, z: -13.5 };
   const inDV = (x, zm) => Math.abs(x - DV.x) < 5.4 && Math.abs(zm - DV.z) < 4.4;
   const ruv = (f, a, b, c, d) => {
-    if (f === 'pz' || f === 'nz') { const s = f === 'pz' ? 1 : -1; return [[s * a[0] / 2.4, 0.2 + 0.8 * (a[1] - FY) / HR], [s * b[0] / 2.4, 0.2 + 0.8 * (b[1] - FY) / HR], [s * c[0] / 2.4, 0.2 + 0.8 * (c[1] - FY) / HR], [s * d[0] / 2.4, 0.2 + 0.8 * (d[1] - FY) / HR]]; }
+    if (f === 'pz' || f === 'nz') { const s = f === 'pz' ? 1 : -1; return [[s * a[0] / RACK_TILE, 0.2 + 0.8 * (a[1] - FY) / HR], [s * b[0] / RACK_TILE, 0.2 + 0.8 * (b[1] - FY) / HR], [s * c[0] / RACK_TILE, 0.2 + 0.8 * (c[1] - FY) / HR], [s * d[0] / RACK_TILE, 0.2 + 0.8 * (d[1] - FY) / HR]]; }
     return [[0, 0.04], [0.2, 0.04], [0.2, 0.16], [0, 0.16]];
   };
   const labels = [];
@@ -1166,7 +1167,7 @@ function roadHall(ctxs, cfg, kit) {
         if (skipRack(a, b, sd, r) || gapAt(k, r, sd)) continue;
         const hgt = (2.9 + r * 0.95) * (0.92 + 0.08 * wideK(a)), y0 = -0.05;
         const R0 = at(a, sd * l0a, y0), R1 = at(b, sd * l0b, y0), R2 = at(b, sd * l0b, y0 + hgt), R3 = at(a, sd * l0a, y0 + hgt);
-        const fu0 = sAt(k) / 2.4, fu1 = fu0 + L / 2.4;
+        const fu0 = sAt(k) / RACK_TILE, fu1 = fu0 + L / RACK_TILE;
         if (sd > 0) racks.quad(R0, R1, R2, R3, [[fu0, 0.2], [fu1, 0.2], [fu1, 1], [fu0, 1]]); else racks.quad(R1, R0, R3, R2, [[fu1, 0.2], [fu0, 0.2], [fu0, 1], [fu1, 1]]);
         const T0 = at(a, sd * l1a, y0 + hgt), T1 = at(b, sd * l1b, y0 + hgt);
         if (sd > 0) dark.quad(R3, R2, T1, T0, DK); else dark.quad(R2, R3, T0, T1, DK);
@@ -1462,7 +1463,7 @@ function edgePods({ THREE, sc, rng, rackSys, atlas }) {
   add(box(12.2, 2.9, 2.6, 0.12, 1), shell, 0, 1.7, 0);
   add(new THREE.BoxGeometry(12.5, 0.3, 2.8), plastic(0x2c323c, 0.7), 0, 0.15, 0);
   const front = new THREE.PlaneGeometry(11.0, 2.2), uv = front.attributes.uv;
-  for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * 11.0 / 2.4, 0.2 + 0.8 * uv.getY(k));
+  for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * 11.0 / RACK_TILE, 0.2 + 0.8 * uv.getY(k));
   add(front, rackSys.mat, 0, 1.75, 1.315);
   for (const x of [-3.8, 0, 3.8]) { add(cyl(0.85, 0.85, 0.3, 14), plastic(0x3a414c, 0.5, 0.4), x, 3.3, 0); add(cyl(0.55, 0.55, 0.32, 10), plastic(0x14171c, 0.6), x, 3.32, 0); }
   const parts = partsOf(pod), spots = [];

@@ -30,7 +30,7 @@ const mobile = !!opt.mobile;
 const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1280, height: 720 }, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
 const page = await ctx.newPage();
 const errors = [], fails = [];
-page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+page.on('pageerror', e => errors.push('pageerror: ' + e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 4).map(l => l.trim()).join(' <- ')));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 const shot = async name => { await page.screenshot({ path: join(out, name + '.jpg'), type: 'jpeg', quality: 85 }); };
 const key = async (k, wait = 260) => { await page.keyboard.press(k); await page.waitForTimeout(wait); };

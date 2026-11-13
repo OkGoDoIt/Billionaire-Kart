@@ -29,7 +29,7 @@ const swiftshader = { headless: true, args: ['--enable-unsafe-swiftshader', '--u
 if (process.env.CI || process.platform === 'linux') browser = await chromium.launch(swiftshader);
 else try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] }); }
 catch { browser = await chromium.launch(swiftshader); }
-const mobile = !!opt.mobile;
+const mobile = !!opt.mobile, CI = !!process.env.CI;
 const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1280, height: 720 }, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
 const page = await ctx.newPage();
 /* The title tap enters full screen on touch devices, and headless Chromium on Linux refuses to resize a
@@ -73,7 +73,7 @@ const luma = () => page.evaluate(() => new Promise(res => requestAnimationFrame(
 const tapOrKey = async (selector, k) => { if (mobile) { await page.locator(selector).first().tap(); await page.waitForTimeout(350); } else await key(k); };
 
 try {
-  await page.goto(base, { waitUntil: 'load' });
+  await page.goto(base + (CI ? '?q=low' : ''), { waitUntil: 'load' });   // a CI runner renders in software: the lowest tier keeps the race near real time
   await page.waitForFunction('window.BK && BK.app && BK.app.menus.screen', null, { timeout: 30000 });
   await page.waitForTimeout(1800); await expect('title', 'boot'); await shot('01-title');
   if (mobile) await page.locator('.screen-title').tap(); else await key('Enter');
@@ -175,7 +175,7 @@ try {
   // let an AI driver finish a shortened race for us
   await page.evaluate(`(async () => { const { AIDriver } = await import('./src/race/ai.js'); const { makeRng } = await import('./src/core/util.js'); const s = BK.session; s.race.laps = 1; s.autopilots = s.race.players.map(k => new AIDriver(k, 'hard', makeRng(5))); })()`);
   // a Quick Race ends on the podium now (#92); the full table is one confirm past it
-  await page.waitForFunction('BK.app.menus.screen?.spec.name === "racePodium"', null, { timeout: 120000 });
+  await page.waitForFunction('BK.app.menus.screen?.spec.name === "racePodium"', null, { timeout: CI ? 300000 : 120000 });
   await page.waitForTimeout(1500); await shot('13-podium');
   if (!(await page.evaluate("!!BK.app.showroom?.podium && BK.app.showroom.slots.length === 3"))) fails.push('quick race podium: the showroom is not showing a three-kart podium');
   await tapOrKey('.screen-racePodium .btn.go', 'Enter');

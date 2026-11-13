@@ -183,7 +183,7 @@ export default {
     { name: 'lake bed', from: 9.35, to: 14.55, path: [[52, -400], [30, -393], [-12, -393], [-40, -398], [-70, -385], [-86, -378]], when: race => race.lakeLap >= race.laps },
   ],
   // the opening shot: the whole lake, the pipes drinking it, and a gas plant smoking behind
-  intro: [{ pos: [168, 62, -292], pos1: [138, 52, -312], look: [-60, 14, -405], look1: [-80, 12, -395], fov: 50, dur: 3 }],
+  intro: [{ pos: [214, 74, -318], pos1: [196, 64, -340], look: [-60, 14, -405], look1: [-80, 12, -395], fov: 50, dur: 3 }],
   tunnels: HALL_RANGES.map(({ from, to }) => ({ from, to })),
   bridges: [{ from: 4.0, to: 6.0 }],
   zones: [

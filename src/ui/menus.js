@@ -54,6 +54,16 @@ export class Menus {
   close() { if (this.screen) { this.screen.el.remove(); this.screen.onClose?.(); } this.screen = null; this.focusEl = null; this.stack.length = 0; }
   reset(name, params = {}) { this.stack.length = 0; this._mount({ name, params }); }
   _mount(spec) {
+    // Screen changes in menu-land wear the checker wipe (#92) as a flourish over the
+    // change: the checkerboard sweeps in and out while the mount itself stays
+    // synchronous — input and anything sampling screen state never wait on an
+    // animation. Scene changes are the ones that swap under full cover, via
+    // App.transition. Screens over a live race (pause, results) get no wipe.
+    const A = this.app;
+    if (A.wipe && this.screen && this.screen.spec.name !== spec.name && (!A.session || A.attract)) A.wipe.through(null, { cover: 200, reveal: 240 });
+    this._doMount(spec);
+  }
+  _doMount(spec) {
     if (this.screen) { this.screen.el.remove(); this.screen.onClose?.(); }
     const def = this['s_' + spec.name](spec.params || {});
     def.spec = spec; def.el.classList.add('menu-screen', 'screen-' + spec.name);
@@ -334,6 +344,22 @@ export class Menus {
         results.length > 2 && h('span', {}, h('b', {}, results[results.length - 1].racer.name + ': '), `“${results[results.length - 1].racer.barks.lose}”`)),
       h('div', { class: 'foot' }, buttons)));
     return { el, onBack: () => false };
+  }
+
+  /* ---------- single-race podium (the cup finish, borrowed for a Quick Race) ---------- */
+  s_racePodium({ results, track, records, best }) {
+    const A = this.app;
+    const top3 = [...results].sort((a, b) => a.rank - b.rank).slice(0, 3);
+    const multi = results.filter(r => r.isPlayer).length > 1;
+    const head = best === 1 ? 'You win!' : best === 2 ? 'Second place' : best === 3 ? 'Third place' : `${best}${ordinalSuffix(best)} place`;
+    const el = h('div', {}, h('div', { class: 'panel cupres' },
+      h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, track.name))),
+      records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
+      h('div', { class: 'res-table final' }, top3.map((r, i) => h('div', { class: 'res-row' + (r.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(r.racer.color)}` + (r.isPlayer ? `;--pc:${PLAYER_COLORS[r.playerIndex]}` : '') },
+        h('b', { class: 'res-rank' }, String(r.rank)), h('img', { src: r.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, r.racer.name, r.isPlayer && h('em', {}, multi ? `P${r.playerIndex + 1}` : 'You')), h('span', { class: 'res-time' }, fmtTime(r.time))))),
+      h('p', { class: 'res-quote' }, h('span', {}, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`)),
+      h('div', { class: 'foot' }, this.btn('Full results', () => A.showResults(), { cls: 'go', def: true }))));
+    return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 
   s_cupResults({ cup, standings, playerRanks, stars }) {

@@ -66,12 +66,17 @@
   .stat { font-size: calc(var(--u) * 1.75); }
   .btn.r-go { padding: calc(var(--u) * 1.4) calc(var(--u) * 2) calc(var(--u) * 1.1); }
 
-  /* engine class: one per row */
-  .cards.three { grid-template-columns: 1fr; gap: calc(var(--u) * 1.6); }
+  /* engine class: one per row. Scoped to the setup screen: the grid's class is .four,
+     shared with the player-count screen (true since 200cc became the fourth class), so an
+     unscoped .four rule would restack the players too. As .three these rules matched
+     nothing, the setup grid fell through to the players' two-column .four grid, and a
+     column cannot shrink under a card's fixed 19u number column — the grid overflowed
+     the screen sideways and the right-hand classes sat off-screen, untappable. */
+  .screen-setup .cards { grid-template-columns: 1fr; gap: calc(var(--u) * 1.6); }
   .card.cc { display: grid; grid-template-columns: calc(var(--u) * 19) 1fr; grid-template-rows: auto auto; align-items: center; column-gap: calc(var(--u) * 1.6); text-align: left; padding: calc(var(--u) * 3) calc(var(--u) * 2.4); }
   .cc-n { grid-row: 1 / 3; font-size: calc(var(--u) * 5.6); text-align: center; }
   /* the choices sit in the middle of the screen, the action at the bottom under the thumb */
-  .screen-setup .cards.three { margin-top: auto; }
+  .screen-setup .cards { margin-top: auto; }
   .screen-setup .foot { margin-top: auto; padding-top: calc(var(--u) * 2.4); }
   .screen-setup .foot .btn { width: 100%; }
   .cc-l { margin-top: 0; align-self: end; }
@@ -136,6 +141,9 @@
 
   /* results: the panel at the bottom, the race shows above */
   .screen-results, .screen-cupResults { align-items: center; justify-content: flex-end; background: linear-gradient(180deg, rgba(11,13,32,0), rgba(11,13,32,0.3) 40%, rgba(11,13,32,0.6)); padding-left: calc(var(--u) * 2 + var(--safe-l)); padding-right: calc(var(--u) * 2 + var(--safe-r)); }
+  /* these two screens pad their sides at 2u, so their scroll fade bleeds 2u too — at the
+     generic 3u it overshot the screen by 1u a side and let both screens scroll sideways */
+  .screen-results .scroll-fade, .screen-cupResults .scroll-fade { margin-left: calc(var(--u) * -2 - var(--safe-l)); margin-right: calc(var(--u) * -2 - var(--safe-r)); }
   .panel.results, .panel.cupres { width: 100%; margin: auto 0 0; }
   .panel.results { padding: calc(var(--u) * 1.8) calc(var(--u) * 1.8); }
   .panel.results .badge { position: static; display: table; margin-top: calc(var(--u) * 0.8); }

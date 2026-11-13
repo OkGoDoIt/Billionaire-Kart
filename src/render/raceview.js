@@ -281,6 +281,26 @@ export class RaceView {
         if (m.userData.wings) for (const w of m.userData.wings) w.rotation.z = Math.sin(this.time * (o.type === 'antitrust' ? 14 : 26)) * 0.7 * Math.sign(w.scale.x);
         if (o.type === 'pinkslip') { m.position.y = o.y - 0.5; m.rotation.x += dt * (o.phase === 'arc' ? 9 : 0); if (o.phase === 'sit') { const f = 1 + Math.sin(this.time * 26) * 0.08; m.scale.setScalar(f); } if (o.phase === 'arc' && this.fx.count(45, dt)) this.fx.dust(o.x, o.y - 0.3, o.z, 0, 0.8, 0, [0.45, 0.44, 0.48], 0.8, 0.55, 0.5); }
         if (o.type === 'antitrust' && this.fx.count(50, dt)) this.fx.add.emit({ x: o.x, y: o.y, z: o.z, vx: 0, vy: 0, vz: 0, color: [0.3, 0.55, 1], size: 1.1, life: 0.4, alpha: 0.9 });
+        if (o.type === 'antitrust') {
+          // the strike telegraph: a target ring on the road under the victim that
+          // closes from the full blast footprint to the strike point as the hover runs out
+          const hovering = o.phase === 'hover' || o.phase === 'dive';
+          let ring = m.userData.ring;
+          if (hovering && !ring) {
+            ring = m.userData.ring = new THREE.Mesh(
+              new THREE.RingGeometry(0.86, 1, 40),
+              new THREE.MeshBasicMaterial({ color: 0x4d8dff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+            ring.rotation.x = -Math.PI / 2; ring.renderOrder = 5; this.root.add(ring);
+          }
+          if (ring) {
+            ring.visible = hovering;
+            if (hovering) {
+              const f = o.phase === 'dive' ? 1 : (o.hoverFrac || 0);
+              ring.scale.setScalar((7.5 - 4.9 * f) * (1 + Math.sin(this.time * 10) * 0.05));
+              ring.position.set(o.mx ?? o.x, (o.my ?? o.y) + 0.15, o.mz ?? o.z);
+            }
+          }
+        }
         if (o.type === 'tweet' && this.fx.count(40, dt)) this.fx.add.emit({ x: o.x, y: o.y, z: o.z, vx: 0, vy: 0.5, vz: 0, color: [0.3, 0.7, 1], size: 0.4, life: 0.3, alpha: 0.9 });
         if (o.type === 'subpoena' && this.fx.count(30, dt)) this.fx.add.emit({ x: o.x, y: o.y, z: o.z, vx: 0, vy: 0.5, vz: 0, color: [1, 0.9, 0.6], size: 0.35, life: 0.25, alpha: 0.8 });
       } else {
@@ -292,7 +312,7 @@ export class RaceView {
     };
     for (const h of items.hazards) sync(h, 'hazard');
     for (const s of items.shots) sync(s, 'shot');
-    for (const [id, m] of this.things) if (!seen.has(id)) { this.root.remove(m); this.things.delete(id); }
+    for (const [id, m] of this.things) if (!seen.has(id)) { this.root.remove(m); if (m.userData.ring) this.root.remove(m.userData.ring); this.things.delete(id); }
   }
 
   dispose() {

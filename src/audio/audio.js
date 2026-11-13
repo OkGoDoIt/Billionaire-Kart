@@ -363,6 +363,7 @@ export class AudioEngine {
       case 'shock': this.play('shock', { vol: this._nearPoint(race, e.data.x, e.data.z, 70) }); break;
       case 'ink': this.play('ink', { vol: 0.6 }); break;
       case 'blueArrive': if (e.data.target.isPlayer) this.play('warning', { rate: 1.3, gap: 0.5 }); break;
+      case 'blueStrike': if (e.data.target.isPlayer) this.play('warning', { rate: 1.7, gap: 0.25 }); break;
       case 'finish': this._exciteCrowd(0.15); break;   // every kart home stirs the grandstand a little
       case 'shotBounce': this.play('bounce', { vol: this._nearPoint(race, e.data.x, e.data.z, 40) * 0.6 }); break;
     }

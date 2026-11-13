@@ -4,7 +4,7 @@ import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { CUPS, cupTracks } from '../content/cups.js';
 import { CLASSES } from '../race/kart.js';
-import { DEVICE_LABEL, PAD_ACTIONS, PAD_STEER_SOURCES, buttonName, describePadBind, defaultPadBindings, applyPadBind } from '../core/input.js';
+import { DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindings, applyPadBind, padFamily } from '../core/input.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
 import { installCard, installButton, installPanel, onInstallChange } from './install.js';
@@ -17,6 +17,34 @@ const h = (tag, attrs = {}, ...kids) => {
   return e;
 };
 const hex = n => '#' + n.toString(16).padStart(6, '0');
+
+/* The Controller panel's pad picture (issue #194): one generic gamepad, drawn
+   once. Every physical button is a [data-btn] group in standard-mapping order;
+   pressing it adds .lit. Face buttons carry an Xbox letter (.tx) and a
+   PlayStation shape (.sh); CSS shows one set per naming family (.fam-ps). */
+const PAD_SVG = `<svg class="pad-svg" viewBox="0 0 360 216" role="img" aria-label="Controller diagram">
+  <g class="pb" data-btn="6"><rect x="56" y="12" width="58" height="18" rx="9"/><text data-txt="6" x="85" y="25.5">LT</text></g>
+  <g class="pb" data-btn="7"><rect x="246" y="12" width="58" height="18" rx="9"/><text data-txt="7" x="275" y="25.5">RT</text></g>
+  <g class="pb" data-btn="4"><rect x="56" y="34" width="58" height="17" rx="8.5"/><text data-txt="4" x="85" y="46.5">LB</text></g>
+  <g class="pb" data-btn="5"><rect x="246" y="34" width="58" height="17" rx="8.5"/><text data-txt="5" x="275" y="46.5">RB</text></g>
+  <path class="pad-body" d="M104 54h152c30 0 46 16 54 44l12 50c5 21-5 38-24 42-15 3-28-4-37-19l-13-22H112l-13 22c-9 15-22 22-37 19-19-4-29-21-24-42l12-50c8-28 24-44 54-44z"/>
+  <g class="pb" data-btn="10"><circle cx="106" cy="100" r="18"/><circle class="inner" cx="106" cy="100" r="8"/></g>
+  <g class="pb" data-btn="8"><circle cx="150" cy="74" r="8"/></g>
+  <g class="pb" data-btn="9"><circle cx="210" cy="74" r="8"/></g>
+  <g class="pb" data-btn="16"><circle cx="180" cy="100" r="10"/></g>
+  <g class="pb" data-btn="3"><circle cx="264" cy="76" r="15"/><text class="tx" x="264" y="80.5">Y</text><g class="sh"><path d="M264 69.5 270.5 80.5 257.5 80.5Z"/></g></g>
+  <g class="pb" data-btn="2"><circle cx="236" cy="104" r="15"/><text class="tx" x="236" y="108.5">X</text><g class="sh"><rect x="230" y="98" width="12" height="12"/></g></g>
+  <g class="pb" data-btn="1"><circle cx="292" cy="104" r="15"/><text class="tx" x="292" y="108.5">B</text><g class="sh"><circle cx="292" cy="104" r="6"/></g></g>
+  <g class="pb" data-btn="0"><circle cx="264" cy="132" r="15"/><text class="tx" x="264" y="136.5">A</text><g class="sh"><path d="M258.5 126.5 269.5 137.5M269.5 126.5 258.5 137.5"/></g></g>
+  <g class="pb" data-btn="11"><circle cx="214" cy="148" r="16"/><circle class="inner" cx="214" cy="148" r="7"/></g>
+  <rect class="pad-deco" x="142" y="139" width="15" height="15"/>
+  <g class="pb" data-btn="12"><rect x="142" y="122" width="15" height="17" rx="2"/></g>
+  <g class="pb" data-btn="13"><rect x="142" y="154" width="15" height="17" rx="2"/></g>
+  <g class="pb" data-btn="14"><rect x="125" y="139" width="17" height="15" rx="2"/></g>
+  <g class="pb" data-btn="15"><rect x="157" y="139" width="17" height="15" rx="2"/></g>
+</svg>`;
+const DIAGRAM_TEXT = { xb: { 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT' }, ps: { 4: 'L1', 5: 'R1', 6: 'L2', 7: 'R2' } };
+const STEER_CHOICES = [['stick', 'Left stick'], ['both', 'Stick + D-pad'], ['dpad', 'D-pad']];
 /* Cup art: a gold, silver, or bronze trophy for a podium finish, and a three-star rating. */
 const trophyImg = rank => rank >= 1 && rank <= 3 ? h('img', { class: 'trophy', src: `assets/ui/trophy-${['gold', 'silver', 'bronze'][rank - 1]}.webp`, alt: '' }) : null;
 const starRow = n => h('span', { class: 'star-row', role: 'img', 'aria-label': `${n} of 3 stars` }, [0, 1, 2].map(i => h('img', { class: i < n ? '' : 'off', src: 'assets/ui/star.webp', alt: '' })));
@@ -421,38 +449,54 @@ export class Menus {
     return { el, onClose: () => fsOff?.() };
   }
 
-  /* ---------- controller buttons ---------- */
+  /* ---------- controller buttons ----------
+     One diagram, six rows, one name per button (issue #194). Pressing a
+     physical button lights it on the diagram and names it in the readout;
+     tapping a row (or focusing it and pressing confirm) makes the row itself
+     listen for the next press — there are no per-row Remap links. Menus
+     derive confirm/back from the Accelerate/Brake buttons, so they are not
+     rows of their own. The "also" buttons keep working but are never shown. */
   s_pad() {
     const A = this.app, S = A.save.settings, input = A.input;
     const persist = () => { S.padBinds = JSON.parse(JSON.stringify(input.padBinds)); S.padSteer = input.padSteer; A.save.write(); A.applySettings(); };
-    const status = h('p', { class: 'pad-status' });
-    const readout = h('div', { class: 'pad-readout' }, 'Press any button on your controller…');
-    let capturing = null, sawRelease = false, prev = new Set(), raf = 0, hitTimer = 0;
+    let fam = 'xb';   // naming family of the connected pad; Xbox-style until a PlayStation pad shows up
+    const readout = h('div', { class: 'pad-readout' }, 'Press any button on your controller — it lights up here.');
+    const diagram = h('div', { class: 'pad-diagram-wrap', html: PAD_SVG });
+    const btnEls = new Map(), txtEls = new Map();
+    diagram.querySelectorAll('[data-btn]').forEach(el => btnEls.set(+el.dataset.btn, el));
+    diagram.querySelectorAll('[data-txt]').forEach(el => txtEls.set(+el.dataset.txt, el));
+    let capturing = null, sawRelease = false, prev = new Set(), raf = 0, flashN = -1, flashUntil = 0;
     const rows = new Map();
     const labelOf = id => PAD_ACTIONS.find(a => a.id === id).label;
     const drawRow = a => {
       const r = rows.get(a.id); if (!r) return;
-      r.binds.replaceChildren(...input.padBinds[a.id].map((n, i) => h('span', { class: 'bind-chip' + (i ? ' alt' : '') }, `${buttonName(n)} · ${n}`)));
       r.el.classList.toggle('capturing', capturing === a.id);
-      r.cap.textContent = capturing === a.id ? 'Press a button… (Esc or tap to cancel)' : 'Remap';
+      r.name.textContent = capturing === a.id ? 'Press a button…' : buttonName(input.padBinds[a.id][0], fam);
+      r.name.classList.toggle('listening', capturing === a.id);
     };
     const drawAll = () => { for (const a of PAD_ACTIONS) drawRow(a); };
-    const startCapture = id => { capturing = id; sawRelease = prev.size === 0; readout.textContent = `Press the button for ${labelOf(id)}…`; drawAll(); };
+    const setFamily = f => {
+      if (f === fam && diagram.classList.contains('fam-set')) return;
+      fam = f; diagram.classList.add('fam-set'); diagram.classList.toggle('fam-ps', fam === 'ps');
+      for (const [n, el] of txtEls) el.textContent = DIAGRAM_TEXT[fam][n] || el.textContent;
+      drawAll();
+    };
+    const startCapture = id => { capturing = id; sawRelease = prev.size === 0; readout.textContent = `Press the button for ${labelOf(id)} — or tap the row again to cancel.`; drawAll(); };
     const endCapture = msg => { capturing = null; if (msg) readout.textContent = msg; drawAll(); };
     const doBind = (id, n) => {
       const res = applyPadBind(input.padBinds, id, n);
-      let msg = `${labelOf(id)} is now ${buttonName(n)} (button ${n}).`;
-      if (res.swapped) msg += ` Swapped with ${labelOf(res.swapped)}.`;
-      if (res.droppedFrom) msg += ` Button ${n} no longer also works for ${labelOf(res.droppedFrom)}.`;
+      let msg = `${labelOf(id)} is now the ${buttonName(n, fam)} button.`;
+      if (res.swapped) msg += ` It swapped with ${labelOf(res.swapped)}.`;
       persist(); A.audio?.ui('select'); endCapture(msg);
     };
     const showPress = n => {
       const acts = PAD_ACTIONS.filter(a => input.padBinds[a.id].includes(n)).map(a => a.label);
-      readout.textContent = `Button ${n} · ${buttonName(n)} — ${acts.length ? acts.join(' · ') : 'not bound to anything'}`;
-      clearTimeout(hitTimer);
-      for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.toggle('hit', input.padBinds[a.id].includes(n));
-      hitTimer = setTimeout(() => { for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.remove('hit'); }, 700);
+      readout.textContent = `${buttonName(n, fam)} — ${acts.length ? acts.join(' · ') : 'not used'}`;
+      flashN = n; flashUntil = performance.now() + 650;
     };
+    /* Tapping a button on the diagram does what pressing it does — and while a
+       row is listening, tapping the diagram is a way to bind without a pad. */
+    for (const [n, el] of btnEls) el.addEventListener('click', () => { if (capturing) doBind(capturing, n); else showPress(n); });
     /* While the panel is open it polls the pads itself: menu navigation only
        reports the mapped actions, but discovery needs every raw button. */
     const tick = () => {
@@ -460,34 +504,39 @@ export class Menus {
       const gps = navigator.getGamepads ? navigator.getGamepads() : [];
       let pad = null; const pressed = new Set();
       for (const gp of gps) { if (!gp || !gp.connected) continue; pad = pad || gp; gp.buttons.forEach((btn, i) => { if (btn.pressed || btn.value > 0.5) pressed.add(i); }); }
-      const sTxt = pad ? `Connected: ${pad.id.replace(/\s*\(.*?\)\s*/g, '').trim().slice(0, 42) || 'Controller'}` : 'No controller connected — plug one in or pair it, then press any button.';
-      if (status.textContent !== sTxt) status.textContent = sTxt;
+      if (pad) setFamily(padFamily(pad.id));
       const fresh = [...pressed].filter(i => !prev.has(i));
       if (capturing) {
         if (!pressed.size) sawRelease = true;               // the press that opened capture must clear first
         else if (sawRelease && fresh.length) doBind(capturing, fresh[0]);
       } else if (fresh.length) showPress(fresh[fresh.length - 1]);
+      /* the diagram and the rows light up live, for exactly as long as the press lasts */
+      const lit = capturing ? new Set() : new Set([...pressed, ...(performance.now() < flashUntil ? [flashN] : [])]);
+      for (const [n, el] of btnEls) el.classList.toggle('lit', lit.has(n));
+      for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.toggle('hit', !capturing && [...pressed].some(n => input.padBinds[a.id].includes(n)));
       prev = pressed;
     };
     const list = h('div', { class: 'pad-rows' }, PAD_ACTIONS.map(a => {
-      const binds = h('span', { class: 'binds' }), cap = h('span', { class: 'pad-cap' }, 'Remap');
-      const el = h('div', { class: 'pad-row', 'data-f': true, onclick: () => { if (capturing) endCapture('Remap cancelled.'); else startCapture(a.id); } },
-        h('span', { class: 'pad-label' }, a.label), binds, cap);
-      rows.set(a.id, { el, binds, cap });
+      const name = h('span', { class: 'bind-name' });
+      const el = h('div', { class: 'pad-row', 'data-f': true, onclick: () => { if (capturing === a.id) endCapture('Tap an action, then press the button for it.'); else if (!capturing) startCapture(a.id); } },
+        h('span', { class: 'pad-label' }, a.label), name);
+      rows.set(a.id, { el, name });
       return el;
     }));
-    // steering source, shaped like the Options cycles
-    const steerVal = h('b', {}, PAD_STEER_SOURCES.find(([id]) => id === input.padSteer)[1]);
-    const setSteer = d => { const i = PAD_STEER_SOURCES.findIndex(([id]) => id === input.padSteer); const n = PAD_STEER_SOURCES[(i + d + PAD_STEER_SOURCES.length) % PAD_STEER_SOURCES.length]; input.padSteer = n[0]; steerVal.textContent = n[1]; persist(); A.audio?.ui('move'); };
-    const steerRow = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: () => setSteer(1) }, h('span', {}, 'Steering'), h('div', { class: 'opt-ctl' }, steerVal));
-    steerRow.addEventListener('adjust', e => setSteer(e.detail));
-    const el = h('div', {}, this.header('Controller', 'Press buttons to see what they do. Pick an action, then press the button you want for it.'),
-      h('div', { class: 'panel pad' }, status, readout, list, steerRow,
-        h('p', { class: 'pad-note' }, 'One mapping covers every controller. Keyboard and touch controls are unchanged. RT and LT always double as the gas and brake pedals.'),
-        h('div', { class: 'foot' }, this.btn('Reset to defaults', () => { input.padBinds = defaultPadBindings(); input.padSteer = 'both'; steerVal.textContent = PAD_STEER_SOURCES[0][1]; persist(); endCapture('Shipped defaults restored.'); A.audio?.ui('back'); }), this.btn('Done', () => this.back(), { cls: 'go', def: true }))));
-    drawAll();
+    // steering: three plain choices, the current one filled in
+    const segBtns = new Map();
+    const drawSteer = () => { for (const [id, b] of segBtns) b.classList.toggle('sel', input.padSteer === id); };
+    const steerRow = h('div', { class: 'pad-steer' }, h('span', { class: 'pad-label' }, 'Steering'),
+      h('div', { class: 'seg' }, STEER_CHOICES.map(([id, label]) => { const b = h('button', { class: 'seg-btn', 'data-f': true, onclick: () => { input.padSteer = id; persist(); drawSteer(); A.audio?.ui('move'); } }, label); segBtns.set(id, b); return b; })));
+    const el = h('div', {}, this.header('Controller', 'Tap an action, then press the button for it.'),
+      h('div', { class: 'panel pad' }, diagram, readout, list, steerRow,
+        h('p', { class: 'pad-note' }, 'The triggers always work as the gas and brake pedals too.'),
+        h('div', { class: 'foot' }, this.btn('Reset to defaults', () => { input.padBinds = defaultPadBindings(); input.padSteer = 'both'; drawSteer(); persist(); endCapture('Back to the standard layout.'); A.audio?.ui('back'); }), this.btn('Done', () => this.back(), { cls: 'go' }))));
+    drawAll(); drawSteer();
     return {
-      el, onOpen: () => { raf = requestAnimationFrame(tick); }, onClose: () => { cancelAnimationFrame(raf); clearTimeout(hitTimer); },
+      /* no data-default button on this screen: initial focus lands on the first
+         row, so the mount-time scrollIntoView keeps the diagram in view */
+      el, onOpen: () => { raf = requestAnimationFrame(tick); }, onClose: () => { cancelAnimationFrame(raf); },
       /* while capturing, pad presses belong to the capture (the poll above), not to menu navigation;
          a keyboard Esc still cancels */
       onAction: (a, dev) => { if (!capturing) return false; if (a === 'back' && !String(dev).startsWith('pad')) endCapture('Remap cancelled.'); return true; },
@@ -500,7 +549,7 @@ export class Menus {
     const key = (...k) => h('span', { class: 'keys' }, k.map(x => h('kbd', {}, x)));
     // each action, and how to do it on each kind of control; the screen shows one kind at a time
     // the controller column is read from the live bindings, so it stays true after a remap
-    const B = this.app.input.padBinds, D = a => describePadBind(B, a), withTrig = (a, idx, word) => B[a].includes(idx) ? D(a) : `${D(a)} or ${word}`;
+    const B = this.app.input.padBinds, gp0 = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(g => g && g.connected), D = a => describePadBind(B, a, padFamily(gp0?.id)), withTrig = (a, idx, word) => B[a].includes(idx) ? D(a) : `${D(a)} or ${word}`;
     const padRows = [['Steer', this.app.input.padSteer === 'dpad' ? 'D-pad' : this.app.input.padSteer === 'stick' ? 'Left stick' : 'Left stick or D-pad'],
       ['Accelerate', withTrig('accelerate', 7, 'right trigger')], ['Drift and hop', D('drift')], ['Use item', D('item')],
       ['Brake and reverse', withTrig('brake', 6, 'left trigger')], ['Look behind', D('rear')], ['Pause', D('pause')]];

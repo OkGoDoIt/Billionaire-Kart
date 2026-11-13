@@ -21,7 +21,7 @@
 /* buttons */
 .btn { font-family: var(--display); font-size: calc(var(--u) * 3); color: var(--ink); background: linear-gradient(180deg, #fff, #e8ecf7); border: calc(var(--u) * 0.45) solid var(--ink); border-radius: calc(var(--u) * 2.2); padding: calc(var(--u) * 1.5) calc(var(--u) * 3.6) calc(var(--u) * 1.1); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.2); box-shadow: 0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.42); transition: transform 0.1s, box-shadow 0.1s, filter 0.1s; min-width: calc(var(--u) * 30); letter-spacing: 0.02em; }
 .btn-sub { font-family: var(--body); font-weight: 500; font-size: calc(var(--u) * 1.75); opacity: 0.8; letter-spacing: 0; }
-.btn.focus, .card.focus, .racer-tile.focus, .chip.focus, .opt.focus, .pad-row.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.35); transform: scale(1.045); z-index: 2; }
+.btn.focus, .card.focus, .racer-tile.focus, .chip.focus, .opt.focus, .pad-row.focus, .seg-btn.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.35); transform: scale(1.045); z-index: 2; }
 .btn:active { transform: translateY(calc(var(--u) * 0.5)) scale(1); box-shadow: 0 calc(var(--u) * 0.25) 0 rgba(0,0,0,0.42); }
 .btn.go { background: linear-gradient(180deg, #7dffc9, #2ee6a6); }
 .btn.danger { background: linear-gradient(180deg, #ffb0be, #ff6f8a); }
@@ -200,21 +200,44 @@
 .opt-ctl button { width: calc(var(--u) * 4.6); height: calc(var(--u) * 4.6); border-radius: 50%; border: calc(var(--u) * 0.35) solid var(--ink); background: #fff; color: var(--ink); font-family: var(--display); font-size: calc(var(--u) * 3); line-height: 1; cursor: pointer; }
 
 /* controller panel: the live press readout, then one row per action */
-.panel.pad { width: min(100%, calc(var(--u) * 88)); display: flex; flex-direction: column; gap: calc(var(--u) * 1.1); }
-.pad-status { font-weight: 600; font-size: calc(var(--u) * 2); opacity: 0.85; }
-.pad-readout { font-weight: 700; font-size: calc(var(--u) * 2.2); color: var(--gold); background: rgba(18,20,43,0.9); border: calc(var(--u) * 0.3) solid rgba(255,255,255,0.35); border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 1.1) calc(var(--u) * 2); min-height: calc(var(--u) * 3); }
+.panel.pad { width: min(100%, calc(var(--u) * 88)); display: flex; flex-direction: column; gap: calc(var(--u) * 0.95); padding-top: calc(var(--u) * 2.6); padding-bottom: calc(var(--u) * 2.6); }
+/* the pad picture: one generic gamepad; a pressed button lights gold (.lit).
+   Face buttons show the Xbox letter (.tx) or the PlayStation shape (.sh),
+   whichever family the connected pad uses (.fam-ps on the svg). */
+.pad-diagram-wrap { display: flex; justify-content: center; }
+.pad-svg { width: min(100%, calc(var(--u) * 64), 38vh); height: auto; display: block; }
+.pad-svg .pad-body, .pad-svg .pad-deco { fill: #1b1e38; stroke: rgba(255,255,255,0.55); stroke-width: 1.6; }
+.pad-svg .pb { cursor: pointer; }
+.pad-svg .pb circle, .pad-svg .pb rect { fill: #2b3054; stroke: rgba(255,255,255,0.8); stroke-width: 1.6; }
+.pad-svg .pb text { fill: #fff; font-family: var(--body); font-weight: 700; font-size: 11px; text-anchor: middle; pointer-events: none; }
+.pad-svg .pb .tx { font-size: 13px; }
+.pad-svg .pb .sh { display: none; }
+.pad-svg .pb .sh * { fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.fam-ps .pad-svg .pb .tx { display: none; }
+.fam-ps .pad-svg .pb .sh { display: block; }
+.pad-svg .pb.lit circle, .pad-svg .pb.lit rect { fill: var(--gold); stroke: var(--gold); }
+.pad-svg .pb.lit circle.inner { fill: #171a30; }
+.pad-svg .pb.lit text { fill: var(--ink); }
+.pad-svg .pb.lit .sh * { stroke: var(--ink); }
+.pad-readout { font-weight: 700; font-size: calc(var(--u) * 2.05); color: var(--gold); background: rgba(18,20,43,0.9); border: calc(var(--u) * 0.3) solid rgba(255,255,255,0.35); border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 0.9) calc(var(--u) * 2); min-height: calc(var(--u) * 3); text-align: center; }
 .pad-rows { display: flex; flex-direction: column; gap: calc(var(--u) * 0.8); }
-.pad-row { display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--u) * 0.8) calc(var(--u) * 1.6); font-weight: 600; font-size: calc(var(--u) * 2.3); background: rgba(255,255,255,0.08); border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 1) calc(var(--u) * 2); cursor: pointer; }
-.pad-row .pad-label { margin-right: auto; }
-.pad-row .binds { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 0.8); }
-.bind-chip { font-weight: 700; font-size: calc(var(--u) * 1.9); color: #fff; background: rgba(18,20,43,0.9); border: calc(var(--u) * 0.3) solid #fff; border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 0.4) calc(var(--u) * 1.6); white-space: nowrap; }
-.bind-chip.alt { opacity: 0.6; border-style: dashed; }
-.pad-cap { color: var(--gold); font-size: calc(var(--u) * 1.9); white-space: nowrap; }
+/* one line per action, always: name on the left, the one button name on the right */
+.pad-row { display: flex; align-items: center; flex-wrap: nowrap; gap: calc(var(--u) * 1.6); font-weight: 600; font-size: calc(var(--u) * 2.15); background: rgba(255,255,255,0.08); border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 0.85) calc(var(--u) * 2); cursor: pointer; }
+.pad-row .pad-label { margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bind-name { font-weight: 700; color: var(--gold); white-space: nowrap; }
+.bind-name.listening { color: #fff; animation: pad-blink 0.9s ease-in-out infinite; }
+@keyframes pad-blink { 50% { opacity: 0.45; } }
 .pad-row.hit { background: rgba(255, 210, 60, 0.38); }
-.pad-row.capturing { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.35); animation: pad-pulse 1s ease-in-out infinite; }
-@keyframes pad-pulse { 50% { transform: scale(1.03); } }
+.pad-row.capturing { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.35); }
+/* steering: three choices in one segmented control; on a narrow screen the
+   control takes its own full line under the label rather than squeezing */
+.pad-steer { display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--u) * 0.8) calc(var(--u) * 1.6); font-weight: 600; font-size: calc(var(--u) * 2.15); background: rgba(255,255,255,0.08); border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 0.85) calc(var(--u) * 2); }
+.pad-steer .pad-label { margin-right: auto; white-space: nowrap; }
+.seg { display: flex; flex: 1; justify-content: flex-end; gap: calc(var(--u) * 0.6); }
+.seg-btn { font: inherit; font-weight: 700; font-size: calc(var(--u) * 1.85); color: #fff; background: rgba(18,20,43,0.55); border: calc(var(--u) * 0.3) solid rgba(255,255,255,0.4); border-radius: 2em; padding: calc(var(--u) * 0.55) calc(var(--u) * 1.7); cursor: pointer; white-space: nowrap; }
+.seg-btn.sel { background: var(--gold); color: var(--ink); border-color: var(--gold); }
 .pad-note { font-size: calc(var(--u) * 1.9); line-height: 1.35; opacity: 0.8; }
-@media (prefers-reduced-motion: reduce) { .pad-row.capturing { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .bind-name.listening { animation: none; } }
 
 .howto { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: calc(var(--u) * 2.2); align-self: stretch; }
 .howto .panel { padding: calc(var(--u) * 1.8) calc(var(--u) * 2.8); }

@@ -56,6 +56,33 @@ const lakePct = y => Math.round(clamp((y - 0.6) / (LAKE.full - 0.6), 0, 1) * 100
    centres looking down at the water. Bench k is flat from BENCH.e0 + k * de to about 70% of the way to the next. */
 const BENCH = { e0: 1.42, de: 0.16, rise: 6, n: 4 };
 const benchLevel = e => { if (e < BENCH.e0) return Infinity; const u = (e - BENCH.e0) / BENCH.de, k = Math.floor(u); return LAKE.rim + 1.5 + BENCH.rise * (k + smoothstep(0.7, 1, u - k)); };
+
+/* ---------- the indoor campus ----------
+   More than half the lap is indoors (Roger, 13 Nov: "at least half of the race ... inside data centers, physically
+   driving through racks of servers"). Training Hall 9 is the axis-aligned box built by trainingHall(); the other
+   four are road-following buildings from roadHall() below, each with its own light: the keynote arena round the
+   start (magenta), the chiller plant up the climb (teal), the GPU hall down the west shore (red), and Hall 2, the
+   inference floor, round the back (blue). The road does not move; each stretch is a tunnel zone, so its edges
+   are walls. Every rack wears the one shared rack material (rackKit), so all halls blink in sync for one draw. */
+const HALL_DEFS = [
+  { id: 'arena', from: 26.45, to: 1.1, wide: 'all', wideL: 12, wideR: 23.5, up: 15, upWide: 15, rackSides: [1], skin: 'carpet',
+    panel: ['#221a33', '#2c2242', '#140f1f', '#ff3dbb'], glow: 0xff7ad6, band: 0x3dc8ff, accent: 0xff3dbb, gantries: false,
+    signIn: null, signOut: null, gables: [true, true] },
+  { id: 'chiller', from: 6.0, to: 9.15, narrow: 6.2, up: 10.5, rackRows: 0, skin: 'metal',
+    panel: ['#15302e', '#1c3d3a', '#0d1f1d', '#3dffd0'], glow: 0x8dffe4, band: 0x3dffd0, accent: 0x16a39a,
+    signIn: ['CHILLER PLANT 3', '#7dffe0'], signOut: ['NEXT: THE LAKE (FOR NOW)', '#ffd23c'], jokes: ['PRESSURE: YES', 'COOLANT: 112% OF A LAKE', 'DO NOT LICK THE PIPES'] },
+  { id: 'gpu', from: 15.0, to: 17.55, narrow: 7.4, up: 10.8, skin: 'hallfloor', rowGlow: 0xff3a1a,
+    panel: ['#2a1416', '#38191c', '#1a0c0e', '#ff5a2a'], glow: 0xffb08a, band: 0xff4a2a, accent: 0xe23b3b,
+    signIn: ['GPU HALL · 41°C AND RISING', '#ff8a5c'], signOut: ['COOL DOWN AHEAD (NOT REALLY)', '#ffd23c'], jokes: ['WE BOUGHT ALL OF THEM', 'FAN SPEED: YES', 'SPICY TENSORS INSIDE'] },
+  { id: 'inference', from: 21.85, to: 26.45, wide: [23.5, 26.1], wideIn: 9.5, wideOut: 16, inAt: 24.0, narrow: 4.6, up: 9.8, upWide: 11.8, skin: 'neon',
+    panel: ['#1d2333', '#262e42', '#121620', '#3dc8ff'], glow: 0x9fe6ff, band: 0x9fe6ff, accent: 0x1f6bff, tanks: [24.42, 25.2],
+    signIn: ['HALL 2 · INFERENCE', '#7fd0ff'], signOut: ['NOW LEAVING THE CLOUD', '#ffd23c'], signOutSub: 'NEXT: THE KEYNOTE (ATTENDANCE MANDATORY)',
+    jokes: ['PLEASE HOLD. YOUR LAP IS IMPORTANT TO US', 'TRAINING RUN 7 OF ∞', 'NO GPUs WERE HARMED (MOST)', 'THIS HALL RUNS ON YOUR LAKE'] },
+];
+/** Lap ranges that are indoors, Hall 9 included: for the tunnel zones, and for the sim/report. */
+const HALL_RANGES = [...HALL_DEFS.map(h => ({ id: h.id, from: h.from, to: h.id === 'arena' ? 1.15 : h.to, skin: h.skin })), { id: 'hall9', from: 1.15, to: 4.0, skin: 'hallfloor' }];
+const inCpRange = (c, a, b) => a <= b ? c >= a && c <= b : c >= a || c <= b;
+
 /* What the bed is like to drive on: wading in the shallows, wet mud while the lake is still draining, hardpan once it is gone. */
 const WADE = { id: 'wade', speed: 0.42, grip: 0.7, dust: 0xbfe8ff, rumble: 0.3, offroad: true, splash: true };
 const MUD = { id: 'mud', speed: 0.5, grip: 0.7, dust: 0x6b5638, rumble: 0.35, offroad: true };
@@ -157,12 +184,11 @@ export default {
   ],
   // the opening shot: the whole lake, the pipes drinking it, and a gas plant smoking behind
   intro: [{ pos: [168, 62, -292], pos1: [138, 52, -312], look: [-60, 14, -405], look1: [-80, 12, -395], fov: 50, dur: 3 }],
-  tunnels: [{ from: 1.15, to: 4.0 }, { from: 21.9, to: 26.4 }],
+  tunnels: HALL_RANGES.map(({ from, to }) => ({ from, to })),
   bridges: [{ from: 4.0, to: 6.0 }],
   zones: [
-    { from: 1.15, to: 4.0, skin: 'hallfloor' },
+    ...HALL_RANGES.map(({ from, to, skin }) => ({ from, to, skin })),
     { from: 4.0, to: 6.0, skin: 'metal' },
-    { from: 21.9, to: 26.4, skin: 'neon' },
   ],
   ramps: [{ at: 4.62, len: 9, lift: 2.1 }],
   boosts: [
@@ -187,10 +213,9 @@ export default {
     // security robots on the straights, each sweeping only part of the road
     { kind: 'patrol', model: 'bot', at: 3.45, lats: [-7, -3.6], speed: 3, effect: 'spin', radius: 1.2 },
     { kind: 'patrol', model: 'bot', at: 17.75, lats: [-7, -3.4], speed: 3.2, effect: 'spin', radius: 1.2 },
-    { kind: 'patrol', model: 'bot', at: 24.95, lats: [-7, -3.6], speed: 3, effect: 'spin', radius: 1.2 },
     // steam vents round the bay, blowing in turn
-    { kind: 'timed', model: 'vent', at: 11.7, lat: -4, period: 3, duty: 0.38, phase: 0, effect: 'spin', radius: 1.4 },
-    { kind: 'timed', model: 'vent', at: 12.4, lat: 4, period: 3, duty: 0.38, phase: 1.5, effect: 'spin', radius: 1.4 },
+    { kind: 'timed', model: 'vent', at: 11.7, lat: -4, period: 3, duty: 0.3, phase: 0, effect: 'spin', radius: 1.4 },
+    { kind: 'timed', model: 'vent', at: 12.4, lat: 4, period: 3, duty: 0.3, phase: 1.5, effect: 'spin', radius: 1.4 },
   ],
   models: { vent: () => D.vent() },
   terrain: {
@@ -231,7 +256,7 @@ export default {
     tunnelLight: 0xffffff, portal: 0xdfe3e8,
     ads: ['NOW TRAINING ON YOU', 'GPU GO BRRR', 'COMPUTE IS THE NEW OIL', 'TOKENS PER SECOND', 'WE ARE OUT OF GPUS', 'HALLUCINATION FREE*', 'STOCHASTIC PARROT FEED', 'ATTENTION IS ALL YOU NEED', 'OVERFIT AND PROUD', 'LIQUID COOLED EGO', 'ROBOTS.TXT IGNORED', 'INFERENCE AT THE EDGE', 'SCALING LAWS APPLY', 'PROMPT RESPONSIBLY'],
   },
-  POND, LAKE,
+  POND, LAKE, HALL_RANGES,
 
   /** Dress the course. ctx: { THREE, track, group, gfx, anim, view } */
   decorate(ctx) { decorate(ctx); },
@@ -448,6 +473,27 @@ function rackKit(THREE) {
   }, { repeat: true }));
   for (const t of frames) t.wrapT = THREE.ClampToEdgeWrapping;
   const mat = new THREE.MeshStandardMaterial({ map: rackTex, emissiveMap: frames[0], emissive: 0xffffff, emissiveIntensity: 2.6, roughness: 0.5, metalness: 0.3 });
+  /* The painted rack front (assets/tracks/datacenter-dash/rack-front.webp, prompt in tools/prompts/datacenter-dash.md):
+     two copies stacked in the cabinet band so the units keep their proportions on a 3 m rack, and the blink frames
+     rebuilt from its own status lights, so the LEDs that flash are the ones painted on the servers. */
+  const img = new Image();
+  img.onload = () => {
+    const g = rackTex.image.getContext('2d'), half = FR / 2;
+    g.drawImage(img, 0, 0, RW, half); g.drawImage(img, 0, half, RW, half);
+    rackTex.needsUpdate = true;
+    const src = g.getImageData(0, 0, RW, FR).data;
+    const led = (r, gg, b) => (gg > 170 && r < 140 && gg - r > 70) || (r > 215 && gg > 110 && gg < 195 && b < 90);   // green, cyan, amber
+    frames.forEach((t, f) => {
+      const fg = t.image.getContext('2d'), out = fg.createImageData(RW, FR), d = out.data, rr = makeRng(301 + f * 17);
+      const on = new Uint8Array(Math.ceil(RW / 10) * Math.ceil(FR / 10)); for (let k = 0; k < on.length; k++) on[k] = rr() < 0.72 ? 1 : 0;
+      for (let y = 0; y < FR; y++) for (let x = 0; x < RW; x++) {
+        const k = (y * RW + x) * 4; d[k + 3] = 255;
+        if (led(src[k], src[k + 1], src[k + 2]) && on[Math.floor(y / 10) * Math.ceil(RW / 10) + Math.floor(x / 10)]) { d[k] = src[k]; d[k + 1] = src[k + 1]; d[k + 2] = src[k + 2]; }
+      }
+      fg.fillStyle = '#000'; fg.fillRect(0, 0, RW, RH); fg.putImageData(out, 0, 0); t.needsUpdate = true;
+    });
+  };
+  img.src = 'assets/tracks/datacenter-dash/rack-front.webp';
   return { mat, frames };
 }
 
@@ -472,7 +518,7 @@ function decorate(ctx) {
   const samples = (a, b, step) => { const i0 = track.indexAtCp(a), n = ((track.indexAtCp(b) - i0) + track.N) % track.N, k = Math.max(1, Math.round(step / track.ds)), out = []; for (let r = 0; r <= n; r += k) out.push((i0 + r) % track.N); return out; };
   const inHallBox = (x, z, m = 0) => x > HB.x0 - m && x < HB.x1 + m && z > HB.z0 - m && z < HB.z1 + m;
   const ctxs = { THREE, track, ctx, sc, rng, bake, atlas, clear, at, samples, view, anim, rackSys: rackKit(THREE) };
-  const h2 = hall2(ctxs);   // first, so the dressing below can keep out of it
+  const campus = campusHalls(ctxs);   // first, so the dressing below can keep out of it
 
   // ---- start/finish: gantry, a hall either side of the main drag, grandstands on the south side ----
   const g0 = sc.beside(0, 1, -track.hwL[0]);
@@ -487,7 +533,7 @@ function decorate(ctx) {
     for (const s of proto.seats) if (rng() < 0.82) { V.set(s[0], s[1], s[2]).applyMatrix4(M); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
     bake.add(g);
   };
-  sc.along({ from: 26.95, to: 0.85, side: -1, offset: 6.5, spacing: 33 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
+  samples(26.95, 0.85, 33).map(i => { const q = at(i, -(track.hwR[i] + 6.5)); return { x: q.x, z: q.z, i, yaw: Math.atan2(track.lx[i], track.lz[i]) }; }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));   // inside the keynote arena
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
   const hallAt = (h, opts = {}) => {
     const g = D.dataHall({ L: h.L, W: h.W, H: h.H, accent: h.c, ...opts }); sc.place(g, h.x, h.z, { yaw: h.yaw, y: h.y ?? sc.y(h.x, h.z) - 0.4 }); bake.add(g);
@@ -506,11 +552,6 @@ function decorate(ctx) {
       atlas.place(r, W3(0, h.W / 2 + 0.32, (y0 + y1) / 2), h.yaw, mw, mh);
     }
   };
-  {
-    const n = sc.beside(27.75, 1, 17.5), s = sc.beside(27.85, -1, 37);
-    hallAt({ x: n.x, z: n.z, yaw: n.yaw, L: 118, W: 26, H: 15, c: 0x1f6bff, name: 'COGNITRON', y: 0, mural: 'TRAINING ON YOUR DATA (THANKS)' });
-    hallAt({ x: s.x, z: s.z, yaw: s.yaw, L: 128, W: 26, H: 16, c: 0x16a34a, name: 'SYNERGY SILO', y: 0, mural: '4 JOBS CREATED', muralLow: 9.6 });
-  }
   // light masts behind the stands and lamps along the walls of the main drag
   sc.instances(partsOf(D.floodMast({ h: 20 })), sc.along({ from: 26.8, to: 0.9, side: -1, offset: 21, spacing: 33, phase: 16 }), {});
   const lampParts = partsOf(D.streetLamp());
@@ -521,7 +562,7 @@ function decorate(ctx) {
     ...sc.along({ from: 15.6, to: 26.6, side: 1, offset: 12.8, spacing: 22 }).filter(p => clear(p.x, p.z, 0.8)),
     ...sc.along({ from: 15.6, to: 26.6, side: -1, offset: 12.8, spacing: 22, phase: 11 }).filter(p => clear(p.x, p.z, 0.8)),
   ];
-  sc.instances(lampParts, lamps.filter(p => !inHallBox(p.x, p.z, 2) && !h2.inside(p.x, p.z)), { cast: false });
+  sc.instances(lampParts, lamps.filter(p => !inHallBox(p.x, p.z, 2) && !campus.inside(p.x, p.z)), { cast: false });
 
   // ---- Training Hall 9: the road runs through a real data hall ----
   const hallFx = trainingHall(ctxs);
@@ -540,7 +581,7 @@ function decorate(ctx) {
 
   // ---- campus: more halls, a security fence, generators, dishes ----
   HALLS.forEach(h => hallAt(h));
-  const inHall = (x, z, m = 6) => HALLS.some(h => { const [u, v] = hallUV(h, x, z); return Math.abs(u) < h.L / 2 + m && Math.abs(v) < h.W / 2 + m; }) || inHallBox(x, z, m) || h2.inside(x, z, m);
+  const inHall = (x, z, m = 6) => HALLS.some(h => { const [u, v] = hallUV(h, x, z); return Math.abs(u) < h.L / 2 + m && Math.abs(v) < h.W / 2 + m; }) || inHallBox(x, z, m) || campus.inside(x, z, m);
   const gens = [], aprons = [];
   const toWorld = (h, u, v) => { const c = Math.cos(h.yaw), s = Math.sin(h.yaw); return { x: h.x + u * c + v * s, z: h.z - u * s + v * c }; };
   const fence = new Quads(), fposts = new ModelBuilder();
@@ -656,7 +697,7 @@ function decorate(ctx) {
   const frame = P.billboard(null, { w: 15, h: 5, legs: 6, frame: 0x3a414c }); frame.remove(frame.children[frame.children.length - 1]);   // keep the frame, drop the blank panel
   const BS = 1.5;   // billboards half again as big as the stock ones
   BOARDS.forEach(([cp, side, off, text, bg, fg], i) => {
-    const p = sc.beside(cp, side, off + 4); if (!clear(p.x, p.z, 0.5) || inHallBox(p.x, p.z, 3) || h2.inside(p.x, p.z, 3)) return;
+    const p = sc.beside(cp, side, off + 4); if (!clear(p.x, p.z, 0.5) || inHallBox(p.x, p.z, 3) || campus.inside(p.x, p.z, 3)) return;
     const yaw = p.yaw + rng.range(-0.12, 0.12), f = frame.clone(); sc.place(f, p.x, p.z, { yaw, scale: BS }); bake.add(f);
     const r = atlas.add(768, 256, (g, w, h) => {
       g.fillStyle = bg; g.fillRect(0, 0, w, h);
@@ -698,11 +739,11 @@ function decorate(ctx) {
   };
   for (let k = 0; k < 80; k++) { tick(0.25, k * 0.25); smoke.update(0.25); }   // the plumes are already up when the race starts
   anim.push(tick);
-  anim.push((dt, time) => { hallFx(dt, time); h2.update(dt, time); lakeFx.update(dt, time); });
+  anim.push((dt, time) => { hallFx(dt, time); campus.update(dt, time); lakeFx.update(dt, time); });
 }
 
 /* ---------- Training Hall 9 ---------- */
-function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys }) {
+function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, counterAt }) {
   const FY = HB.fy, group = ctx.group;
   // distance from the road edge, over the samples inside and around the hall
   const iA = track.indexAtCp(0.9), iB = track.indexAtCp(4.2), idx = []; for (let i = iA; i <= iB; i++) idx.push(i);
@@ -992,7 +1033,7 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys }
     });
     bake.builder(hang, { c: plastic(0x2c323c, 0.5) }, false);
   }
-  const counter = ledSign(THREE, group, 1024, 200, [HB.x0 - 0.45, HB.door + 2.4, -0.3], -Math.PI / 2, 20, 3.9);
+  const counter = ledSign(THREE, group, 1024, 200, counterAt?.c ?? [HB.x0 - 0.45, HB.door + 2.4, -0.3], counterAt?.yaw ?? -Math.PI / 2, 20, 3.9);   // on the arena's end wall, over the door into the hall
 
   /* the leaking pipe inside, with a mop and bucket under the drip */
   { const mb = D.mopBucket(); sc.place(mb, drip.x, drip.z, { y: FY, yaw: Math.PI / 2 }); bake.add(mb, false); }
@@ -1047,212 +1088,355 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys }
   };
 }
 
-/* ---------- Hall 2: the inference floor ----------
-   A dark hall wrapped round the back of the lap, from the end of the switchback (cp 21.85) to the main drag
-   (cp 26.45): a narrow cold corridor first, then it opens into a wide, tall rack canyon round the long bend,
-   rows stepping up in height away from the road so the blinking walls stack like a stadium. The road does not
-   move; the stretch is a tunnel zone, so its edges are walls. Racks share Hall 9's one material (one blink).
-   On the outside of the straight, immersion tanks fill as the reservoir drains: the lake ends up in here. */
-const H2 = { from: 21.85, to: 26.45, wide0: 23.5, wide1: 26.1, tanks: [24.42, 25.2] };
-function hall2({ THREE, track, ctx, sc, bake, atlas, samples, at: atObj, rackSys, view }) {
+/** Shared bits for every road hall: one material per kind across the campus. */
+function hallKit(THREE) {
+  const tex = (draw) => canvasTexture(THREE, 256, 256, draw, { repeat: true });
+  const clad = tex((g, w, h) => { g.fillStyle = '#e4e8ee'; g.fillRect(0, 0, w, h); g.fillStyle = '#c9cfd8'; g.fillRect(0, 0, 3, h); g.fillRect(w / 2, 0, 3, h); g.fillStyle = '#d6dbe2'; g.fillRect(0, h - 4, w, 4); });
+  const floor = tex((g, w, h) => { g.fillStyle = '#161b27'; g.fillRect(0, 0, w, h); g.strokeStyle = '#252d3f'; g.lineWidth = 3; for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(k * w / 4, 0); g.lineTo(k * w / 4, h); g.stroke(); g.beginPath(); g.moveTo(0, k * h / 4); g.lineTo(w, k * h / 4); g.stroke(); } });
+  return {
+    clad: new THREE.MeshStandardMaterial({ map: clad, roughness: 0.75 }),
+    floor: new THREE.MeshStandardMaterial({ map: floor, roughness: 0.4, metalness: 0.3, emissive: 0xffffff, emissiveMap: floor, emissiveIntensity: 0.22, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+    ceil: plastic(0x0d1017, 0.95), roof: plastic(0x9aa1aa, 0.8), dark: plastic(0x14171c, 0.6, 0.3),
+    tray: plastic(0xffc928, 0.5), rod: plastic(0x2c323c, 0.5),
+    fans: [],   // spinning wall fans from every hall, drawn as one instanced mesh at the end
+  };
+}
+
+/**
+ * One road-following building: walls, roof, ceiling and floor in the road frame, stepped rack rows on both sides,
+ * light strips over the aisles, cable gantries, portals with signs. cfg: an entry of HALL_DEFS.
+ * Returns { update(dt, time), inside(x, z, m), api } and calls the hall's own extras.
+ */
+function roadHall(ctxs, cfg, kit) {
+  const { THREE, track, sc, bake, atlas, samples, at: atObj, rackSys } = ctxs;
   const at = (i, lat, up = 0) => { const p = atObj(i, lat, up); return [p.x, p.y, p.z]; };
-  const idx = samples(H2.from, H2.to, 3), n = idx.length;
+  const idx = samples(cfg.from, cfg.to, 3), n = idx.length;
   const cpOf = i => track.cp[i];
   const hw = i => Math.max(track.hwL[i], track.hwR[i]);
-  // which side the long bend turns toward (+1 = left): the inside of the canyon is narrower than the outside
-  const iC = track.indexAtCp(24.0), iD = track.indexAtCp(24.3);
-  const inSide = Math.sign((track.tx[iD] - track.tx[iC]) * track.lx[iC] + (track.tz[iD] - track.tz[iC]) * track.lz[iC]) || 1;
-  const wideK = i => { const c = cpOf(i); return smoothstep(H2.wide0, H2.wide0 + 0.4, c) * (1 - smoothstep(H2.wide1 - 0.3, H2.wide1, c)); };
-  const Wd = (i, sd) => hw(i) + lerp(4.6, sd === inSide ? 9.5 : 16, wideK(i));
-  const UPf = i => lerp(9.8, 11.8, wideK(i));
-  const DN = -10, DOOR = 8.4;
-  const sAt = k => k * 3;   // along-distance of idx[k] (samples are 3 m apart)
-
+  let inSide = 1;
+  if (cfg.inAt != null) { const iC = track.indexAtCp(cfg.inAt), iD = track.indexAtCp(cfg.inAt + 0.3); inSide = Math.sign((track.tx[iD] - track.tx[iC]) * track.lx[iC] + (track.tz[iD] - track.tz[iC]) * track.lz[iC]) || 1; }
+  const wideK = cfg.wide === 'all' ? () => 1 : cfg.wide ? i => { const c = cpOf(i); return smoothstep(cfg.wide[0], cfg.wide[0] + 0.4, c) * (1 - smoothstep(cfg.wide[1] - 0.3, cfg.wide[1], c)); } : () => 0;
+  const wideFor = sd => cfg.wideL != null ? (sd > 0 ? cfg.wideL : cfg.wideR) : (sd === inSide ? cfg.wideIn : cfg.wideOut);
+  const Wd = (i, sd) => hw(i) + lerp(cfg.narrow ?? 4.6, wideFor(sd) ?? cfg.narrow ?? 4.6, wideK(i));
+  const UPf = i => lerp(cfg.up, cfg.upWide ?? cfg.up, wideK(i));
+  const DN = -10, DOOR = 8.4, sAt = k => k * 3;
+  const [pBase, pInset, pSeam, pLed] = cfg.panel;
   const panelTex = canvasTexture(THREE, 256, 256, (g, w, h) => {
-    g.fillStyle = '#1d2333'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#262e42'; g.fillRect(6, 6, w / 2 - 9, h - 12); g.fillRect(w / 2 + 3, 6, w / 2 - 9, h - 12);
-    g.fillStyle = '#121620'; g.fillRect(0, h - 10, w, 10);
-    g.fillStyle = '#3dc8ff'; for (const x of [20, w / 2 + 17]) g.fillRect(x, h - 26, 22, 4);
+    g.fillStyle = pBase; g.fillRect(0, 0, w, h); g.fillStyle = pInset; g.fillRect(6, 6, w / 2 - 9, h - 12); g.fillRect(w / 2 + 3, 6, w / 2 - 9, h - 12);
+    g.fillStyle = pSeam; g.fillRect(0, h - 10, w, 10); g.fillStyle = pLed; for (const x of [20, w / 2 + 17]) g.fillRect(x, h - 26, 22, 4);
   }, { repeat: true });
-  const cladTex = canvasTexture(THREE, 256, 256, (g, w, h) => {
-    g.fillStyle = '#e4e8ee'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#c9cfd8'; g.fillRect(0, 0, 3, h); g.fillRect(w / 2, 0, 3, h);
-    g.fillStyle = '#d6dbe2'; g.fillRect(0, h - 4, w, 4);
-  }, { repeat: true });
-  const floorTex = canvasTexture(THREE, 256, 256, (g, w, h) => {
-    g.fillStyle = '#161b27'; g.fillRect(0, 0, w, h);
-    g.strokeStyle = '#252d3f'; g.lineWidth = 3; for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(k * w / 4, 0); g.lineTo(k * w / 4, h); g.stroke(); g.beginPath(); g.moveTo(0, k * h / 4); g.lineTo(w, k * h / 4); g.stroke(); }
-  }, { repeat: true });
+  const panelMat = new THREE.MeshStandardMaterial({ map: panelTex, roughness: 0.7, emissive: 0xffffff, emissiveMap: panelTex, emissiveIntensity: 0.35 });
+  const glowMat = glow(cfg.glow, 1.6), bandMat = cfg.band === cfg.glow ? glowMat : glow(cfg.band, 1.8);
 
-  const inner = new Quads(), outer = new Quads(), ceil = new Quads(), roof = new Quads(), floor = new Quads(), racks = new Quads(), strips = new Quads(), dark = new Quads();
-  const ov = new ModelBuilder(), units = [], chills = [];
+  const inner = new Quads(), outer = new Quads(), accentQ = new Quads(), ceil = new Quads(), roof = new Quads(), floor = new Quads(), racks = new Quads(), strips = new Quads(), bands = new Quads(), dark = new Quads(), rowGlowQ = new Quads();
+  const ov = new ModelBuilder(), chills = [];
   const segLen = k => Math.hypot(track.px[idx[k + 1]] - track.px[idx[k]], track.pz[idx[k + 1]] - track.pz[idx[k]]);
   const DK = [[0, 0.04], [0.2, 0.04], [0.2, 0.16], [0, 0.16]];
   const gapAt = (k, r, sd) => ((sAt(k) + r * 10 + (sd > 0 ? 0 : 5)) % 30) < 3.1;   // a cross aisle now and then
+  const rackSides = cfg.rackSides || [-1, 1], rows = cfg.rackRows ?? 5;
+  const skipRack = (a, b, sd, r) => cfg.tanks && sd !== inSide && r < 3 && cpOf(a) > cfg.tanks[0] - 0.05 && cpOf(b) < cfg.tanks[1] + 0.05;
+  const lift = p => { p[1] = Math.max(p[1], track.terrainHeight(p[0], p[2]) + 0.06); return p; };
+  /** Side-aware quad: given the four corners as seen for the left (+) side, flip the winding for the right side. */
+  const sq = (Q, sd, A, B, C, D, uv) => sd > 0 ? Q.quad(A, B, C, D, uv) : Q.quad(B, A, D, C, uv && uv.length === 4 && Array.isArray(uv[0]) ? [uv[1], uv[0], uv[3], uv[2]] : uv);
 
   for (let k = 0; k + 1 < n; k++) {
     const a = idx[k], b = idx[k + 1], L = segLen(k), u0 = sAt(k) / 4, u1 = sAt(k + 1) / 4;
     const Ua = UPf(a), Ub = UPf(b);
     for (const sd of [-1, 1]) {
       const wa = sd * Wd(a, sd), wb = sd * Wd(b, sd), ea = sd * (Wd(a, sd) + 0.35), eb = sd * (Wd(b, sd) + 0.35);
-      // interior face (dark panels, facing the road) and exterior cladding (facing out)
-      const A = at(a, wa, DN), B = at(b, wb, DN), Bt = at(b, wb, Ub), At = at(a, wa, Ua);
-      if (sd > 0) inner.quad(A, B, Bt, At, [[u0, DN / 4], [u1, DN / 4], [u1, Ub / 4], [u0, Ua / 4]]); else inner.quad(B, A, At, Bt, [[u1, DN / 4], [u0, DN / 4], [u0, Ua / 4], [u1, Ub / 4]]);
-      const E = at(a, ea, DN), F = at(b, eb, DN), Ft = at(b, eb, Ub + 1.2), Et = at(a, ea, Ua + 1.2);
-      if (sd > 0) outer.quad(F, E, Et, Ft, [[u1, DN / 6], [u0, DN / 6], [u0, (Ua + 1.2) / 6], [u1, (Ub + 1.2) / 6]]); else outer.quad(E, F, Ft, Et, [[u0, DN / 6], [u1, DN / 6], [u1, (Ub + 1.2) / 6], [u0, (Ua + 1.2) / 6]]);
+      // interior face (facing the road) and exterior cladding (facing out), with a band of the hall's colour along the top
+      sq(inner, sd, at(a, wa, DN), at(b, wb, DN), at(b, wb, Ub), at(a, wa, Ua), [[u0, DN / 4], [u1, DN / 4], [u1, Ub / 4], [u0, Ua / 4]]);
+      sq(outer, -sd, at(b, eb, DN), at(a, ea, DN), at(a, ea, Ua + 1.2), at(b, eb, Ub + 1.2), [[u1, DN / 6], [u0, DN / 6], [u0, (Ua + 1.2) / 6], [u1, (Ub + 1.2) / 6]]);
+      const xa = sd * (Wd(a, sd) + 0.37), xb = sd * (Wd(b, sd) + 0.37);
+      sq(accentQ, -sd, at(b, xb, Ub - 1.6), at(a, xa, Ua - 1.6), at(a, xa, Ua - 0.4), at(b, xb, Ub - 0.4));
       // the floor beside the road, just proud of the land so nothing grows through it
-      const fa = sd * (hw(a) + 0.25), fb = sd * (hw(b) + 0.25);
-      const lift = p => { p[1] = Math.max(p[1], track.terrainHeight(p[0], p[2]) + 0.06); return p; };
-      const F0 = lift(at(a, fa, 0.03)), F1 = lift(at(b, fb, 0.03)), F2 = lift(at(b, wb, 0.03)), F3 = lift(at(a, wa, 0.03));
+      const F0 = lift(at(a, sd * (hw(a) + 0.25), 0.03)), F1 = lift(at(b, sd * (hw(b) + 0.25), 0.03)), F2 = lift(at(b, wb, 0.03)), F3 = lift(at(a, wa, 0.03));
       const fuv = p => [p[0] / 4, -p[2] / 4];
       if (sd > 0) floor.quad(F0, F1, F2, F3, [fuv(F0), fuv(F1), fuv(F2), fuv(F3)]); else floor.quad(F3, F2, F1, F0, [fuv(F3), fuv(F2), fuv(F1), fuv(F0)]);
-      // a cold blue band along the wall at mid height, so the dark panels read as a wall and not a void
-      { const ba = sd * (Wd(a, sd) - 0.04), bb = sd * (Wd(b, sd) - 0.04), G0 = at(a, ba, 6.6), G1 = at(b, bb, 6.6), G2 = at(b, bb, 6.9), G3 = at(a, ba, 6.9); if (sd > 0) strips.quad(G0, G1, G2, G3); else strips.quad(G1, G0, G3, G2); }
-      // parapet cap along the roof edge
+      // parapet cap
       const P0 = at(a, ea, Ua + 1.2), P1 = at(b, eb, Ub + 1.2), P2 = at(b, wb, Ub + 1.2), P3 = at(a, wa, Ua + 1.2);
       if (sd > 0) roof.quad(P3, P2, P1, P0); else roof.quad(P0, P1, P2, P3);
+      // a band of light along the wall at mid height, so the dark panels read as a wall and not a void
+      { const ba = sd * (Wd(a, sd) - 0.04), bb = sd * (Wd(b, sd) - 0.04); sq(bands, sd, at(a, ba, 6.6), at(b, bb, 6.6), at(b, bb, 6.9), at(a, ba, 6.9)); }
 
       // rack rows parallel to the road, each one taller than the one in front of it
-      const inTanks = sd !== inSide && cpOf(a) > H2.tanks[0] - 0.05 && cpOf(b) < H2.tanks[1] + 0.05;
-      for (let r = 0; r < 5; r++) {
+      if (rackSides.includes(sd)) for (let r = 0; r < rows; r++) {
         const l0a = hw(a) + 2.3 + r * 3.1, l0b = hw(b) + 2.3 + r * 3.1, l1a = l0a + 1.1, l1b = l0b + 1.1;
         if (l1a > Wd(a, sd) - 0.9 || l1b > Wd(b, sd) - 0.9) continue;
-        if (inTanks && r < 3) continue;
-        if (gapAt(k, r, sd)) continue;
-        const hgt = (2.7 + r * 0.95) * (0.92 + 0.08 * wideK(a)), y0 = -0.05;
+        if (skipRack(a, b, sd, r) || gapAt(k, r, sd)) continue;
+        const hgt = (2.9 + r * 0.95) * (0.92 + 0.08 * wideK(a)), y0 = -0.05;
         const R0 = at(a, sd * l0a, y0), R1 = at(b, sd * l0b, y0), R2 = at(b, sd * l0b, y0 + hgt), R3 = at(a, sd * l0a, y0 + hgt);
         const fu0 = sAt(k) / 2.4, fu1 = fu0 + L / 2.4;
         if (sd > 0) racks.quad(R0, R1, R2, R3, [[fu0, 0.2], [fu1, 0.2], [fu1, 1], [fu0, 1]]); else racks.quad(R1, R0, R3, R2, [[fu1, 0.2], [fu0, 0.2], [fu0, 1], [fu1, 1]]);
         const T0 = at(a, sd * l1a, y0 + hgt), T1 = at(b, sd * l1b, y0 + hgt);
         if (sd > 0) dark.quad(R3, R2, T1, T0, DK); else dark.quad(R2, R3, T0, T1, DK);
-        // the aisle behind each row gets a cold blue light strip on the ceiling
+        if (cfg.rowGlow) sq(rowGlowQ, sd, at(a, sd * (l0a - 0.02), y0 + hgt - 0.22), at(b, sd * (l0b - 0.02), y0 + hgt - 0.22), at(b, sd * (l0b - 0.02), y0 + hgt - 0.08), at(a, sd * (l0a - 0.02), y0 + hgt - 0.08));
+        // the aisle behind each row gets a light strip on the ceiling
         const la = sd * (l1a + 1.0), lb = sd * (l1b + 1.0), S0 = at(a, la - 0.18 * sd, Ua - 0.25), S1 = at(b, lb - 0.18 * sd, Ub - 0.25), S2 = at(b, lb + 0.18 * sd, Ub - 0.25), S3 = at(a, la + 0.18 * sd, Ua - 0.25);
         if (sd > 0) strips.quad(S1, S0, S3, S2); else strips.quad(S0, S1, S2, S3);
-        // end caps where a cross aisle starts or stops, so a gap reads as an aisle and not a missing wall
+        // end caps where a cross aisle starts or stops
         if (k + 1 < n - 1 && gapAt(k + 1, r, sd)) { const B1 = at(b, sd * l1b, y0); dark.quad(R1, B1, T1, R2, DK); dark.quad(B1, R1, R2, T1, DK); }
         if (k > 0 && gapAt(k - 1, r, sd)) { const A1 = at(a, sd * l1a, y0); dark.quad(R0, A1, T0, R3, DK); dark.quad(A1, R0, R3, T0, DK); }
       }
     }
     ceil.quad(at(a, Wd(a, 1), Ua - 0.05), at(b, Wd(b, 1), Ub - 0.05), at(b, -Wd(b, -1), Ub - 0.05), at(a, -Wd(a, -1), Ua - 0.05));
     roof.quad(at(a, -Wd(a, -1) - 0.35, Ua + 0.9), at(b, -Wd(b, -1) - 0.35, Ub + 0.9), at(b, Wd(b, 1) + 0.35, Ub + 0.9), at(a, Wd(a, 1) + 0.35, Ua + 0.9));
-    // the white light strip down the middle, over the racing line
-    { const S0 = at(a, -0.3, Ua - 0.2), S1 = at(b, -0.3, Ub - 0.2), S2 = at(b, 0.3, Ub - 0.2), S3 = at(a, 0.3, Ua - 0.2); strips.quad(S1, S0, S3, S2); }
+    { const S0 = at(a, -0.3, Ua - 0.2), S1 = at(b, -0.3, Ub - 0.2), S2 = at(b, 0.3, Ub - 0.2), S3 = at(a, 0.3, Ua - 0.2); strips.quad(S1, S0, S3, S2); }   // over the racing line
     if (k % 4 === 2) for (const sd of [-1, 1]) { const p = at(a, sd * Wd(a, sd) * 0.5, Ua + 0.9); chills.push({ x: p[0], y: p[1], z: p[2], yaw: Math.atan2(track.tx[a], track.tz[a]) }); }
   }
 
-  // portals: the gable at each end (outside and inside faces), a sign over each doorway on both faces
-  for (const [e, dir] of [[0, 1], [n - 1, -1]]) {
-    const i = idx[e], wl = Wd(i, 1), wr = Wd(i, -1), o = hw(i) + 0.4, U = UPf(i);
+  // portals: the gable at each end (outside and inside faces) with a doorway for the road
+  (cfg.gables || [true, true]).forEach((on, j) => {
+    if (!on) return;
+    const e = j === 0 ? 0 : n - 1, dir = j === 0 ? 1 : -1, i = idx[e], wl = Wd(i, 1), wr = Wd(i, -1), o = hw(i) + 0.4, U = UPf(i);
     for (const [off, face] of [[0, dir], [0.35 * dir, -dir]]) {
       const sh = p => [p[0] + track.tx[i] * off, p[1] + track.ty[i] * off, p[2] + track.tz[i] * off];
-      const q = (a, b, c, d) => face > 0 ? outer.quad(sh(b), sh(a), sh(d), sh(c)) : outer.quad(sh(a), sh(b), sh(c), sh(d));
+      const Qt = off === 0 ? outer : inner, wu = p => [(p[0] + p[2]) / 4, p[1] / 4];   // the outside in cladding, the inside in the hall's own panels
+      const q = (a, b, c, d) => { const [A, B, C, D] = face > 0 ? [sh(b), sh(a), sh(d), sh(c)] : [sh(a), sh(b), sh(c), sh(d)]; Qt.quad(A, B, C, D, [wu(A), wu(B), wu(C), wu(D)]); };
       q(at(i, -wr, DN), at(i, -o, DN), at(i, -o, U + 1.2), at(i, -wr, U + 1.2));
       q(at(i, o, DN), at(i, wl, DN), at(i, wl, U + 1.2), at(i, o, U + 1.2));
       q(at(i, -o, DOOR), at(i, o, DOOR), at(i, o, U + 1.2), at(i, -o, U + 1.2));
     }
-    // a sign over each doorway, facing the drivers: the name outside the entrance, the way out inside the exit
-    const yawBack = Math.atan2(-track.tx[i], -track.tz[i]), off = e === 0 ? -0.1 : -0.45, sp = at(i, 0, DOOR + 1.7), w = 2 * o - 2;
-    const P = (dy, o2 = off) => [sp[0] + track.tx[i] * o2, sp[1] + dy, sp[2] + track.tz[i] * o2];
-    const r = atlas.add(1024, 160, signDraw(e === 0 ? 'HALL 2 · INFERENCE' : 'NOW LEAVING THE CLOUD', { bg: '#1a1d29', fg: e === 0 ? '#7fd0ff' : '#ffd23c', font: SANS, size: 92, lines: 1, stripe: '#3dc8ff' }));
-    atlas.place(r, P(0.5), yawBack, w, w / 6.4);
-    if (e > 0) atlas.place(atlas.add(1024, 128, signDraw('EXIT → SOME SUNLIGHT (SMOG FLAVORED)', { bg: '#20242c', fg: '#7dff9a', font: SANS, size: 64, lines: 1 })), P(-1.15), yawBack, w * 0.85, w * 0.85 / 8);
-  }
+    // a sign over the doorway, facing the drivers: the name outside the entrance, the way on inside the exit
+    const sign = j === 0 ? cfg.signIn : cfg.signOut;
+    if (!sign) return;
+    const yawBack = Math.atan2(-track.tx[i], -track.tz[i]), so = j === 0 ? -0.1 : -0.45, sp = at(i, 0, DOOR + 1.7), w = 2 * o - 2;
+    const P = dy => [sp[0] + track.tx[i] * so, sp[1] + dy, sp[2] + track.tz[i] * so];
+    atlas.place(atlas.add(1024, 160, signDraw(sign[0], { bg: '#1a1d29', fg: sign[1], font: SANS, size: 92, lines: 1, stripe: '#' + new THREE.Color(cfg.band).getHexString() })), P(0.5), yawBack, w, w / 6.4);
+    if (j > 0 && cfg.signOutSub) atlas.place(atlas.add(1024, 128, signDraw(cfg.signOutSub, { bg: '#20242c', fg: '#7dff9a', font: SANS, size: 64, lines: 1 })), P(-1.15), yawBack, w * 0.85, w * 0.85 / 8);
+  });
 
   // cable gantries across the road, jokes hung from some of them
-  const gantryJokes = ['PLEASE HOLD. YOUR LAP IS IMPORTANT TO US', 'TRAINING RUN 7 OF ∞', 'NO GPUs WERE HARMED (MOST)', 'THIS HALL RUNS ON YOUR LAKE'];
-  let gj = 0;
-  for (let k = 3; k < n - 3; k += 7) {
-    const i = idx[k], U = UPf(i), yaw = Math.atan2(track.tx[i], track.tz[i]);
-    ov.add('tray', new THREE.BoxGeometry(0.6, 0.14, Wd(i, 1) + Wd(i, -1)), { p: at(i, (Wd(i, 1) - Wd(i, -1)) / 2, U - 2.6), r: [0, yaw + Math.PI / 2, 0] });
-    for (const sd of [-1, 1]) for (const l of [0.6, 0.3]) ov.add('rod', new THREE.BoxGeometry(0.06, 2.5, 0.06), { p: at(i, sd * Wd(i, sd) * l, U - 1.3) });
-    if ((k - 3) % 14 === 0 && cpOf(i) > 22.3) {
-      const r = atlas.add(1024, 150, signDraw(gantryJokes[gj++ % gantryJokes.length], { bg: '#0f131c', fg: '#7fd0ff', font: SANS, size: 70, lines: 1, border: '#3dc8ff' }));
-      atlas.place(r, at(i, 0, U - 3.6), Math.atan2(-track.tx[i], -track.tz[i]), 12.5, 1.83, 0, true);
-      for (const sd of [-1, 1]) ov.add('rod', new THREE.BoxGeometry(0.04, 1.0, 0.04), { p: at(i, sd * 5, U - 3.0) });
+  if (cfg.gantries !== false) {
+    let gj = 0;
+    for (let k = 3; k < n - 3; k += 7) {
+      const i = idx[k], U = UPf(i), yaw = Math.atan2(track.tx[i], track.tz[i]);
+      ov.add('tray', new THREE.BoxGeometry(0.6, 0.14, Wd(i, 1) + Wd(i, -1)), { p: at(i, (Wd(i, 1) - Wd(i, -1)) / 2, U - 2.6), r: [0, yaw + Math.PI / 2, 0] });
+      for (const sd of [-1, 1]) for (const l of [0.6, 0.3]) ov.add('rod', new THREE.BoxGeometry(0.06, 2.5, 0.06), { p: at(i, sd * Wd(i, sd) * l, U - 1.3) });
+      if (cfg.jokes && (k - 3) % 14 === 0) {
+        const r = atlas.add(1024, 150, signDraw(cfg.jokes[gj++ % cfg.jokes.length], { bg: '#0f131c', fg: '#' + new THREE.Color(cfg.glow).getHexString(), font: SANS, size: 70, lines: 1, border: '#' + new THREE.Color(cfg.band).getHexString() }));
+        atlas.place(r, at(i, 0, U - 3.6), Math.atan2(-track.tx[i], -track.tz[i]), 12.5, 1.83, 0, true);
+        for (const sd of [-1, 1]) ov.add('rod', new THREE.BoxGeometry(0.04, 1.0, 0.04), { p: at(i, sd * 5, U - 3.0) });
+      }
     }
   }
-  // CRAH units against the walls
-  for (let k = 2; k < n - 2; k += 5) for (const sd of [-1, 1]) { const i = idx[k]; if (wideK(i) < 0.5) continue; const p = at(i, sd * (Wd(i, sd) - 0.9), -0.05); units.push({ x: p[0], y: p[1], z: p[2], yaw: Math.atan2(-sd * track.lx[i], -sd * track.lz[i]) }); }
 
-  // the immersion tanks: glass tubs of blue coolant with racks sunk in them, on the outside of the straight
-  const tankIdx = samples(H2.tanks[0] + 0.03, H2.tanks[1] - 0.03, 5.2), tanks = [], glassQ = new Quads(), out = -inSide;
-  for (const i of tankIdx) {
-    const c = at(i, out * (hw(i) + 6.3), 0), yaw = Math.atan2(track.tx[i], track.tz[i]);
-    tanks.push({ x: c[0], y: c[1], z: c[2], yaw });
-    ov.add('tankrim', box(4.6, 0.3, 4.2, 0.08, 1), { p: [c[0], c[1] + 3.5, c[2]], r: [0, yaw, 0] });
-    ov.add('tankbase', box(4.8, 0.5, 4.4, 0.08, 1), { p: [c[0], c[1] + 0.2, c[2]], r: [0, yaw, 0] });
-    for (const dz of [-1.1, 0, 1.1]) ov.add('sunk', new THREE.BoxGeometry(0.55, 2.2, 3.6), { p: [c[0] + Math.cos(yaw) * dz, c[1] + 1.6, c[2] - Math.sin(yaw) * dz], r: [0, yaw, 0] });
-    const cs = Math.cos(yaw), sn = Math.sin(yaw), corner = (u, v, y) => [c[0] + u * cs + v * sn, c[1] + y, c[2] - u * sn + v * cs];
-    const hx = 2.2, hz = 2.0;
-    glassQ.quad(corner(-hx, -hz, 0.4), corner(hx, -hz, 0.4), corner(hx, -hz, 3.4), corner(-hx, -hz, 3.4));
-    glassQ.quad(corner(hx, hz, 0.4), corner(-hx, hz, 0.4), corner(-hx, hz, 3.4), corner(hx, hz, 3.4));
-    glassQ.quad(corner(hx, -hz, 0.4), corner(hx, hz, 0.4), corner(hx, hz, 3.4), corner(hx, -hz, 3.4));
-    glassQ.quad(corner(-hx, hz, 0.4), corner(-hx, -hz, 0.4), corner(-hx, -hz, 3.4), corner(-hx, hz, 3.4));
-  }
-  const coolant = new THREE.InstancedMesh(new THREE.BoxGeometry(4.3, 1, 3.9), new THREE.MeshStandardMaterial({ color: 0x2fa8ff, emissive: 0x1a7fe0, emissiveIntensity: 0.9, transparent: true, opacity: 0.72, roughness: 0.1, depthWrite: false }), tanks.length);
-  coolant.frustumCulled = false; coolant.renderOrder = 2; ctx.group.add(coolant);
-  {
-    const i = tankIdx[Math.floor(tankIdx.length / 2)], c = at(i, out * (hw(i) + 6.3), 6.4);
-    const r = atlas.add(1024, 220, (g, w, h) => { g.fillStyle = '#0d1a2a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#3dc8ff'; g.lineWidth = 8; g.strokeRect(4, 4, w - 8, h - 8); fitText(g, 'IMMERSION COOLING', w / 2, h * 0.34, w - 80, 96, SANS, '#7fd0ff', { lines: 1 }); fitText(g, 'NOW WITH 100% MORE LAKE', w / 2, h * 0.72, w - 80, 66, SANS, '#ffd23c', { lines: 1 }); });
-    atlas.place(r, c, Math.atan2(-out * track.lx[i], -out * track.lz[i]), 15, 3.2, 0, true);
-    for (const o of [-6, 6]) ov.add('rod', new THREE.BoxGeometry(0.05, UPf(i) - 8, 0.05), { p: [c[0] + Math.cos(Math.atan2(track.tx[i], track.tz[i])) * 0 + track.tx[i] * o, c[1] + 1.6 + (UPf(i) - 8) / 2, c[2] + track.tz[i] * o] });
-  }
-  // the inference screen on the outside wall at the apex: guesses about what it is looking at
-  const iS = track.indexAtCp(24.05), sP = at(iS, out * (Wd(iS, out) - 0.25), 8.4);
-  const screen = ledSign(THREE, ctx.group, 1024, 384, sP, Math.atan2(-out * track.lx[iS], -out * track.lz[iS]), 19, 7.1);
-  // inner-wall mural, readable across the canyon
-  { const i = track.indexAtCp(25.0), p = at(i, inSide * (Wd(i, inSide) - 0.2), 9.4), r = atlas.add(1600, 300, muralDraw('THINKING REALLY HARD', '#3dc8ff')); atlas.place(r, p, Math.atan2(-inSide * track.lx[i], -inSide * track.lz[i]), 24, 4.5); }
-  // the name on the roof at the bend, turned to the drivers coming down the west shore
-  {
-    const i = track.indexAtCp(23.9), p = at(i, 0, UPf(i) + 5.4), yaw = Math.atan2(-118 - p[0], -300 - p[2]);
-    const r = atlas.add(1280, 240, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#1f6bff'; g.beginPath(); g.arc(h * 0.5, h * 0.5, h * 0.34, 0, 7); g.fill(); g.fillStyle = '#7fd0ff'; g.beginPath(); g.arc(h * 0.5, h * 0.5, h * 0.15, 0, 7); g.fill(); fitText(g, 'DEEPTHIRST', w * 0.58, h * 0.4, w * 0.72, 150, SANS, '#1a1d29', { lines: 1 }); fitText(g, 'HALL 2 · INFERENCE', w * 0.58, h * 0.8, w * 0.7, 56, SANS, '#1f6bff', { lines: 1 }); });
-    atlas.place(r, p, yaw, 32, 6, 0, true);
-    const fr = new ModelBuilder(); for (const o of [-11, 0, 11]) fr.add('f', box(0.6, 6.4, 0.6, 0.1, 1), { p: [p[0] + Math.cos(yaw) * o - Math.sin(yaw) * 0.4, p[1] - 3.0, p[2] - Math.sin(yaw) * o - Math.cos(yaw) * 0.4] });
-    bake.builder(fr, { f: plastic(0x6b7380, 0.5, 0.4) }, false);
-  }
+  const api = { THREE, track, sc, bake, atlas, at, idx, n, hw, Wd, UPf, wideK, inSide, ov, cpOf, kit, cfg, ctxs };
+  const extra = HALL_EXTRAS[cfg.id]?.(api);
 
-  bake.geo(new THREE.MeshStandardMaterial({ map: panelTex, roughness: 0.7, emissive: 0xffffff, emissiveMap: panelTex, emissiveIntensity: 0.35 }), inner.geometry(THREE), false);
-  bake.geo(new THREE.MeshStandardMaterial({ map: cladTex, roughness: 0.75 }), outer.geometry(THREE), false);
-  bake.geo(new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.4, metalness: 0.3, emissive: 0xffffff, emissiveMap: floorTex, emissiveIntensity: 0.25, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), floor.geometry(THREE), false);
-  bake.geo(plastic(0x0d1017, 0.95), ceil.geometry(THREE), false);
-  bake.geo(plastic(0x9aa1aa, 0.8), roof.geometry(THREE), false);
-  bake.geo(rackSys.mat, racks.geometry(THREE), false);
-  bake.geo(plastic(0x14171c, 0.6, 0.3), dark.geometry(THREE), false);
-  bake.geo(glow(0x9fe6ff, 1.6), strips.geometry(THREE), false);
-  bake.geo(new THREE.MeshStandardMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide }), glassQ.geometry(THREE), false);
-  bake.builder(ov, { tray: plastic(0xffc928, 0.5), rod: plastic(0x2c323c, 0.5), tankrim: plastic(0x3a414c, 0.4, 0.6), tankbase: plastic(0x232832, 0.5, 0.4), sunk: plastic(0x0d0f14, 0.4, 0.3) }, false);
-  if (units.length) sc.instances(partsOf(D.crah()), units, { cast: false });
+  bake.geo(panelMat, inner.geometry(THREE), false);
+  bake.geo(kit.clad, outer.geometry(THREE), false);
+  bake.geo(plastic(cfg.accent, 0.5), accentQ.geometry(THREE), false);
+  bake.geo(kit.floor, floor.geometry(THREE), false);
+  bake.geo(kit.ceil, ceil.geometry(THREE), false);
+  bake.geo(kit.roof, roof.geometry(THREE), false);
+  if (!racks.empty) bake.geo(rackSys.mat, racks.geometry(THREE), false);
+  if (!dark.empty) bake.geo(kit.dark, dark.geometry(THREE), false);
+  if (!rowGlowQ.empty) bake.geo(glow(cfg.rowGlow, 2.6), rowGlowQ.geometry(THREE), false);
+  bake.geo(glowMat, strips.geometry(THREE), false);
+  bake.geo(bandMat, bands.geometry(THREE), false);
+  bake.builder(ov, { tray: kit.tray, rod: kit.rod, tankrim: plastic(0x3a414c, 0.4, 0.6), tankbase: plastic(0x232832, 0.5, 0.4), sunk: plastic(0x0d0f14, 0.4, 0.3), pipeA: plastic(0x2f6fc0, 0.42, 0.25), pipeB: plastic(0x16a39a, 0.42, 0.25), flange: plastic(0x24569a, 0.45, 0.3), steel: plastic(0x8a929e, 0.4, 0.6), stage: plastic(0x1a1426, 0.6), lip: glow(0xff3dbb, 2.2) }, false);
   if (chills.length) sc.instances(partsOf(D.chiller()), chills, { cast: false });
 
-  /** True when (x, z) is inside Hall 2's footprint (for keeping other dressing out). */
   const ground = makeGroundHit();
-  const inside = (x, z, m = 2) => { const g = track.ground(x, z, -1, ground); const c = track.cp[g.i]; if (!(c >= H2.from - 0.1 && c <= H2.to + 0.1)) return false; return (g.onRoad ? 0 : g.outside) < Wd(g.i, g.side > 0 ? 1 : -1) - hw(g.i) + m; };
+  /** True when (x, z) is inside this hall's footprint (for keeping other dressing out). */
+  const inside = (x, z, m = 2) => { const g = track.ground(x, z, -1, ground); if (!inCpRange(track.cp[g.i], cfg.from - 0.1, cfg.to + 0.1)) return false; return (g.onRoad ? 0 : g.outside) < Wd(g.i, g.side > 0 ? 1 : -1) - hw(g.i) + m; };
+  return { update: extra?.update || (() => {}), inside, api };
+}
 
-  // per frame: the coolant follows the reservoir (down there, up here), bubbles, and the screen's guesses
-  const M4 = new THREE.Matrix4(), Q4 = new THREE.Quaternion(), S4 = new THREE.Vector3(), P4 = new THREE.Vector3(), Yx = new THREE.Vector3(0, 1, 0);
-  const GUESS = [['IS THIS A ROAD?', 'YES', 97], ['IS THAT A KART?', 'A TOASTER', 64], ['IS THE LAKE OK?', 'YES', 12], ['WHO IS WINNING?', 'US', 100], ['IS THIS ETHICAL?', 'LOADING...', 0], ['WHAT IS GRASS?', 'NO DATA', 3]];
-  let shown = -1, lev = 0.22;
-  const update = (dt, time) => {
-    const lake = view.dcLake || { level: LAKE.full };
-    const want = 0.22 + 0.78 * clamp((LAKE.full - lake.level) / (LAKE.full - LAKE.low), 0, 1);
-    lev += (want - lev) * Math.min(1, dt * 1.5);
-    const hgt = 0.2 + 2.95 * lev;
-    tanks.forEach((t, k) => { const wob = 1 + 0.015 * Math.sin(time * 3 + k); Q4.setFromAxisAngle(Yx, t.yaw); M4.compose(P4.set(t.x, t.y + 0.45 + hgt * wob / 2, t.z), Q4, S4.set(1, hgt * wob, 1)); coolant.setMatrixAt(k, M4); });
-    coolant.instanceMatrix.needsUpdate = true;
-    for (let k = 0, m = view.fx.count(10 + 30 * lev, dt); k < m; k++) { const t = tanks[Math.floor(Math.random() * tanks.length)]; view.fx.add.emit({ x: t.x + (Math.random() - 0.5) * 3.4, y: t.y + 0.7, z: t.z + (Math.random() - 0.5) * 3.2, vx: 0, vy: 1.6 + Math.random(), vz: 0, color: [0.75, 0.95, 1], size: 0.22, life: Math.max(0.3, hgt / 2.2), gravity: -0.5, alpha: 0.8 }); }
-    const gi = Math.floor(time / 2.4) % GUESS.length;
-    if (gi !== shown) {
-      shown = gi; const [q, a, pc] = GUESS[gi];
-      screen.draw((g, w, h) => {
-        g.fillStyle = '#04070b'; g.fillRect(0, 0, w, h);
-        g.fillStyle = '#3dc8ff'; g.font = `bold 40px ${MONO}`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('INFERENCE IN PROGRESS', 34, 46);
-        fitText(g, q, w / 2, 150, w - 80, 92, SANS, '#ffffff', { lines: 1 });
-        fitText(g, a, w / 2, 262, w - 80, 104, SANS, a === 'YES' || a === 'US' ? '#38ff74' : '#ffb020', { lines: 1 });
-        g.fillStyle = '#5a6a78'; g.font = `bold 32px ${MONO}`; g.textAlign = 'right'; g.fillText(`CONFIDENCE ${pc}%`, w - 34, h - 30);
-      });
+/** Spinning wall fans: a steel ring on the wall, its blades collected across halls and spun in one instanced mesh. */
+function wallFan(api, i, sd, up, r = 2.2) {
+  const { at, Wd, kit, ov, track, THREE } = api;
+  const c = at(i, sd * (Wd(i, sd) - 0.25), up), yaw = Math.atan2(-sd * track.lx[i], -sd * track.lz[i]);
+  const ring = new THREE.CylinderGeometry(r + 0.25, r + 0.25, 0.2, 20); ring.rotateX(Math.PI / 2); ring.rotateY(yaw);
+  ov.add('steel', ring, { p: c });
+  kit.fans.push({ x: c[0] + Math.sin(yaw) * 0.14, y: c[1], z: c[2] + Math.cos(yaw) * 0.14, yaw, r });
+}
+
+/** Each hall's own set pieces. Each gets the hall's api and may return { update(dt, time) }. */
+const HALL_EXTRAS = {
+  /* The keynote arena: the start line runs down the red carpet of a product launch. Stands on the right, a rack
+     canyon on the left, a stage screen, sweeping spotlights, and a curtain of plastic strips at the way in. */
+  arena(api) {
+    const { THREE, track, sc, bake, atlas, at, idx, n, hw, Wd, UPf, ov, ctxs } = api;
+    // the stage screen, high on the left wall, cycling launch slides
+    const iS = track.indexAtCp(27.55), sP = at(iS, Wd(iS, 1) - 0.3, 9.4);
+    const screen = ledSign(THREE, ctxs.ctx.group, 1024, 320, sP, Math.atan2(-track.lx[iS], -track.lz[iS]), 30, 9.4);
+    { const i0 = track.indexAtCp(27.2), i1 = track.indexAtCp(27.9); for (const i of [i0, i1]) ov.add('stage', new THREE.BoxGeometry(1.2, 11, 1.2), { p: at(i, Wd(i, 1) - 0.7, 9.2) }); }
+    // murals: the old campus jokes, now on the arena walls
+    { const i = track.indexAtCp(0.35), r = atlas.add(1600, 260, muralDraw('TRAINING ON YOUR DATA (THANKS)', '#ff3dbb')); atlas.place(r, at(i, Wd(i, 1) - 0.2, 11.6), Math.atan2(-track.lx[i], -track.lz[i]), 46, 7.4); }
+    { const i = track.indexAtCp(27.6), r = atlas.add(1600, 300, muralDraw('4 JOBS CREATED', '#3dc8ff')); atlas.place(r, at(i, -(Wd(i, -1) - 0.2), 12.4), Math.atan2(track.lx[i], track.lz[i]), 34, 6.2); }
+    // the wall at the far end carries the hall it leads to: the gallons counter and the name over the door
+    const iE = idx[n - 1], ty = Math.atan2(-track.tx[iE], -track.tz[iE]), e = (lat, up, o) => { const p = at(iE, lat, up); return [p[0] - track.tx[iE] * o, p[1], p[2] - track.tz[iE] * o]; };
+    ctxs.counterAt = { c: e(0, DOORH + 2.05, 0.5), yaw: ty };
+    atlas.place(atlas.add(1280, 240, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#1f6bff'; g.beginPath(); g.arc(h * 0.5, h * 0.5, h * 0.36, 0, 7); g.fill(); g.fillStyle = '#7fd0ff'; g.beginPath(); g.moveTo(h * 0.5, h * 0.22); g.quadraticCurveTo(h * 0.75, h * 0.55, h * 0.5, h * 0.75); g.quadraticCurveTo(h * 0.25, h * 0.55, h * 0.5, h * 0.22); g.fill(); fitText(g, 'DEEPTHIRST', w * 0.58, h * 0.4, w * 0.74, 150, SANS, '#1a1d29', { lines: 1 }); fitText(g, 'TRAINING HALL 9 →', w * 0.58, h * 0.8, w * 0.7, 52, SANS, '#1f6bff', { lines: 1 }); }), e(0, DOORH + 5.35, 0.5), ty, 14, 2.6);
+    // a short vestibule between this end wall and Hall 9's door: roof and sides, so no sky shows between them
+    {
+      const x0 = at(iE, 0, 0)[0], q = new Quads(), y = DOORH + 0.2;
+      q.quad([x0, y, 11.5], [HB.x0 + 0.1, y, 11.5], [HB.x0 + 0.1, y, -11.5], [x0, y, -11.5]);
+      q.quad([x0, y + 0.3, -11.5], [HB.x0 + 0.1, y + 0.3, -11.5], [HB.x0 + 0.1, y + 0.3, 11.5], [x0, y + 0.3, 11.5]);
+      for (const z of [-11.5, 11.5]) { q.quad([x0, -1, z], [HB.x0 + 0.1, -1, z], [HB.x0 + 0.1, y, z], [x0, y, z]); q.quad([HB.x0 + 0.1, -1, z], [x0, -1, z], [x0, y, z], [HB.x0 + 0.1, y, z]); }
+      bake.geo(api.kit.dark, q.geometry(THREE), false);
     }
+    // the plastic strip curtain at the way in from Hall 2: you burst through it into the light show
+    {
+      const i = idx[0], q = new Quads(), o = hw(i) + 0.4, yaw = Math.atan2(track.tx[i], track.tz[i]), off = 0.6;
+      for (let l = -o + 0.2; l < o - 0.1; l += 0.62) { const A = at(i, l, 0.5), B = at(i, l + 0.48, 0.5), C = at(i, l + 0.48, DOORH), D = at(i, l, DOORH); const s = p => [p[0] + track.tx[i] * off, p[1], p[2] + track.tz[i] * off]; q.quad(s(A), s(B), s(C), s(D)); }
+      bake.geo(new THREE.MeshStandardMaterial({ color: 0xcfe9ff, transparent: true, opacity: 0.28, roughness: 0.1, depthWrite: false, side: THREE.DoubleSide }), q.geometry(THREE), false);
+      void yaw;
+    }
+    // spotlight beams sweeping from the ceiling, magenta and cyan
+    const beamGeo = new THREE.ConeGeometry(2.8, 14, 20, 1, true); beamGeo.translate(0, -7, 0);
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.075, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, vertexColors: false });
+    const beams = new THREE.InstancedMesh(beamGeo, beamMat, 8); beams.frustumCulled = false; ctxs.ctx.group.add(beams);
+    const cols = [0xff3dbb, 0x3dc8ff], bPos = [];
+    for (let k = 0; k < 8; k++) { const i = idx[Math.round((k + 0.5) / 8 * (n - 1))], p = at(i, (k % 2 ? -1 : 1) * 4, UPf(i) - 0.5); bPos.push(p); beams.setColorAt(k, new THREE.Color(cols[k % 2])); }
+    beams.instanceColor.needsUpdate = true;
+    const M = new THREE.Matrix4(), Qb = new THREE.Quaternion(), Eb = new THREE.Euler(), Sb = new THREE.Vector3(1, 1, 1), Pb = new THREE.Vector3();
+    const SLIDES = [['ONE MORE THING...', '#ffffff'], ['IT IS YOUR LAKE', '#7fd0ff'], ['NOW 40% THIRSTIER', '#ff7ad6'], ['AVAILABLE: NEVER', '#ffd23c'], ['APPLAUSE, PLEASE', '#7dff9a']];
+    let shown = -1;
+    return {
+      update(dt, time) {
+        bPos.forEach((p, k) => { Eb.set(Math.sin(time * 0.7 + k * 1.3) * 0.5, 0, Math.cos(time * 0.55 + k) * 0.45); Qb.setFromEuler(Eb); M.compose(Pb.set(p[0], p[1], p[2]), Qb, Sb); beams.setMatrixAt(k, M); });
+        beams.instanceMatrix.needsUpdate = true;
+        const si = Math.floor(time / 2.2) % SLIDES.length;
+        if (si !== shown) {
+          shown = si; const [t, c] = SLIDES[si];
+          screen.draw((g, w, h) => {
+            const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#1a0f2e'); gr.addColorStop(1, '#3a0f3a'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+            g.fillStyle = '#ff3dbb'; g.font = `bold 34px ${MONO}`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('DEEPTHIRST DEVDAY · LIVE', 30, 36);
+            fitText(g, t, w / 2, h * 0.58, w - 80, 130, FONT, c, { lines: 1 });
+          });
+        }
+      },
+    };
+  },
+
+  /* The chiller plant: fat coolant pipes running up both walls with the climb, gauges, and fans. */
+  chiller(api) {
+    const { THREE, track, atlas, at, idx, n, hw, Wd, ov } = api;
+    for (const sd of [-1, 1]) for (const [up, r, key, lo] of [[1.6, 1.0, 'pipeA', 1.6], [4.3, 0.8, 'pipeB', 1.4], [6.6, 0.55, 'pipeA', 1.0]]) {
+      const pts = idx.map(i => { const p = at(i, sd * (Wd(i, sd) - lo), up); return new THREE.Vector3(p[0], p[1], p[2]); });
+      const curve = new THREE.CatmullRomCurve3(pts), len = curve.getLength();
+      ov.add(key, new THREE.TubeGeometry(curve, Math.max(8, Math.round(len / 3)), r, 12, false));
+      for (let s = 4; s < len - 2; s += 9) { const t = s / len, p = curve.getPointAt(t), tg = curve.getTangentAt(t), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), tg), e = new THREE.Euler().setFromQuaternion(q); ov.add('flange', new THREE.TorusGeometry(r + 0.06, 0.13, 5, 16), { p: [p.x, p.y, p.z], r: [e.x, e.y, e.z] }); }
+    }
+    // gauges at driver height, and fans up high
+    const gauges = [['COOLANT', 'A LOT'], ['LAKE LEFT', 'SOME'], ['PRESSURE', 'YES']];
+    gauges.forEach(([a, b], k) => {
+      const i = idx[Math.round((k + 1) / (gauges.length + 1) * (n - 1))], sd = k % 2 ? -1 : 1;
+      const r = atlas.add(320, 320, (g, w, h) => { g.fillStyle = '#e8ecef'; g.beginPath(); g.arc(w / 2, h / 2, w * 0.47, 0, 7); g.fill(); g.lineWidth = 14; g.strokeStyle = '#3a414c'; g.stroke(); g.strokeStyle = '#e23b3b'; g.lineWidth = 22; g.beginPath(); g.arc(w / 2, h / 2, w * 0.36, -0.4, 0.5); g.stroke(); g.strokeStyle = '#1a1d29'; g.lineWidth = 9; g.beginPath(); g.moveTo(w / 2, h / 2); g.lineTo(w * 0.86, h * 0.56); g.stroke(); fitText(g, a, w / 2, h * 0.3, w * 0.6, 40, SANS, '#1a1d29', { lines: 1 }); fitText(g, b, w / 2, h * 0.72, w * 0.55, 44, SANS, '#e23b3b', { lines: 1 }); });
+      atlas.place(r, at(i, sd * (Wd(i, sd) - 0.3), 3.0), Math.atan2(-sd * track.lx[i], -sd * track.lz[i]), 2.6, 2.6);
+    });
+    for (let k = 2; k < n - 2; k += 6) for (const sd of [-1, 1]) wallFan(api, idx[k], sd, 8.4, 1.4);
+    void hw;
+    return null;
+  },
+
+  /* The GPU hall: hot aisles glowing red, heat shimmer off every rack, and the fans roaring. */
+  gpu(api) {
+    const { THREE, track, at, idx, n, hw, view = api.ctxs.view, atlas, Wd } = api;
+    for (let k = 3; k < n - 2; k += 5) for (const sd of [-1, 1]) wallFan(api, idx[k], sd, 8.0, 1.6);
+    { const i = idx[Math.floor(n * 0.45)], p = at(i, -(Wd(i, -1) - 0.2), 8.7), r = atlas.add(1600, 260, muralDraw('WE BOUGHT ALL OF THEM', '#e23b3b')); atlas.place(r, p, Math.atan2(track.lx[i], track.lz[i]), 26, 4.2); }
+    const hot = idx.filter((_, k) => k % 3 === 1).map(i => ({ i, sd: (i & 1) ? 1 : -1 }));
+    void THREE;
+    return {
+      update(dt) {
+        for (let k = 0, m = view.fx.count(14, dt); k < m; k++) {
+          const h = hot[Math.floor(Math.random() * hot.length)], p = at(h.i, h.sd * (hw(h.i) + 2.3 + Math.random() * 4), 3.2 + Math.random() * 1.4);
+          view.fx.add.emit({ x: p[0], y: p[1], z: p[2], vx: 0, vy: 1.1, vz: 0, color: [1, 0.42, 0.16], size: 0.7, life: 1.3, gravity: -0.4, alpha: 0.26 });
+        }
+      },
+    };
+  },
+
+  /* Hall 2: immersion tanks that fill as the reservoir drains, the inference screen, and the name on the roof. */
+  inference(api) {
+    const { THREE, track, sc, atlas, at, hw, Wd, UPf, inSide, ov, ctxs, bake } = api;
+    const view = ctxs.view, cfg = api.cfg, out = -inSide;
+    const tankIdx = ctxs.samples(cfg.tanks[0] + 0.03, cfg.tanks[1] - 0.03, 5.2), tanks = [], glassQ = new Quads();
+    for (const i of tankIdx) {
+      const c = at(i, out * (hw(i) + 6.3), 0), yaw = Math.atan2(track.tx[i], track.tz[i]);
+      tanks.push({ x: c[0], y: c[1], z: c[2], yaw });
+      ov.add('tankrim', box(4.6, 0.3, 4.2, 0.08, 1), { p: [c[0], c[1] + 3.5, c[2]], r: [0, yaw, 0] });
+      ov.add('tankbase', box(4.8, 0.5, 4.4, 0.08, 1), { p: [c[0], c[1] + 0.2, c[2]], r: [0, yaw, 0] });
+      for (const dz of [-1.1, 0, 1.1]) ov.add('sunk', new THREE.BoxGeometry(0.55, 2.2, 3.6), { p: [c[0] + Math.cos(yaw) * dz, c[1] + 1.6, c[2] - Math.sin(yaw) * dz], r: [0, yaw, 0] });
+      const cs = Math.cos(yaw), sn = Math.sin(yaw), corner = (u, v, y) => [c[0] + u * cs + v * sn, c[1] + y, c[2] - u * sn + v * cs], hx = 2.2, hz = 2.0;
+      glassQ.quad(corner(-hx, -hz, 0.4), corner(hx, -hz, 0.4), corner(hx, -hz, 3.4), corner(-hx, -hz, 3.4));
+      glassQ.quad(corner(hx, hz, 0.4), corner(-hx, hz, 0.4), corner(-hx, hz, 3.4), corner(hx, hz, 3.4));
+      glassQ.quad(corner(hx, -hz, 0.4), corner(hx, hz, 0.4), corner(hx, hz, 3.4), corner(hx, -hz, 3.4));
+      glassQ.quad(corner(-hx, hz, 0.4), corner(-hx, -hz, 0.4), corner(-hx, -hz, 3.4), corner(-hx, hz, 3.4));
+    }
+    bake.geo(new THREE.MeshStandardMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide }), glassQ.geometry(THREE), false);
+    const coolant = new THREE.InstancedMesh(new THREE.BoxGeometry(4.3, 1, 3.9), new THREE.MeshStandardMaterial({ color: 0x2fa8ff, emissive: 0x1a7fe0, emissiveIntensity: 0.9, transparent: true, opacity: 0.72, roughness: 0.1, depthWrite: false }), tanks.length);
+    coolant.frustumCulled = false; coolant.renderOrder = 2; ctxs.ctx.group.add(coolant);
+    {
+      const i = tankIdx[Math.floor(tankIdx.length / 2)], c = at(i, out * (hw(i) + 6.3), 6.4);
+      const r = atlas.add(1024, 220, (g, w, h) => { g.fillStyle = '#0d1a2a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#3dc8ff'; g.lineWidth = 8; g.strokeRect(4, 4, w - 8, h - 8); fitText(g, 'IMMERSION COOLING', w / 2, h * 0.34, w - 80, 96, SANS, '#7fd0ff', { lines: 1 }); fitText(g, 'NOW WITH 100% MORE LAKE', w / 2, h * 0.72, w - 80, 66, SANS, '#ffd23c', { lines: 1 }); });
+      atlas.place(r, c, Math.atan2(-out * track.lx[i], -out * track.lz[i]), 15, 3.2, 0, true);
+      for (const o of [-6, 6]) ov.add('rod', new THREE.BoxGeometry(0.05, UPf(i) - 8, 0.05), { p: [c[0] + track.tx[i] * o, c[1] + 1.6 + (UPf(i) - 8) / 2, c[2] + track.tz[i] * o] });
+    }
+    const iS = track.indexAtCp(24.05), sP = at(iS, out * (Wd(iS, out) - 0.25), 8.4);
+    const screen = ledSign(THREE, ctxs.ctx.group, 1024, 384, sP, Math.atan2(-out * track.lx[iS], -out * track.lz[iS]), 19, 7.1);
+    { const i = track.indexAtCp(25.0), p = at(i, inSide * (Wd(i, inSide) - 0.2), 9.4), r = atlas.add(1600, 300, muralDraw('THINKING REALLY HARD', '#3dc8ff')); atlas.place(r, p, Math.atan2(-inSide * track.lx[i], -inSide * track.lz[i]), 24, 4.5); }
+    {
+      const i = track.indexAtCp(23.9), p = at(i, 0, UPf(i) + 5.4), yaw = Math.atan2(-118 - p[0], -300 - p[2]);
+      const r = atlas.add(1280, 240, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#1f6bff'; g.beginPath(); g.arc(h * 0.5, h * 0.5, h * 0.34, 0, 7); g.fill(); g.fillStyle = '#7fd0ff'; g.beginPath(); g.arc(h * 0.5, h * 0.5, h * 0.15, 0, 7); g.fill(); fitText(g, 'DEEPTHIRST', w * 0.58, h * 0.4, w * 0.72, 150, SANS, '#1a1d29', { lines: 1 }); fitText(g, 'HALL 2 · INFERENCE', w * 0.58, h * 0.8, w * 0.7, 56, SANS, '#1f6bff', { lines: 1 }); });
+      atlas.place(r, p, yaw, 32, 6, 0, true);
+      for (const o of [-11, 0, 11]) ov.add('steel', box(0.6, 6.4, 0.6, 0.1, 1), { p: [p[0] + Math.cos(yaw) * o - Math.sin(yaw) * 0.4, p[1] - 3.0, p[2] - Math.sin(yaw) * o - Math.cos(yaw) * 0.4] });
+    }
+    void sc;
+    const M4 = new THREE.Matrix4(), Q4 = new THREE.Quaternion(), S4 = new THREE.Vector3(), P4 = new THREE.Vector3(), Yx = new THREE.Vector3(0, 1, 0);
+    const GUESS = [['IS THIS A ROAD?', 'YES', 97], ['IS THAT A KART?', 'A TOASTER', 64], ['IS THE LAKE OK?', 'YES', 12], ['WHO IS WINNING?', 'US', 100], ['IS THIS ETHICAL?', 'LOADING...', 0], ['WHAT IS GRASS?', 'NO DATA', 3]];
+    let shown = -1, lev = 0.22;
+    return {
+      update(dt, time) {
+        const lake = view.dcLake || { level: LAKE.full };
+        const want = 0.22 + 0.78 * clamp((LAKE.full - lake.level) / (LAKE.full - LAKE.low), 0, 1);
+        lev += (want - lev) * Math.min(1, dt * 1.5);
+        const hgt = 0.2 + 2.95 * lev;
+        tanks.forEach((t, k) => { const wob = 1 + 0.015 * Math.sin(time * 3 + k); Q4.setFromAxisAngle(Yx, t.yaw); M4.compose(P4.set(t.x, t.y + 0.45 + hgt * wob / 2, t.z), Q4, S4.set(1, hgt * wob, 1)); coolant.setMatrixAt(k, M4); });
+        coolant.instanceMatrix.needsUpdate = true;
+        for (let k = 0, m = view.fx.count(10 + 30 * lev, dt); k < m; k++) { const t = tanks[Math.floor(Math.random() * tanks.length)]; view.fx.add.emit({ x: t.x + (Math.random() - 0.5) * 3.4, y: t.y + 0.7, z: t.z + (Math.random() - 0.5) * 3.2, vx: 0, vy: 1.6 + Math.random(), vz: 0, color: [0.75, 0.95, 1], size: 0.22, life: Math.max(0.3, hgt / 2.2), gravity: -0.5, alpha: 0.8 }); }
+        const gi = Math.floor(time / 2.4) % GUESS.length;
+        if (gi !== shown) {
+          shown = gi; const [q, a, pc] = GUESS[gi];
+          screen.draw((g, w, h) => {
+            g.fillStyle = '#04070b'; g.fillRect(0, 0, w, h);
+            g.fillStyle = '#3dc8ff'; g.font = `bold 40px ${MONO}`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('INFERENCE IN PROGRESS', 34, 46);
+            fitText(g, q, w / 2, 150, w - 80, 92, SANS, '#ffffff', { lines: 1 });
+            fitText(g, a, w / 2, 262, w - 80, 104, SANS, a === 'YES' || a === 'US' ? '#38ff74' : '#ffb020', { lines: 1 });
+            g.fillStyle = '#5a6a78'; g.font = `bold 32px ${MONO}`; g.textAlign = 'right'; g.fillText(`CONFIDENCE ${pc}%`, w - 34, h - 30);
+          });
+        }
+      },
+    };
+  },
+};
+const DOORH = 8.4;
+
+/** Builds every road hall; returns { update, inside } for the whole campus (Hall 9's box is checked separately). */
+function campusHalls(ctxs) {
+  const kit = hallKit(ctxs.THREE), halls = HALL_DEFS.map(cfg => roadHall(ctxs, cfg, kit));
+  const { THREE } = ctxs;
+  // every hall's wall fans, spun in one draw
+  let fanMesh = null;
+  if (kit.fans.length) {
+    const blade = new THREE.BufferGeometry(), pos = [];
+    for (let b = 0; b < 4; b++) { const a = b * Math.PI / 2, c = Math.cos(a), s = Math.sin(a), w = 0.28; pos.push(0, 0, 0, c * 1 - s * w, s * 1 + c * w, 0, c * 1 + s * w, s * 1 - c * w, 0); }
+    blade.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); blade.computeVertexNormals();
+    fanMesh = new THREE.InstancedMesh(blade, new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide }), kit.fans.length);
+    fanMesh.frustumCulled = false; ctxs.ctx.group.add(fanMesh);
+  }
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), S = new THREE.Vector3(), P = new THREE.Vector3();
+  return {
+    halls,
+    inside: (x, z, m = 2) => halls.some(h => h.inside(x, z, m)),
+    update(dt, time) {
+      for (const h of halls) h.update(dt, time);
+      if (fanMesh) { kit.fans.forEach((f, k) => { E.set(0, f.yaw, time * 9 + k, 'YXZ'); Q.setFromEuler(E); M.compose(P.set(f.x, f.y, f.z), Q, S.set(f.r, f.r, 1)); fanMesh.setMatrixAt(k, M); }); fanMesh.instanceMatrix.needsUpdate = true; }
+    },
   };
-  return { update, inside };
 }
 
 /** An LED panel with its own canvas, redrawn on demand. Returns { draw(fn) }. */

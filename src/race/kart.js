@@ -17,8 +17,9 @@ export const CLASSES = {
  *  (and then held to GO): press with `window` or less to go and the start boosts —
  *  inside `perfect` the boost is full strength — while pressing earlier than
  *  `burnoutAt` floods the engine and the start stalls. A racer's special
- *  (sp.startWindow / sp.burnoutAt) can widen both. The HUD rev meter reads these
- *  same numbers, so the window it draws is the window launch() judges. */
+ *  (sp.startWindow / sp.burnoutAt) can widen both. Nothing anywhere shows these
+ *  numbers: as in the reference games, the rocket start is a hidden timing skill
+ *  keyed to the countdown beats and learned by feel (#169). */
 export const START_TIMING = { window: 2.05, perfect: 1.25, floor: 0.05, burnoutAt: 2.6 };
 
 export const TUNE = {

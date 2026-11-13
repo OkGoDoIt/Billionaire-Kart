@@ -16,7 +16,7 @@
 .hud b { font-weight: normal; }
 
 /* chunky outlined lettering */
-.hud-rank, .hud-banner, .hud-rev-label, .hud-pill, .hud-time, .hud-item-count, .hud-wrong, .hud-speed, .hud-coin-pop { paint-order: stroke fill; -webkit-text-stroke: 0.16em var(--ink); letter-spacing: 0.01em; }
+.hud-rank, .hud-banner, .hud-pill, .hud-time, .hud-item-count, .hud-wrong, .hud-speed, .hud-coin-pop { paint-order: stroke fill; -webkit-text-stroke: 0.16em var(--ink); letter-spacing: 0.01em; }
 
 /* item slot, top-left */
 .hud-item { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 17); height: calc(var(--u) * 17); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3a4170 0%, #171a36 55%, #0b0d20 100%); box-shadow: 0 0 0 calc(var(--u) * 0.7) #0b0d20, 0 0 0 calc(var(--u) * 1.1) rgba(255,255,255,0.85), 0 calc(var(--u) * 1.2) calc(var(--u) * 2.4) rgba(0,0,0,0.45); display: grid; place-items: center; opacity: 0.55; transition: opacity 0.2s; }
@@ -96,32 +96,6 @@
 .hud-banner.small { font-size: calc(var(--u) * 6.5); top: 19.5%; }
 .hud-banner.bad { color: var(--hot); }
 .hud-banner.bad.small { font-size: calc(var(--u) * 7); top: 24%; }   /* the longest of these take two lines */
-
-/* countdown rev meter: the rocket-start window as a bar under the countdown number.
-   Red floods the engine, gold is the full boost. It exists only while the countdown
-   runs, so the centre of the screen is clear again the moment the race starts. */
-.hud-rev { position: absolute; left: 50%; top: 52%; transform: translateX(-50%); width: calc(var(--u) * 60); text-align: center; opacity: 0; transition: opacity 0.18s; }
-.hud-rev.show { opacity: 1; }
-.hud-rev-label { font-size: calc(var(--u) * 4.8); line-height: 1; min-height: calc(var(--u) * 4.8); color: #fff; filter: drop-shadow(0 calc(var(--u) * 0.7) 0 rgba(0,0,0,0.35)); }
-.hud-rev-label[data-zone="burn"] { color: var(--hot); }
-.hud-rev-label[data-zone="good"] { color: var(--mint); }
-.hud-rev-label[data-zone="perfect"] { color: var(--gold); }
-.hud-rev-label[data-zone="dead"], .hud-rev-label[data-zone="late"] { color: rgba(255,255,255,0.75); }
-.hud-rev-label[data-zone="hold"] { animation: hud-blink 0.55s linear infinite; }
-.hud-rev-bar { position: relative; height: calc(var(--u) * 3.6); margin-top: calc(var(--u) * 1.6); border-radius: calc(var(--u) * 1.8); background: rgba(11,13,32,0.72); box-shadow: 0 0 0 calc(var(--u) * 0.5) rgba(11,13,32,0.9), 0 calc(var(--u) * 0.8) calc(var(--u) * 1.6) rgba(0,0,0,0.4); }
-.hud-rev-zones { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
-.hud-rev-zones i { position: absolute; top: 0; bottom: 0; }
-.hud-rev-zones .z-burn { background: var(--hot); opacity: 0.85; }
-.hud-rev-zones .z-dead { background: rgba(255,255,255,0.20); }
-.hud-rev-zones .z-good { background: var(--mint); opacity: 0.82; }
-.hud-rev-zones .z-perfect { background: var(--gold); }
-.hud-rev-needle { position: absolute; top: calc(var(--u) * -0.8); bottom: calc(var(--u) * -0.8); width: calc(var(--u) * 0.9); margin-left: calc(var(--u) * -0.45); background: #fff; border-radius: calc(var(--u) * 0.45); box-shadow: 0 0 0 calc(var(--u) * 0.32) var(--ink); }
-.hud-rev.locked .hud-rev-needle { opacity: 0.35; }
-.hud-rev-lock { position: absolute; top: calc(var(--u) * -3.8); width: calc(var(--u) * 3.2); height: calc(var(--u) * 2.8); margin-left: calc(var(--u) * -1.6); background: #fff; clip-path: polygon(0 0, 100% 0, 50% 100%); animation: hud-pulse 0.4s ease-in-out infinite alternate; }
-.hud-rev-lock[data-zone="burn"] { background: var(--hot); }
-.hud-rev-lock[data-zone="good"] { background: var(--mint); }
-.hud-rev-lock[data-zone="perfect"] { background: var(--gold); }
-.hud-rev-lock[data-zone="dead"], .hud-rev-lock[data-zone="late"] { background: rgba(255,255,255,0.8); }
 
 /* trash talk: a rival's face and a speech bubble, on the left where it cannot cover the road */
 .hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--u) * 41); display: flex; align-items: center; gap: calc(var(--u) * 2); max-width: calc(var(--u) * 58); opacity: 0; transform: translateX(calc(var(--u) * -8)) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }

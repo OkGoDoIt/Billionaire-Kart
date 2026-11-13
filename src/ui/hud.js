@@ -2,7 +2,7 @@
    lap bottom-left, rank bottom-right, minimap right) and keeps the centre clear.
    Sized in container units so it scales to split-screen panes. */
 import { ITEMS } from '../race/items.js';
-import { TUNE, START_TIMING } from '../race/kart.js';
+import { TUNE } from '../race/kart.js';
 import { fmtTime, ordinalSuffix, clamp } from '../core/util.js';
 
 /* kart.speed is metres per second (the class table in race/kart.js says so); the readout shows honest mph. */
@@ -26,7 +26,6 @@ export class Hud {
       <div class="hud-rank"><b>1</b><span>st</span></div>
       <div class="hud-time"></div>
       <div class="hud-banner"></div>
-      <div class="hud-rev"><div class="hud-rev-label"></div><div class="hud-rev-bar"><div class="hud-rev-zones"><i class="z-burn"></i><i class="z-dead"></i><i class="z-good"></i><i class="z-perfect"></i></div><i class="hud-rev-lock"></i><i class="hud-rev-needle"></i></div></div>
       <div class="hud-warn"></div>
       <div class="hud-feed"></div>
       <div class="hud-talk"><img alt=""><div><b></b><span></span></div></div>
@@ -38,7 +37,7 @@ export class Hud {
     const q = s => root.querySelector(s);
     this.$ = { item: q('.hud-item'), img: q('.hud-item-img'), coinFallback: q('.hud-item-coin'), count: q('.hud-item-count'), info: q('.hud-item-info'), itemName: q('.hud-item-info b'), itemDesc: q('.hud-item-info span'), coins: q('.hud-coins b'), coinsPill: q('.hud-coins'), lap: q('.hud-lap b'), lapPill: q('.hud-lap'),
       rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed'), speedN: q('.hud-speed b'), coinPop: q('.hud-coin-pop'),
-      rev: q('.hud-rev'), revLabel: q('.hud-rev-label'), revBurn: q('.z-burn'), revDead: q('.z-dead'), revGood: q('.z-good'), revPerfect: q('.z-perfect'), revLock: q('.hud-rev-lock'), revNeedle: q('.hud-rev-needle') };
+    };
     if (showMap) this._buildMap();
     for (const id of ROULETTE) { const i = new Image(); i.src = itemIcon(id); }
     this.update(0);
@@ -166,49 +165,6 @@ export class Hud {
   }
   countdown(n) { this.banner(n === 0 ? 'GO!' : String(n), n === 0 ? 'go' : 'count', n === 0 ? 900 : 850); }
 
-  /* ---------- countdown rev meter ---------- */
-  /** The rocket-start window, drawn from the same numbers Kart.launch() judges
-      (START_TIMING, plus this kart's special where it widens them). The bar is the
-      countdown itself, running from its start on the left to GO on the right; the
-      needle is what pressing right now would get. Once the throttle is pressed a
-      marker locks where it landed — releasing and pressing again starts the timing
-      over, exactly as the sim treats it — and the label turns into the one
-      instruction that matters: hold it. Lives only while the countdown runs. */
-  _updateRev() {
-    const race = this.race, k = this.kart, $ = this.$;
-    if (!race.frozen || race.state !== 'countdown' || race.countdown <= 0) {
-      if (this._revShown) { this._revShown = false; $.rev.classList.remove('show'); }
-      return;
-    }
-    this._revShown = true; $.rev.classList.add('show');
-    const total = race.countdownFrom || 3.6, sp = k.sp || {};
-    const win = sp.startWindow || START_TIMING.window, burn = sp.burnoutAt || START_TIMING.burnoutAt;
-    const pct = c => clamp((total - c) / total, 0, 1) * 100;
-    const key = total + '|' + win + '|' + burn;
-    if (key !== this._revKey) {
-      this._revKey = key;
-      const seg = (elm, cHi, cLo) => { elm.style.left = pct(cHi) + '%'; elm.style.width = Math.max(0, pct(cLo) - pct(cHi)) + '%'; };
-      seg($.revBurn, total, burn);                              // pressed up here, the start stalls
-      seg($.revDead, burn, win);                                // in between: no boost, no stall
-      seg($.revGood, win, START_TIMING.perfect);                // in the window: a good start
-      seg($.revPerfect, START_TIMING.perfect, START_TIMING.floor);   // the sweet spot: the full boost
-    }
-    // the same boundaries launch() applies, in the same order
-    const zoneOf = c => c > burn ? 'burn' : c > win ? 'dead' : c < START_TIMING.floor ? 'late' : c <= START_TIMING.perfect ? 'perfect' : 'good';
-    const LABEL = { burn: 'TOO EARLY!', dead: 'NO BOOST', good: 'GOOD START', perfect: 'ROCKET START!', late: 'TOO LATE' };
-    $.revNeedle.style.left = pct(race.countdown) + '%';
-    const at = k.startPressAt;
-    if (at != null) {
-      $.revLock.style.left = pct(at) + '%'; $.revLock.style.display = ''; $.revLock.dataset.zone = zoneOf(at);
-      $.rev.classList.add('locked');
-      if (this._revLabel !== 'hold') { this._revLabel = 'hold'; $.revLabel.textContent = 'HOLD IT!'; $.revLabel.dataset.zone = 'hold'; }
-    } else {
-      $.revLock.style.display = 'none'; $.rev.classList.remove('locked');
-      const z = zoneOf(race.countdown);
-      if (this._revLabel !== z) { this._revLabel = z; $.revLabel.textContent = LABEL[z]; $.revLabel.dataset.zone = z; }
-    }
-  }
-
   update(dt) {
     const k = this.kart, $ = this.$, race = this.race;
     this.t += dt;
@@ -262,7 +218,6 @@ export class Hud {
     $.ink.classList.toggle('show', k.inkT > 0);
     $.speedN.textContent = Math.round(k.speed * MPH_PER_MS);
     this.mapT -= dt; if (this.mapT <= 0) { this.mapT = 0.05; this._drawMap(); }
-    this._updateRev();
   }
 
   setVisible(v) { this.root.classList.toggle('hidden', !v); }

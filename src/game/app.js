@@ -4,6 +4,7 @@ import { Gfx, detectQuality } from '../render/gfx.js';
 import { Input } from '../core/input.js';
 import { Save } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
+import { Wipe } from '../ui/wipe.js';
 import { Showroom } from '../render/showroom.js';
 import { RaceSession } from './session.js';
 import { AudioEngine } from '../audio/audio.js';
@@ -25,7 +26,7 @@ export class App {
     this.menus = new Menus(this);
     this.audio = new AudioEngine(this.save);
     this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = []; this._turnOk = false;
-    this.curtain = el('div', 'curtain'); document.body.appendChild(this.curtain);
+    this.wipe = new Wipe();
     this.rng = makeRng(Date.now() & 0xffff);
     this.input.onMenu = (a, d) => this.onMenu(a, d);
     this.input.onAnyInput = () => this.audio?.unlock?.();
@@ -110,12 +111,8 @@ export class App {
     try { if (on && !this.wakeLock && navigator.wakeLock) { this.wakeLock = await navigator.wakeLock.request('screen'); this.wakeLock.addEventListener('release', () => { this.wakeLock = null; }); } else if (!on && this.wakeLock) { await this.wakeLock.release(); this.wakeLock = null; } } catch { /* unsupported or denied */ }
   }
 
-  /** Fade to dark, swap the scene, fade back. */
-  async transition(fn) {
-    this.curtain.classList.add('on');
-    await new Promise(r => setTimeout(r, 300));
-    try { await fn(); } finally { requestAnimationFrame(() => requestAnimationFrame(() => this.curtain.classList.remove('on'))); }
-  }
+  /** Checker wipe: cover the screen, swap the scene, reveal. */
+  async transition(fn) { await this.wipe.through(fn); }
   _clearScene() {
     this.session?.dispose(); this.session = null; this.attract = false; document.body.classList.remove('must-turn');
     this.showroom?.dispose(); this.showroom = null;
@@ -225,10 +222,27 @@ export class App {
     }
     for (const h of session.huds) h.setVisible(false);
     session.touch?.setVisible(false); this._lockLandscape(false); document.body.classList.remove('must-turn');
-    this.menus.reset('results', { results, gp, track: def, records });
+    // a single race gets the cup's finish: the podium first, the full table behind it (#92)
+    if (!gp && cfg.mode === 'race') this._racePodium({ results, track: def, records });
+    else this.menus.reset('results', { results, gp, track: def, records });
     this.audio?.event?.('results', mine?.rank);
     this.audio?.music?.('results');
   }
+  _racePodium({ results, track, records }) {
+    const top3 = [...results].sort((a, b) => a.rank - b.rank).slice(0, 3);
+    const mine = results.filter(r => r.isPlayer);
+    const best = mine.length ? Math.min(...mine.map(r => r.rank)) : 1;
+    this.lastResults = { results, gp: null, track, records };
+    this.menus.close();
+    this.transition(() => {
+      this._clearScene();
+      this.showroom = new Showroom(this.gfx);
+      this.showroom.setPodium(top3.map(r => r.racer));
+      this.menus.reset('racePodium', { results, track, records, best });
+      this.audio?.event?.('podium', best);
+    });
+  }
+  showResults() { if (this.lastResults) this.menus.reset('results', this.lastResults); }
   gpNext() {
     const g = this.gp; if (!g) return;
     if (g.index < g.tracks.length - 1) { g.index++; this._gpRace(); return; }

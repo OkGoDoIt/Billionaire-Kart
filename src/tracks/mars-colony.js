@@ -237,6 +237,25 @@ function dress(ctx) {
     signAt(p.x, p.z, yaw, draw, w, h, up, opts); return p;
   };
   const RUST_HEX = '#c1440e', INK = '#1f1418', CREAM = '#f2efe6';
+  // painted posters (generated art, tools/gen-posters.mjs): one 2x2 atlas image, one mesh for all of them
+  const posters = (() => {
+    const tex = new THREE.TextureLoader().load('assets/posters/mars-colony.webp'); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const q = new K.Quads();
+    return {
+      place(k, c, yaw, w, h) { const u0 = (k % 2) / 2, v1 = 1 - Math.floor(k / 2) / 2; q.panel(c, yaw, w, h, [u0 + 0.002, v1 - 0.498, u0 + 0.498, v1 - 0.002]); },
+      flush() { if (q.empty) return; const m = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.4, roughness: 0.6 })); m.matrixAutoUpdate = false; ctx.group.add(m); },
+    };
+  })();
+  /** A painted poster on a board beside the road (poster k of the atlas), with a lettered back. */
+  const poster = (at, side, off, k, back, { w = 15, h = 10, up = 9, turn = 0.45 } = {}) => {
+    const p = sc.beside(at, side, off), yaw = faceIn(p.i, side, turn), rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
+    if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return null;
+    const y0 = sc.y(p.x, p.z), f = K.signFrame(w, h, up, { color: 0x2a2026, legs: 2 }); sc.place(f, p.x, p.z, { yaw, y: y0 }); bake.add(f); take(p.x, p.z, w * 0.55);
+    posters.place(k, [p.x + Math.sin(yaw) * 0.03, y0 + up, p.z + Math.cos(yaw) * 0.03], yaw, w, h);
+    const r = atlas.add(768, 512, K.board(back, { bg: INK, fg: CREAM, size: 120, stripe: RUST_HEX }));
+    atlas.place(r, [p.x - Math.sin(yaw) * 0.39, y0 + up, p.z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
+    return p;
+  };
   // spots the gags will stand on, kept clear of the domes, rocks, and solar panels
   for (const [at, side, off, r] of [[0.55, 1, 9, 13], [4.3, 1, 32, 10], [7.0, 1, 36, 20], [20.6, -1, 22, 16], [19.6, 1, 20, 12], [26.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [9.4, 1, 26, 13], [13.9, -1, 18, 11], [18.4, 1, 18, 11], [21.9, -1, 20, 11], [25.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
@@ -688,10 +707,11 @@ function dress(ctx) {
     const inDome = (x, z, m) => Math.hypot(x - DOME.x, z - DOME.z) < DOME.r - m;
     const ponds = [];
     for (const side of [1, -1]) { const p = sc.beside(22.05, side, 19); if (inDome(p.x, p.z, 9)) ponds.push(p); }
+    const boardsIn = [[21.95, -1, 17], [21.72, 1, 12.5], [22.5, -1, 12.5]].map(([a, sd, o]) => sc.beside(a, sd, o));   // the boards inside keep a clearing
     const spots = [];
     for (let gx = -DOME.r; gx <= DOME.r; gx += 6) for (let gz = -DOME.r; gz <= DOME.r; gz += 6) {
       const x = DOME.x + gx + rng.range(-2, 2), z = DOME.z + gz + rng.range(-2, 2);
-      if (!inDome(x, z, 4) || !clear(x, z, 1.5) || ponds.some(p => near(x, z, p, 9))) continue;
+      if (!inDome(x, z, 4) || !clear(x, z, 1.5) || ponds.some(p => near(x, z, p, 9)) || boardsIn.some(p => near(x, z, p, 9))) continue;
       const room = DOME.h * Math.sqrt(Math.max(0, 1 - (Math.hypot(x - DOME.x, z - DOME.z) / DOME.r) ** 2));
       spots.push({ x, y: track.terrainHeight(x, z), z, yaw: rng() * 6.28, room });
     }
@@ -868,11 +888,17 @@ function dress(ctx) {
   // ---- billboards where you are looking anyway ----
   const BOARDS = [
     [1.35, 1, 18, 'FUNDING SECURED', INK, '#38ff74'], [4.2, -1, 18, 'FULL SELF-LANDING: NEXT YEAR', CREAM, RUST_HEX],
-    [8.3, 1, 35, 'TICKET TO MARS: $500K', '#1f6bff', '#ffffff', 'RETURN TRIP: SOLD OUT'], [13.9, -1, 18, 'EARTH: HAD ITS CHANCE', '#2f7fe0', '#ffffff'],
-    [18.4, 1, 18, 'BREATHING IS NOW A SUBSCRIPTION', '#ffd23c', INK], [21.9, -1, 20, 'WORK FROM DOME: MANDATORY', '#ffffff', '#1f6bff'],
+    [18.4, 1, 18, 'BREATHING IS NOW A SUBSCRIPTION', '#ffd23c', INK],
     [25.6, -1, 18, 'MARS: NO REGULATORS', RUST_HEX, '#ffffff', '(OR ATMOSPHERE)'],
   ];
   for (const [at, side, off, text, bg, fg, sub] of BOARDS) sign(at, side, off, K.board(text, { bg, fg, size: 130, sub, subFg: fg, subScale: 0.6 }), 20, 6.6, 10, { turn: 0.45 });
+  // the painted posters: the travel poster at the pad, Earth as a holiday spot before the crater, the recruiting
+  // poster on the rim road, and the terraforming promise inside the dome
+  poster(8.7, 1, 22, 0, 'NO REFUNDS', { w: 18, h: 12, up: 10 });
+  poster(13.9, -1, 18, 1, 'EARTH: HAD ITS CHANCE');
+  poster(5.6, 1, 36, 2, 'MUST BRING OWN OXYGEN', { w: 21, h: 14, up: 11, turn: 0.5 });
+  poster(21.95, -1, 17, 3, 'WORK FROM DOME: MANDATORY', { w: 13.5, h: 9, up: 7.5 });
+  posters.flush();
 
   bake.flush();
   atlas.flush();

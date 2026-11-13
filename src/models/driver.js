@@ -622,15 +622,6 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
   if (racer.id === 'bill') banner(c, 'win31', { w: 0.64, h: 0.48 });
   if (racer.id === 'satya') banner(c, 'win11', { w: 0.52, h: 0.52, backing: 'cloth' });
   if (racer.id === 'zuck') banner(c, 'meta', { w: 0.66, h: 0.33, backing: 'cloth' });
-  if (racer.id === 'thiel') {
-    // the seeing stone, held up on a short staff behind his shoulder, glowing —
-    // so he reads from the chase camera by more than the kart's pedestal orb
-    const zb = c.Bk(0.62) - 0.08;
-    b.add('steel', limb([0.35, 0.42, zb], [0.43, 1.5, zb], 0.026, 0.02, 10));
-    b.add('steel', limb([0.08, 0.55, c.Bk(0.55)], [0.365, 0.55, zb], 0.016, 0.016, 8));
-    b.add('steel', cone(0.05, 0.09, 10), { p: [0.435, 1.53, zb], r: [PI, 0, 0] });
-    b.add('orb', sphere(0.105, 14, 10), { p: [0.44, 1.64, zb] });
-  }
 
   // materials: [colour (null = the racer's top), roughness, metalness, brightness]
   const km = kit.mats ?? {};
@@ -650,7 +641,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     tie: plastic(look.tie ?? 0xd8232a, 0.45), vest: fluoro(0xd8f23a),
     gold: plastic(0xffcf4a, 0.25, 1), silver: plastic(0xc9ced6, 0.25, 1), steel: MAT.chrome, white: MAT.white, black: MAT.black,
     pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), flame: glow(0xff8a1e, 3.2), flame2: glow(0x9fd4ff, 3.4), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
-    bot: plastic(0xf2f4f7, 0.3), eye: glow(0x5ce1ff, 2.2), orb: glow(0x7b6cff, 3.2),
+    bot: plastic(0xf2f4f7, 0.3), eye: glow(0x5ce1ff, 2.2),
     lid: plastic(0x33363c, 0.32, 0.85),
     cloth: doubleSided(0xf4f4ee, 0.8),
     apple: cached('applemat', () => new THREE.MeshStandardMaterial({ map: appleLogo(), emissiveMap: appleLogo(), emissive: 0xffffff, emissiveIntensity: 1.35, transparent: true, alphaTest: 0.35, roughness: 0.4 })),

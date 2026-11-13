@@ -619,9 +619,9 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
   // the Microsoft men and Zuck fly their eras on a banner behind the seat (#153):
   // Bill's is the waving 1992 flag on a stitched cream cloth, Satya's the flat
   // modern grid on white, Zuck's the loop on white: same pole, different decade.
-  if (racer.id === 'bill') banner(c, 'win31', { w: 0.64, h: 0.48 });
-  if (racer.id === 'satya') banner(c, 'win11', { w: 0.52, h: 0.52, backing: 'cloth' });
-  if (racer.id === 'zuck') banner(c, 'meta', { w: 0.66, h: 0.33, backing: 'cloth' });
+  if (racer.id === 'bill') banner(c, 'win31', { w: 0.76, h: 0.57, top: 1.4 });
+  if (racer.id === 'satya') banner(c, 'win11', { w: 0.6, h: 0.6, top: 1.4, backing: 'cloth' });
+  if (racer.id === 'zuck') banner(c, 'meta', { w: 0.84, h: 0.42, x: 0.48, top: 1.4, backing: 'cloth' });
 
   // materials: [colour (null = the racer's top), roughness, metalness, brightness]
   const km = kit.mats ?? {};

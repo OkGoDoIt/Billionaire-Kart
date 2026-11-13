@@ -215,5 +215,135 @@ harness over AI races — the probe pattern used in this audit). Targets:
 
 ## 2. The v3 track standard (principles)
 
-1. **Two to four 
-...[truncated 9113 chars]
+*(Sections beyond this point were truncated in the original PR #137 file
+and reconstructed from issue #135 on Nov 13, 2026.)*
+
+1. **Two to four route decisions per lap.** Every lap offers the driver
+   two to four real choices — an island split, an earned cut, a
+   grade-separated line — spread across the lap rather than stacked in
+   one sector. This is the repo research's own prescription (rec. 10,
+   quoted in the introduction), and it is the standard the pilot in §5
+   was specced against.
+2. **One signature vertical moment per lap.** A drop, a crest with air,
+   a wall-ride arc, an overpass — one moment per lap where the track
+   leaves the flat and the driver feels it. §4 lists the machinery that
+   delivers this today.
+3. **A crossover where the plan allows.** Crossovers are proven and
+   routine (§1.2): mark the upper section in `bridges`, keep ≥ 9 m
+   clearance outdoors (a readability rule, not an engine limit), and
+   keep the crossing strands far apart in arc length.
+4. **Height spent on drops and air, not only climbs.** Current tracks
+   spend their 15–32 m y-spans on climbs; sustained drops, crests and
+   air are rarer than the spans suggest (§1.3). Authored y and bank are
+   cheap — spend them on the way down as well as up.
+5. **Every choice balanced by the §1.5 method before it ships.** Split
+   sides within ~0.3 s of each other over the stretch, the faster side
+   carrying the risk and the slower side the reward; cuts lose
+   ≥ ~0.5 s unboosted and gain ~0.5–1.5 s boosted; whole-track gates
+   stay green (sim no FAIL, rescues < 2/race, spread < 20 s,
+   mini-turbos > 0).
+6. **Nothing that pitches the frame.** Loops and other frame-pitching
+   elements are excluded until the engine work in §6 is done — the
+   §1.4 test fails decisively, and the substitutes in §4 deliver the
+   same thrill today.
+
+## 3. Per-track opportunities
+
+The audit's menu, per track. Current state is §1.1's measured
+inventory; the opportunity named for each track is the cheapest step
+toward the §2 standard that the audit's evidence supports.
+
+| track | today (measured, §1.1) | opportunity |
+|---|---|---|
+| silicon-valley | 1,119 m; no shortcuts, no crossover — zero route decisions | **The pilot (§5)** — the game's opener gets the full treatment first |
+| burning-circuit | geometry cut exists but no `shortcuts[]` entry, so the AI never uses it | Formalize the existing cut as an earned `shortcuts[]` entry |
+| crypto-cove | geometry cut exists but no `shortcuts[]` entry, so the AI never uses it | Formalize the existing cut as an earned `shortcuts[]` entry |
+| wework-memorial | plan crossing at 3.42 m clearance, two floors + mezzanine | Already compliant with the standard — no work proposed |
+| singularity-speedway | ships the 720° spiral stack (0.7 m plan offset, Δy 20.1 m, bridge-marked) | Left alone — it is already the crossover exemplar; the §1.2 evidence comes from it |
+| boring-tunnel | no shortcuts, deliberately; ships the drift-through ring | Honestly left alone — the ring is its vertical moment (§1.4) |
+| bliss-hills | meadow cut (16% of lap); 24.5 m y-span, 26% pitches, three air crests | Already carries an earned cut and spends its span vertically — no specific proposal in the audit |
+| capitol-hill | the Mall cut (18% of lap) | Already carries an earned cut — no specific proposal in the audit |
+| datacenter-dash | lake bed cut (21% of lap, final lap only, under the causeway) | Already carries an earned, grade-separated cut — no specific proposal in the audit |
+| davos | 31.9 m y-span, 26% pitches, crest air | The vertical exemplar of §1.3 — no specific proposal in the audit |
+| international-waters | barge gap jump (§1.3) | No specific proposal in the audit |
+| mars-colony | 1,429 m; 18.1 m y-span; no shortcuts | No specific proposal in the audit |
+
+## 4. Vertical machinery: what a track can use today
+
+The proven devices, all authoring-only, drawn from the §1.2–§1.4
+verdicts:
+
+- **Overpass spiral** (Singularity pattern): a bridge-marked spiral
+  whose strands sit far apart in arc length; clearances are proven
+  from the shipped 20.1 m separation down to the audit's compressed
+  3.5 m stress test (§1.2). Give the upper deck walls so a kart can't
+  fall onto the lower road.
+- **Wall-ride arc**: authored per-point `bank` is unbounded (only the
+  automatic bank is capped), and the frame solve stays healthy —
+  plane-solve determinant 0.616 — to ~55° of bank (§1.3).
+- **Drift-through ring** (Boring Tunnel pattern, PR #124): a loop as
+  set dressing the road drifts *through* — the vertical thrill
+  without pitching the frame.
+- **Drops, crests and gap jumps**: big authored drops and climbs,
+  crests that give air (Davos's crest, Bliss's three), gap jumps
+  (Waters' barge jump; `gaps` sets bridge=1 and void ground), and
+  ramps (`_rampHeight` lift, which arms tricks) (§1.3).
+
+## 5. The pilot: Silicon Valley Circuit (original spec)
+
+> **Supersession note (Nov 13, 2026):** the parking-garage helix at
+> the centre of this spec was **rejected by Roger**: *"I don't like
+> the parking garage idea, let's try to figure out how we could
+> actually drive on the Golden Gate Bridge or incorporate some part
+> of the Stanford campus or Sandhill Road or something like that. We
+> can do better."* The pilot is superseded by
+> `docs/track-design-sv-pilot-v2.md` (PR #176), which rebuilds the
+> signature moment around real geography — the Golden Gate deck
+> crossing (#168), a Stanford campus section, and/or a Sand Hill Road
+> section — and retains the Founder's Fountain island split and the
+> two boost-gated grass cuts specified below. The original §5 is kept
+> under this note as history. **Do not build from it.**
+
+The pilot takes the game's opener from zero route decisions to four,
+using proven machinery only:
+
+1. **Garage-helix crossover.** A parking-garage helix (centre
+   (−128, 30), r 24) rising 3.0 → 12.5 m and crossing 9.5 m over its
+   own entry lane — the Singularity pattern (§1.2), the upper section
+   marked in `bridges` and walled.
+2. **Founder's Fountain island split** on the home straight — the
+   §1.1 pattern: widen the ribbon, solid island in the middle, both
+   sides full-speed road, differing in length, items and hazards.
+3. **The two existing grass cuts formalized** as boost-gated
+   `shortcuts[]` entries, so the AI takes them and they are balanced
+   by the guide's method rather than found by accident.
+
+Balance targets (§1.5): split sides ≤ 0.3 s apart over the stretch;
+cuts lose ≥ ~0.5 s unboosted and gain ~0.5–1.5 s boosted; whole-track
+gates stay green (sim no FAIL, rescues < 2/race, spread < 20 s,
+mini-turbos > 0).
+
+## 6. Engine work, costed and deferred
+
+Two capabilities sit beyond authoring. Both are recorded here for
+completeness; nothing in §§2–5 waits on either.
+
+- **Branch ribbons** (a true two-ribbon split). Today `ground()`
+  resolves exactly one spline, so anything off the spline is terrain
+  with the track's single `offroad` surface (§1.1). Two paved
+  branches, each with its own width, edges and surface, merging with
+  correct progress, ground and AI behaviour across the split, is an
+  engine feature. Deferred: the island split, the earned cut and the
+  spline-as-branch patterns (§1.1) cover every proposal in this doc.
+- **Loops.** Enabling a true loop means replacing the
+  horizontal-reference frame with parallel-transport frames, a full
+  3D ground solve, pitch-aware progress/AI (yaw is meaningless
+  upside-down), kart visual pitch beyond its ±0.6 rad clamp, and a
+  roll-following camera (§1.4) — an engine project with regression
+  risk to all 12 tracks. Not recommended now; §4's substitutes
+  deliver the vertical thrill without it.
+
+The reference frame cited in §1.1 lives here as well: Mario Kart
+World's wide river surface — the field spreading around rocks on one
+wide surface — is the island split's grammar (restated in
+`docs/track-design-sv-pilot-v2.md` §7).

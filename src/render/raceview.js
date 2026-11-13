@@ -169,8 +169,8 @@ export class RaceView {
             fx.confetti(p.x, p.y + 2, p.z, top ? 160 : 90, CONFETTI, top ? 13 : 10, p.y);
             if (cam) { // the line: a white pop, a gold rim on a podium finish, fireworks over the kart
               cam.punch(0.8);
-              if (this.views.length === 1) { this.flash = Math.max(this.flash, 0.5); this.gfx.post.flashColor.setRGB(1, 1, 1); }
-              if (top) { this._edge(cam, [1, 0.82, 0.25], 0.8, 0.7); this._fireworks(p, k.yaw, e.data === 1 ? 5 : 3); }
+              if (this.views.length === 1) { this.flash = Math.max(this.flash, 0.32); this.gfx.post.flashColor.setRGB(1, 1, 1); }
+              if (top) { this._edge(cam, [1, 0.82, 0.25], 0.6, 0.9); this._fireworks(k, e.data === 1 ? 5 : 3); }
             }
             break; }
           case 'finalLap': if (cam) this._edge(cam, [1, 0.3, 0.45], 0.55, 1.1); break;
@@ -231,12 +231,10 @@ export class RaceView {
     for (let i = 0; i < n * this.fx.density; i++) { const a = (i / n) * 6.283 + Math.random() * 0.3, v = 4 + s * 5 + Math.random() * 2; this.fx.smoke.emit({ x: p.x + Math.cos(a) * 0.8, y: p.y + 0.15, z: p.z + Math.sin(a) * 0.8, vx: Math.cos(a) * v, vy: 0.6 + Math.random() * 0.8, vz: Math.sin(a) * v, color: rgb, size: 0.55 + s * 0.35, life: 0.45 + s * 0.2, grow: 1.6, drag: 3.2, gravity: -0.6, alpha: 0.32, spin: (Math.random() - 0.5) * 2 }); }
   }
   /** Fireworks over a podium finish: a few bursts high ahead of the kart, one after another. */
-  _fireworks(p, yaw, n) {
-    for (let i = 0; i < n; i++) {
-      // low and close enough to sit in the chase view's upper third, ahead of the kart as the camera swings round
-      const at = this.time + 0.15 + i * 0.26, a = yaw + (i - (n - 1) / 2) * 0.45, d = 8 + Math.random() * 5;
-      (this._pending || (this._pending = [])).push({ at, x: p.x + Math.sin(a) * d, y: p.y + 4.5 + Math.random() * 2.5, z: p.z + Math.cos(a) * d, col: CONFETTI[i % 5] });
-    }
+  _fireworks(k, n) {
+    // each shell is placed when it bursts, ahead of where the kart is by then (it is still doing 90 mph through the
+    // slow motion), alternating sides so it flanks the FINISH banner instead of hiding behind it
+    for (let i = 0; i < n; i++) (this._pending || (this._pending = [])).push({ at: this.time + 0.15 + i * 0.26, k, a: (i % 2 ? 1 : -1) * (0.38 + i * 0.06), d: 22 + Math.random() * 5, h: 2.5 + Math.random() * 1.5, col: CONFETTI[i % 5] });
   }
   _shakeNear(x, z, amount, range) { for (const c of this.cams) { const d = Math.hypot(c.kart.x - x, c.kart.z - z); if (d < range) c.addShake(amount * (1 - d / range)); } }
 
@@ -320,7 +318,7 @@ export class RaceView {
     this.flash = Math.max(0, this.flash - dt * 2.6); gfx.post.flash = this.flash * 0.75;
     this.edge = Math.max(0, (this.edge || 0) - dt * (this.edgeDecay || 2.4)); gfx.post.edge = this.edge;
     gfx.post.lines += ((this.spectate || !this.cams[0] ? 0 : this.cams[0].lines) - gfx.post.lines) * Math.min(1, dt * 8);
-    if (this._pending?.length) for (let i = this._pending.length - 1; i >= 0; i--) { const f = this._pending[i]; if (this.time < f.at) continue; this._pending.splice(i, 1); this.fx.burst(f.x, f.y, f.z, 46, f.col, 10, 0.45, 0.9, 1); for (let j = 0; j < 22 * this.fx.density; j++) { const u = Math.random() * 6.283, w = Math.random() * 2 - 1, r = Math.sqrt(1 - w * w), v = 6 + Math.random() * 3; this.fx.glint.emit({ x: f.x, y: f.y, z: f.z, vx: Math.cos(u) * r * v, vy: w * v + 1, vz: Math.sin(u) * r * v, color: [1, 1, 1], color2: f.col, size: 0.4, life: 0.7 + Math.random() * 0.4, gravity: 4, drag: 1.6, alpha: 1.3, spin: 6 }); } }
+    if (this._pending?.length) for (let i = this._pending.length - 1; i >= 0; i--) { const f = this._pending[i]; if (this.time < f.at) continue; this._pending.splice(i, 1); f.x = f.k.x + Math.sin(f.k.yaw + f.a) * f.d; f.y = f.k.y + f.h; f.z = f.k.z + Math.cos(f.k.yaw + f.a) * f.d; this.fx.burst(f.x, f.y, f.z, 60, f.col, 9, 0.85, 0.9, 1); for (let j = 0; j < 30 * this.fx.density; j++) { const u = Math.random() * 6.283, w = Math.random() * 2 - 1, r = Math.sqrt(1 - w * w), v = 6 + Math.random() * 3; this.fx.glint.emit({ x: f.x, y: f.y, z: f.z, vx: Math.cos(u) * r * v, vy: w * v + 1, vz: Math.sin(u) * r * v, color: [1, 1, 1], color2: f.col, size: 0.8, life: 0.7 + Math.random() * 0.4, gravity: 4, drag: 1.6, alpha: 1.3, spin: 6 }); } }
   }
 
   /** Mirror hazards and projectiles with models. */

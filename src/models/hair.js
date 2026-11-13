@@ -239,16 +239,18 @@ export function buildHair(look, faceId, R, cy, skinColor) {
       const baseK = big ? 1.14 : 1.07;
       const edge = big ? a => hairline(PI * 0.27, PI * 0.46, NAPE + PI * 0.03)(a) + tufts(10, PI * 0.03)(a) : a => hairline(PI * 0.29, PI * 0.41, NAPE)(a) + tufts(12, PI * 0.025)(a);
       const kf = (a, t) => baseK + (big ? 0.12 : 0.04) * Math.cos(t) ** 2 + n(a, t);
-      shellAdd({ top, edge, tuckTop: capped ? 0.25 : 0, k: kf, rows: 16, cols: 56 }, base.clone().multiplyScalar(0.8));
-      // curls: round clumps over the scalp and a row along the hairline to break it up
-      const count = big ? 44 : 40, rr = big ? 0.1 : 0.072;
-      const curl = (a, t, s) => blob(P(a, t, kf(a, t) - (big ? 0.06 : 0.07)), rr * s);
+      shellAdd({ top, edge, tuckTop: capped ? 0.25 : 0, k: kf, rows: 16, cols: 56 }, base.clone().multiplyScalar(0.88));
+      // curls: round clumps over the scalp and a row along the hairline to break it up.
+      // They sit deep in the shell and close to one size, so the mass reads as curls
+      // rather than separate balls parked on a darker cap.
+      const count = big ? 44 : 40, rr = big ? 0.108 : 0.082;
+      const curl = (a, t, s) => blob(P(a, t, kf(a, t) - (big ? 0.085 : 0.095)), rr * s);
       for (let i = 0; i < count; i++) {
         const a = (rng() * 2 - 1) * PI, t = top(a) + 0.06 + rng() * (edge(a) - top(a) - 0.14);
         if (Math.cos(a) > 0.55 && t > PI * 0.26) continue;
-        curl(a, t, 0.75 + rng() * 0.5);
+        curl(a, t, 0.86 + rng() * 0.28);
       }
-      for (let i = 0; i < (big ? 20 : 16); i++) { const a = -PI + (i + rng() * 0.4) / (big ? 20 : 16) * PI * 2, t = edge(a) - 0.07; if (t > top(a) + 0.05) curl(a, t, 0.7 + rng() * 0.3); }
+      for (let i = 0; i < (big ? 20 : 16); i++) { const a = -PI + (i + rng() * 0.4) / (big ? 20 : 16) * PI * 2, t = edge(a) - 0.07; if (t > top(a) + 0.05) curl(a, t, 0.82 + rng() * 0.22); }
       break;
     }
     case 'baldsides': {

@@ -9,23 +9,38 @@ import * as S from '../models/props-silicon-valley.js';
 const POND = { x: -40, z: 102, r: 46 };
 const RING = { x: -40, z: 102, r: 72, band: 15 };
 const ROCKET = { x: 286, z: 96 };
+/* The bay the Golden Gate crosses (#168): a strait running south from the infield to a
+   basin outside the loop. The terrain fn floods everything within the strait's reach
+   (the scatter water check keeps scenery out of it). Axis: a two-segment polyline. */
+const BAY_AXIS = [[186, -140], [200, -45], [212, 20]];
+const BAY_FLOOR = -5.5, BAY_R = 40, BAY_SLOPE = 30;
+function bayDist(x, z) {
+  let d = Infinity;
+  for (let k = 0; k < BAY_AXIS.length - 1; k++) {
+    const [ax, az] = BAY_AXIS[k], [bx, bz] = BAY_AXIS[k + 1];
+    const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+    d = Math.min(d, Math.hypot(x - (ax + dx * t), z - (az + dz * t)));
+  }
+  return d;
+}
 /* The centerpiece: the PIVOT TO AI tower in the infield beyond the grandstands, facing the start straight. */
 const PIVOT = { x: 125, z: 72, yaw: -2.03, w: 36, h: 36, legs: 16 };
 
 /* Billboards: [cp, side, metres beyond the road edge, text, background, ink]. */
 const BOARDS = [
-  [1.75, -1, 22, 'EVERY RIDE LOSES MONEY. VOLUME!', '#1a1d29', '#ffd23c'],
-  [3.4, -1, 32, 'HIRING: 10X ENGINEER, 0.1X SALARY', '#ffffff', '#1f6bff'],
-  [4.3, -1, 18, 'AI WILL REPLACE YOU. APPLY NOW.', '#e23b3b', '#ffffff'],
-  [5.4, 1, 18, 'UNLIMITED PTO (DO NOT TAKE IT)', '#2ee6a6', '#1a1d29'],
-  [6.2, 1, 20, 'A BETTER WORLD (FOR SHAREHOLDERS)', '#7b5cff', '#ffffff'],
-  [7.0, -1, 16, 'RETURN TO OFFICE. OR ELSE.', '#ffd23c', '#1a1d29'],
-  [8.5, -1, 26, 'FREE KOMBUCHA. NO RAISES.', '#ff8a3c', '#1a1d29'],
-  [9.95, -1, 18, 'MOVE FAST. BREAK LAWS.', '#1a1d29', '#ffffff'],
-  [10.7, -1, 18, 'YOU ARE THE PRODUCT', '#ffffff', '#e23b3b'],
-  [11.4, 1, 18, 'PRE-REVENUE. POST-SHAME.', '#0ea5e9', '#ffffff'],
-  [12.5, -1, 22, 'DISRUPTING THINGS THAT WORKED', '#db2777', '#ffffff'],
-  [2.6, -1, 32, 'SERIES Z: PLEASE, ANYONE?', '#16a34a', '#ffffff'],
+  [1.28, -1, 22, 'EVERY RIDE LOSES MONEY. VOLUME!', '#1a1d29', '#ffd23c'],
+  [4.4, -1, 32, 'HIRING: 10X ENGINEER, 0.1X SALARY', '#ffffff', '#1f6bff'],
+  [5.3, -1, 18, 'AI WILL REPLACE YOU. APPLY NOW.', '#e23b3b', '#ffffff'],
+  [6.4, 1, 18, 'UNLIMITED PTO (DO NOT TAKE IT)', '#2ee6a6', '#1a1d29'],
+  [7.2, 1, 20, 'A BETTER WORLD (FOR SHAREHOLDERS)', '#7b5cff', '#ffffff'],
+  [8.0, -1, 16, 'RETURN TO OFFICE. OR ELSE.', '#ffd23c', '#1a1d29'],
+  [9.5, -1, 26, 'FREE KOMBUCHA. NO RAISES.', '#ff8a3c', '#1a1d29'],
+  [10.95, -1, 18, 'MOVE FAST. BREAK LAWS.', '#1a1d29', '#ffffff'],
+  [11.7, -1, 18, 'YOU ARE THE PRODUCT', '#ffffff', '#e23b3b'],
+  [12.4, 1, 18, 'PRE-REVENUE. POST-SHAME.', '#0ea5e9', '#ffffff'],
+  [13.5, -1, 22, 'DISRUPTING THINGS THAT WORKED', '#db2777', '#ffffff'],
+  [3.55, 1, 30, 'SERIES Z: PLEASE, ANYONE?', '#16a34a', '#ffffff'],
 ];
 const STANDS = ['SEATS PAID IN EQUITY', 'INTERN SECTION (UNPAID)', "VC BOX: LET'S CIRCLE BACK", 'LAID OFF? FREE SEATS!'];
 const PLACARDS = ['SHIP IT!', 'IS IT AGI YET?', "MOM, I'M A UNICORN", 'WHERE IS MY EQUITY', 'PIVOT!', '996 OR BUST', 'NO REVENUE, NO PROBLEM', 'I FUNDED THIS'];
@@ -46,39 +61,46 @@ export default {
   path: [
     { p: [0, 0, 0] },            // 0 start/finish, heading +x
     { p: [95, 0, 0] },           // 1
-    { p: [172, 1.5, 28], w: 19 },// 2 turn one, wide and banked
-    { p: [196, 5, 104] },        // 3 climbing
-    { p: [158, 10, 168] },       // 4
-    { p: [84, 13.5, 150], w: 15 },// 5 esses at the top
-    { p: [22, 15.5, 196], w: 15 },// 6
-    { p: [-62, 15, 214] },       // 7 crest
-    { p: [-142, 8.5, 176], w: 19 },// 8 downhill sweeper
-    { p: [-192, 3, 104] },       // 9
-    { p: [-168, 0.5, 36], w: 15 },// 10 chicane in
-    { p: [-196, 0, -22], w: 15 },// 11 chicane out
-    { p: [-140, 0, -52], w: 18 },// 12 final corner
-    { p: [-70, 0, -8] },         // 13 back onto the straight
+    { p: [162, 4.5, -40], w: 19 },// 2 the bridge approach: swings south off the shore, climbing onto the deck
+    { p: [246, 8, -26], w: 19 }, // 3 far shore: the Golden Gate deck ends in a big sweeper (turn one now)
+    { p: [214, 5, 106] },        // 4 climbing the shore
+    { p: [158, 10, 168] },       // 5
+    { p: [84, 13.5, 150], w: 15 },// 6 esses at the top
+    { p: [22, 15.5, 196], w: 15 },// 7
+    { p: [-62, 15, 214] },       // 8 crest
+    { p: [-142, 8.5, 176], w: 19 },// 9 downhill sweeper
+    { p: [-192, 3, 104] },       // 10
+    { p: [-168, 0.5, 36], w: 15 },// 11 chicane in
+    { p: [-196, 0, -22], w: 15 },// 12 chicane out
+    { p: [-140, 0, -52], w: 18 },// 13 final corner
+    { p: [-70, 0, -8] },         // 14 back onto the straight
   ],
   sides: [
-    { from: 12.3, to: 1.6, side: 'L', edge: 'wall' },   // pit wall along the grandstand side
-    { from: 6.6, to: 7.9, edge: 'wall' },                // crest and jump are fenced in
-    { from: 2.2, to: 3.6, side: 'R', outer: 26, shoulder: 6 }, // open meadow on the outside of the climb
-    { from: 8.2, to: 9.6, side: 'L', outer: 30, shoulder: 5 }, // cut across the grass on the way down (needs a boost)
+    { from: 13.3, to: 1.6, side: 'L', edge: 'wall' },   // pit wall along the grandstand side
+    { from: 7.6, to: 8.9, edge: 'wall' },                // crest and jump are fenced in
+    { from: 3.3, to: 4.6, side: 'L', outer: 26, shoulder: 6 }, // open meadow on the outside of the shore climb
+    { from: 9.2, to: 10.6, side: 'L', outer: 30, shoulder: 5 }, // cut across the grass on the way down (needs a boost)
+    { from: 1.45, to: 3.12, edge: 'wall', wallHeight: 0.85 }, // the bridge guardrails: low enough to see the bay over
+  ],
+  bridges: [
+    { from: 1.45, to: 3.12 },                            // the Golden Gate span: terrain/water stay below the deck
   ],
   ramps: [
-    { at: 7.25, len: 9, lift: 2.1 },
+    { at: 8.25, len: 9, lift: 2.1 },
   ],
   boosts: [
     { at: 0.55, lat: 0, w: 5 },
-    { at: 3.2, lat: -4, w: 4.5 },
-    { at: 8.9, lat: 3.5, w: 4.5 },
-    { at: 12.9, lat: 0, w: 5 },
+    { at: 2.45, lat: 0, w: 5 },
+    { at: 4.2, lat: -4, w: 4.5 },
+    { at: 9.9, lat: 3.5, w: 4.5 },
+    { at: 13.9, lat: 0, w: 5 },
   ],
-  itemRows: [{ at: 1.5 }, { at: 4.6 }, { at: 8.4 }, { at: 11.5, n: 3 }],
+  itemRows: [{ at: 1.5 }, { at: 5.6 }, { at: 9.4 }, { at: 12.5, n: 3 }],
   coins: [
-    { from: 0.2, to: 0.5, n: 4, lat: 4.5 }, { from: 2.4, to: 2.9, n: 5, lat: [6, -5] },
-    { from: 5.2, to: 5.9, n: 5, lat: [-4, 4] }, { from: 7.34, to: 7.5, n: 3, lat: 0, air: 2.6 },
-    { from: 9.3, to: 9.8, n: 4, lat: -5 }, { from: 12.1, to: 12.6, n: 5, lat: [-5, 2] },
+    { from: 0.2, to: 0.5, n: 4, lat: 4.5 }, { from: 2.15, to: 2.85, n: 5, lat: 0 },
+    { from: 3.4, to: 3.9, n: 5, lat: [6, -5] },
+    { from: 6.2, to: 6.9, n: 5, lat: [-4, 4] }, { from: 8.34, to: 8.5, n: 3, lat: 0, air: 2.6 },
+    { from: 10.3, to: 10.8, n: 4, lat: -5 }, { from: 13.1, to: 13.6, n: 5, lat: [-5, 2] },
   ],
   terrain: {
     cell: 3, margin: 150, blend: 30, water: -1.4,
@@ -96,6 +118,9 @@ export default {
       h = h * (1 - ring) + 2.2 * ring;
       const pad = 1 - smoothstep(16, 34, Math.hypot(x - ROCKET.x, z - ROCKET.z));
       h = h * (1 - pad) + 13 * pad;
+      // the bay (#168): the strait the bridge crosses, flooded last so nothing refills it
+      const bay = 1 - smoothstep(BAY_R, BAY_R + BAY_SLOPE, bayDist(x, z));
+      h = h * (1 - bay) + BAY_FLOOR * bay;
       return h;
     },
   },
@@ -145,8 +170,8 @@ export default {
         atlas.place(board(text, { bg: ['#ffffff', '#ff4d6d', '#38b6ff', '#2ee6a6'][(k + j) % 4], fg: '#1a1d29', size: 110, border: '#1a1d29' }, 384, 224), local(p, u + rng.range(-1.5, 1.5), 0.4, p.y + 3.9), p.yaw + rng.range(-0.15, 0.15), 3.0, 1.75);
       });
     };
-    sc.along({ from: 12.75, to: 1.3, side: 1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
-    sc.along({ from: 13.3, to: 0.9, side: -1, offset: 17, spacing: 34, phase: 12 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
+    sc.along({ from: 13.75, to: 1.3, side: 1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
+    sc.along({ from: 14.3, to: 0.9, side: -1, offset: 17, spacing: 34, phase: 12 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
     const crowd = sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
     const crowdFull = crowd.map(m => m.count);
     // the correction (#121): on the final lap the layoffs land and the grandstands empty out
@@ -200,9 +225,10 @@ export default {
     sc.instances(oakB, oakSpots.filter((_, i) => i % 3 === 1), { scale: [0.8, 1.6], yaw: 'random', tilt: 0.04 });
     sc.instances(oakC, oakSpots.filter((_, i) => i % 3 === 2), { scale: [0.8, 1.4], yaw: 'random', tilt: 0.04 });
     const cyp = partsOf(P.cypress(1, { h: 12 }));
-    sc.instances(cyp, [...sc.along({ from: 8.2, to: 9.9, side: -1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 4.1, to: 6.4, side: 1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 4.1, to: 6.4, side: -1, offset: 14.5, spacing: 9 })], { scale: [0.85, 1.2] });
+    sc.instances(cyp, [...sc.along({ from: 9.2, to: 10.9, side: -1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 5.1, to: 7.4, side: 1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 5.1, to: 7.4, side: -1, offset: 14.5, spacing: 9 })], { scale: [0.85, 1.2] });
     const palmA = partsOf(P.palm(1, { h: 10 })), palmB = partsOf(P.palm(5, { h: 8.5 }));
-    const palmSpots = [...sc.along({ from: 1.35, to: 3.9, side: -1, offset: 14, spacing: 12 }), ...sc.along({ from: 1.6, to: 2.1, side: 1, offset: 14, spacing: 12 }), ...sc.along({ from: 10.0, to: 12.6, side: 1, offset: 14, spacing: 11 }), ...sc.along({ from: 10.0, to: 12.2, side: -1, offset: 14, spacing: 11 })];
+    // palms line the shores and the climb; sc.along skips bridge samples, so none land on the deck
+    const palmSpots = [...sc.along({ from: 1.35, to: 4.9, side: -1, offset: 14, spacing: 12 }), ...sc.along({ from: 3.15, to: 3.6, side: 1, offset: 14, spacing: 12 }), ...sc.along({ from: 11.0, to: 13.6, side: 1, offset: 14, spacing: 11 }), ...sc.along({ from: 11.0, to: 13.2, side: -1, offset: 14, spacing: 11 })];
     sc.instances(palmA, palmSpots.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.25], yaw: 'random' });
     sc.instances(palmB, palmSpots.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.25], yaw: 'random' });
     // shrubs and rocks close to the action
@@ -324,9 +350,9 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     });
   }
 
-  // ---- turn one: robotaxis frozen in a ring around one traffic cone ----
+  // ---- the bridge exit: robotaxis frozen in a ring around one traffic cone ----
   {
-    const i = track.indexAtCp(1.95), c = sc.beside(1.95, 1, 27), l = [track.lx[i], track.lz[i]], R = 9;
+    const i = track.indexAtCp(2.95), c = sc.beside(2.95, 1, 27), l = [track.lx[i], track.lz[i]], R = 9;
     const cars = [];
     for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2, x = c.x + Math.cos(a) * R, z = c.z + Math.sin(a) * R; cars.push({ x, z, y: sc.y(x, z), yaw: Math.atan2(c.x - x, c.z - z) + rng.range(-0.12, 0.12) }); }
     sc.instances(partsOf(S.robotaxi()), cars, { scale: 1.35 });
@@ -339,7 +365,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the climb: shipping containers sold as luxury micro-lofts ----
   {
-    const p = sc.beside(3.05, 1, 23); p.yaw += 0.08;
+    const p = sc.beside(4.05, 1, 23); p.yaw += 0.08;
     const st = S.containerStack(); sc.place(st, p.x, p.z, { yaw: p.yaw, y: p.y - 0.2 }); bake.add(st);
     legs({ ...p, ...xz(local(p, 0, -1.2, 0)) }, 26, 13);
     atlas.place(board('LUXURY MICRO-LOFTS $4,200/MO', { bg: '#1a1d29', fg: '#ffd23c', kicker: 'NOW LEASING', kfg: '#ffffff', size: 120 }, 1024, 300), local(p, 0, -1.0, p.y + 10.6), p.yaw, 26, 7.6);
@@ -349,7 +375,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the esses: the unicorn balloon over its HQ, slowly deflating ----
   {
-    const p = sc.beside(4.9, 1, 32), hq = P.campusBlock(7, { w: 30, d: 16, floors: 3, accent: 0xff7eb6 });
+    const p = sc.beside(5.9, 1, 32), hq = P.campusBlock(7, { w: 30, d: 16, floors: 3, accent: 0xff7eb6 });
     sc.place(hq, p.x, p.z, { yaw: p.yaw, y: p.y - 0.4 }); bake.add(hq);
     const roof = p.y - 0.4 + 3 * 3.4 + 0.6;
     legs({ ...p, y: roof }, 20, 6, 0xff7eb6);
@@ -385,7 +411,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- after the crest: the rental scooter graveyard ----
   {
-    const p = sc.beside(7.8, 1, 28), H = 11, R = 13, ic = track.indexAtCp(7.25);
+    const p = sc.beside(8.8, 1, 28), H = 11, R = 13, ic = track.indexAtCp(8.25);
     const mound = new THREE.Mesh(new THREE.ConeGeometry(R, H, 18, 1, true), new THREE.MeshStandardMaterial({ color: 0x7c6a52, roughness: 0.95 }));
     mound.position.set(p.x, p.y + H / 2 - 0.6, p.z); group.add(mound); bake.add(mound);
     const cols = [0x22c55e, 0xff4d6d, 0x111827, 0xffd23c, 0x38b6ff], parts = cols.map(c => partsOf(S.scooter(c))), mats = cols.map(() => []);
@@ -404,7 +430,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the downhill: the fifteen-minute standup, now in its ninth hour ----
   {
-    const p = sc.beside(9.85, 1, 24), people = [], sleepers = [];
+    const p = sc.beside(10.85, 1, 24), people = [], sleepers = [];
     for (let k = 0; k < 9; k++) {
       const a = (k / 9) * Math.PI * 2, x = p.x + Math.cos(a) * 4.5, z = p.z + Math.sin(a) * 4.5;
       (k === 2 || k === 6 ? sleepers : people).push({ x, z, y: sc.y(x, z), yaw: Math.atan2(p.x - x, p.z - z) });
@@ -439,10 +465,10 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the final corner: the HQ whose sign can't make up its mind ----
   {
-    const p = sc.beside(12.05, 1, 30), hq = P.campusBlock(2, { w: 36, d: 18, floors: 4, accent: 0x1f6bff });
+    const p = sc.beside(13.05, 1, 30), hq = P.campusBlock(2, { w: 36, d: 18, floors: 4, accent: 0x1f6bff });
     sc.place(hq, p.x, p.z, { yaw: p.yaw, y: p.y - 0.4 }); bake.add(hq);
     const roof = p.y - 0.4 + 4 * 3.4 + 0.6, mast = S.post(4, 0.5); sc.place(mast, p.x, p.z, { y: roof }); bake.add(mast);
-    const ia = track.indexAtCp(11.1), fyaw = facing(p, track.px[ia], track.pz[ia]);   // it faces the karts coming out of the chicane
+    const ia = track.indexAtCp(12.1), fyaw = facing(p, track.px[ia], track.pz[ia]);   // it faces the karts coming out of the chicane
     const flip = new THREE.Group(); flip.position.set(p.x, roof + 8.5, p.z); flip.rotation.y = fyaw; group.add(flip);
     const fr = atlas.mesh(board("WE'RE HIRING!", { bg: '#16a34a', fg: '#ffffff', size: 150, lines: 1 }, 768, 230), 26, 7.8);
     const bk = atlas.mesh(board("LAYOFFS (WE'RE A FAMILY)", { bg: '#e23b3b', fg: '#ffffff', size: 130 }, 768, 230), 26, 7.8);
@@ -472,33 +498,95 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     taken.push([sp.x, sp.z, 13]);
   }
 
-  // ---- the landmarks (playtest dressing): a Golden Gate over the run to turn one ----
+  // ---- the Golden Gate (#168): the lap itself crosses the bay on the deck ----
   {
-    // The road dips through a saddle here (ground rises on both sides), so the bridge lands on real
-    // hillsides: towers at ±27 m on the slopes, the deck clearing the road by ~10 m, the pivot tower
-    // standing behind it. Pure dressing — like the start gantry, it carries no collider.
-    const i = track.indexAtCp(1.45);
-    const hx = Math.hypot(track.lx[i], track.lz[i]) || 1, ux = track.lx[i] / hx, uz = track.lz[i] / hx;
-    const ht = Math.hypot(track.tx[i], track.tz[i]) || 1, tx = track.tx[i] / ht, tz = track.tz[i] / ht;
-    const C = { x: track.px[i], z: track.pz[i] }, roadY = track.py[i];
-    const br = S.ggBridge({});
-    sc.place(br, C.x, C.z, { yaw: Math.atan2(-uz, ux), y: roadY });
-    bake.add(br);
-    // the toll sign on both fascias, so it reads coming and going — each with a back-to-back twin,
-    // like every other board on the track, so the text never mirrors from behind
-    const toll = board('BRIDGE TOLL: YOUR EQUITY', { bg: '#c0362c', fg: '#ffffff', kicker: 'THE GOLDEN GATE', kfg: '#ffd23c', size: 118 }, 1024, 256);
-    for (const s of [-1, 1]) {
-      atlas.place(toll, [C.x + tx * s * 6.55, roadY + 10.8, C.z + tz * s * 6.55], Math.atan2(tx * s, tz * s), 22, 4.4);
-      atlas.place(toll, [C.x + tx * s * 6.3, roadY + 10.8, C.z + tz * s * 6.3], Math.atan2(tx * s, tz * s) + Math.PI, 22, 4.4);
+    // The road IS the bridge here (bridges 1.45-3.12 in the track data: engine deck, pillars and
+    // guardrails). This block adds what makes it the Golden Gate: two orange tower portals the
+    // karts drive through, main cables with suspenders overhead, orange edge girders, concrete
+    // anchor blocks on the shores, and the toll gantry at the deck entry. Everything is placed
+    // from the track's own samples, so it follows the deck (and its banking) exactly.
+    const ORANGE = new THREE.MeshStandardMaterial({ color: 0xc0362c, roughness: 0.42, metalness: 0.3 });
+    const CONC = new THREE.MeshStandardMaterial({ color: 0x8b93a6, roughness: 0.8 });
+    const gg = new THREE.Group(); group.add(gg);
+    const put = (geo, mat, x, y, z, yaw = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.y = yaw; gg.add(m); return m; };
+    const PV = new THREE.Vector3();
+    /** Road-frame point at a control-point param: {x,y,z} on the deck plane at lat, plus the road yaw. */
+    const at = (cp, lat = 0) => { const s = track.sAtCp(cp); track.pointAt(s, lat, PV); return { x: PV.x, y: PV.y, z: PV.z, yaw: track.yawAt(s) }; };
+    const LEG = 11.3, SUS = 10.6;   // tower legs / cable plane, and the suspender + girder line, just outside the guardrail
+
+    // the two tower portals: legs from below the waterline to 30 m over the deck, four portal beams
+    const towerAt = [2.08, 2.72];
+    for (const tc of towerAt) {
+      const c = at(tc), top = c.y + 30, bot = -4;
+      for (const s of [-1, 1]) {
+        const lp = at(tc, s * LEG);
+        put(new THREE.BoxGeometry(1.7, top - bot, 1.7), ORANGE, lp.x, (top + bot) / 2, lp.z, c.yaw);
+        put(new THREE.BoxGeometry(5, 3.4, 5), CONC, lp.x, -2.6, lp.z, c.yaw);            // the pier footing, awash
+        put(new THREE.BoxGeometry(3.1, 1.1, 3.1), ORANGE, lp.x, top + 0.4, lp.z, c.yaw); // cap
+      }
+      for (const dy of [6.5, 14, 21.5, 28]) put(new THREE.BoxGeometry(LEG * 2 + 1.7, 1.15, 1.0), ORANGE, c.x, c.y + dy, c.z, c.yaw);
+      taken.push([c.x, c.z, 13]);
     }
-    taken.push([C.x, C.z, 26], [C.x + ux * 47, C.z + uz * 47, 11], [C.x - ux * 47, C.z - uz * 47, 11]);
+    // anchor blocks where the cables come down to the shores
+    for (const ac of [1.47, 3.09]) for (const s of [-1, 1]) {
+      const ap = at(ac, s * LEG), top = ap.y + 0.4;
+      put(new THREE.BoxGeometry(6.5, top + 3.5, 5.5), CONC, ap.x, (top - 3.5) / 2, ap.z, ap.yaw);
+      taken.push([ap.x, ap.z, 8]);
+    }
+    // the main cables: shore anchor, up over tower A, the long sag across the main span, tower B, down
+    const cableY = (cp) => {
+      const d = at(cp).y;
+      if (cp < towerAt[0]) { const t = (cp - 1.5) / (towerAt[0] - 1.5); return d + 1.2 + (29.2 - 1.2) * t * t - Math.sin(t * Math.PI) * 1.1; }
+      if (cp > towerAt[1]) { const t = (cp - towerAt[1]) / (3.05 - towerAt[1]); return d + 29.2 + (1.2 - 29.2) * t * t - Math.sin(t * Math.PI) * 1.1; }
+      const t = (cp - towerAt[0]) / (towerAt[1] - towerAt[0]);
+      return d + 2.4 + (29.2 - 2.4) * (2 * t - 1) ** 2;
+    };
+    for (const s of [-1, 1]) {
+      const pts = [];
+      for (let cp = 1.5; cp <= 3.051; cp += 0.045) { const p = at(cp, s * LEG); pts.push(new THREE.Vector3(p.x, cableY(cp), p.z)); }
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 72, 0.34, 6), ORANGE);
+      gg.add(tube);
+      // suspenders: from the cable down to the girder line, every ~6 m of deck
+      for (let cp = 1.56; cp <= 3.02; cp += 0.07) {
+        const topP = at(cp, s * LEG), botP = at(cp, s * SUS), cy = cableY(cp), by = botP.y + 0.1;
+        if (cy - by < 1.6) continue;
+        put(new THREE.BoxGeometry(0.16, cy - by, 0.16), ORANGE, botP.x + (topP.x - botP.x) / 2, (cy + by) / 2, botP.z + (topP.z - botP.z) / 2, botP.yaw);
+      }
+    }
+    // orange edge girders riding just under the deck edge, the whole span
+    for (const s of [-1, 1]) {
+      let prev = at(1.46, s * SUS);
+      for (let cp = 1.5; cp <= 3.121; cp += 0.04) {
+        const p = at(cp, s * SUS), mx = (prev.x + p.x) / 2, mz = (prev.z + p.z) / 2;
+        const len = Math.hypot(p.x - prev.x, p.z - prev.z) + 0.5;
+        put(new THREE.BoxGeometry(0.35, 1.3, len), ORANGE, mx, (prev.y + p.y) / 2 - 0.82, mz, Math.atan2(p.x - prev.x, p.z - prev.z));
+        prev = p;
+      }
+    }
+    bake.add(gg);
+    // the toll gantry at the deck entry: two orange posts and the fascia sign, with a back-to-back
+    // twin like every other board on the track so the text never mirrors from behind
+    {
+      const gi = track.indexAtCp(1.52), gp0 = at(1.52);
+      for (const s of [-1, 1]) {
+        const pp = at(1.52, s * 10.3), post = S.post(8.6, 0.35, 0xc0362c);
+        sc.place(post, pp.x, pp.z, { y: pp.y - 0.2, yaw: gp0.yaw }); bake.add(post);
+      }
+      const toll = board('BRIDGE TOLL: YOUR EQUITY', { bg: '#c0362c', fg: '#ffffff', kicker: 'THE GOLDEN GATE', kfg: '#ffd23c', size: 118 }, 1024, 256);
+      const gyaw = Math.atan2(-track.tx[gi], -track.tz[gi]);
+      // upstream panel (the one drivers meet first) carries the driver-readable face; the
+      // downstream twin faces the other way. (Swapped after the first capture round showed the
+      // upstream face mirrored — the readable side had been on the occluded downstream panel.)
+      atlas.place(toll, [gp0.x, gp0.y + 6.6, gp0.z], gyaw + Math.PI, 22, 4.4);
+      atlas.place(toll, [gp0.x - track.tx[gi] * 0.55, gp0.y + 6.6, gp0.z - track.tz[gi] * 0.55], gyaw, 22, 4.4);
+    }
   }
 
   // ---- the landmarks: a Hoover Tower on the climb meadow, watching the esses ----
   {
-    const tp = sc.beside(3.0, 1, 34);
+    const tp = sc.beside(4.0, 1, 34);
     const tw = S.hooverTower({}); sc.place(tw, tp.x, tp.z, { yaw: tp.yaw }); bake.add(tw);
-    const sp = sc.beside(3.0, 1, 21);
+    const sp = sc.beside(4.0, 1, 21);
     legs(sp, 15, 8);
     atlas.place(board('HOOVER TOWER', { bg: '#d9c096', fg: '#7a2d1e', kicker: 'THE FARM · PARKING $47', kfg: '#1a1d29', size: 118 }, 768, 300), local(sp, 0, 0, sp.y + 10.5), sp.yaw, 16, 6);
     taken.push([tp.x, tp.z, 15], [sp.x, sp.z, 10]);
@@ -506,7 +594,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the landmarks: the garage where it all started, outside the chicane ----
   {
-    const p = sc.beside(10.55, 1, 25);
+    const p = sc.beside(11.55, 1, 25);
     const gr = S.garage(); sc.place(gr, p.x, p.z, { yaw: p.yaw }); bake.add(gr);
     atlas.place(board('IT STARTED IN A GARAGE', { bg: '#ffffff', fg: '#1a1d29', kicker: 'NOW VALUED AT $3B', kfg: '#e23b3b', size: 110 }, 1024, 200), local(p, 0, 3.62, p.y + 3.6), p.yaw, 9.6, 1.9);
     taken.push([p.x, p.z, 12]);

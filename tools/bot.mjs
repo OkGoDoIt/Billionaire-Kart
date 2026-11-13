@@ -176,7 +176,14 @@ try {
     await page.waitForFunction('BK.app.menus.screen?.spec.name === "cupResults"', null, { timeout: 30000 }).catch(() => fails.push('no cup results screen after the last race'));
     await page.waitForTimeout(2500); await shot('22-podium');
     console.log('cup totals:', await page.evaluate('JSON.stringify(BK.app.gp.totals)'));
-    await key('Enter', 1200); await expect('main', 'after the podium');
+    // the podium screen offers a way back in, not just a way out (#146): the default button runs the same cup again from race 1
+    const exits = await page.evaluate(`[...document.querySelectorAll('.screen-cupResults .foot .btn .btn-label')].map(e => e.textContent)`);
+    if (JSON.stringify(exits) !== JSON.stringify(['Race this cup again', 'Change racer', 'Continue'])) fails.push(`cup results exits: ${exits.join(' / ')}`);
+    await key('Enter', 1200);
+    await page.waitForFunction('BK.app.gp && BK.app.gp.index === 0 && BK.session && !BK.app.menus.screen', null, { timeout: 30000 }).catch(() => fails.push('Race this cup again did not start a fresh cup'));
+    const fresh = await page.evaluate('JSON.stringify(BK.app.gp.totals)');
+    if (Object.values(JSON.parse(fresh)).some(v => v !== 0)) fails.push(`cup restart kept the old standings: ${fresh}`);
+    console.log('cup restarted, totals:', fresh);
   }
   if (mobile && !opt.gp) {
     // every menu screen with the phone upright: nothing may spill off the sides, and nothing may be left unrendered

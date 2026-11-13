@@ -49,7 +49,7 @@ node tools/budget.mjs --track crypto-cove   # one track
 Phones are the slowest screens we ship to, and the renderer's cost is mostly draw calls, not triangles. `tools/budget.mjs` loads each track at Medium quality (what a phone gets), parks the player's kart at the start line and at 20, 40, 60, and 80 percent of the lap, lets the race camera settle, and reads one whole frame (shadow pass included). A track is flagged, and the tool exits 1, when any of those five views goes over:
 
 - **800 draw calls** per frame, and
-- **1.5 million triangles** per frame.
+- **1.8 million triangles** per frame (the same limits as `docs/track-authoring.md`).
 
 The numbers are tunable (`--calls`, `--tris`), not walls: if a track needs more to look right, say so in the PR and raise it deliberately. The usual fix is merging static props into one mesh or using instancing. Counts depend on what the camera sees, so the start line (grid, gate, and crowd all in view) and the busiest set piece matter most. Add the table the tool prints to any PR that adds scenery.
 

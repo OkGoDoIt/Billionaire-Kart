@@ -16,7 +16,7 @@ await takeSlot('budget');   // two heavy jobs at a time on this machine: see slo
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2), opt = {};
 for (let i = 0; i < args.length; i++) if (args[i].startsWith('--')) { const k = args[i].slice(2); opt[k] = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : true; }
-const CALLS = +(opt.calls || 800), TRIS = +(opt.tris || 1.5e6), Q = opt.q || 'medium', POINTS = [0, 0.2, 0.4, 0.6, 0.8];
+const CALLS = +(opt.calls || 800), TRIS = +(opt.tris || 1.8e6), Q = opt.q || 'medium', POINTS = [0, 0.2, 0.4, 0.6, 0.8];
 const ids = opt.track ? String(opt.track).split(',') : (await readdir(join(ROOT, 'src/tracks'))).filter(f => f.endsWith('.js') && !f.startsWith('_')).map(f => f.slice(0, -3)).sort();
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg' };
 const server = http.createServer(async (req, res) => { try { let p = normalize(join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname))); if (p.endsWith('/')) p = join(p, 'index.html'); const d = await readFile(p); res.writeHead(200, { 'Content-Type': MIME[extname(p)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(d); } catch { res.writeHead(404); res.end('nf'); } });

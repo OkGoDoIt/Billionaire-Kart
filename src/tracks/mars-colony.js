@@ -9,7 +9,8 @@ import { Scenery, partsOf } from '../render/scenery.js';
 import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
 import * as M from '../models/props-mars-colony.js';
-import * as K from '../models/props-burning-circuit.js';   // the sign kit (atlas, baker, boards) lives there
+import { makeBaker } from '../models/props-international-waters.js';
+import * as K from '../models/props-burning-circuit.js';   // the sign atlas and boards
 import { ModelBuilder, cyl, box, sphere, plastic, glow } from '../models/build.js';
 
 /* The canyon the jump crosses: a winding cut along the east side of the rim road. */
@@ -234,7 +235,17 @@ function dress(ctx) {
   take(ROCKET.x, ROCKET.z, 26); take(CRATER.x, CRATER.z, 16); take(DOME.x, DOME.z, DOME.r + 4);
 
   // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
-  const bake = K.makeBaker(ctx.group, sc.shadows), atlas = K.makeAtlas(ctx.group, { glow: 0.5 });
+  // One packed roughness/metalness texture lets painted colony structures share draws
+  // while keeping their own pigment and finish. Textured glass, displays, and lamps stay independent.
+  const palette = M.colonyFinishes(), staticProps = makeBaker(ctx.group, sc.shadows);
+  ctx.group.userData.dispose = palette.dispose;
+  const bake = {
+    add(object, cast = true) {
+      palette.apply(object);
+      staticProps.add(object, cast);
+    },
+  };
+  const atlas = K.makeAtlas(ctx.group, { glow: 0.5 });
   /** Yaw that faces the road at sample i from `side`, turned toward oncoming karts by k. */
   const faceIn = (i, side, k = 0.5) => Math.atan2(-side * track.lx[i] - track.tx[i] * k, -side * track.lz[i] - track.tz[i] * k);
   /** A lettered board on legs at (x, z), facing yaw; up is the panel centre above the ground. */
@@ -379,8 +390,8 @@ function dress(ctx) {
   const domes = domeSpots.filter(([x, z, r]) => clear(x, z, r + 1)).map(([x, z, r]) => { take(x, z, r + 3); return { x, z, r, y: track.terrainHeight(x, z) - 0.2 }; });
   const facing = d => { const i = track.ground(d.x, d.z, -1, hit).i; return Math.atan2(track.px[i] - d.x, track.pz[i] - d.z); };
   const domeS = domes.filter(d => d.r < 10.5), domeL = domes.filter(d => d.r >= 10.5);
-  sc.instances(partsOf(M.habitatDome(9, { seed: 3 })), domeS.map(d => ({ x: d.x, y: d.y, z: d.z, yaw: facing(d), sy: 1 })), { scale: [0.9, 1.1] });
-  sc.instances(partsOf(M.habitatDome(12, { seed: 5, lit: 0xffc890 })), domeL.map(d => ({ x: d.x, y: d.y, z: d.z, yaw: facing(d) })), { scale: [0.95, 1.1] });
+  sc.instances(palette.parts(M.habitatDome(9, { seed: 3 })), domeS.map(d => ({ x: d.x, y: d.y, z: d.z, yaw: facing(d), sy: 1 })), { scale: [0.9, 1.1] });
+  sc.instances(palette.parts(M.habitatDome(12, { seed: 5, lit: 0xffc890 })), domeL.map(d => ({ x: d.x, y: d.y, z: d.z, yaw: facing(d) })), { scale: [0.95, 1.1] });
   const link = (a, b) => {
     const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), len = d - a.r - b.r + 1.5;
     if (len < 4 || len > 60) return;
@@ -397,7 +408,7 @@ function dress(ctx) {
   ghSpots.forEach(([x, z, yaw]) => { take(x, z, 12); bake.add(sc.place(M.greenhouse({ len: 22 }), x, z, { yaw, y: track.terrainHeight(x, z) - 0.2 })); });
   const modSpots = sc.scatter({ count: 10, min: 20, max: 90, maxSlope: 0.25, minGap: 22, where: (x, z) => near(x, z, COLONY, COLONY.r * 0.95) && clear(x, z, 4) && free(x, z, 8) });
   modSpots.forEach(p => take(p.x, p.z, 7));
-  sc.instances(partsOf(M.habModule()), modSpots, { scale: [0.9, 1.15], yaw: 'random' });
+  sc.instances(palette.parts(M.habModule()), modSpots, { scale: [0.9, 1.15], yaw: 'random' });
 
   // ---- the airlock tube: white ribs and a glow strip on the outside of the tunnel shell ----
   {
@@ -476,7 +487,7 @@ function dress(ctx) {
     }
     const equipment = hardware.build({ graphite: plastic(0x23313b, 0.65), cream: plastic(0xffe9ca, 0.65),
       amber: glow(0xffb84c, 1.4), signal: glow(0x79ffff, 1.6) });
-    ctx.group.add(equipment);
+    bake.add(equipment);
   }
 
   // ---- the centrepiece: a megarocket on the pad whose story is the race — lap 1 it cannot get off the ground,
@@ -913,7 +924,7 @@ function dress(ctx) {
       if (slope > 0.22 || canyonDist(x, z).d < 34) continue;
       panels.push({ x, y: h, z, yaw });
     }
-    sc.instances(partsOf(M.solarPanel()), panels, {});
+    sc.instances(palette.parts(M.solarPanel()), panels, {});
     panels.forEach(p => take(p.x, p.z, 3.5));
   }
 
@@ -998,7 +1009,7 @@ function dress(ctx) {
   poster(22.28, -1, 20.5, 3, 'WORK FROM DOME: MANDATORY', { w: 14, h: 9.3, up: 8.2, turn: 2.7 });
   posters.flush();
 
-  bake.flush();
+  staticProps.flush();
   atlas.flush();
 }
 

@@ -4,6 +4,8 @@
    devils. Each builder returns a THREE.Group on y = 0, facing +Z, made of a few
    merged meshes. Nothing here touches the DOM at import time. */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { partsOf } from '../render/scenery.js';
 import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, loft, plastic, glow, paint, MAT } from './build.js';
 import { canvasTex, fitText } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
@@ -480,4 +482,74 @@ export function nutrientTower() {
   }
   b.add('pipe', cyl(0.7, 0.45, 0.34, 8), { p: [0, 5.95, 0] });
   return b.build({ tank: WHITE, pipe: PANEL, leaf: plastic(0x278a4b, 0.68), fruit: plastic(0xe43840, 0.45) });
+}
+
+
+// Static Mars paint uses the native PBR channels: G = roughness, B = metalness.
+// Geometry and material caches are scoped to this scene because each race owns its buffers.
+export function colonyFinishes() {
+  const materials = new Map(), slots = new Map(), geometryCache = new WeakMap();
+  const pixels = new Uint8Array(256 * 4);
+  const texture = new THREE.DataTexture(pixels, 256, 1);
+  texture.needsUpdate = true;
+  const apply = object => object.traverse(mesh => {
+    if (!mesh.isMesh) return;
+    const mat = mesh.material;
+    if (!mat.isMeshStandardMaterial || mat.transparent || mat.vertexColors || mat.map || mat.emissiveMap ||
+        mat.roughnessMap || mat.metalnessMap || mat.emissive.getHex()) return;
+    const key = [mat.type, mat.side, mat.envMapIntensity, mat.clearcoat, mat.clearcoatRoughness].join('/');
+    let finish = materials.get(key);
+    if (!finish) {
+      finish = mat.clone();
+      finish.color.set(0xffffff); finish.vertexColors = true;
+      finish.roughness = finish.metalness = 1;
+      finish.roughnessMap = finish.metalnessMap = texture;
+      materials.set(key, finish);
+    }
+    const surface = mat.roughness + '/' + mat.metalness;
+    let slot = slots.get(surface);
+    if (slot === undefined) {
+      if (slots.size >= texture.image.width) return;
+      slot = slots.size; slots.set(surface, slot);
+      pixels.set([255, Math.round(mat.roughness * 255), Math.round(mat.metalness * 255), 255], 4 * slot);
+      texture.needsUpdate = true;
+    }
+    let variants = geometryCache.get(mesh.geometry);
+    if (!variants) geometryCache.set(mesh.geometry, variants = new Map());
+    let geometry = variants.get(mat);
+    if (!geometry) {
+      geometry = mesh.geometry.clone();
+      const count = geometry.attributes.position.count, colors = new Float32Array(count * 3), uvs = new Float32Array(count * 2);
+      for (let i = 0; i < count; i++) {
+        mat.color.toArray(colors, i * 3);
+        uvs[i * 2] = (slot + 0.5) / texture.image.width;
+        uvs[i * 2 + 1] = 0.5;
+      }
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+      variants.set(mat, geometry);
+    }
+    mesh.geometry = geometry; mesh.material = finish;
+  });
+  return {
+    apply,
+    dispose() {
+      texture.dispose();
+      for (const material of materials.values()) material.dispose();
+    },
+    parts(object) {
+      apply(object);
+      const groups = new Map();
+      for (const { geometry, material } of partsOf(object)) {
+        if (!groups.has(material)) groups.set(material, []);
+        groups.get(material).push(geometry);
+      }
+      return [...groups].map(([material, geometries]) => {
+        if (geometries.length === 1) return { geometry: geometries[0], material };
+        const geometry = mergeGeometries(geometries);
+        geometries.forEach(g => g.dispose());
+        return { geometry, material };
+      });
+    },
+  };
 }

@@ -686,9 +686,15 @@ export default {
       const g = nb.build({ pole: plastic(0x3a2c34, 0.6, 0.3), net: plastic(0xfff0d0, 0.7) }); ctx.group.add(g); bake.add(g, false);
       const sp = at(-half - 5, -wide - 6, 0);
       signAt(sp[0], sp[2], Math.atan2(-txn, -tzn) + 0.4, B.board('SAFETY NET', { bg: '#fff6e6', fg: '#c2410c', size: 150, sub: 'FUNDING ROUND: PENDING', subFg: '#1a1d29', subScale: 0.6, lines: 1 }), 12, 5, Math.max(6, track.py[gs0] - gy - 1), { frame: 0x3a2c34 });
-      // the judges, on the far side of the gap: a scorecard on stilts, at eye level for the karts in the air
+      // The judges hold up their verdict beside the gap. The official score spans the landing.
       const jp = at(half + 4, wide + 9, 0);
-      signAt(jp[0], jp[2], Math.atan2(-txn, -tzn) + 0.40, B.board('JUDGES: 10/10', { bg: '#ffffff', fg: '#1a1d29', size: 150, sub: '(ALL INVESTORS)', subFg: '#1a1d29', subScale: 0.96, pad: 0.045, lines: 1, border: '#1a1d29' }), 20.5, 8.8, Math.max(8, track.py[gs1] - gy + 3), { frame: 0x3a2c34 });
+      const votes = [1, 2, 3].map(n => B.board('10', { bg: '#ffffff', fg: '#1a1d29', size: 250, sub: 'JUDGE ' + n, subScale: 0.32, lines: 1, border: '#1a1d29' }));
+      signAt(jp[0], jp[2], Math.atan2(-txn, -tzn) + 0.40, (g, w, h) => {
+        for (const vote of votes) {
+          vote(g, w / votes.length, h);
+          g.translate(w / votes.length, 0);
+        }
+      }, 20.5, 8.8, Math.max(8, track.py[gs1] - gy + 3), { frame: 0x3a2c34 });
       for (let k = 0; k < 3; k++) { const q = at(half + 1 + k * 1.6, wide + 4.5, 0), m = B.person({ seated: true }); sc.place(m, q[0], q[2], { yaw: Math.atan2(-lxn, -lzn), y: sc.y(q[0], q[2]) }); bake.add(m); }
       // The judges score the investors while a volunteer line cleans up their camp.
       const approach = track.indexAtCp(20.35);
@@ -715,7 +721,7 @@ export default {
       const placard = spot(-2.9, -4.3);
       signAt(placard.x, placard.z, yaw, B.board('LEAVE NO TRACE', { bg: '#163a39', fg: '#fff7dd',
         sub: 'ITEM 000001 · SEQUIN', subFg: '#ffda65', subScale: 0.84, pad: 0.035, lines: 1 }), 11.5, 4.6, 8.5, { y: placard.y });
-      const bag = B.cleanupSack(), bagSpot = spot(4.1, -0.6);
+      const bag = B.cleanupSack(), bagSpot = spot(7.4, -4.2);
       sc.place(bag, bagSpot.x, bagSpot.z, { yaw, y: bagSpot.y, cast: false });
       let lastFill = 0;
       anim.push(() => {
@@ -726,15 +732,17 @@ export default {
         const width = 0.56 + 0.20 * lap;
         bag.scale.set(width, 0.12 + 0.43 * (lap - 1), width);
       });
-      // over the landing, the boardwalk's welcome arch
+      // Score the jump over the landing, in the sightline of a driver crossing the gap.
       const li = track.indexAtCp(21.95), lw = track.hwL[li] + track.hwR[li] + 2.5, ly = track.py[li], la = Math.atan2(track.tx[li], track.tz[li]);
       const ab = new ModelBuilder(), lr = [Math.cos(la), -Math.sin(la)];
-      for (const sx of [-1, 1]) ab.add('post', box(0.7, 9, 0.7, 0.1, 1), { p: [track.px[li] + lr[0] * sx * lw / 2, ly + 4.5, track.pz[li] + lr[1] * sx * lw / 2] });
-      ab.add('post', box(lw + 1.6, 3.4, 0.35, 0.05, 1), { p: [track.px[li], ly + 9.6, track.pz[li]], r: [0, la, 0] });
+      for (const sx of [-1, 1]) ab.add('post', box(0.7, 13.7, 0.7, 0.1, 1), { p: [track.px[li] + lr[0] * sx * lw / 2, ly + 6.85, track.pz[li] + lr[1] * sx * lw / 2] });
+      ab.add('post', box(lw + 1.6, 8.4, 0.35, 0.05, 1), { p: [track.px[li], ly + 12.1, track.pz[li]], r: [0, la, 0] });
       const ag = ab.build({ post: plastic(0x7c4f2e, 0.6, 0.3) }); ctx.group.add(ag); bake.add(ag);
-      const ar = atlas.add(1280, 300, B.board('STUCK THE LANDING (SPIRITUALLY)', { bg: '#1a1d29', fg: '#ffd23c', size: 150, lines: 1, border: '#ff6a2a', pad: 0.04 }));
-      const fy = la + Math.PI;
-      atlas.both(ar, [track.px[li] + Math.sin(fy) * 0.19, ly + 9.6, track.pz[li] + Math.cos(fy) * 0.19], fy, lw + 1.2, 3.1, 0.38);
+      const score = atlas.add(1024, 256, B.board('JUDGES: 10/10', { bg: '#1a1d29', fg: '#ffd23c', size: 150, sub: '(ALL INVESTORS)', subFg: '#ffffff', subScale: 0.94, lines: 1, border: '#ff6a2a', pad: 0.04 }));
+      const motto = atlas.add(1280, 300, B.board('STUCK THE LANDING (SPIRITUALLY)', { bg: '#1a1d29', fg: '#ffd23c', size: 150, lines: 1, border: '#ff6a2a', pad: 0.04 }));
+      const fy = la + Math.PI, frontX = track.px[li] + Math.sin(fy) * 0.19, frontZ = track.pz[li] + Math.cos(fy) * 0.19;
+      atlas.both(score, [frontX, ly + 13.75, frontZ], fy, lw + 1.2, 4.8, 0.38);
+      atlas.both(motto, [frontX, ly + 9.6, frontZ], fy, lw + 1.2, 3.1, 0.38);
     }
 
     // ---- the boardwalk: festival lights on both rails, so it reads as a pier lit up over the camp ----

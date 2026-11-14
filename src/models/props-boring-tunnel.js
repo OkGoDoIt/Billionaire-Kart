@@ -63,6 +63,82 @@ export function boringMachine() {
   return grp;
 }
 
+/** The HERO cutter head (#234 item 5): an 11 m face with a ring of work
+ *  lamps around its rim, so it reads lit from the road. The returned group's
+ *  userData.spin is the face (rotate it around Z to spin). */
+export function heroCutter(r = 5.5) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('disc', cyl(r, r, 0.9, 36), { p: [0, 0, 0], r: [Math.PI / 2, 0, 0] });
+  b.add('hub', cyl(0.9, 1.7, 1.3, 18), { p: [0, 0, 0.75], r: [Math.PI / 2, 0, 0] });
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    b.add('tooth', box(1.1, 1.3, 0.8, 0.08, 1), { p: [Math.cos(a) * r * 0.88, Math.sin(a) * r * 0.88, 0.42] });
+  }
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + 0.26;
+    b.add('spoke', box(0.8, r * 0.66, 0.55, 0.08, 1), { p: [Math.cos(a) * r * 0.46, Math.sin(a) * r * 0.46, 0.44], r: [0, 0, a + Math.PI / 2] });
+  }
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2 + 0.31;
+    b.add('lamp', sphere(0.3, 8), { p: [Math.cos(a) * r * 0.99, Math.sin(a) * r * 0.99, 0.35] });
+  }
+  const face = b.build({
+    disc: paint(0x9aa0a6, { rough: 0.42, metal: 0.35 }),
+    hub: paint(YELLOW, { rough: 0.4, metal: 0.3 }),
+    tooth: paint(YELLOW, { rough: 0.45, metal: 0.3 }),
+    spoke: MAT.dark,
+    lamp: glow(0xffd9a0, 2.6),
+  });
+  grp.add(face);
+  grp.userData.spin = face;
+  return grp;
+}
+
+/** The dead-end side bore (#234 item 5): a cylindrical chamber the road
+ *  skims past, with the hero cutter standing at its end. Local space: the
+ *  mouth is at the origin, the chamber extends toward -Z, floor at y = 0.
+ *  Place it at the tube wall with the road-facing yaw (faceCentre). */
+export function tbmChamber() {
+  const grp = new THREE.Group();
+  const concrete = paint(0x596069, { rough: 0.96 });
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, 16.5, 20, 1, true), new THREE.MeshStandardMaterial({ color: 0x596069, roughness: 0.96, side: THREE.DoubleSide }));
+  shell.rotation.x = Math.PI / 2;
+  shell.position.set(0, 5.0, -8.25);
+  grp.add(shell);
+  const end = new THREE.Mesh(new THREE.CircleGeometry(6.6, 20), concrete);
+  end.position.set(0, 5.0, -16.5);
+  grp.add(end);
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(13.2, 0.25, 16.9), paint(0x43484e, { rough: 0.97 }));
+  floor.position.set(0, -0.12, -8.3);
+  grp.add(floor);
+  // cheek walls closing the crescents between the chamber and the tube wall
+  for (const s of [1, -1]) {
+    const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.4, 8.5, 8), concrete);
+    cheek.position.set(s * 6.45, 3.4, -3.4);
+    grp.add(cheek);
+  }
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.32, 8, 24), glow(0xffa63e, 1.9));
+  rim.position.set(0, 5.0, -0.2);
+  grp.add(rim);
+  // the machine itself: neck into the end wall, hero face toward the road
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 3.4, 3.2, 16), paint(YELLOW, { rough: 0.5, metal: 0.3 }));
+  neck.rotation.x = Math.PI / 2;
+  neck.position.set(0, 5.5, -15.2);
+  grp.add(neck);
+  const face = heroCutter(5.5);
+  face.position.set(0, 5.5, -13.4);
+  grp.add(face);
+  grp.userData.spin = face.userData.spin;
+  // work lights inside, aimed back at the face
+  for (const s of [1, -1]) {
+    const wl = workLight();
+    wl.position.set(s * 4.6, 0, -7.5);
+    wl.rotation.y = Math.PI + s * 0.35;
+    grp.add(wl);
+  }
+  return grp;
+}
+
 /** A lone cutter head, for the dig site outside the portal. */
 export function spareCutter(r = 2.3) { return cutterFace(r); }
 
@@ -119,6 +195,22 @@ export function workLight() {
   return b.build({ leg: MAT.dark, head: MAT.dark, face: glow(0xfff3cf, 3.2) });
 }
 
+/** An overhead banner for the bore: a wide sign panel hung from the crown
+ *  on two cables, spanning the road so it reads dead-ahead. Origin at the
+ *  panel's bottom-centre; place at road level + ~4.3. Faces +Z. */
+export function hangBanner(tex, { w = 11, h = 1.9 } = {}) {
+  const grp = new THREE.Group();
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.16),
+    [MAT.dark, MAT.dark, MAT.dark, MAT.dark, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 })]);
+  panel.position.y = h / 2;
+  grp.add(panel);
+  const b = new ModelBuilder();
+  for (const s of [1, -1]) b.add('cable', cyl(0.045, 0.045, 1.1, 6), { p: [s * (w / 2 - 0.7), h + 0.55, 0] });
+  b.add('bar', cyl(0.07, 0.07, w - 1.2, 6), { p: [0, h + 0.06, 0], r: [0, 0, Math.PI / 2] });
+  grp.add(b.build({ cable: MAT.dark, bar: MAT.steel }));
+  return grp;
+}
+
 /** A lit wall sign: dark frame plus a textured panel, facing +Z. Origin at panel centre. */
 export function wallSign(tex, { w = 6.2, h = 1.9 } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder();
@@ -133,6 +225,183 @@ export function wallSign(tex, { w = 6.2, h = 1.9 } = {}) {
   return grp;
 }
 
+/** A boomtown tower for the city on top (#234 item 4): sandstone shaft with
+ *  a lit-window grid (texture passed in, cloned per tower so the grid scale
+ *  stays constant), a darker cap and a wide asphalt plinth for the block. */
+export function cityTower(tex, { w = 16, d = 16, h = 20 } = {}) {
+  const g = new THREE.Group();
+  const t = tex.clone();
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(Math.max(1, Math.round(w / 5)), Math.max(1, Math.round(h / 5)));
+  t.needsUpdate = true;
+  const wall = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffbe78, emissiveIntensity: 0.75, roughness: 0.85 });
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wall);
+  shaft.position.y = h / 2;
+  g.add(shaft);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(w + 0.9, 0.8, d + 0.9), paint(0x8a6a4a, { rough: 0.8 }));
+  cap.position.y = h + 0.4;
+  g.add(cap);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(w + 11, 0.5, d + 11), paint(0x4c4a48, { rough: 0.95 }));
+  plinth.position.y = 0.25;
+  g.add(plinth);
+  return g;
+}
+
+/** The pyramid hotel: a four-sided stepped pyramid in sandstone with the
+ *  window grid on its slopes and a glowing apex. */
+export function pyramidHotel(tex, { r = 19, h = 16 } = {}) {
+  const g = new THREE.Group();
+  const t = tex.clone();
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(6, 3);
+  t.needsUpdate = true;
+  const wall = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffbe78, emissiveIntensity: 0.6, roughness: 0.85 });
+  const pyr = new THREE.Mesh(new THREE.ConeGeometry(r, h, 4), wall);
+  pyr.position.y = h / 2;
+  pyr.rotation.y = Math.PI / 4;
+  g.add(pyr);
+  const apex = new THREE.Mesh(new THREE.SphereGeometry(0.85, 10, 8), glow(0xff4fa0, 2.2));
+  apex.position.y = h + 0.5;
+  g.add(apex);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(r * 1.9, 0.5, r * 1.9), paint(0x4c4a48, { rough: 0.95 }));
+  plinth.position.y = 0.25;
+  g.add(plinth);
+  return g;
+}
+
+/** A half-built tower frame with a tower crane on top: concrete columns and
+ *  slabs, then the crane mast, jib, counter-jib, cable and hook block. */
+export function constructionSite({ h = 15, craneH = 27 } = {}) {
+  const g = new THREE.Group(), b = new ModelBuilder();
+  for (const sx of [-6, 0, 6]) for (const sz of [-6, 6]) b.add('col', box(0.7, h, 0.7, 0.08, 1), { p: [sx, h / 2, sz] });
+  for (let lvl = 1; lvl <= 3; lvl++) b.add('slab', box(15, 0.5, 15, 0.08, 1), { p: [0, lvl * (h / 3), 0] });
+  b.add('mast', box(0.9, craneH - h, 0.9, 0.08, 1), { p: [0, h + (craneH - h) / 2, 0] });
+  b.add('jib', box(17, 0.7, 0.7, 0.08, 1), { p: [5.5, craneH, 0] });
+  b.add('cjib', box(6, 0.7, 0.7, 0.08, 1), { p: [-4.5, craneH, 0] });
+  b.add('weight', box(1.4, 2.2, 1.2, 0.08, 1), { p: [-7.2, craneH - 1.4, 0] });
+  b.add('cable', box(0.09, 7, 0.09, 0.08, 1), { p: [12.5, craneH - 3.5, 0] });
+  b.add('hook', box(1.1, 0.8, 1.1, 0.08, 1), { p: [12.5, craneH - 7.2, 0] });
+  b.add('cab', box(1.6, 1.6, 1.6, 0.08, 1), { p: [1.2, craneH - 0.6, 0] });
+  const frame = b.build({ col: MAT.concrete, slab: MAT.concrete, mast: paint(YELLOW, { rough: 0.5, metal: 0.3 }), jib: paint(YELLOW, { rough: 0.5, metal: 0.3 }), cjib: paint(YELLOW, { rough: 0.5, metal: 0.3 }), weight: MAT.dark, cable: MAT.dark, hook: MAT.dark, cab: paint(0x2b6cb0, { rough: 0.4 }) });
+  g.add(frame);
+  return g;
+}
+
+/** The Loop Station's glass canopy (#234 item 4): a transparent arc shell
+ *  over the road between two cps, with opaque rib bands every ~12 m. Built
+ *  in world space from the track frames, like boreTube. */
+export function stationCanopy(track, from, to, glassMat, ribMat) {
+  const { ds, px, py, pz, lx, ly, lz, ux, uy, uz, hwL, hwR } = track;
+  const g = new THREE.Group();
+  const r0 = track.indexAtCp(from), r1 = track.indexAtCp(to), STEP = 2, ARC = 10;
+  const arcRow = (r, lift) => {
+    const i = r % track.N, a = hwL[i] + 2.6, b = hwR[i] + 2.6, mid = (a - b) / 2, half = (a + b) / 2, H = 9.4;
+    const pts = [];
+    for (let k = 1; k < ARC; k++) {
+      const ang = Math.PI * (k / ARC), lat = mid + Math.cos(ang) * half, up = Math.sin(ang) * H + lift;
+      pts.push([px[i] + lx[i] * lat + ux[i] * up, py[i] + ly[i] * lat + uy[i] * up, pz[i] + lz[i] * lat + uz[i] * up]);
+    }
+    return pts;
+  };
+  const quadStrip = (rows) => {
+    const pos = [], idx = [];
+    rows.forEach(pts => pts.forEach(p => pos.push(...p)));
+    const w = rows[0].length;
+    for (let r = 0; r < rows.length - 1; r++) for (let k = 0; k < w - 1; k++) {
+      const a0 = r * w + k, a1 = a0 + 1, b0 = a0 + w, b1 = b0 + 1;
+      idx.push(a0, b0, a1, a1, b0, b1);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return geo;
+  };
+  const glassRows = [];
+  for (let r = r0; r <= r1; r += STEP) glassRows.push(arcRow(r, 0));
+  const glass = new THREE.Mesh(quadStrip(glassRows), glassMat);
+  g.add(glass);
+  for (let r = r0; r <= r1; r += Math.round(12 / ds / STEP) * STEP) {
+    const rib = new THREE.Mesh(quadStrip([arcRow(r, 0.06), arcRow(Math.min(r + 1, r1), 0.06)]), ribMat);
+    g.add(rib);
+  }
+  return g;
+}
+
+/** A plain steel column post of a given height (station canopy supports). */
+export function columnPost(h = 4) {
+  const b = new ModelBuilder();
+  b.add('post', box(0.55, h, 0.55, 0.08, 1), { p: [0, h / 2, 0] });
+  b.add('base', box(1.3, 0.25, 1.3, 0.08, 1), { p: [0, 0.12, 0] });
+  return b.build({ post: MAT.steel, base: MAT.dark });
+}
+
+/** One station platform segment: a low slab with a lit edge line. */
+export function stationPlatform(len = 26) {
+  const g = new THREE.Group(), b = new ModelBuilder();
+  b.add('slab', box(len, 0.9, 2.4, 0.08, 1), { p: [0, 0.45, 0] });
+  b.add('edge', box(len, 0.14, 0.3, 0.08, 1), { p: [0, 0.93, -1.0] });
+  const m = b.build({ slab: MAT.concrete, edge: glow(0xffd23c, 1.6) });
+  g.add(m);
+  return g;
+}
+
+/** The SHORTCUT COMING SOON barrier (#234 item 6): two posts, a sign panel
+ *  and a striped skirt, built on a pivot at its base so the final-lap
+ *  breakthrough can tip it flat (userData.pivot). Faces +Z. */
+export function shortcutBarrier(tex) {
+  const grp = new THREE.Group();
+  const pivot = new THREE.Group();
+  grp.add(pivot);
+  const b = new ModelBuilder();
+  for (const s of [1, -1]) b.add('post', box(0.28, 2.3, 0.28, 0.08, 1), { p: [s * 2.5, 1.15, 0] });
+  b.add('skirt', box(5.6, 0.55, 0.18, 0.08, 1), { p: [0, 0.32, 0.05] });
+  const frame = b.build({ post: MAT.steel, skirt: paint(0xe8641e, { rough: 0.6 }) });
+  pivot.add(frame);
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.5, 0.14),
+    [MAT.dark, MAT.dark, MAT.dark, MAT.dark, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }), MAT.dark]);
+  panel.position.set(0, 1.62, 0.06);
+  pivot.add(panel);
+  grp.userData.pivot = pivot;
+  return grp;
+}
+
+/** A robotaxi pod (#234 item 7): driverless, cream pod body, dark glass
+ *  canopy, a spinning sensor puck on the roof, a teal eye-stripe for a face
+ *  and a little roof sign. Invented brand only — the sign texture is passed
+ *  in. Faces +Z. Used parked (scenery) and as the 'taxi' patrol obstacle. */
+export function robotaxi(tex) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('body', box(1.9, 0.85, 4.3, 0.16, 2), { p: [0, 0.62, 0] });
+  b.add('stripe', box(1.94, 0.16, 4.34, 0.05, 1), { p: [0, 0.52, 0] });
+  b.add('glass', box(1.66, 0.6, 2.5, 0.14, 2), { p: [0, 1.28, -0.2] });
+  b.add('puck', cyl(0.34, 0.38, 0.22, 12), { p: [0, 1.68, -0.2] });
+  b.add('eye', box(1.3, 0.13, 0.1, 0.04, 1), { p: [0, 0.78, 2.16] });
+  b.add('tail', box(1.3, 0.1, 0.1, 0.04, 1), { p: [0, 0.82, -2.16] });
+  for (const sx of [1, -1]) for (const sz of [1, -1]) b.add('wheel', cyl(0.34, 0.34, 0.24, 12), { p: [sx * 0.86, 0.34, sz * 1.42], r: [0, 0, Math.PI / 2] });
+  const car = b.build({
+    body: paint(0xf2f0e9, { rough: 0.32, metal: 0.05 }),
+    stripe: paint(0x14b8a6, { rough: 0.4 }),
+    glass: plastic(0x1d2733, 0.15),
+    puck: MAT.dark,
+    eye: glow(0x39e6c3, 2.4),
+    tail: glow(0xff4040, 1.8),
+    wheel: MAT.dark,
+  });
+  grp.add(car);
+  if (tex) {
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.42, 0.3),
+      [MAT.dark, MAT.dark, MAT.dark, MAT.dark, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55 }), MAT.dark]);
+    sign.position.set(0, 1.62, 0.9);
+    grp.add(sign);
+    const sign2 = sign.clone();
+    sign2.rotation.y = Math.PI;
+    sign2.position.z = 0.9;
+    grp.add(sign2);
+  }
+  return grp;
+}
+
 /** A sandstone pylon for a portal mouth, with a red band near the top. */
 export function portalPylon({ h = 13 } = {}) {
   const b = new ModelBuilder();
@@ -140,6 +409,122 @@ export function portalPylon({ h = 13 } = {}) {
   b.add('cap', box(3.3, 0.9, 3.3, 0.15, 1), { p: [0, h + 0.45, 0] });
   b.add('band', box(2.75, 1.1, 2.75, 0.05, 1), { p: [0, h - 2.4, 0] });
   return b.build({ post: plastic(SANDSTONE, 0.7), cap: plastic(0xbfb49a, 0.7), band: paint(0xe23b3b, { rough: 0.5 }) });
+}
+
+/** The bore's own tube (#234 item 3, replacing the stock shell via
+ *  tunnelShell: false): dark concrete rings every ~1.5 m with subtle 6 m
+ *  banding, portal arch faces at the range ends, and — the track's signature
+ *  look — an emissive strip ring every ~6 m whose colour runs
+ *  hsl(fract(s/120 - time*0.25)) so a rainbow wave travels the bore.
+ *  One merged concrete geometry + one merged strip geometry = 2 draw calls.
+ *  `windows` lets later work open the arc on one side (the TBM chamber,
+ *  the shortcut junctions): entries { r0, r1, k0, k1 } in sample/arc-index
+ *  space clamp the arc of every ring in [r0, r1] to [k0, k1] (k runs 0..ARC
+ *  from the L wall base over the crown to the R wall base). Portals are
+ *  skipped near window mouths, so a window gets no floating arch slice. */
+export function boreTube(track, uTime, windows = [], extraCover = []) {
+  const { N, ds, px, py, pz, lx, ly, lz, ux, uy, uz, hwL, hwR } = track;
+  const H = track.def.tunnelHeight ?? 7, ARC = 12, STEP = 2;
+  const group = new THREE.Group();
+  const winAt = r => windows.find(w => r >= w.r0 && r <= w.r1) || null;
+  const kRange = r => { const w = winAt(r); return w ? [w.k0, w.k1] : [0, ARC]; };
+  // the tube also spans the shortcut-junction gaps in def.tunnels (the road
+  // is still underground there; only the station gap stays open to the sky)
+  const covered = r => track.tunnel[r % N] || extraCover.some(w => r >= w.r0 && r <= w.r1);
+
+  // ---- concrete (tube + portal faces share one geometry) ----
+  const pos = [], nor = [], col = [], idx = [];
+  function arcVerts(r, sh) {
+    const i = r % N, a = hwL[i] + 0.7, b = hwR[i] + 0.7, mid = (a - b) / 2, half = (a + b) / 2;
+    const [k0, k1] = kRange(r), first = pos.length / 3;
+    for (let k = k0; k <= k1; k++) {
+      const ang = Math.PI * (k / ARC), ca = Math.cos(ang), sa = Math.sin(ang), lat = mid + ca * half, up = sa * H;
+      pos.push(px[i] + lx[i] * lat + ux[i] * up, py[i] + ly[i] * lat + uy[i] * up, pz[i] + lz[i] * lat + uz[i] * up);
+      nor.push(-(lx[i] * ca + ux[i] * sa), -(ly[i] * ca + uy[i] * sa), -(lz[i] * ca + uz[i] * sa));
+      col.push(sh, sh, sh);
+    }
+    return { first, k0, k1 };
+  }
+  let prev = null;
+  for (let r = 0; r <= N; r++) {
+    const i = r % N;
+    if (!covered(r)) { prev = null; continue; }
+    const ring = arcVerts(r, (Math.floor(r / STEP / 4) % 2) ? 0.93 : 1.0);
+    if (prev) {
+      const k0 = Math.max(prev.k0, ring.k0), k1 = Math.min(prev.k1, ring.k1);
+      for (let k = k0; k < k1; k++) {
+        const a0 = prev.first + (k - prev.k0), a1 = a0 + 1, b0 = ring.first + (k - ring.k0), b1 = b0 + 1;
+        idx.push(a0, b0, a1, a1, b0, b1);
+      }
+    }
+    prev = ring;
+    // portal face where a covered run starts or ends (not near a window mouth)
+    const isEnd = !covered(r + 1) || !covered(r - 1);
+    if (isEnd && !winAt(r) && !winAt(r - 1) && !winAt(r + 1)) {
+      const a = hwL[i] + 0.7, b = hwR[i] + 0.7, mid = (a - b) / 2, half = (a + b) / 2, c0 = pos.length / 3;
+      for (let k = 0; k <= ARC; k++) {
+        const ang = Math.PI * (k / ARC), ca = Math.cos(ang), sa = Math.sin(ang);
+        for (const e of [0, 2.2]) {
+          const lat = mid + ca * (half + e), up = sa * (H + e);
+          pos.push(px[i] + lx[i] * lat + ux[i] * up, py[i] + ly[i] * lat + uy[i] * up, pz[i] + lz[i] * lat + uz[i] * up);
+          nor.push(track.tx[i], 0, track.tz[i]);
+          col.push(0.66, 0.66, 0.66);
+        }
+        if (k) { const q = c0 + (k - 1) * 2; idx.push(q, q + 1, q + 2, q + 2, q + 1, q + 3); }
+      }
+    }
+  }
+  const cg = new THREE.BufferGeometry();
+  cg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  cg.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  cg.setIndex(idx);
+  group.add(new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ color: 0x848b93, roughness: 0.96, metalness: 0.02, vertexColors: true, emissive: 0x14120e, side: THREE.DoubleSide })));
+
+  // ---- rainbow strips: a band between ring r and r+1 at every 4th ring ----
+  const sp = [], sa = [], sidx = [];
+  for (let r = 0; r < N; r += STEP) {
+    const i = r % N;
+    if (!covered(r) || !covered(r + 1) || (r / STEP) % 4 !== 0) continue;
+    const rows = [];
+    for (const rr of [r, r + 1]) {
+      const j = rr % N, a = hwL[j] + 0.64, b = hwR[j] + 0.64, mid = (a - b) / 2, half = (a + b) / 2, h = H - 0.06;
+      const [k0, k1] = kRange(rr), first = sp.length / 3;
+      for (let k = k0; k <= k1; k++) {
+        const ang = Math.PI * (k / ARC), lat = mid + Math.cos(ang) * half, up = Math.sin(ang) * h;
+        sp.push(px[j] + lx[j] * lat + ux[j] * up, py[j] + ly[j] * lat + uy[j] * up, pz[j] + lz[j] * lat + uz[j] * up);
+        sa.push(rr * ds);
+      }
+      rows.push({ first, k0, k1 });
+    }
+    const [A, B] = rows, k0 = Math.max(A.k0, B.k0), k1 = Math.min(A.k1, B.k1);
+    for (let k = k0; k < k1; k++) {
+      const a0 = A.first + (k - A.k0), a1 = a0 + 1, b0 = B.first + (k - B.k0), b1 = b0 + 1;
+      sidx.push(a0, a1, b0, a1, b1, b0);
+    }
+  }
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+  sg.setAttribute('aS', new THREE.Float32BufferAttribute(sa, 1));
+  sg.setIndex(sidx);
+  group.add(new THREE.Mesh(sg, new THREE.ShaderMaterial({
+    uniforms: { uTime },
+    vertexShader: /* glsl */`
+      attribute float aS; varying float vS;
+      void main() { vS = aS; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      uniform float uTime; varying float vS;
+      vec3 hsl2rgb(vec3 c) {
+        vec3 rgb = clamp(abs(mod(c.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+        return c.z + c.y * (rgb - 0.5) * (1.0 - abs(2.0 * c.z - 1.0));
+      }
+      void main() {
+        vec3 c = hsl2rgb(vec3(fract(vS / 120.0 - uTime * 0.25), 0.9, 0.55));
+        gl_FragColor = vec4(c * 1.55, 1.0);
+      }`,
+    side: THREE.DoubleSide,
+  })));
+  return group;
 }
 
 /**

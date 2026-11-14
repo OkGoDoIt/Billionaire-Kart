@@ -15,6 +15,23 @@ import * as P from '../models/props.js';
 import * as T from '../models/props-boring-tunnel.js';
 import { canvasTex, fitText } from '../render/textures.js';
 
+/** Where the bore tube's arc opens instead of closing over the road
+ *  (#234 items 5+6). k runs 0..12 from the L wall base (lat +) over the crown
+ *  to the R wall base (lat −): keeping [k0, k1] drops the arc outside it.
+ *  Item 5's TBM chamber keeps k 5..12 (the L lower arc is the chamber
+ *  mouth); item 6's shortcut junctions keep k 0..7 (R-side mouths). */
+const TUBE_WINDOWS = [
+  { from: 4.17, to: 4.43, k0: 4, k1: 12 },   // the Boring Machine's chamber mouth (item 5; opened to k4 in the owner-directive pass — the Machine must be unmissable)
+  { from: 2.95, to: 5.9, k0: 5, k1: 12 },    // the breakthrough junction: one long L-side opening (item 6)
+];
+
+/** Junction gaps in def.tunnels that the tube still covers (item 6): the
+ *  road is underground there, only its L wall opens. The station gap
+ *  (6.4–7.6) is NOT covered — it daylights. */
+const TUBE_COVER = [
+  { from: 2.95, to: 5.9 },
+];
+
 const SIGN_FONT = '"Luckiest Guy", "Arial Black", sans-serif';
 /** A worksite sign texture: fitted text (never squashed, via fitText), drawn
     again once the display font arrives so it never stays on the fallback. */
@@ -33,17 +50,17 @@ const PATH = [
     { p: [20, 0, -108] },                        // 0 start/finish on the portal straight, flat and bank-free
     { p: [140, -0.6, -108] },                    // 1 the dive begins, dead level across the grid first
     { p: [198, -2.4, -96], bank: -6 },           // 2 Portal Bend: the dive's first pitch, bank catches the kart
-    { p: [226, -4.2, -52] },                     // 3 the chicane, right kink: first half of the S-bend
-    { p: [208, -5.2, -8] },                      // 4 the chicane, left kink: the dive bottoms out at the Machine
-    { p: [230, -5.9, 40] },                      // 5 settle right at running depth
-    { p: [190, -6, 84], bank: -7 },              // 6 Boring Bend: 90 degrees onto the north wall at full depth
+    { p: [226, -4.2, -52], wr: 8.5, wl: 7.5 },   // 3 the chicane, right kink: first half of the S-bend (wr apron: the pursuit chord clips this inside wall — wall-map 9/race before)
+    { p: [208, -5.2, -8], wl: 9 },               // 4 the chicane, left kink: the dive bottoms out at the Machine (wl apron, same reason)
+    { p: [230, -5.9, 40], wr: 8 },               // 5 settle right at running depth (wr apron)
+    { p: [190, -6, 84], bank: -7, wr: 7.5 },     // 6 Boring Bend: 90 degrees onto the north wall at full depth (wr apron tail: the settle's grind runs to cp ~5.5)
     { p: [118, -5.8, 105] },                     // 7 the deep run: the longest level sector in the game
     { p: [-60, -5.2, 110] },                     // 8 the deep run continues; the climb quietly begins
     { p: [-156, -3.8, 102], bank: -5 },          // 9 the climb, hairpin approach
     { p: [-198, -2.2, 56] },                     // 10 the west climb: the bore's high shoulder
     { p: [-206, -0.8, 8] },                      // 11 the west climb, deep in the hill
-    { p: [-186, 0.4, -42] },                     // 12 the Ring Hairpin, entry: the corner tightens hard
-    { p: [-168, 1.6, -84], bank: -5 },           // 13 the Ring Hairpin, exit onto the crown (ring at the apex, cp ~12.6)
+    { p: [-186, 0.4, -42], w: 16 },              // 12 the Ring Hairpin, entry: the corner tightens hard (w:16 — the ring sector stays wide so the loop ring fits)
+    { p: [-168, 1.6, -84], bank: -5, w: 16 },    // 13 the Ring Hairpin, exit onto the crown (ring at the apex, cp ~12.6)
     { p: [-106, 2.2, -104], bank: -5 },          // 14 the crown: +2.2 m, shallowest cover, closest to daylight
     { p: [-30, 0.3, -108] },                     // 15 the settle: dead level again by the portal straight
   ];
@@ -53,17 +70,20 @@ export default {
   name: 'Boring Tunnel GP',
   tagline: 'One bore. No shortcut. Still digging.',
   laps: 3,
-  width: 19,
-  tunnelHeight: 10,                 // a big bore: room for the ring and the fans
+  width: 13,
+  tunnelHeight: 7,                  // a single-lane bore (#234 item 2): the walls close in; the ring sector keeps w:16
+  tunnelShell: false,               // #234 item 3: the bore builds its own tube (dark concrete + rainbow light strips) in decorate
   sky: 'golden',                    // the portal mouths get the golden hour (design doc: mk8-desert)
   offroad: 'sand',
   defaults: { edge: 'open', shoulder: 3, outer: 10 },
   // the opening shot: from the road at the chicane, looking down the dive's
-  // last pitch at the Boring Machine — the lit bore converging on the
-  // spinning cutter face at the bottom (machine sits at cp ~4.4)
+  // last pitch into the Boring Machine's chamber — the lit bore converging
+  // on the 11 m cutter face at the bottom (face centre ~(233, -0.4, -4.5);
+  // re-aimed in #234 item 5: the old framing centred the road at cp 4.05
+  // and the machine sat hidden behind the kink, out of frame)
   intro: [{
-    pos: [214, 2.0, -38], look: [214, -4.0, 8],
-    pos1: [215, 0.8, -26], look1: [214, -4.0, 8],
+    pos: [216.8, -2.6, -33.2], look: [233.0, -0.4, -4.5],
+    pos1: [212.9, -3.2, -24.9], look1: [233.0, -0.4, -4.5],
     fov: 55, dur: 3.4,
   }],
   lapNotes: [
@@ -73,10 +93,49 @@ export default {
   path: PATH,
   // the whole lap is one bore except the start cutting (cp 15.5 -> 0.45),
   // where the road daylights between the berms
-  tunnels: [{ from: 0.45, to: 15.5, through: true }],
+  tunnels: [{ from: 0.45, to: 2.95, through: true }, { from: 5.9, to: 6.4, through: true }, { from: 7.6, to: 15.5, through: true }],   // gaps: the Loop Station (#234 item 4) + the two shortcut junctions (item 6)
+  backdrop: { img: 'assets/backdrops/boring-tunnel.webp', top: 9, bottom: -0.3 },             // the boomtown skyline, painted (assets/tracks/boring-tunnel/prompts.md)
   sides: [
     { from: 15.5, to: 0.45, edge: 'wall' },   // retaining walls along the open-air cutting: the sponsor boards live here
+    // #234 item 6: the breakthrough cut's junctions. The cut crosses the
+    // S-bend's inside (the L side at both ends); the facing side opens onto
+    // the dug bench (outer 30, no hoardings to block the mouths), the far
+    // side stays a wall. The bench surface itself is def.lake below.
+    { from: 2.95, to: 5.9, side: 'L', edge: 'open', outer: 30, hoarding: false },
+    { from: 2.95, to: 5.9, side: 'R', edge: 'wall' },
   ],
+  // #234 item 6: the shortcut breaks through on the final lap. The lake
+  // hook carries the joke: the side bore's floor is WET CEMENT (speed 0.2)
+  // until the final lap, then sets hard and fast (0.92). levelForLap stays
+  // deep below the bench, so it never reads as water — no drownings, and
+  // the AI's dry-path check always passes; the shortcuts entry's `when`
+  // is what actually gates it to the final lap.
+  lake: {
+    inside(x, z) {
+      const seg = [[226, -48], [225, -30], [228, -6], [228, 10], [224, 22]];
+      for (let k = 0; k < seg.length - 1; k++) {
+        const [ax, az] = seg[k], [bx, bz] = seg[k + 1];
+        const abx = bx - ax, abz = bz - az;
+        const tt = Math.max(0, Math.min(1, ((x - ax) * abx + (z - az) * abz) / (abx * abx + abz * abz || 1)));
+        const dx = x - (ax + abx * tt), dz = z - (az + abz * tt);
+        if (dx * dx + dz * dz < 16.5 * 16.5) return true;
+      }
+      return false;
+    },
+    levelForLap() { return -50; },
+    surface(depth, race) {
+      return race.lakeLap >= race.laps
+        ? { id: 'cement', speed: 0.92, grip: 0.95, dust: 0xb9b3a4, rumble: 0.25, offroad: true }
+        : { id: 'wet-cement', speed: 0.2, grip: 0.5, dust: 0x9d968b, rumble: 0.4, offroad: true };
+    },
+  },
+  shortcuts: [{
+    name: 'The Breakthrough',
+    from: 2.8, to: 5.1,
+    path: [[226, -48], [225, -30], [228, -6], [228, 10], [224, 22]],
+    skill: 0.55,
+    when: (race) => race.lakeLap >= race.laps,
+  }],
   zones: [
     { from: 2.2, to: 8.8, skin: 'metal' },   // riveted plates from the dive's foot along the deep run
     { from: 12.1, to: 13.2, skin: 'neon' },  // the ring sector glows
@@ -102,13 +161,15 @@ export default {
     { from: 12.15, to: 13.05, n: 6, lat: -4 },     // the inside of the Ring Hairpin
     { from: 13.75, to: 14.2, n: 4, lat: 0, air: 2.2 },  // over the crown jump
   ],
+  models: { taxi: () => T.robotaxi(signTex('AUTOPILOT-ISH', { w: 900, h: 200, size: 118, bg: '#101623', fg: '#39e6c3' })) },
   obstacles: [
-    { kind: 'patrol', model: 'bot', at: 6.9, lats: [-8, -3.5], speed: 4, effect: 'spin' },   // maintenance bot sweeping the deep run's left half
-    { kind: 'patrol', model: 'bot', at: 8.8, lats: [8, 3.5], speed: 3.5, effect: 'spin' },   // and one working the climb
-    { kind: 'orbit', model: 'drone', at: 15.6, lat: -7, orbit: 3, speed: 6, effect: 'spin' }, // survey drone worrying the home straight
-    { kind: 'static', model: 'crate', at: 9.6, lat: -6.5, effect: 'bump' },                  // dig crates on the climb
-    { kind: 'static', model: 'barrel', at: 5.6, lat: 6.5, effect: 'bump' },                  // a barrel at the chicane's settle
-    { kind: 'static', model: 'crate', at: 12.9, lat: 6, effect: 'bump' },                    // crates on the crown approach
+    { kind: 'patrol', model: 'taxi', at: 6.95, lats: [1.8, 5.6], speed: 1.9, effect: 'spin' },   // a robotaxi forever nosing halfway across the station lane, then thinking better of it (#234 item 7: a full-lane crossing cost +16 hits/race in sim A/B — a wall of spins at racing speed; the half-crossing reads the same from the kart and costs ~0)
+    { kind: 'patrol', model: 'bot', at: 6.9, lats: [-4.5, -3.4], speed: 4, effect: 'spin' },   // maintenance bot working the deep run's left wall band (centre sweeps caused 6 hits/race at cp7)
+    { kind: 'patrol', model: 'bot', at: 8.8, lats: [4.5, 3.4], speed: 3.5, effect: 'spin' },   // and one working the climb's right wall band
+    { kind: 'orbit', model: 'drone', at: 15.6, lat: -4.6, orbit: 0.6, speed: 6, effect: 'spin' }, // survey drone worrying the home straight's left edge (mid-road orbit caused 13 hits/race at cp15.5)
+    { kind: 'static', model: 'crate', at: 9.6, lat: -4.5, effect: 'bump' },                  // dig crates on the climb
+    { kind: 'static', model: 'barrel', at: 5.6, lat: 4.5, effect: 'bump' },                  // a barrel at the chicane's settle
+    { kind: 'static', model: 'crate', at: 12.9, lat: 4.5, effect: 'bump' },                    // crates on the crown approach
   ],
   terrain: {
     // water sits below the bore's -6 m floor: the road runs UNDER this level for
@@ -116,20 +177,16 @@ export default {
     // water - 0.9 as drowned. The desert surface never gets near it.
     cell: 3, margin: 210, blend: 26, water: -9,
     fn(x, z) {
-      // the massif the bore is dug through: a high desert plateau with fbm
-      // lumps and rim mesas — with a graded dig apron trenched along the
-      // bore's line. A `through` tunnel is excluded from the terrain conform
-      // (track.js marks its samples as bridges), so beside the bore the raw
-      // fn IS the ground: if it ever sat between the road and the shell top,
-      // the mountain would plug the tube (the conform's blend at the portal
-      // throats, and a low carve across the dive, both did exactly that in
-      // review). The apron floor (-7.5 m) stays below the deepest road
-      // (-6 m) everywhere along the line, and the plateau (~16.5 m and up)
-      // stays above the highest shell top (~12.2 m at the crown).
-      let h = 22 + (fbm(x * 0.008, z * 0.008, 4, 11) - 0.5) * 8;
-      h += (fbm(x * 0.03, z * 0.03, 2, 4) - 0.5) * 3;
-      const d = Math.hypot(x, z);
-      h += smoothstep(240, 430, d) * 26;
+      // the massif the bore is dug through — with a graded dig apron
+      // trenched along the bore's line. A `through` tunnel is excluded from
+      // the terrain conform (track.js marks its samples as bridges), so
+      // beside the bore the raw fn IS the ground: if it ever sat between
+      // the road and the shell top, the mountain would plug the tube (the
+      // conform's blend at the portal throats, and a low carve across the
+      // dive, both did exactly that in review). The apron floor (-7.5 m)
+      // stays below the deepest road (-6 m) everywhere along the line, and
+      // the surface (city table, +14 m) stays above the highest shell top
+      // (~9.2 m at the crown).
       let dp = 1e9;
       for (let k = 0; k < PATH.length; k++) {
         const a = PATH[k].p, b = PATH[(k + 1) % PATH.length].p;
@@ -138,7 +195,19 @@ export default {
         const dx = x - (a[0] + abx * tt), dz = z - (a[2] + abz * tt), dd = dx * dx + dz * dz;
         if (dd < dp) dp = dd;
       }
-      const trench = 1 - smoothstep(34, 62, Math.sqrt(dp));
+      const dLine = Math.sqrt(dp);
+      // #234 item 4: a city stands on top of the bore now. The plateau is a
+      // flat +14 m table (the block grid in decorate stands on it), grading
+      // out to open desert and rim mesas at the horizon. The graded trench
+      // along the line is unchanged: it is the start cutting, the Loop
+      // Station slot, and the guarantee the ground never plugs the bore
+      // (table 14 > highest shell top ~9.2 at the crown; slot floor -7.5
+      // stays below the deepest road -6).
+      let desert = 2.2 + (fbm(x * 0.004 + 9, z * 0.004, 3, 7) - 0.5) * 2.4;
+      desert += smoothstep(240, 430, Math.hypot(x, z)) * 26;
+      const table = 1 - smoothstep(105, 185, dLine);
+      let h = desert * (1 - table) + 14 * table;
+      const trench = 1 - smoothstep(34, 62, dLine);
       return h * (1 - trench) + -7.5 * trench;
     },
   },
@@ -195,32 +264,121 @@ export default {
       { x: dig.x + 6, y: sc.y(dig.x + 6, dig.z - 3), z: dig.z - 3, yaw: 2.8 },
     ], {});
 
+    /* ---- the city on top + the Loop Station (#234 item 4) ---- */
+    const TH = ctx.THREE;
+    const winTex = canvasTex(256, 256, (g) => {
+      g.fillStyle = '#bb905f'; g.fillRect(0, 0, 256, 256);
+      for (let y = 0; y < 8; y++) for (let x = 0; x < 5; x++) {
+        g.fillStyle = (x * 7 + y * 13) % 3 ? '#ffd98f' : '#77582f';
+        g.fillRect(18 + x * 46, 16 + y * 30, 24, 16);
+      }
+    });
+    const distToLine = (x, z) => {
+      let dp = 1e9;
+      for (let k = 0; k < PATH.length; k++) {
+        const a = PATH[k].p, b = PATH[(k + 1) % PATH.length];
+        const abx = b[0] - a[0], abz = b[2] - a[2];
+        const tt = Math.max(0, Math.min(1, ((x - a[0]) * abx + (z - a[2]) * abz) / (abx * abx + abz * abz || 1)));
+        const dx = x - (a[0] + abx * tt), dz = z - (a[2] + abz * tt), dd = dx * dx + dz * dz;
+        if (dd < dp) dp = dd;
+      }
+      return Math.sqrt(dp);
+    };
+    // the block grid on the +14 table: jittered casino towers set back from
+    // the trench apron, standing on the rendered terrain (sc.y), never floating
+    for (let gx = -330; gx <= 330; gx += 44) for (let gz = -210; gz <= 250; gz += 44) {
+      const x = gx + (rng() - 0.5) * 12, z = gz + (rng() - 0.5) * 12;
+      const dl = distToLine(x, z);
+      if (dl < 68 || dl > 145 || rng() < 0.32) continue;
+      const y = sc.y(x, z);
+      if (y < 12.5) continue;
+      sc.place(T.cityTower(winTex, { w: 13 + rng() * 9, d: 13 + rng() * 9, h: 9 + rng() * 21 }), x, z,
+        { yaw: (rng() < 0.5 ? 0 : Math.PI / 2) + (rng() - 0.5) * 0.1, y: y - 0.25 });
+    }
+    // heroes flanking the station: the pyramid hotel north of the slot, a
+    // tall slab on the inside, a half-built tower with its crane to the NE
+    sc.place(T.pyramidHotel(winTex, {}), 105, 188, { yaw: Math.PI, y: sc.y(105, 188) - 0.25 });
+    sc.place(T.cityTower(winTex, { w: 17, d: 15, h: 27 }), 92, 16, { yaw: 0.2, y: sc.y(92, 16) - 0.25 });
+    sc.place(T.constructionSite({}), 196, 182, { yaw: -0.5, y: sc.y(196, 182) - 0.25 });
+
+    // the Loop Station: glass canopy over the bore gap, ribbed, on columns
+    const glassMat = new TH.MeshStandardMaterial({ color: 0xa8d8ea, transparent: true, opacity: 0.22, roughness: 0.12, metalness: 0.05, side: TH.DoubleSide, depthWrite: false });
+    const ribMat = new TH.MeshStandardMaterial({ color: 0x20505e, roughness: 0.5, metalness: 0.4, side: TH.DoubleSide });
+    ctx.group.add(T.stationCanopy(track, 6.38, 7.62, glassMat, ribMat));
+    for (const endAt of [6.45, 7.55]) for (const side of [1, -1]) {
+      const ci = track.indexAtCp(endAt), lat = side * (track.hwL[ci] + 2.3);
+      const p = atPos(endAt, lat), gy = sc.y(p.x, p.z) - 0.3, top = p.y + 2.9;
+      sc.place(T.columnPost(Math.max(1.5, top - gy)), p.x, p.z, { yaw: p.yaw, y: gy });
+    }
+    // platforms along both edges of the station stretch
+    for (const side of [1, -1]) for (let k = 0; k < 5; k++) {
+      const at = 6.52 + k * 0.22, ci = track.indexAtCp(at);
+      const p = atPos(at, side * (track.hwL[ci] + 1.35));
+      sc.place(T.stationPlatform(27), p.x, p.z, { yaw: p.yaw + Math.PI / 2, y: p.y - 0.35 });
+    }
+    // a hanging LOOP STATION sign at the canopy's middle, readable both ways
+    const stTex = signTex('LOOP STATION', { w: 1400, h: 260, size: 190, bg: '#101623', fg: '#39e6c3' });
+    const stp = atPos(7.0, 0);
+    sc.place(T.wallSign(stTex, { w: 11, h: 2.1 }), stp.x, stp.z, { yaw: stp.yaw, y: stp.y + 5.4 });
+    sc.place(T.wallSign(stTex, { w: 11, h: 2.1 }), stp.x, stp.z, { yaw: stp.yaw + Math.PI, y: stp.y + 5.4 });
+
+    // the traffic joke (#234 item 7): a queue of driverless robotaxis
+    // parked nose-to-tail on both platforms, waiting for passengers who
+    // are 20 m underground in a tunnel. One more crosses the lane as a
+    // patrol obstacle (def.obstacles, model 'taxi').
+    const taxiTex = signTex('AUTOPILOT-ISH', { w: 900, h: 200, size: 118, bg: '#101623', fg: '#39e6c3' });
+    for (const [at, side] of [[6.55, 1], [6.63, 1], [6.71, 1], [6.79, 1], [6.87, 1], [7.15, 1], [7.23, 1], [6.9, -1], [6.98, -1], [7.3, -1]]) {
+      const ci = track.indexAtCp(at), p = atPos(at, side * (track.hwL[ci] + 1.35));
+      sc.place(T.robotaxi(taxiTex), p.x, p.z, { yaw: p.yaw + (side > 0 ? 0 : Math.PI), y: p.y + 0.55 });
+    }
+
     /* ---- in the bore ---- */
-    // THE BORING MACHINE, chewing the left wall at the bottom of the dive:
-    // scaled up so the cutter face fills the view as you exit the chicane
-    const mp = atPos(4.4, 8.6);
-    const machine = T.boringMachine();
-    machine.scale.setScalar(1.32);
-    sc.place(machine, mp.x, mp.z, { yaw: faceCentre(mp, 1), y: mp.y });
-    const dustP = atPos(4.45, 6.2, 3.4);
+    // the bore's own tube (#234 item 3): dark concrete + the rainbow light
+    // strips, one merged geometry each; the colour wave runs on uTime.
+    // TUBE_WINDOWS (module top) opens the arc where item 6 cuts the wall
+    // away at the shortcut junctions.
+    const uTime = { value: 0 };
+    ctx.group.add(T.boreTube(track, uTime,
+      TUBE_WINDOWS.map(w => ({ ...w, r0: track.indexAtCp(w.from), r1: track.indexAtCp(w.to) })),
+      TUBE_COVER.map(w => ({ r0: track.indexAtCp(w.from), r1: track.indexAtCp(w.to) }))));
+    anim.push((dt, time) => { uTime.value = time; });
+
+    // THE BORING MACHINE at hero scale (#234 item 5): a dead-end side bore
+    // off the chicane's bottom, its 11 m cutter face lit and spinning at the
+    // end of the chamber, the road skimming the mouth (tube window k 5..12).
+    // The old wall-chewing machine is gone — this replaces it.
+    const mp = atPos(4.3, 9.2);
+    const chamber = T.tbmChamber();
+    sc.place(chamber, mp.x, mp.z, { yaw: faceCentre(mp, 1), y: mp.y });
+    const faceP = atPos(4.3, 21.5, 5.0);
+    const dustP = atPos(4.32, 12.5, 2.2);
     anim.push((dt) => {
-      machine.userData.spin.rotation.z -= dt * 1.4;
+      chamber.userData.spin.rotation.z -= dt * 1.1;
       const n = view.fx.count(26, dt);
       for (let k = 0; k < n; k++) {
         view.fx.dust(dustP.x + rng.range(-1.6, 1.6), dustP.y + rng.range(-1.4, 1.4), dustP.z + rng.range(-1.6, 1.6),
           rng.range(-1.2, 1.2), rng.range(0.4, 1.8), rng.range(-1.2, 1.2), [0.62, 0.55, 0.45], 2.4 + rng() * 2.4, 1.6, 0.5);
       }
+      const s = view.fx.count(7, dt);
+      for (let k = 0; k < s; k++) {
+        view.fx.dust(faceP.x + rng.range(-3.4, 3.4), faceP.y + rng.range(-3.4, 3.4), faceP.z + rng.range(-1, 1),
+          rng.range(-0.6, 0.6), rng.range(-2.4, -0.8), rng.range(-0.6, 0.6), [1.0, 0.62, 0.2], 0.55 + rng() * 0.5, 0.5, 0.9);
+      }
     });
 
-    // the dig gantry straddling the road just past the Machine
+    // the dig gantry straddling the road just past the Machine (span/beam
+    // shrunk for the 7 m bore: legs bed into the shell base, as they did at 24)
     const gp = atPos(4.75, 0);
     const gTex = signTex('MIND THE MACHINE', { w: 1600, h: 200, size: 150, bg: '#f7b500', fg: '#1a1d29' });
-    sc.place(T.digGantry(gTex, { span: 24 }), gp.x, gp.z, { yaw: gp.yaw + Math.PI, y: gp.y });
+    sc.place(T.digGantry(gTex, { span: 14.5, beamY: 5.9 }), gp.x, gp.z, { yaw: gp.yaw + Math.PI, y: gp.y });
 
-    // the loop-the-loop ring at the hairpin apex: visual only, drive through it mid-drift
+    // the loop-the-loop ring at the hairpin apex: visual only, drive through it mid-drift.
+    // Sunk 2.5 m for the 7 m bore (#234 item 2): the 18.3 m ring keeps its size, its top
+    // tucks under the shell apex (6.95 < 7) and its sides meet the road right at the
+    // w:16 sector's edges, so the whole road threads the ring.
     const rp = atPos(12.6, 0);
     const ringTex = signTex('LOOP-THE-LOOP', { w: 1024, h: 240, size: 175 });
-    sc.place(T.loopRing(ringTex), rp.x, rp.z, { yaw: rp.yaw, y: rp.y });
+    sc.place(T.loopRing(ringTex), rp.x, rp.z, { yaw: rp.yaw, y: rp.y - 2.5 });
 
     // ceiling fans on the dive, on the deep run, and on the crown settle;
     // the deep-run fan is the big vent fan, half again as large
@@ -235,7 +393,8 @@ export default {
 
     // tripod work lights down both walls: the mid-distance structure in every tunnel view
     for (const [at, side] of [[2.2, 1], [3.7, -1], [5.3, 1], [7.3, -1], [9.4, 1], [11.3, -1], [12.9, 1], [13.9, -1]]) {
-      const p = atPos(at, side * 8.85);
+      const ci = track.indexAtCp(at), hw = (side > 0 ? track.hwL[ci] : track.hwR[ci]);
+      const p = atPos(at, side * (hw - 0.3));
       sc.place(T.workLight(), p.x, p.z, { yaw: faceCentre(p, side), y: p.y });
     }
 
@@ -244,14 +403,21 @@ export default {
       const ci = track.indexAtCp(at);
       const p = atPos(at, side * ((side > 0 ? track.hwL[ci] : track.hwR[ci]) - 0.35));
       const tex = seed % 2 ? signTex(text, { size: 175 }) : signTex(text, { size: 175, bg: '#f7b500', fg: '#1a1d29' });
-      sc.place(T.wallSign(tex, { w: 9, h: 2.6 }), p.x, p.z, { yaw: faceCentre(p, side), y: p.y + 3.1 });
+      sc.place(T.wallSign(tex, { w: 10.5, h: 3.0 }), p.x, p.z, { yaw: faceCentre(p, side), y: p.y + 3.2 });
     };
-    wallSignAt(2.7, -1, 'NEXT EXIT: 40 MILES', 11);
-    wallSignAt(3.9, 1, 'SHORTCUT STILL BEING DUG', 23);
-    wallSignAt(6.4, -1, 'NOT A FLAMETHROWER', 37);
-    wallSignAt(8.15, -1, 'EST. COMPLETION: SOON', 53);
+    // overhead banners (owner directive, Nov 14): dead-ahead over the road,
+    // impossible to glimpse past — the three best lines hang over the bore
+    const bannerAt = (at, text, seed) => {
+      const p = atPos(at, 0);
+      const tex = seed % 2 ? signTex(text, { size: 175 }) : signTex(text, { size: 175, bg: '#f7b500', fg: '#1a1d29' });
+      sc.place(T.hangBanner(tex, { w: 11, h: 1.9 }), p.x, p.z, { yaw: p.yaw + Math.PI, y: p.y + 4.3 });
+    };
+    bannerAt(2.7, 'NEXT EXIT: 40 MILES', 11);
+    wallSignAt(4.1, -1, 'SHORTCUT STILL BEING DUG', 23);   // moved: at 3.9 L it hung in the open junction (nothing behind it since item 6) — now on the R wall facing the cut
+    wallSignAt(6.1, -1, 'NOT A FLAMETHROWER', 37);          // moved in from 6.4: that was the station portal mouth itself
+    bannerAt(8.15, 'EST. COMPLETION: SOON', 53);
     wallSignAt(9.7, 1, 'MIND THE HAIRPIN', 67);
-    wallSignAt(13.4, -1, 'LIGHT AT THE END', 71);
+    bannerAt(13.4, 'LIGHT AT THE END', 71);
 
     // chevron boards on the outside wall of every real corner, inside the bore
     for (const c of track.corners) {
@@ -265,6 +431,63 @@ export default {
         sc.place(board, track.px[i] + lx * lat, track.pz[i] + lz * lat, { yaw: Math.atan2(-side * lx, -side * lz), y: track.py[i], lift: 0.9 });
       }
     }
+
+    /* ---- the breakthrough cut (#234 item 6): slab, barrier, rubble ---- */
+    // a cement slab on the dug bench along the cut line: wet (dark, glossy)
+    // until the final lap, then set (pale, matte) — the surface speed flips
+    // with it via def.lake. y follows the rendered terrain, tucked under
+    // the road edges at both ends.
+    const cutPts = [[227, -56], [226, -48], [225, -30], [228, -6], [228, 10], [224, 22], [221.5, 26]];
+    const slabPos = [], slabIdx = [];
+    cutPts.forEach(([x, z], k) => {
+      const [nx, nz] = cutPts[Math.min(k + 1, cutPts.length - 1)], [px2, pz2] = cutPts[Math.max(k - 1, 0)];
+      let dx = nx - px2, dz = nz - pz2; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+      for (const s of [1, -1]) {
+        const vx = x + dz * 5.5 * s, vz = z - dx * 5.5 * s;
+        slabPos.push(vx, sc.y(vx, vz) + 0.07, vz);
+      }
+      if (k) { const a0 = (k - 1) * 2; slabIdx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2); }
+    });
+    const slabGeo = new TH.BufferGeometry();
+    slabGeo.setAttribute('position', new TH.Float32BufferAttribute(slabPos, 3));
+    slabGeo.setIndex(slabIdx);
+    slabGeo.computeVertexNormals();
+    const cementMat = new TH.MeshStandardMaterial({ color: 0x76746d, roughness: 0.3, metalness: 0.05 });
+    ctx.group.add(new TH.Mesh(slabGeo, cementMat));
+
+    // the barrier across the exit mouth, and rubble at both mouths
+    const bTex = signTex('SHORTCUT COMING SOON', { w: 1500, h: 400, size: 150, bg: '#f7b500', fg: '#1a1d29' });
+    const bp = atPos(3.22, 10.4);
+    const barrier = T.shortcutBarrier(bTex);
+    barrier.scale.setScalar(1.3);
+    sc.place(barrier, bp.x, bp.z, { yaw: faceCentre(bp, 1), y: sc.y(bp.x, bp.z) - 0.1 });
+    sc.instances(partsOf(P.rock(3, { r: 1.1 })), [
+      { x: 233, y: sc.y(233, -38), z: -38, yaw: 0.7 }, { x: 235, y: sc.y(235, -27), z: -27, yaw: 2.4 },
+      { x: 231, y: sc.y(231, 13), z: 13, yaw: 1.5 }, { x: 234, y: sc.y(234, 22), z: 22, yaw: 3.0 },
+    ], { scale: [0.8, 1.7], tints: [0x8d8d94, 0x767680, 0x9a938a] });
+
+    // the breakthrough: on the final lap the barrier tips flat in a burst
+    // of dust and the cement sets
+    let tip = 0, burstDone = false;
+    const wet = new TH.Color(0x76746d), dry = new TH.Color(0xa8a296);
+    anim.push((dt) => {
+      if (view.finalLap) {
+        if (!burstDone) {
+          burstDone = true;
+          for (let k = 0; k < 22; k++) {
+            view.fx.dust(bp.x + rng.range(-2.6, 2.6), sc.y(bp.x, bp.z) + rng.range(0.2, 2.2), bp.z + rng.range(-1, 1),
+              rng.range(-1.6, 1.6), rng.range(0.6, 2.6), rng.range(-1.6, 1.6), [0.66, 0.6, 0.5], 1.8 + rng() * 2.2, 1.8, 0.55);
+          }
+        }
+        if (tip < 1) {
+          tip = Math.min(1, tip + dt * 1.7);
+          const e = 1 - (1 - tip) * (1 - tip);
+          barrier.userData.pivot.rotation.x = -1.32 * e;
+          cementMat.color.lerpColors(wet, dry, e);
+          cementMat.roughness = 0.3 + 0.6 * e;
+        }
+      }
+    });
 
     /* ---- the desert above ---- */
     const rocks = sc.scatter({ count: 130, min: 14, max: 170, maxSlope: 0.85, minGap: 4 });

@@ -435,3 +435,31 @@ export function bigFlagPole({ h = 20, fw = 13, fh = 6.5 } = {}) {
   g.userData.flag = { x: fw / 2 + 0.3, y: h - fh / 2 - 0.4, w: fw, h: fh };
   return g;
 }
+
+/** The terraforming biodome: a geodesic glass dome of radius r and height h centred on y = 0, with white struts.
+    keep(x, y, z) gets each glass triangle's centre (local) and returns false to leave that pane out, which is how the
+    track cuts the two portals the road drives through. Struts follow the kept panes only. */
+export function geoDome(r = 40, { h = 24, rings = 9, segs = 40, keep = () => true, tint = 0xcff7e4 } = {}) {
+  const b = new ModelBuilder();
+  const P = (k, j) => { const phi = (k / rings) * Math.PI / 2, a = ((j + (k % 2) * 0.5) / segs) * Math.PI * 2, c = Math.cos(phi); return [Math.cos(a) * r * c, Math.sin(phi) * h, Math.sin(a) * r * c]; };
+  const pos = [], edges = new Map();
+  const edge = (u, v) => { const key = u < v ? u + '|' + v : v + '|' + u; if (!edges.has(key)) edges.set(key, [u, v]); };
+  const vid = (k, j) => k >= rings ? 'top' : k + ':' + ((j % segs) + segs) % segs;
+  const at = id => { if (id === 'top') return [0, h, 0]; const [k, j] = id.split(':').map(Number); return P(k, j); };
+  const tri = (A, B, C) => {
+    const a = at(A), bb = at(B), c = at(C), cx = (a[0] + bb[0] + c[0]) / 3, cy = (a[1] + bb[1] + c[1]) / 3, cz = (a[2] + bb[2] + c[2]) / 3;
+    if (!keep(cx, cy, cz)) return;
+    pos.push(...a, ...bb, ...c); edge(A, B); edge(B, C); edge(C, A);
+  };
+  for (let k = 0; k < rings; k++) for (let j = 0; j < segs; j++) {
+    if (k === rings - 1) { tri(vid(k, j), vid(k, j + 1), 'top'); continue; }
+    if (k % 2 === 0) { tri(vid(k, j), vid(k, j + 1), vid(k + 1, j)); tri(vid(k, j + 1), vid(k + 1, j + 1), vid(k + 1, j)); }
+    else { tri(vid(k, j), vid(k, j + 1), vid(k + 1, j + 1)); tri(vid(k, j), vid(k + 1, j + 1), vid(k + 1, j)); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  b.add('glass', g);
+  for (const [u, v] of edges.values()) strut(b, 'frame', at(u), at(v), 0.34);
+  for (const id of new Set([...edges.values()].flat())) b.add('frame', sphere(0.42, 6, 4), { p: at(id) });
+  const glass = new THREE.MeshStandardMaterial({ color: tint, roughness: 0.06, metalness: 0.25, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.8 });
+  return b.build({ glass, frame: WHITE });
+}

@@ -340,6 +340,25 @@ body.must-turn .hud, body.must-turn .track-card, body.must-turn .hint-card { vis
 .panel.results .res-rank { font-size: calc(var(--u) * 2.5); }
 .panel.results .foot { flex-wrap: nowrap; margin-top: calc(var(--u) * 1.1); gap: calc(var(--u) * 1.2); }
 .panel.results .foot .btn { font-size: calc(var(--u) * 2.05); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.8) calc(var(--u) * 0.6); white-space: nowrap; }
+/* the one final screen (#243): the podium head on the results panel — the track name stacks
+   under the place headline instead of sitting beside it, and the trophy shrinks a step so
+   the taller head still leaves room for all eight rows */
+.panel.results.podium .res-sub { display: block; margin-left: 0; }
+.panel.results.podium .cupres-head .trophy { width: calc(var(--u) * 6.5); height: calc(var(--u) * 6.5); }
+/* a phone in landscape is only ~56u tall: the final screen squeezes its chrome, never its rows */
+@media (max-height: 500px) and (orientation: landscape) {
+  .panel.results { padding: calc(var(--u) * 1) calc(var(--u) * 2.2); }
+  .panel.results .res-table { margin-top: calc(var(--u) * 0.6); gap: calc(var(--u) * 0.3); }
+  .panel.results .res-row { padding-top: calc(var(--u) * 0.05); padding-bottom: calc(var(--u) * 0.05); }
+  .panel.results .res-row img { width: calc(var(--u) * 2.9); height: calc(var(--u) * 2.9); }
+  .panel.results .res-strips { margin-top: calc(var(--u) * 0.5); }
+  .panel.results .res-strip { padding: calc(var(--u) * 0.3) calc(var(--u) * 1.4); font-size: calc(var(--u) * 1.45); }
+  .panel.results .res-quote { font-size: calc(var(--u) * 1.55); margin-top: calc(var(--u) * 0.4) !important; }
+  .panel.results .foot { margin-top: calc(var(--u) * 0.8); }
+  .panel.results .foot .btn { padding: calc(var(--u) * 0.7) calc(var(--u) * 1.8) calc(var(--u) * 0.45); }
+  .panel.results.podium .cupres-head .trophy { width: calc(var(--u) * 5); height: calc(var(--u) * 5); }
+  .panel.results.podium h1 { font-size: calc(var(--u) * 2.9); }
+}
 
 .res-quote { font-size: calc(var(--u) * 1.75); font-style: italic; opacity: 0.92; margin-top: calc(var(--u) * 0.55) !important; text-align: center; } .res-quote b { font-style: normal; color: var(--gold); } .res-quote span { display: inline-block; margin: 0 calc(var(--u) * 1.2); }
 

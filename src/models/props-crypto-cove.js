@@ -13,6 +13,25 @@ const GOLD = paint(0xffc23a, { rough: 0.3, metal: 0.6, clear: 0.4 });
 const SHELL = paint(0xf6f4ef, { rough: 0.28, clear: 0.8 }), GLASS = plastic(0x1d3346, 0.15, 0.6);
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif';
 
+/** A twisted foil dog in profile. Each swollen segment pinches into the next. */
+export function listingBalloon() {
+  const b = new ModelBuilder();
+  const lobe = (x, y, z, w, h, d, lean = 0) =>
+    b.add('foil', sphere(1, 20, 14), { p: [x, y, z], s: [w, h, d], r: [0, 0, lean] });
+  lobe(0, 1.85, 0, 1.76, 0.74, 0.7);
+  for (const side of [-1, 1]) {
+    lobe(-1.05, 0.99, side * 0.32, 0.43, 1.01, 0.42, -0.18);
+    lobe(1.12, 0.99, side * 0.32, 0.43, 1.01, 0.42, 0.16);
+  }
+  lobe(-1.44, 2.67, 0, 0.47, 1, 0.48, 0.43);
+  lobe(-2.28, 3.28, 0, 0.9, 0.53, 0.52, 0.08);
+  lobe(-1.98, 4.08, -0.32, 0.34, 1.02, 0.3, 0.24);
+  lobe(-1.43, 4.12, 0.22, 0.34, 1.05, 0.32, -0.38);
+  lobe(1.83, 2.56, 0, 0.36, 1.09, 0.35, -0.55);
+  b.add('knot', cone(0.19, 0.3, 8), { p: [-3.16, 3.29, 0], r: [0, 0, Math.PI / 2] });
+  return b.build({ foil: GOLD, knot: WOOD_DARK });
+}
+
 /** A painted name board as a texture: text centred on a coloured ground. */
 function nameTex(text, { w = 512, h = 128, bg = '#f6f4ef', fg = '#14213d', stroke = null, size = 84 } = {}) {
   return canvasTex(w, h, (g, W, H) => {

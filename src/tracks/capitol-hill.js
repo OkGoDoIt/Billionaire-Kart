@@ -13,12 +13,12 @@ import { canvasTex } from '../render/textures.js';
 import { ModelBuilder, cyl, box, plastic, paint } from '../models/build.js';
 
 export const CAPITOL = { x: -85, z: 147, y: 27, ax: 66, az: 34 };   // plateau (half-axes) the capitol stands on
-// #140 round 3: THE Reflecting Pool. A long, narrow basin (18 x 152 m, about 1:8) whose west coping is the
+// #140 round 3: THE Reflecting Pool. A long, narrow basin (27 x 176 m) whose west coping is the
 // edge of the pool run, on one axis with the memorial at its head (north) and the monument at its foot (south)
-export const POOL = { x0: 167.6, x1: 185.6, z0: 62, z1: 214, floor: -0.3, water: 0.6, coping: 166.3 };
+export const POOL = { x0: 165.5, x1: 192.5, z0: 48, z1: 224, floor: -0.3, water: 0.6, coping: 164.2 };
 export const AXIS = (POOL.x0 + POOL.x1) / 2;
-export const OBELISK = { x: AXIS, z: 276, h: 58, w: 7.2 };              // the monument, hero scale, at the foot of the pool's axis
-const MEMORIAL = { x: 189, z: 17 };                                     // the memorial at the head of the pool, dead ahead down the Avenue
+export const OBELISK = { x: AXIS, z: 278, h: 65, w: 8.4 };              // the monument, hero scale, at the foot of the pool's axis
+const MEMORIAL = { x: AXIS + 35, z: 12 };                                     // the memorial at the head of the pool, dead ahead down the Avenue
 
 // The Filibuster's legs (z of the centreline, and the road's height at its two ends) and the terrace lines between
 // them: the hillside steps down in stone-walled terraces, one per leg, so each hairpin drops you a storey.
@@ -66,10 +66,10 @@ export default {
     { p: [0, 0, 0] },                            // 0 start/finish on the Avenue, heading +x
     { p: [68, 0, 0] },                           // 1
     { p: [106, 0.2, 0], w: 18 },                   // 2 turn one, right
-    { p: [134.3, 0.6, 11.7], w: 18 },              // 3
-    { p: [152, 0.7, 40], w: 18 },                  // 4
-    { p: [156, 0.6, 100] },                        // 5 the Reflecting Pool, pool on the left
-    { p: [156, 0.6, 168] },                        // 6
+    { p: [141, 0.6, 9], w: 18 },              // 3
+    { p: [166.8, 0.7, 38], w: 18 },                  // 4
+    { p: [156, 0.6, 94] },                        // 5 the Reflecting Pool, pool on the left
+    { p: [155, 0.6, 168] },                        // 6
     { p: [151, 0.9, 233], w: 18 },               // 7 round the obelisk, right
     { p: [129.5, 1.3, 263.6], w: 18 },           // 8
     { p: [96.5, 1.8, 263.6], w: 18 },            // 9
@@ -134,12 +134,13 @@ export default {
   ],
   boosts: [
     { at: 0.45, lat: 0, w: 5 },                    // down the Avenue
+    { at: 5.28, lat: 5.8, w: 3.6 },                  // commit to the narrow stone coping to launch down the Mall
     { at: 11.2, lat: -3, w: 4.5 },                 // up the Mall leg
     { at: 20.9, lat: 0, w: 5 },                    // on the red carpet under the dome
     { at: 29.35, lat: -3.8, w: 4.5 },                  // between hairpins one and two: only if you dare
     { at: 43.35, lat: 0, w: 5 },                    // out of the Filibuster, onto the Avenue
   ],
-  itemRows: [{ at: 4.6 }, { at: 13.6 }, { at: 21.5 }, { at: 36.85 }, { at: 44.4, n: 3 }],
+  itemRows: [{ at: 6.85 }, { at: 13.6 }, { at: 21.5 }, { at: 36.85 }, { at: 44.4, n: 3 }],
   coins: [
     { from: 0.15, to: 0.6, n: 4, lat: 4 },
     { from: 5.2, to: 6.4, n: 5, lat: [6.5, 7] },            // along the pool edge: one slip and you are in the water
@@ -158,7 +159,7 @@ export default {
   obstacles: [
     // the motorcade crawls across the road
     { kind: 'patrol', model: 'motorcade', at: 1.35, lats: [-9, -5], speed: 3.5, effect: 'spin', radius: 2.0 },
-    { kind: 'patrol', model: 'motorcade', at: 5.7, lats: [9, 5], speed: 3, effect: 'spin', radius: 2.0 },
+    { kind: 'patrol', model: 'motorcade', at: 6.15, lats: [-9, -5], speed: 3, effect: 'spin', radius: 2.0 },
     // lobbyist drones circling the Climb
     { kind: 'orbit', model: 'drone', at: 14.4, lat: -5, orbit: 3, speed: 5, effect: 'spin', lift: 0.6 },
     { kind: 'orbit', model: 'drone', at: 18.7, lat: 5.5, orbit: 2.5, speed: 4.5, effect: 'spin', lift: 0.6 },
@@ -266,6 +267,8 @@ export default {
       const chand = C.crashedChandelier(); chand.position.set(2.6, 9.0, 1.9); chand.rotation.set(0.4, 0.5, 0.25); site.add(chand);
       const fb = C.fallenBoard(); fb.position.set(-3, 0.55, 10.1); site.add(fb);
       sc.place(site, SX, SZ, { yaw: -0.38, y: SY, scale: 1.25 });
+      const masonry = C.makeBaker(group, sc.shadows);
+      masonry.add(site, false); masonry.flush();
       taken.push([SX, SZ, 26]);
       // the wrecking crane, west of the site, its jib reaching over the demolished half
       const wc = C.wreckCrane(), swing = wc.userData.swing;
@@ -305,7 +308,7 @@ export default {
       taken.push([OBELISK.x, OBELISK.z, 22]);
     }
     ctx.monument = mon;
-    { const t = artTex(THREE, 'ashlar', 'monument'); t.repeat.set(4, OBELISK.h / 4); mon.traverse(o => { if (o.isMesh && o.material.color?.getHex() === 0xece6d6) { o.material = o.material.clone(); o.material.map = t; o.material.color.setHex(0xfaf6ee); o.material.flatShading = true; } }); }
+    { const t = artTex(THREE, 'ashlar', 'monument'); t.repeat.set(3, OBELISK.h / 6); mon.traverse(o => { if (o.isMesh && o.material.color?.getHex() === 0xece6d6) { o.material = o.material.clone(); o.material.map = t; o.material.color.setHex(0xfaf6ee); o.material.flatShading = true; } }); }
     reflectingPool(ctx, sc, { taken, free, reach });
     filibuster(ctx, sc, { taken });
 
@@ -338,8 +341,8 @@ export default {
     };
     sc.along({ from: 44.15, to: 1.0, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? standsB : standsA, i % 2 ? stand2 : stand, p));
     sc.along({ from: 44.3, to: 0.75, side: 1, offset: 18, spacing: 36, phase: 10 }).forEach((p, i) => putStand(i % 2 ? standsA : standsB, i % 2 ? stand : stand2, p));
-    sc.instances(partsOf(stand.group), standsA, {});
-    sc.instances(partsOf(stand2.group), standsB, {});
+    sc.instances(partsOf(stand.group), standsA, { cast: false });
+    sc.instances(partsOf(stand2.group), standsB, { cast: false });
     sc.instances(partsOf(C.crowdPerson()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
 
     // flagpoles and lamps lining the Avenue
@@ -363,7 +366,7 @@ export default {
     // the Mall: protest signs and clipped topiary to thread between on the shortcut (solid)
     const mallSpots = [[104, 176], [130, 182], [114, 198], [100, 212], [134, 208], [138, 160]];
     const signSpots = [], topiSpots = [];
-    mallSpots.forEach(([x, z], k) => { const spot = { x, z, y: sc.y(x, z), yaw: rng() * 6.28 }; (k % 3 === 2 ? topiSpots : signSpots).push(spot); });
+    mallSpots.forEach(([x, z], k) => { const spot = { x, z, y: sc.y(x, z), yaw: Math.atan2(150 - x, 178 - z) + rng.range(-0.22, 0.22) }; (k % 3 === 2 ? topiSpots : signSpots).push(spot); });
     const signA = partsOf(C.signCluster(3)), signB = partsOf(C.signCluster(8));
     sc.instances(signA, signSpots.filter((_, k) => k % 2 === 0), { scale: 1.5, solid: 2.6 });
     sc.instances(signB, signSpots.filter((_, k) => k % 2 === 1), { scale: 1.5, solid: 2.6 });
@@ -379,7 +382,12 @@ export default {
       ...sc.along({ from: 10.2, to: 11.6, side: 1, offset: 13.5, spacing: 8, jitter: 1 }),
     ];
     cherrySpots.push(...sc.scatter({ count: 60, min: 14, max: 70, maxSlope: 0.5, minGap: 7, where: (x, z) => (onPlateau(x, z, 1.6) && !onPlateau(x, z, 1.02)) || (x > -60 && x < 100 && z > 20 && z < 95) }));
-    const cherries = cherrySpots.filter(p => ok(p.x, p.z, 1.5)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
+    const sightlines = BOARDS.map(([cp, side, offset]) => {
+      const board = sc.beside(cp, side, offset), i = track.indexAtCp(cp);
+      return [board.x, board.z, track.px[i] - track.tx[i] * 29, track.pz[i] - track.tz[i] * 29];
+    });
+    const blocksBoard = (x, z) => sightlines.some(([bx, bz, ax, az]) => segDist(x, z, ax, az, bx, bz) < 7.4);
+    const cherries = cherrySpots.filter(p => ok(p.x, p.z, 1.5) && !blocksBoard(p.x, p.z)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
     const chA = partsOf(C.cherryTree(1, { h: 6.5 })), chB = partsOf(C.cherryTree(4, { h: 7.2, pinkA: 0xf9c7da, pinkB: 0xf2a2c2 })), chC = partsOf(C.cherryTree(7, { h: 5.8, pinkA: 0xf4a6c4, pinkB: 0xe57aa6 }));
     sc.instances(chA, cherries.filter((_, i) => i % 3 === 0), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
     sc.instances(chB, cherries.filter((_, i) => i % 3 === 1), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
@@ -400,7 +408,7 @@ export default {
 
     // woods everywhere outside the formal gardens, oaks dotted over the lawns
     const formal = (x, z) => (Math.abs(z) < 48 && x > -150 && x < 175) || (x > -45 && x < 140 && z > 20 && z < 95) || inMall(x, z) || (x > 150 && x < 245 && z > -20 && z < 312) || onPlateau(x, z, 1.2);
-    const woods = sc.scatter({ count: 440, min: 13, max: 230, maxSlope: 0.8, minGap: 5.5, where: (x, z) => !formal(x, z) && ok(x, z, 1.5) });
+    const woods = sc.scatter({ count: 440, min: 13, max: 230, maxSlope: 0.8, minGap: 5.5, where: (x, z) => !formal(x, z) && !blocksBoard(x, z) && ok(x, z, 1.5) });
     const oakA = partsOf(P.roundTree(1, { h: 8, leafA: 0x4f9e3f, leafB: 0x6fbf4a })), oakB = partsOf(P.roundTree(2, { h: 9.5, leafA: 0x3f8f3a, leafB: 0x5cae45 })), oakC = partsOf(P.roundTree(3, { h: 7, leafA: 0x6bb84a, leafB: 0x8fcc5a }));
     for (const near of [true, false]) {                                  // distant trees skip the shadow pass
       const set = woods.filter(p => (p.dist < 60) === near), o = { yaw: 'random', tilt: 0.04, cast: near };
@@ -408,7 +416,7 @@ export default {
       sc.instances(oakB, set.filter((_, i) => i % 3 === 1), { ...o, scale: [0.85, 1.6] });
       sc.instances(oakC, set.filter((_, i) => i % 3 === 2), { ...o, scale: [0.85, 1.4] });
     }
-    const lawnOaks = sc.scatter({ count: 45, min: 14, max: 140, maxSlope: 0.4, minGap: 16, where: (x, z) => formal(x, z) && !inMall(x, z) && !onPlateau(x, z, 1.2) && ok(x, z, 1.5) });
+    const lawnOaks = sc.scatter({ count: 45, min: 14, max: 140, maxSlope: 0.4, minGap: 16, where: (x, z) => formal(x, z) && !inMall(x, z) && !onPlateau(x, z, 1.2) && !blocksBoard(x, z) && ok(x, z, 1.5) });
     sc.instances(oakB, lawnOaks, { scale: [1.0, 1.5], yaw: 'random', tilt: 0.03 });
     const low = sc.scatter({ count: 170, min: 12.5, max: 60, maxSlope: 0.7, minGap: 2.6, where: (x, z) => ok(x, z, 0.8) && !inMall(x, z) });
     sc.instances(partsOf(P.bush(1, { color: 0x4f9e3f })), low.filter((_, i) => i % 3 === 0), { scale: [0.8, 1.6], yaw: 'random', cast: false });
@@ -454,30 +462,41 @@ export default {
 function reflectingPool(ctx, sc, { taken, free, reach }) {
   const { THREE, track, anim, group } = ctx, rng = sc.rng;
   const Y = 0.62, WY = POOL.water, LEN = POOL.z1 - POOL.z0, ZM = (POOL.z0 + POOL.z1) / 2;
-  // the water: one long sheet, glassy so it carries the sky, murky green underneath
+  // A cheap planar reflection. Reflect the eye ray about the surface and intersect the
+  // silhouette of the actual monument on its axis. It stays anchored when the camera moves.
   {
     const g = new THREE.PlaneGeometry(POOL.x1 - POOL.x0 + 0.6, LEN + 0.6); g.rotateX(-Math.PI / 2);
-    // a murky green with lighter swirls of algae through it, and only a little of the sky on top
-    // deep teal-green water with pale ripple lines across it (so it reads as water at a glance, not as paving), and
-    // swirls of algae through it
-    const tex = canvasTex(256, 1024, (c, w, h) => {
-      c.fillStyle = '#1f5a4c'; c.fillRect(0, 0, w, h);
-      for (let k = 0; k < 120; k++) { c.fillStyle = `rgba(${70 + (k * 37) % 50},${120 + (k * 53) % 40},${40 + (k * 13) % 20},${0.14 + (k % 4) * 0.05})`; c.beginPath(); c.ellipse((k * 97) % w, (k * 389) % h, 8 + (k * 7) % 26, 16 + (k * 11) % 54, 0, 0, 7); c.fill(); }
-      c.strokeStyle = 'rgba(190,235,220,0.55)'; c.lineCap = 'round';
-      for (let k = 0; k < 90; k++) { const x = (k * 151) % w, y = (k * 233) % h, l = 18 + (k * 13) % 40; c.lineWidth = 2 + (k % 3); c.beginPath(); c.moveTo(x - l / 2, y); c.quadraticCurveTo(x, y - 4, x + l / 2, y); c.stroke(); }
-    });
-    tex.repeat.set(2, 6);
-    const m = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.55, metalness: 0.0, envMapIntensity: 0.12 });   // little sky in it: at kart height a mirror reads as paving
-    const w = new THREE.Mesh(g, m); w.position.set(AXIS, WY, ZM); w.receiveShadow = true; group.add(w);
-    anim.push((dt, time) => { tex.offset.set(Math.sin(time * 0.05) * 0.01, time * 0.004); });
-    // the reflection everyone takes the photo for: the monument, a long pale shimmer down the axis toward it
-    const rt = canvasTex(64, 512, (c, w, h) => {
-      const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,248,232,0)'); gr.addColorStop(0.55, 'rgba(255,248,232,0.35)'); gr.addColorStop(1, 'rgba(255,248,232,0.7)');
-      c.fillStyle = gr; for (let y = 0; y < h; y += 6) { const wv = w * (0.3 + 0.25 * Math.sin(y * 0.21) * Math.sin(y * 0.05)); c.fillRect(w / 2 - wv / 2, y, wv, 4); }
-    }, { repeat: false });
-    const rg = new THREE.PlaneGeometry(4.2, LEN * 0.62); rg.rotateX(-Math.PI / 2);
-    const rm = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ map: rt, transparent: true, depthWrite: false, fog: true }));
-    rm.position.set(AXIS, WY + 0.012, POOL.z1 - LEN * 0.31); rm.renderOrder = 2; group.add(rm);
+    const waterTime = { value: 0 };
+    const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    m.onBeforeCompile = shader => {
+      shader.uniforms.waterTime = waterTime;
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 poolPoint;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\npoolPoint = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 poolPoint; uniform float waterTime;')
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          vec3 eyeRay = normalize(poolPoint - cameraPosition);
+          float across = (poolPoint.x - ${POOL.x0}) / ${POOL.x1 - POOL.x0};
+          float swell = sin(poolPoint.z * 1.52 + poolPoint.x * .43 + waterTime * 1.12)
+                      + .45 * sin(poolPoint.z * 3.55 - poolPoint.x * .75 - waterTime * 1.45);
+          float banks = smoothstep(.25, .49, abs(across - .5));
+          vec3 water = mix(vec3(.085, .34, .35), vec3(.065, .245, .175), banks * .65);
+          float ripple = smoothstep(.99, 1.32, swell) * (.25 + .75 * pow(sin(poolPoint.x * .83 + poolPoint.z * .12), 2.0));
+          water += ripple * vec3(.16, .17, .13);
+          vec3 ray = vec3(eyeRay.x + .002 * swell, -eyeRay.y + .0024 * swell, eyeRay.z);
+          float distanceToMonument = (${OBELISK.z.toFixed(1)} - poolPoint.z) / max(.001, ray.z);
+          vec3 atMonument = poolPoint + distanceToMonument * ray;
+          float height = (atMonument.y - ${sc.y(OBELISK.x, OBELISK.z).toFixed(2)}) / ${OBELISK.h.toFixed(1)};
+          float halfWidth = ${(OBELISK.w / 2).toFixed(2)} * mix(1.0, .62, clamp(height, 0.0, 1.0))
+                          * (1.0 - smoothstep(1.04, 1.15, height));
+          float dx = atMonument.x - ${AXIS.toFixed(1)};
+          float shaft = (1.0 - smoothstep(halfWidth - .35, halfWidth + .35, abs(dx)))
+                      * step(0.0, height) * step(height, 1.15) * step(.01, ray.z);
+          water = mix(water, mix(vec3(.51, .46, .30), vec3(.88, .79, .60), smoothstep(-.2, .2, dx)), shaft * .86);
+          diffuseColor.rgb = water;
+        `);
+    };
+    const w = new THREE.Mesh(g, m); w.position.set(AXIS, WY, ZM); group.add(w);
+    anim.push((dt, time) => { waterTime.value = time; });
   }
   // granite coping round the rim (tall enough to wall the water in), and the gravel walk on the far side
   const cop = partsOf(C.coping(8)), copSpots = [];
@@ -510,7 +529,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   const elmSpots = [];
   for (let z = POOL.z0 - 8; z <= POOL.z1 + 10; z += 9.5) for (const x of [POOL.x1 + 11.5, POOL.x1 + 19.5]) elmSpots.push({ x: x + rng.range(-0.6, 0.6), z: z + rng.range(-1, 1) });
   for (let z = 52; z <= 230; z += 9.5) { if (z > 172 && z < 204) continue; for (const x of [134, 126]) elmSpots.push({ x: x + rng.range(-0.6, 0.6), z: z + rng.range(-1, 1) }); }
-  const elms = elmSpots.filter(p => free(p.x, p.z) && !reach(p.x, p.z, 0.4)).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.1 }));
+  const elms = elmSpots.filter(p => !(p.x < POOL.x0 && p.z < 92) && free(p.x, p.z) && !reach(p.x, p.z, 0.4)).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.1 }));
   sc.instances(partsOf(C.elm(3, { h: 15 })), elms.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9, cast: false });
   sc.instances(partsOf(C.elm(8, { h: 16, leafA: 0x467f37, leafB: 0x58983f })), elms.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9, cast: false });
   // lamps along the far walk
@@ -523,7 +542,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // the twist: algae mats in three greens, scum along the coping, ducks in residence
   {
     const matSpots = [];
-    for (let k = 0; k < 54; k++) matSpots.push({ x: rng.range(POOL.x0 + 1.5, POOL.x1 - 1.5), z: rng.range(POOL.z0 + 2, POOL.z1 - 2), y: WY + 0.015, yaw: rng.range(0, 6.28) });
+    for (let k = 0; k < 54; k++) matSpots.push({ x: k % 4 ? POOL.x1 - rng.range(1.2, 5.8) : POOL.x0 + rng.range(1.2, 3.6), z: rng.range(POOL.z0 + 2, POOL.z1 - 2), y: WY + 0.015, yaw: rng.range(0, 6.28) });
     sc.instances(partsOf(C.algaePatch(0x3e7a24)), matSpots.slice(0, 18), { scale: [1.0, 3.0], cast: false });
     sc.instances(partsOf(C.algaePatch(0x639c33)), matSpots.slice(18, 36), { scale: [0.9, 2.6], cast: false });
     sc.instances(partsOf(C.algaePatch(0x8aa832)), matSpots.slice(36), { scale: [0.8, 2.2], cast: false });
@@ -536,8 +555,32 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
     }
     anim.push((dt, time) => ducks.forEach((d, n) => { d.position.y = WY - 0.05 + Math.sin(time * 0.9 + n * 2.1) * 0.05; d.rotation.z = Math.sin(time * 0.7 + n * 1.7) * 0.05; d.position.x += Math.sin(time * 0.15 + n) * dt * 0.15; }));
     // at the closest pass, on the far walk, angled to the karts coming down the run
-    sc.place(C.poolSign(), POOL.x1 + 4.6, 118, { yaw: -Math.PI / 2 - 0.55, y: Y - 0.1 });
-    sc.place(C.poolSignSmall(), AXIS + 2, POOL.z0 + 12, { yaw: Math.PI + 0.25, y: POOL.floor });
+    sc.place(C.poolSign(), POOL.x1 + 5.8, 152, { yaw: -Math.PI / 2 - 0.55, y: Y - 0.1 });
+    sc.place(C.poolSignSmall(), POOL.x1 + 2, 97, { yaw: -Math.PI * 0.75, y: Y });
+  }
+
+  // Two inward-curving ranks of wreath-bearing memorial piers frame the plaza and
+  // obelisk. The raised pavilion on each flank leaves a clear central sky gap.
+  {
+    const wings = new ModelBuilder();
+    for (const side of [-1, 1]) {
+      for (let j = 0; j < 7; j++) {
+        const a = 0.28 + j * 0.17;
+        const x = AXIS + side * (13 + 18 * Math.sin(a)), z = POOL.z1 + 14 + 14 * Math.cos(a);
+        const h = j === 6 ? 10.4 : 6.6;
+        wings.add('limestone', new THREE.BoxGeometry(3.0, h, 1.7), { p: [x, Y + h / 2, z], r: [0, side * a, 0] });
+        wings.add('limestone', new THREE.BoxGeometry(3.55, .54, 2.22), { p: [x, Y + h, z], r: [0, side * a, 0] });
+        wings.add('bronze', new THREE.TorusGeometry(.62, .16, 5, 14), {
+          p: [x - Math.sin(side * a) * .97, Y + h - 1.5, z - Math.cos(a) * .97], r: [0, side * a, 0]
+        });
+      }
+      const x = AXIS + side * 19.2, z = POOL.z1 + 29;
+      for (const dx of [-3.2, 3.2]) for (const dz of [-2.1, 2.1])
+        wings.add('limestone', cyl(.87, 1.04, 10.8, 10), { p: [x + dx, Y + 5.4, z + dz] });
+      wings.add('limestone', new THREE.BoxGeometry(9.6, 2.8, 7.4), { p: [x, Y + 11.9, z] });
+      wings.add('bronze', new THREE.BoxGeometry(8.6, .4, 6.6), { p: [x, Y + 13.5, z] });
+    }
+    group.add(wings.build({ limestone: plastic(0xe2dcc5, .8), bronze: plastic(0x52786a, .58) }, { cast: false }));
   }
 
   // the fountain plaza at the foot of the pool, on the axis, between the water and the monument
@@ -559,7 +602,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // the memorial at the head of the pool, facing down the axis; its name on the attic
   {
     const mem = C.lincolnMemorial(), yaw = Math.atan2(AXIS - MEMORIAL.x, ZM - MEMORIAL.z);
-    sc.place(mem, MEMORIAL.x, MEMORIAL.z, { yaw, y: sc.y(MEMORIAL.x, MEMORIAL.z) - 0.4 });
+    sc.place(mem, MEMORIAL.x, MEMORIAL.z, { yaw, y: sc.y(MEMORIAL.x, MEMORIAL.z) - 0.4, cast: false });
     taken.push([MEMORIAL.x, MEMORIAL.z, 30]);
     const tex = canvasTex(1024, 96, (g, w, h) => { g.fillStyle = '#ede7da'; g.fillRect(0, 0, w, h); C.fitText(g, 'THE LOBBYIST MEMORIAL', w / 2, h * 0.56, w * 0.92, 72, C.SIGN_FONT, '#6f6553', { lines: 1 }); }, { repeat: false });
     const q = new C.Quads(), a = mem.userData.attic, c = Math.cos(yaw), s = Math.sin(yaw), y0 = sc.y(MEMORIAL.x, MEMORIAL.z) - 0.4;
@@ -746,7 +789,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const Ms = new THREE.Matrix4(), Qs = new THREE.Quaternion(), Ps = new THREE.Vector3(), Ss = new THREE.Vector3(2.5, 2.5, 2.5), Ys = new THREE.Vector3(0, 1, 0);
 
   /* ---- 2. the Avenue: the congressional portfolio, on a stock ticker you cannot miss ---- */
-  const tickAt = sc.beside(2.0, 1, 40), tickYaw = yawTo(tickAt, { x: -20, z: 0 }), tickY = tickAt.y + 16;
+  const tickAt = sc.beside(2.0, 1, 23), tickYaw = yawTo(tickAt, { x: 45, z: 0 }), tickY = tickAt.y + 13;
   const ticker = C.ledPanel(group, 1024, 300, [{ c: [tickAt.x, tickY, tickAt.z], yaw: tickYaw }], 36, 10.5);
   for (const d of [-12, 12]) pole(tickAt.x + Math.cos(tickYaw) * d - Math.sin(tickYaw) * 0.4, tickAt.z - Math.sin(tickYaw) * d - Math.cos(tickYaw) * 0.4, tickAt.y - 0.5, tickY - 4, 0.45);
   const TAPE = 'BOUGHT DEFENSE STOCK ▲ DAY BEFORE THE VOTE ▲ SOLD EVERYTHING ▲ DAY BEFORE THE CRASH ▲ STOCK ACT? NEVER HEARD OF IT ▲ DISCLOSURE FILED 2 YEARS LATE ▲ ';
@@ -799,7 +842,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const muzzle = new THREE.Vector3(...toWorld({ x: CANNON.x, y: canY, z: CANNON.z, yaw: canYaw, scale: 1.3 }, can.userData.muzzle));
   bake.add(can);
   {
-    const at = toWorld({ x: CANNON.x, y: canY, z: CANNON.z, yaw: canYaw }, [0, 0, -9]), y0 = sc.y(at[0], at[2]);
+    const roadside = sc.beside(12.14, -1, 13), at = [roadside.x, roadside.y, roadside.z], y0 = roadside.y;
     const s = atlas.add(1024, 300, (g, w, h) => { g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.fillStyle = '#d4af37'; g.fillRect(0, h * 0.84, w, h * 0.16); fitText(g, 'K STREET CASH CANNON', w / 2, h * 0.36, w * 0.9, 120, F, '#ffd23c', { lines: 1 }); fitText(g, "IT'S NOT A BRIBE, IT'S SPEECH", w / 2, h * 0.68, w * 0.84, 60, SANS, '#ffffff', { lines: 1 }); });
     const fy = yawTo({ x: at[0], z: at[2] }, roadPt(11.2));
     atlas.place2(s, [at[0], y0 + 7, at[2]], fy, 15, 4.4);

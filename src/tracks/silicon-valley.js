@@ -82,7 +82,7 @@ export default {
     { p: [-198, 2.5, 116] },     // 12 the foot of the hill, sweeping onto Palm Drive
     { p: [-208, 0.4, 56], w: 18 },// 13 Palm Drive
     { p: [-208, 0, -22], w: 18 },// 14 the end of Palm Drive: the chapel dead ahead
-    { p: [-200, 0, -54] },       // 15 the Oval hairpin, round the lawn
+    { p: [-203, 0, -50] },       // 15 the Oval hairpin, round the lawn (moved out/up #215 item 1: AI ran wide onto the grass at the entry)
     { p: [-174, 0, -68] },       // 16
     { p: [-148, 0, -56] },       // 17
     { p: [-138, 0, -24] },       // 18 back north, and left into the Quad
@@ -109,7 +109,7 @@ export default {
     { at: 2.45, lat: 0, w: 5 },
     { at: 4.35, lat: 17.4, w: 4.5 }, { at: 4.8, lat: 17.4, w: 4.5 }, // Sand Hill: the LP lane's reward, two pads
     { at: 6.2, lat: -4, w: 4.5 },
-    { at: 16.3, lat: 5, w: 4.5 },                        // the Oval: a pad on the outside line round the hairpin
+    { at: 16.3, lat: 3, w: 4.5 },                        // the Oval: a pad on the outside line round the hairpin (lat 5 -> 3, #215 item 1)
     { at: 21.55, lat: 17.4, w: 4.5 },                    // the fountain's inside lane: narrow, walled, and quick
   ],
   itemRows: [{ at: 1.5 }, { at: 7.6 }, { at: 11.6 }, { at: 13.35 }, { at: 21.25, n: 3 }],

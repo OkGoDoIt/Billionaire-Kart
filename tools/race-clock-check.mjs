@@ -6,6 +6,7 @@ import { Track } from '../src/track/track.js';
 import { Race } from '../src/race/race.js';
 import { RACERS } from '../src/content/racers.js';
 
+globalThis.window = globalThis;
 globalThis.addEventListener = () => {};
 globalThis.matchMedia = () => ({ matches: false });
 const { App } = await import('../src/game/app.js');

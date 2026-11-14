@@ -70,7 +70,7 @@ export default {
   skyOverrides: { zenith: 0x2d63c8, horizon: 0xffd0a0, ground: 0xffe4c6, sun: 0xffe0b0, sunDir: [0.45, 0.34, -0.83], sunLight: 0xffdcb0, sunIntensity: 3.5, hemiSky: 0xb2c8ff, hemiGround: 0xf0d4c4, hemiIntensity: 1.05, cloud: 0xfff2e4, cloudShade: 0xe2a796, cloudCover: 0.3, fog: 0xf1d0b4, fogNear: 340, fogFar: 1650, exposure: 1.02 },
   // the painted Alps (two generated strips, prompts and assembly in assets/backdrops/davos-prompts.md): the hero
   // peak stands behind the summit from the town, and dead ahead up the east ridge; a glacier massif fills the rest
-  backdrop: { img: 'assets/backdrops/davos.webp', top: 25, bottom: -14, rot: 0.325 },
+  backdrop: { img: 'assets/backdrops/davos.webp', top: 25, bottom: -7, rot: 0.325 },
   // opening shots: the whole mountain from the valley, the switchbacks and the jump on its face;
   // then the top of the in-run, looking down the jump at the town
   intro: [
@@ -158,7 +158,7 @@ export default {
     { from: 29.85, to: 30.5, n: 3, lat: 3 },
   ],
   obstacles: [
-    { kind: 'patrol', model: 'plow', at: 3.83, lats: [7, 8.6], speed: 2.2, effect: 'bump', radius: 2.2 },
+    { kind: 'patrol', model: 'plow', at: 4.12, lats: [7, 8.6], speed: 2.2, effect: 'bump', radius: 2.2 },
   ],
   terrain: {
     cell: 3, margin: 280, blend: 26, water: -5.5,
@@ -179,6 +179,10 @@ export default {
       h = lerp(h, -6.4, lake);
       const ring = smoothstep(360, 600, Math.hypot(x - 30, z - 170));                    // the far Alps, in front of the painted ones
       h += ring * (22 + ridged(x * 0.009, z * 0.009, 4, 7) * 38);
+      // A foreground ridge overlaps the bottom of the painted Alps. From
+      // the table, the real terrain used to end in a horizontal strip of sky.
+      const valleyRim = (1 - smoothstep(0, 115, Math.abs(z + 219 + 23 * Math.sin(x * 0.016))));
+      h += valleyRim * (62 + 23 * Math.sin(x * 0.022) + 16 * ridged(x * 0.013, z * 0.015, 2, 61));
       return h;
     },
     // snow light, per vertex: hollows fall blue, groomed pistes show their corduroy, exposed snow throws sparse glints

@@ -399,7 +399,7 @@ export function navMine() {
    The yacht toolkit (quality pass): a hull generator with real sections,
    a raked stem and a flat teak deck, sleek lofted superstructure tiers,
    and two yachts built from it: the gigayacht the lap runs through and
-   along, and the marina yachts whose bows reach over the start straight.
+   along, and the marina yachts at the starting quay.
    Hull frame: bow +Z, port +X, waterline y = 0.
    ===================================================================== */
 const WHITE = paint(0xf7f6f2, { rough: 0.22, clear: 0.9 });
@@ -522,9 +522,19 @@ function tier(b, { x = 0, z0, z1, y0, y1, w, nose = 0.3, tail = 0.9, glassH = 0.
     { z: z1 - len * 0.08, w: ww * (0.55 + nose * 0.6), h: h * 0.96, y, x, n: 4 },
     { z: z1, w: ww * nose, h: h * 0.9, y: y - h * 0.04, x, n: 3 },
   ];
-  b.add(mat, loft(secs(w, hh, yc), 28, 5));
-  const gs = secs(w + 0.14, hh * glassH, yc + hh * 0.12); gs[0].z += 0.9; gs[0].w = (w + 0.14) * tail * 0.92;
-  b.add('glass', loft(gs, 28, 5));
+  // Use one surface for the window belt and its white surround. Overlapping
+  // lofts previously put two end caps in the same plane at the nose.
+  const ring = 48, skin = loft(secs(w, hh, yc), ring, 5), index = skin.index.array;
+  const sideCount = index.length - ring * 6, glass = [], house = [];
+  for (let i = 0; i < sideCount; i += 6) {
+    const angle = ((i / 6 % ring) + 0.5) * Math.PI * 2 / ring;
+    const y = Math.sign(Math.sin(angle)) * Math.abs(Math.sin(angle)) ** 0.41;
+    const bucket = Math.abs(y - 0.12) <= glassH ? glass : house;
+    for (let k = 0; k < 6; k++) bucket.push(index[i + k]);
+  }
+  for (let i = sideCount; i < index.length; i++) house.push(index[i]);
+  const windows = skin.clone(); windows.setIndex(glass); skin.setIndex(house);
+  b.add(mat, skin); b.add('glass', windows);
 }
 
 /**
@@ -671,8 +681,8 @@ export function foamMaterial() {
 }
 
 /**
- * A marina superyacht moored bow-on to the quay, the raked stem reaching out
- * over the road, merged into the shared builder b (materials from YACHT_MATS).
+ * A marina superyacht moored bow-on to the quay, the raked stem facing
+ * the road, merged into the shared builder b (materials from YACHT_MATS).
  * Placed by x, z, yaw (bow toward yaw), waterline y = 0. Returns the hull numbers.
  */
 export function marinaYacht(b, { L = 92, B = 9.5, D = 7.6, x = 0, z = 0, yaw = 0, boot = 'bootRed', tiers = 3 } = {}) {
@@ -687,13 +697,41 @@ export function marinaYacht(b, { L = 92, B = 9.5, D = 7.6, x = 0, z = 0, yaw = 0
   s.add('house', sphere(1.0, 14, 10), { p: [1.4, mastY + 1.4, -L * 0.1] });
   s.add('house', sphere(0.8, 14, 10), { p: [-1.4, mastY + 1.3, -L * 0.1] });
   s.add('house', cyl(0.25, 0.4, 2.2, 8), { p: [0, mastY + 1.0, -L * 0.1] });
-  for (const sd of [1, -1]) s.add('chrome', tube(range(L * 0.12, L * 0.46, 6).map(zz => { const st = station(zz, o); return [sd * (st.w - 0.35), st.top + 1.0, zz]; }), 0.07, 18, 5));
+  for (const side of [-1, 1]) {
+    const rail = range(L * 0.12, L * 0.46, 10).map(z => {
+      const st = station(z, o), x = side * (st.w - 0.35);
+      s.add('chrome', cyl(0.07, 0.09, 1.02, 6), { p: [x, st.top + 0.5, z] });
+      return [x, st.top + 1, z];
+    });
+    s.add('chrome', tube(rail, 0.09, 22, 6));
+  }
   s.add('pool', box(4.4, 0.5, 5, 0.25, 2), { p: [0, station(L * 0.25, o).top + 0.3, L * 0.25] });
   const grp = s.build({}), M = new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
   grp.traverse(m => { if (m.isMesh) b.add(m.name === 'boot' ? boot : m.name, m.geometry.applyMatrix4(M)); });
-  o.station = zz => station(zz, o);
   return o;
 }
+/** The name follows the changing beam, sheer, and flare on each side of the bow. */
+export function marinaLettering(atlas, tile, hull, x, z) {
+  const { L } = hull;
+  const height = L * 0.0205, count = 20;
+  for (const side of [-1, 1]) {
+    const edge = u => {
+      const st = station(L * (0.241 + side * (0.5 - u) * 0.245), hull);
+      return [-height / 2, height / 2].map(dy => {
+        const y = st.top - 4.1 + dy;
+        const [width] = sectionPt(st, uAt(st, y), 0.065);
+        return [x + side * width, y, z + st.z];
+      });
+    };
+    let left = edge(0);
+    for (let i = 1; i <= count; i++) {
+      const right = edge(i / count);
+      atlas.strip(tile, left, right, (i - 1) / count, i / count);
+      left = right;
+    }
+  }
+}
+
 export const YACHT_MATS = () => ({
   hull: WHITE, bottom: paint(0x10233f, { rough: 0.35, clear: 0.5 }), gold: GOLDP, glass: SMOKE, deck: teakMat(),
   cut: WHITE, house: WHITE, chrome: CHROME, pool: new THREE.MeshStandardMaterial({ color: 0x0aa7c6, emissive: 0x29d9f0, emissiveIntensity: 0.7, roughness: 0.1 }),
@@ -823,11 +861,11 @@ export function makeBaker(group, shadows) {
 }
 
 /** Text panels packed into big canvases, one mesh per canvas; redrawn once the web fonts arrive. */
-export function makeAtlas(group, S = 2048, { emissive = 0.25 } = {}) {
+export function makeAtlas(group, S = 2048, { emissive = 0.25, cutout = false } = {}) {
   const pages = [], newPage = () => {
     const c = document.createElement('canvas'); c.width = c.height = S;
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: emissive, roughness: 0.6 });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: emissive, roughness: 0.6, alphaTest: cutout ? 0.4 : 0 });
     const p = { c, g: c.getContext('2d'), tex, mat, q: new Quads(), x: 0, y: 0, row: 0, items: [] }; pages.push(p); return p;
   };
   newPage();
@@ -840,6 +878,9 @@ export function makeAtlas(group, S = 2048, { emissive = 0.25 } = {}) {
   const api = {
     add(w, h, draw) { const r = alloc(w, h); r.draw = draw; r.p.items.push(r); return r; },
     place(r, c, yaw, w, h) { const { p } = r; p.q.panel(c, yaw, w, h, [r.x / S, 1 - (r.y + r.h) / S, (r.x + r.w) / S, 1 - r.y / S]); },
+    strip(r, left, right, u0, u1) {
+      r.p.q.quad(left[0], right[0], right[1], left[1], [(r.x + r.w * u0) / S, 1 - (r.y + r.h) / S, (r.x + r.w * u1) / S, 1 - r.y / S]);
+    },
     /** Two faces back to back, so the sign reads the right way round from both sides. */
     place2(r, c, yaw, w, h, gap = 0.08) {
       const fx = Math.sin(yaw) * gap, fz = Math.cos(yaw) * gap;
@@ -878,6 +919,38 @@ export function shellOffice() {
   const plaque = boardMesh(['SHELL COMPANY'], 18.6, 3.7, {bg:'#123548', accent:'#f99b75'});
   plaque.position.set(0,3.4,6.8); group.add(plaque);
   return group;
+}
+
+/** An oversize self-inking registry stamp with the embossed travel document below. */
+export function registryDesk() {
+  const root = new THREE.Group(), bed = new ModelBuilder(), plunger = new ModelBuilder();
+  bed.add('green', box(13.5, 1.4, 6, 0.35, 2), { p: [0, 1.1, 0] });
+  bed.add('paper', box(12.9, 1.7, 5.5, 0.45, 2), { p: [0, 2.4, 0] });
+  for (const side of [-1, 1]) {
+    bed.add('brass', cyl(0.33, 0.45, 4.8, 12), { p: [5.6 * side, 5.55, -0.55] });
+    bed.add('ink', box(11.6, 0.1, 0.12), { p: [0, 2.15 + side * 0.35, 2.77] });
+  }
+  plunger.add('ink', box(12, 0.5, 5.1, 0.22, 2));
+  plunger.add('red', box(12.3, 1.2, 5.45, 0.38, 2), { p: [0, 0.72, 0] });
+  plunger.add('brass', cyl(0.95, 1.3, 2.25, 18), { p: [0, 2.28, 0] });
+  plunger.add('red', sphere(2.85, 20, 12), { p: [0, 4.15, 0], s: [1.35, 0.66, 0.76] });
+  const mats = { ink: MAT.dark, green: paint(0x115947), paper: WHITE, brass: GOLDP, red: paint(0xc72f3d) };
+  root.add(bed.build(mats, { cast: false }));
+  const handle = plunger.build(mats, { cast: false }); root.add(handle);
+  const states = ['PENDING', 'ELSEWHERE', 'CLASSIFIED'];
+  const draw = lap => signFace(['HOME PORT', states[lap]], { bg: '#f5e3af', fg: '#124f45', accent: '#a02e39', rule: false });
+  const texture = canvasTex(768, 256, draw(0), { repeat: false });
+  const paper = new THREE.Mesh(new THREE.PlaneGeometry(12.6, 3.7), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.78 }));
+  paper.position.set(0, 2.05, 2.98); root.add(paper);
+  let current = 0;
+  const repaint = () => { const c = texture.image; draw(current)(c.getContext('2d'), c.width, c.height); texture.needsUpdate = true; };
+  document.fonts?.ready.then(repaint);
+  return { root, update(time, lap) {
+    const phase = (time % 2.7) / 2.7;
+    handle.position.y = 3.46 + 3.15 * Math.min(1, Math.abs(phase - 0.5) * 6) ** 1.5;
+    const next = Math.min(2, Math.max(0, lap - 1));
+    if (current !== next) { current = next; repaint(); }
+  } };
 }
 
 /** A semaphore marshal, with each arm and flag pivoting at the shoulder. */
@@ -951,9 +1024,8 @@ export const signFace = (lines, { bg = '#10222e', fg = '#f3ead2', accent = '#e8b
   });
 };
 
-/** A yacht's name for the atlas: navy letters on hull white. */
+/** Navy paint on the hull. The bare gelcoat between letters remains visible. */
 export const nameFace = text => (g, W, H) => {
-  g.fillStyle = '#f7f6f2'; g.fillRect(0, 0, W, H);
   fitText(g, text, W / 2, H / 2 + 4, W * 0.94, H * 0.84, H * 0.8, FONT, { fill: '#10233f' });
 };
 

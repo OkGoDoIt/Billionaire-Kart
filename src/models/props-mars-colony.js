@@ -24,6 +24,34 @@ function strut(b, mat, a, c, w = 0.3, d = w) {
   g.translate((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2);
   b.add(mat, g);
 }
+/** One gold return canister displayed above nine small samples in a shipping rack. */
+export function sampleDepot() {
+  const b = new ModelBuilder();
+  b.add('base', box(13.0, 3.3, 5.1, 0.22), { p: [0, 0.15, 0] });
+  b.add('rust', box(13.2, 0.35, 5.3), { p: [0, 1.85, 0] });
+  const tube = (x, z, scale) => {
+    const foot = 2.0;
+    for (const [mat, y, h, top, bottom] of [
+      ['dark', 0.2, 0.4, 1, 0.94], ['gold', 2.28, 4.1, 0.88, 1],
+      ['white', 3.55, 0.48, 0.95, 0.96], ['gold', 4.56, 0.45, 0.62, 0.88],
+      ['dark', 4.87, 0.2, 0.62, 0.62],
+    ]) b.add(mat, cyl(top * scale, bottom * scale, h * scale, 16), { p: [x, foot + y * scale, z] });
+  };
+  tube(4.5, 0, 1);
+  // The machined rings and two clamp jaws distinguish a sealed metal sample from a bottle.
+  for (const y of [2.57, 2.85, 6.2]) {
+    b.add('brass', cyl(1.03, 1.03, 0.13, 20), { p: [4.5, y, 0] });
+  }
+  for (const side of [-1, 1]) {
+    b.add('rust', box(0.41, 1.78, 1.35, 0.1), { p: [4.5 + side * 1.08, 2.88, 0], r: [0, 0, side * -0.12] });
+    b.add('brass', box(0.78, 0.23, 1.5), { p: [4.5 + side * 0.95, 3.70, 0] });
+  }
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) tube(2.65 - col * 0.81, -0.86 + row * 0.84, 0.36);
+  // A parcel tag displayed beside the ten tubes.
+  b.add('white', box(7.5, 5.3, 0.4, 0.15), { p: [-2.55, 4.55, 0] });
+  return b.build({ gold: paint(0xffc040, { metal: 0.62, rough: 0.3 }), dark: MAT.dark, brass: plastic(0x916c31, 0.38, 0.58), base: PANEL, white: WHITE, rust: RUST });
+}
+
 /** A lumpy icosphere for rocks (same idea as props.js rock). */
 function blob(r, seed = 1, lump = 0.4, detail = 2) {
   const g = new THREE.IcosahedronGeometry(r, detail), p = g.attributes.position, rng = makeRng(seed);

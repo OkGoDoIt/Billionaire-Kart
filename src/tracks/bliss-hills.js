@@ -337,17 +337,16 @@ export default {
     {
       const i = track.indexAtCp(8.05), p = sc.beside(8.05, 1, -track.hwL[i]);
       sc.place(B.paperclipArch({ span: track.hwL[i] + track.hwR[i] + 12, h: 12 }), p.x, p.z, { yaw: p.along, y: p.roadY - 0.2 });
-      const cursor = B.waitCursor();
+      const cursor = B.frozenPointer();
       // Set it just behind the arch so the top stays in the chase camera as the kart crests the hill.
       const crest = track.indexAtCp(9.15);
-      cursor.scale.setScalar(0.72);
+      cursor.rotation.y = p.along + Math.PI;
       cursor.position.set(track.px[crest], p.roadY + 14.8, track.pz[crest]); ctx.group.add(cursor);
       const label = atlas.mesh(board('NOT RESPONDING', { bg: '#082e8c', fg: '#ffffff', font: S.SANS, lines: 1, size: 72 }, 512, 90), 14.5, 2.3);
       label.position.set(p.x, p.roadY + 8.4, p.z); label.rotation.y = p.along + Math.PI; ctx.group.add(label);
       cursor.visible = label.visible = false;
-      anim.push((dt, time) => {
+      anim.push(() => {
         cursor.visible = label.visible = view.showLap >= 2;
-        if (cursor.visible) { cursor.rotation.y = p.along + time * 0.6; cursor.rotation.z = Math.sin(time * 0.9) * 0.12; }
       });
     }
 
@@ -625,21 +624,31 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
       const post = S.post(y + H - ground, 0.48, 0x4772b2);
       sc.place(post, x, z, { y: ground }); bake.add(post);
     }
-    const updates = [[3, 'TIME REMAINING: 4 YEARS'], [58, 'TIME REMAINING: 7 MINUTES'], [100, 'RESTARTING...']];
+    const hourglass = B.updateHourglass();
+    const [hx, , hz] = local(p, -W / 2 - 5.5, 14, 0);
+    const base = sc.y(hx, hz) - .05;
+    sc.place(hourglass.frame, hx, hz, { y: base, yaw: p.yaw }); bake.add(hourglass.frame);
+    sc.place(hourglass.grains, hx, hz, { y: base, yaw: p.yaw });
+    taken.push([hx, hz, 3]);
+    const updates = [[3, '1 MINUTE'], [58, '39 MINUTES'], [99, 'CALCULATING']];
     let state = 0;
     const tex = canvasTex(1024, 452, xpWindow('INSTALLING UPDATES', (g, x0, y0, w, h) => {
-      fitText(g, `UPDATE ${updates[state][0]}%`, w / 2, y0 + h * 0.2, w * 0.9, 110, SANS, '#12142b', { lines: 1 });
-      fitText(g, 'DO NOT TURN OFF YOUR KART', w / 2, y0 + h * 0.45, w * 0.9, 70, SANS, '#e5352b', { lines: 1 });
-      const bx = w * 0.07, by = y0 + h * 0.62, bw = w * 0.86, bh = h * 0.2;
+      fitText(g, 'TIME REMAINING', w / 2, y0 + h * .13, w * .9, 44, SANS, '#304971', { lines: 1 });
+      fitText(g, updates[state][1], w / 2, y0 + h * .41, w * .92, 118, SANS, '#12142b', { lines: 1 });
+      const bx = w * .07, by = y0 + h * .66, bw = w * .72, bh = h * .19;
       g.fillStyle = '#ffffff'; g.fillRect(bx, by, bw, bh); g.strokeStyle = '#7a7a7a'; g.lineWidth = 6; g.strokeRect(bx, by, bw, bh);
       g.fillStyle = '#37c34a'; const step = (bw - 16) / 25, n = Math.max(1, Math.round(updates[state][0] / 4)); for (let k = 0; k < n; k++) g.fillRect(bx + 8 + k * step, by + 6, step - 5, bh - 12);
-      fitText(g, updates[state][1], w / 2, y0 + h * 0.92, w * 0.9, 40, SANS, '#12142b', { lines: 1 });
+      fitText(g, updates[state][0] + '%', w * .88, by + bh / 2, w * .15, 60, SANS, '#12142b', { lines: 1 });
     }));
     const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6 });
     for (const s of [1, -1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat); m.position.set(...local(p, 0, s > 0 ? 0.05 : -0.35, y + H / 2)); m.rotation.y = p.yaw + (s > 0 ? 0 : Math.PI); group.add(m); }
-    anim.push(() => {
+    const approach = track.sAtCp(22.9) - 74;
+    anim.push((dt, time) => {
       const next = view.finalLap ? 2 : view.showLap >= 2 ? 1 : 0;
       if (next !== state) { state = next; tex.redraw(); }
+      const kart = view.race.players[0] || view.race.karts[0];
+      const t = smoothstep(0, 1, (kart.s - approach) / 80);
+      hourglass.fill(.06 + .88 * t, time * 1.35);
     });
   }
 
@@ -655,14 +664,21 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
   {
     const path = [[-48, 174], ...track.def.shortcuts[0].path, [-30, 95]];
     const marks = ['1', '2', '1', '3'];
+    let highlighted = -1;
     const tex = canvasTex(512, 128, (g) => {
       for (const [i, n] of marks.entries()) {
         const x = i * 128;
         g.fillStyle = '#52635e'; g.fillRect(x, 0, 128, 128);
         g.fillStyle = '#d3dcce'; g.fillRect(x + 4, 4, 118, 118);
-        g.fillStyle = '#abb8ac'; g.fillRect(x + 8, 8, 114, 114);
+        g.fillStyle = i === highlighted ? '#fff2a4' : '#abb8ac'; g.fillRect(x + 8, 8, 114, 114);
         fitText(g, n, x + 64, 64, 90, 92, XP, ['#153fac', '#1d6c38', '#153fac', '#ab3628'][i], { lines: 1 });
       }
+    });
+    const entry = track.sAtCp(21), exit = track.sAtCp(28);
+    anim.push((dt, time) => {
+      const kart = view.race.players[0] || view.race.karts[0];
+      const beat = kart.s >= entry && kart.s <= exit ? Math.floor(time * 2) % marks.length : -1;
+      if (beat !== highlighted) { highlighted = beat; tex.redraw(); }
     });
     const pos = [], uv = [];
     for (let j = 1; j < path.length; j++) {

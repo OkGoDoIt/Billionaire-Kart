@@ -20,6 +20,48 @@ const gold = () => paint(GOLD, { rough: 0.3, metal: 0.65, clear: 0.4 });
 const flatMat = {};
 const flat = color => flatMat[color] || (flatMat[color] = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0, flatShading: true, envMapIntensity: 0.6 }));
 
+/** A wheeled floor microphone with a padded rest. Its axle stays on the plinth as it folds. */
+export function floorMicrophone(ashlar) {
+  const b = new ModelBuilder(), shaft = new ModelBuilder(), stack = new ModelBuilder();
+  const mats = { stone: ashlar, brass: gold(), ink: flat(0x202639), silver: plastic(0xdce5e9,.3,.3),
+    leather: flat(0x8c2639), paper: flat(0xf1e4c5), blue: flat(0x233d72) };
+  const rect = (builder, mat, pos, size, bevel = .06) => builder.add(mat, box(...size, bevel, 1), {p:pos});
+  rect(b,'stone',[0,-.75,0],[10.4,3.5,3.6],.16);
+  rect(b,'brass',[0,1,0],[10.5,.16,3.7]);
+  // A little trolley and the padded fork that receives the microphone on the final lap.
+  rect(b,'leather',[.67,1.7,0],[7.7,.36,2.4]);
+  for (const x of [-2.7,4.07]) for (const z of [-.85,.85]) {
+    b.add('ink', cyl(.35,.35,.3,12),{p:[x,1.4,z],r:[Math.PI/2,0,0]});
+    b.add('brass', cyl(.15,.15,.34,12),{p:[x,1.4,z],r:[Math.PI/2,0,0]});
+  }
+  rect(b,'brass',[3.2,2,0],[1.4,.34,1.55]);
+  for (const z of [-.62,.62]) rect(b,'leather',[3.2,2.35,z],[1.25,.52,.28],.12);
+  shaft.add('brass', cyl(.16,.29,3.12,12),{p:[0,1.56,0]});
+  shaft.add('ink', cyl(.25,.25,.2,12),{p:[0,1.8,0]});
+  // The broad silver head and six dark grille slots read as a microphone from the road.
+  rect(shaft,'silver',[0,3.93,0],[1.44,1.88,1.08],.45);
+  for (let j=0;j<6;j++) {
+    const y = 3.39 + j*.215, width = j===0 || j===5 ? .9 : 1.16;
+    rect(shaft,'ink',[0,y,.545],[width,.105,.055],.03);
+  }
+  for (const x of [-.87,.87]) rect(shaft,'brass',[x,3.46,0],[.18,1.12,.24]);
+  rect(shaft,'brass',[0,2.96,0],[1.9,.22,.25]);
+  const binder = (builder,n) => {
+    const x=-3.76 + .12*Math.sin(n*2.4),y=1.25+n*.49, z=-.1+.11*Math.cos(n);
+    const cover = n%2===0 ? 'blue' : 'leather';
+    rect(builder,'paper',[x,y+.11,z],[1.98,.35,1.25]);
+    for (const dy of [-.09,.31]) rect(builder,cover,[x,y+dy,z],[2.12,.10,1.41]);
+    rect(builder,cover,[x,y+.11,z+.7],[2.12,.42,.08]);
+    rect(builder,'paper',[x+.28,y+.12,z+.75],[.6,.16,.04],.005);
+  };
+  binder(b,0);
+  for (let n=1;n<10;n++) binder(stack,n);
+  const prop=b.build(mats,{cast:false}), boom=shaft.build(mats,{cast:false}), extra=stack.build(mats,{cast:false});
+  boom.position.set(-.75,2.21,0); extra.visible=false;
+  prop.add(boom,extra);
+  return { prop, boom, extra };
+}
+
 /** A triangular prism (pediments), apex up, base on y = 0, length along Z. */
 function prism(width, height, len) {
   const r = width / Math.sqrt(3);

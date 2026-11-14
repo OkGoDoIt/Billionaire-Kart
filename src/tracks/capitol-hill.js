@@ -316,7 +316,8 @@ export default {
     ctx.monument = mon;
     { const t = artTex(THREE, 'ashlar', 'monument'); t.repeat.set(3, OBELISK.h / 6); mon.traverse(o => { if (o.isMesh && o.material.color?.getHex() === 0xece6d6) { o.material = o.material.clone(); o.material.map = t; o.material.color.setHex(0xfaf6ee); o.material.flatShading = true; } }); }
     reflectingPool(ctx, sc, { taken, free, reach });
-    filibuster(ctx, sc, { taken });
+    const civicSigns = C.makeAtlas(ctx.group);
+    filibuster(ctx, sc, { taken, atlas: civicSigns });
 
     // memorial halls round the district, and the fountain on the lawn
     const halls = [[114, 306, Math.PI], [-20, -72, 0]].map(([x, z, yaw]) => ({ x, z, yaw, y: sc.y(x, z) - 0.3 }));
@@ -462,7 +463,7 @@ export default {
     }
     sc.instances(mirrored, chevL, {});
 
-    jokes(ctx, sc, { seats, stands: [...standsA, ...standsB], gantryAt: g0, reach });
+    jokes(ctx, sc, { seats, stands: [...standsA, ...standsB], gantryAt: g0, reach, atlas: civicSigns });
 
     // hot-air balloons over the district
     const cols = [[0xb3122a, 0xf2efe6], [0x1f3f8a, 0xf2efe6], [0xd4af37, 0xf2efe6], [0xf7b8d0, 0xffffff], [0xb3122a, 0x1f3f8a]];
@@ -672,7 +673,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
    with a balustrade along its top, flags and lamps on it, so from below it is a storey of dressed stone and from above
    a parapet with the next leg dropping away beneath. Hairpin two's infield and the gap in the middle wall are the
    cloture steps: fenced with barricades for two laps, open on the final one. */
-function filibuster(ctx, sc, { taken }) {
+function filibuster(ctx, sc, { taken, atlas }) {
   const { THREE, track, anim, group, view } = ctx;
   const stone = artTex(THREE, 'ashlar');
   const mat = new THREE.MeshStandardMaterial({ map: stone, color: 0xf4efe6, roughness: 0.85 }), capMat = new THREE.MeshStandardMaterial({ color: 0xd2c8b4, roughness: 0.7 });
@@ -774,12 +775,32 @@ function filibuster(ctx, sc, { taken }) {
     const b = new ModelBuilder(); for (const d of [-12.2, 12.2]) { b.add("p", cyl(0.25, 0.25, 9.4, 8), { p: [SX + d, SY + 4.5, SZ] }); track.addCollider(SX + d, SZ, 0.6); }
     group.add(b.build({ p: plastic(0x2a2d36, 0.5, 0.3) }));
   }
+  // Once the Senate invokes cloture the empty floor microphone yields with the barricade.
+  const posMic = sc.beside(29.48, -1, 7), approach = track.indexAtCp(29.1);
+  const yaw = Math.atan2(track.px[approach] - posMic.x, track.pz[approach] - posMic.z);
+  const mic = C.floorMicrophone(mat);
+  // The shoulder rises sideways. Level the cart at the highest corner and seat the stone base in the bank.
+  const cos = Math.cos(yaw), sin = Math.sin(yaw);
+  let micY = posMic.y;
+  for (const x of [-5.2, 5.2]) for (const z of [-1.8, 1.8]) {
+    micY = Math.max(micY, sc.y(posMic.x + x*cos + z*sin, posMic.z - x*sin + z*cos));
+  }
+  sc.place(mic.prop, posMic.x, posMic.z, {yaw, y: micY});
+  taken.push([posMic.x, posMic.z, 7]);
+  const plaque = atlas.add(640,80,C.signDraw('YIELD THE FLOOR',{bg:'#243858',fg:'#ffdd80',size:69,lines:1}));
+  atlas.place(plaque,[posMic.x+Math.sin(yaw)*1.82,micY+.54,posMic.z+Math.cos(yaw)*1.82],yaw,8.0,.98);
+
   let shown = false, drop = 0;
   anim.push(dt => {
     const open = clotureOpen(view.race);
     if (open !== shown) { shown = open; const g = signTex.image.getContext('2d'); draw(open)(g, signTex.image.width, signTex.image.height); signTex.needsUpdate = true; setGate(open); }
+    mic.extra.visible = (view.showLap || 1) >= 2 || open;
     const target = open ? 1 : 0;
-    if (drop !== target) { drop += Math.sign(target - drop) * Math.min(Math.abs(target - drop), dt * 1.4); for (const m of fenceMeshes) m.position.y = -2.4 * drop; }
+    if (drop !== target) {
+      drop += Math.sign(target - drop) * Math.min(Math.abs(target - drop), dt * 1.4);
+      for (const m of fenceMeshes) m.position.y = -2.4 * drop;
+      mic.boom.rotation.z = -Math.PI * .49 * drop;
+    }
   });
 }
 
@@ -806,9 +827,9 @@ const BOARDS = [
 const CROWD = ['OBJECTION!', 'I YIELD', 'NO COMMENT', 'PAY TO PLAY', 'SO MOVED', 'RECESS!', 'FILIBUSTER!', 'SPEAK UP, SENATOR', 'HONK FOR GRIDLOCK', 'MORE HEARINGS'];
 const MONO = '"Courier New", Courier, monospace';
 
-function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
+function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
   const { THREE, track, anim, view } = ctx, rng = sc.rng, group = ctx.group;
-  const bake = C.makeBaker(group, false), atlas = C.makeAtlas(group), F = C.SIGN_FONT, SANS = C.SANS, signDraw = C.signDraw, fitText = C.fitText;
+  const bake = C.makeBaker(group, false), F = C.SIGN_FONT, SANS = C.SANS, signDraw = C.signDraw, fitText = C.fitText;
   const yawTo = (from, to) => Math.atan2(to.x - from.x, to.z - from.z);
   const roadPt = cp => { const i = track.indexAtCp(cp); return { x: track.px[i], y: track.py[i], z: track.pz[i], i }; };
   const toWorld = (o, l) => { const c = Math.cos(o.yaw), s = Math.sin(o.yaw), k = o.scale ?? 1; return [o.x + (l[0] * c + l[2] * s) * k, o.y + l[1] * k, o.z + (-l[0] * s + l[2] * c) * k]; };

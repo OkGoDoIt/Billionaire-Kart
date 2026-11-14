@@ -5,7 +5,7 @@
    Each builder returns a THREE.Group (or Mesh). Nothing here touches the DOM at
    import time; canvas textures are only made when a builder runs. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, torus, cone, capsule, lathe, glow, plastic, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, torus, cone, capsule, lathe, tube, glow, plastic, MAT } from './build.js';
 import { canvasTex } from '../render/textures.js';
 import { makeRng, fbm } from '../core/util.js';
 
@@ -94,6 +94,70 @@ function discMaterial({ inner, outer, gain = 1.6, streaks = 22, hot = 0xfff4e0, 
       }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   });
+}
+
+/** An office snack machine. The yellow catch tray hinges at the cabinet face. */
+export function tungstenKiosk() {
+  const shell = new ModelBuilder();
+  const block = (material, x, y, z, w, h, d) => shell.add(material, box(w, h, d, .06, 1), { p: [x, y, z] });
+  block('enamel', 0, 3.1, -.35, 5.2, 5.8, 1.8);
+  block('interior', -.38, 3.35, .59, 3.9, 3.1, .24);
+  // Backlit shelves, two vending spirals, and the empty sandwich compartment.
+  for (const y of [2.15, 3.35, 4.62]) block('shelf', -.43, y, .88, 3.55, .13, .85);
+  for (const x of [-1.33, .42]) {
+    const points = [];
+    for (let n = 0; n <= 48; n++) {
+      const a = n * Math.PI / 8;
+      points.push([x + .44 * Math.cos(a), 3.91 + .42 * Math.sin(a), .58 + n * .016]);
+    }
+    shell.add('wire', tube(points, .057, 48, 5));
+  }
+  // One row of familiar chip bags gives the empty lower shelf and metal cube a size reference.
+  for (const [x, m] of [[-1.34,'gold'],[-.73,'berry'],[-.12,'gold']]) {
+    block(m, x, 2.64, .78, .47, .73, .25);
+    block('shelf', x, 2.7, .93, .38, .14, .025);
+  }
+  block('interior', 1.95, 3.66, .61, .8, 1.72, .2);
+  block('lamp', 1.95, 4.29, .73, .63, .23, .07);
+  for (const x of [1.77, 1.98, 2.19]) for (const y of [3.18, 3.42, 3.66]) block('shelf', x, y, .75, .13, .13, .07);
+  block('interior', -.38, 1.21, .66, 3.96, 1.24, .23);
+  block('shelf', 1.96, 2.53, .72, .69, .16, .15);
+  block('shelf', 2.0, 2.17, .83, .53, .58, .06);
+  block('plinth', 0, -.12, .5, 6.95, .58, 4.9);
+  const mats = { enamel: plastic(0xe86d46,.38,.22), interior: plastic(0x182333,.62),
+    shelf: plastic(0xdbebed,.4,.25), wire: plastic(0xb8d8e9,.22,.55), lamp: glow(0xb9fcd5,1),
+    gold: plastic(0xffbe36,.5), berry: plastic(0xe7388d,.5), plinth: plastic(0x27324c,.55) };
+  const cabinet = shell.build(mats, {cast:false});
+  const trayBuilder = new ModelBuilder();
+  trayBuilder.add('gold', box(3.9,.2,2.25,.08,1), {p:[0,0,1.05]});
+  trayBuilder.add('gold', box(3.9,.4,.14,.06,1), {p:[0,.12,2.16]});
+  const tray = trayBuilder.build(mats,{cast:false}); tray.position.set(-.38,1.24,.75);
+  const ingot = new ModelBuilder();
+  ingot.add('metal', box(1.48,1.48,1.48,.11,2));
+  // A stamped chemical symbol on the front reads even when the cube is still in its slot.
+  const stamp = [[-.46,.3],[-.26,-.29],[0,.1],[.26,-.29],[.46,.3]];
+  for (let n = 1; n < stamp.length; n++) {
+    const [x,y] = stamp[n], [px,py] = stamp[n-1];
+    ingot.add('ink', box(Math.hypot(x-px,y-py),.105,.024,.01,1), {
+      p: [(x+px)/2,(y+py)/2,.748], r: [0,0,Math.atan2(y-py,x-px)] });
+  }
+  const cube = ingot.build({metal:plastic(0xe7edf1,.35,.23),ink:mats.interior},{cast:false});
+  cube.rotation.y = .37;
+  cabinet.add(tray,cube);
+  const setLap = lap => {
+    const stage = Math.min(2, Math.max(0, lap - 1));
+    const tilt = [0,12,25][stage] * Math.PI / 180;
+    tray.rotation.x = tilt;
+    if (stage === 0) cube.position.set(.42,3.84,1.38);
+    else {
+      // The cube has dropped onto the tray and slides forward as the hinge yields.
+      const reach = stage === 1 ? .5 : 1.37;
+      cube.position.set(-.38,1.24 + .83*Math.cos(tilt) - reach*Math.sin(tilt),.75 + reach*Math.cos(tilt) + .83*Math.sin(tilt));
+    }
+    cube.rotation.x = tilt;
+  };
+  setLap(1);
+  return { cabinet, setLap };
 }
 
 /** The orb: core sphere, two shells, a tilted inner accretion ring, and two polar jets.

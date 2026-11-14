@@ -202,6 +202,9 @@ export default {
     // spots the gags will stand on, kept clear of the camps up front
     for (const [at, side, off, r] of [[5.6, -1, 26, 14], [4.9, -1, 15, 10], [14.6, -1, 35, 14], [18.1, -1, 34, 10], [20.45, -1, 46, 22], [19.75, -1, 33, 8], [22.85, -1, 13, 14], [23.6, -1, 18, 10], [25.45, -1, 15, 10], [25.15, -1, 15, 9], [26.15, -1, 16, 12], [25.75, -1, 26, 12], [2.3, -1, 19, 12], [7.2, -1, 20, 12], [10.7, -1, 19, 12], [21.2, 1, 37, 12], [24.6, -1, 19, 12], [14.35, -1, 39, 12], [19.85, -1, 38, 12], [21.0, -1, 36, 10]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
+    const cleanup = sc.beside(21.02, 1, 9);
+    take(cleanup.x, cleanup.z, 10);
+
     // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
     const bake = makeBaker(ctx.group, sc.shadows), atlas = B.makeAtlas(ctx.group, { glow: 0.4 });
     /** Small repeated props baked into the shared material buckets (no shadows): far fewer draw calls than instancing each kind. */
@@ -687,6 +690,42 @@ export default {
       const jp = at(half + 4, wide + 9, 0);
       signAt(jp[0], jp[2], Math.atan2(-txn, -tzn) + 0.40, B.board('JUDGES: 10/10', { bg: '#ffffff', fg: '#1a1d29', size: 150, sub: '(ALL INVESTORS)', subFg: '#1a1d29', subScale: 0.96, pad: 0.045, lines: 1, border: '#1a1d29' }), 20.5, 8.8, Math.max(8, track.py[gs1] - gy + 3), { frame: 0x3a2c34 });
       for (let k = 0; k < 3; k++) { const q = at(half + 1 + k * 1.6, wide + 4.5, 0), m = B.person({ seated: true }); sc.place(m, q[0], q[2], { yaw: Math.atan2(-lxn, -lzn), y: sc.y(q[0], q[2]) }); bake.add(m); }
+      // The judges score the investors while a volunteer line cleans up their camp.
+      const approach = track.indexAtCp(20.35);
+      const yaw = Math.atan2(track.px[approach] - cleanup.x, track.pz[approach] - cleanup.z);
+      const spot = (u, v) => {
+        const x = cleanup.x + Math.cos(yaw) * u + Math.sin(yaw) * v;
+        const z = cleanup.z - Math.sin(yaw) * u + Math.cos(yaw) * v;
+        return { x, z, y: track.terrainHeight(x, z) };
+      };
+      const litter = spot(0, 0);
+      bake.add(sc.place(B.cleanupSequin(), litter.x, litter.z, { yaw, y: litter.y }), false);
+      const chalk = new ModelBuilder(), n = 40;
+      for (let i = 0; i < n; i++) {
+        const a = i * Math.PI * 2 / n, b = (i + 1) * Math.PI * 2 / n;
+        const from = spot(4.1 * Math.cos(a), 3.3 * Math.sin(a));
+        const to = spot(4.1 * Math.cos(b), 3.3 * Math.sin(b));
+        chalk.add('chalk', strutGeo([from.x, from.y + 0.12, from.z], [to.x, to.y + 0.12, to.z], 0.19));
+      }
+      bake.add(chalk.build({ chalk: plastic(0xfaffed) }), false);
+      for (const [u, v, tint] of [[-3.2, 2, 0xf7752f], [-1.3, 3.2, 0xf5d150], [1.1, 3.55, 0x73cebb]]) {
+        const p = spot(u, v);
+        bake.add(sc.place(B.cleanupWorker(tint), p.x, p.z, { yaw: yaw + Math.PI, y: p.y }), false);
+      }
+      const placard = spot(-2.9, -4.3);
+      signAt(placard.x, placard.z, yaw, B.board('LEAVE NO TRACE', { bg: '#163a39', fg: '#fff7dd',
+        sub: 'ITEM 000001 · SEQUIN', subFg: '#ffda65', subScale: 0.84, pad: 0.035, lines: 1 }), 11.5, 4.6, 8.5, { y: placard.y });
+      const bag = B.cleanupSack(), bagSpot = spot(4.1, -0.6);
+      sc.place(bag, bagSpot.x, bagSpot.z, { yaw, y: bagSpot.y, cast: false });
+      let lastFill = 0;
+      anim.push(() => {
+        const lap = Math.min(3, view.showLap || 1);
+        if (lap === lastFill) return;
+        lastFill = lap;
+        // From an empty canvas sack lying flat to a bulging bag on the final pass.
+        const width = 0.56 + 0.20 * lap;
+        bag.scale.set(width, 0.12 + 0.43 * (lap - 1), width);
+      });
       // over the landing, the boardwalk's welcome arch
       const li = track.indexAtCp(21.95), lw = track.hwL[li] + track.hwR[li] + 2.5, ly = track.py[li], la = Math.atan2(track.tx[li], track.tz[li]);
       const ab = new ModelBuilder(), lr = [Math.cos(la), -Math.sin(la)];

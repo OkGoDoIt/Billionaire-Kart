@@ -304,20 +304,56 @@ export function mine() {
   return b.build({ mine: plastic(0x16171c, 0.45, 0.3), shine: plastic(0xffffff, 0.4), flagpole: MAT.dark, flag: paint(0xe5352b, { rough: 0.4 }) });
 }
 
-/** An amber desktop wait cursor over the paperclip. Open glass leaves the falling sand visible. */
-export function waitCursor() {
+/** The desktop pointer that freezes above the paperclip arch on lap two. */
+export function frozenPointer() {
+  const points = [[-3, 6], [-3, -3], [-0.8, -1.3], [1.2, -5.1], [3, -4.2], [0.9, -0.3], [4.2, -0.3]];
+  const arrow = new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x, y)));
+  const outline = new THREE.ExtrudeGeometry(arrow, {
+    depth: 0.55, bevelEnabled: true, bevelSize: 0.35, bevelThickness: 0.15, bevelSegments: 1,
+  });
+  return new THREE.Mesh(outline, [MAT.white, MAT.dark]);
+}
+
+/** An open, six-meter update cursor. The sand moves against gravity as the driver approaches. */
+export function updateHourglass() {
   const b = new ModelBuilder();
-  for (const s of [-1, 1]) {
-    b.add('case', box(10.8, 1.35, 6.2, 0.55, 2), { p: [0, s * 7.3, 0] });
-    b.add('edge', box(9.8, 0.4, 5.5, 0.15, 1), { p: [0, s * 6.6, 0] });
-    for (const z of [-1.9, 1.9]) {
-      b.add('edge', tube([[s * 4.1, 6.4, z], [s * 3.4, 3.6, z], [s * 0.45, 0, z * 0.3], [s * 3.4, -3.6, z], [s * 4.1, -6.4, z]], 0.28, 24, 8));
+  for (const y of [0.24, 5.76]) {
+    b.add('case', box(4.2, 0.48, 2.9, 0.16, 2), { p: [0, y, 0] });
+    b.add('edge', box(3.8, 0.13, 2.7), { p: [0, y < 3 ? 0.52 : 5.48, 0] });
+  }
+  for (const side of [-1, 1]) {
+    for (const z of [-0.8, 0.8]) {
+      const rim = [[side * 1.53, 0.58, z], [side * 1.31, 1.35, z], [side * 0.15, 3, z * 0.25],
+        [side * 1.31, 4.65, z], [side * 1.53, 5.42, z]];
+      b.add('edge', tube(rim, 0.10, 16, 8));
     }
   }
-  b.add('sand', cyl(3.6, 0.16, 5.2, 20), { p: [0, 3.2, 0], s: [1, 1, 0.65] });
-  b.add('sand', cyl(0.18, 3.9, 3.4, 20), { p: [0, -4.9, 0], s: [1, 1, 0.65] });
-  b.add('sand', cyl(0.14, 0.14, 4, 8), { p: [0, -1.4, 0] });
-  return b.build({ case: plastic(0x142952), edge: plastic(0x91e4ff), sand: glow(0xffb526, 0.32) });
+  const frame = b.build({ case: plastic(0x163157), edge: plastic(0xa6edff) });
+  const sand = glow(0xffac19, 0.4);
+  const pile = new THREE.ConeGeometry(1.40, 2.05, 20);
+  pile.translate(0, 1.025, 0);
+  const lower = new THREE.Mesh(pile, sand), upper = new THREE.Mesh(pile, sand);
+  lower.position.y = 0.59;
+  upper.position.y = 5.41;
+  upper.rotation.z = Math.PI;
+  const stream = new THREE.InstancedMesh(cyl(0.08, 0.12, 0.31, 6), sand, 8);
+  stream.frustumCulled = false;
+  const grains = new THREE.Group();
+  grains.add(lower, upper, stream);
+  const grainPose = new THREE.Matrix4();
+  function fill(fraction, phase) {
+    // Scale each pile by volume so what leaves one end arrives at the other.
+    const bottom = Math.cbrt(1 - fraction), top = Math.cbrt(fraction);
+    lower.scale.set(bottom, bottom, bottom * 0.72);
+    upper.scale.set(top, top, top * 0.72);
+    for (let i = 0; i < stream.count; i++) {
+      const t = (phase + i / stream.count) % 1;
+      stream.setMatrixAt(i, grainPose.makeTranslation(0, 0.62 + 4.76 * t, 0));
+    }
+    stream.instanceMatrix.needsUpdate = true;
+  }
+  fill(0.22, 0);
+  return { frame, grains, fill };
 }
 
 /** The suspended, right-angled paths of a pipes screensaver. Elbows and flanges match the tube diameter. */

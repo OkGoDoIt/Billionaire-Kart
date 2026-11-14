@@ -348,7 +348,7 @@ function decorate(ctx) {
 
   /* ----- the landmarks (their spots, so the drifting scenery keeps clear of them) ----- */
   anchors.push({ x: FACTORY.x, z: FACTORY.z, r: 200 });
-  landmarks({ THREE, ctx, tr, I, at, edge, faceRoad, boardYaw, facing, atlas, fixed, anchors, rng, ox, oy, oz, lapFx });
+  const setKioskLap = landmarks({ THREE, ctx, tr, I, at, edge, faceRoad, boardYaw, facing, atlas, fixed, anchors, rng, ox, oy, oz, lapFx });
 
   /* ----- lap by lap: the forecast counts down, the lattice spreads, the sky goes red alert ----- */
   {
@@ -455,6 +455,7 @@ function decorate(ctx) {
       const lap = view.showLap || 1, laps = view.race?.laps ?? 3, fin = !!view.finalLap || lap >= laps;
       const key = fin ? 'fin' : 'r' + (laps - lap);
       if (key !== boardKey) {   // canvas redraws and material swaps only when the lap changes
+        setKioskLap(fin ? 3 : lap);
         boardKey = key; drawBench(fin ? -1 : laps - lap);
         lapFx.mood = fin ? 'evil' : lap >= 2 ? 'think' : 'happy'; face.userData.setMood(lapFx.mood);
         builtTo = fin ? 1 : laps <= 1 ? 0.55 : 0.55 + 0.25 * (lap - 1) / Math.max(1, laps - 2);
@@ -676,7 +677,7 @@ const BOARDS = [
   [35.6, 1, 8, 5, 'COPILOT: NOW IN YOUR TOASTER'],
   [40.3, -1, 8, 5, 'RESPONSIBLE SCALING (NO SPEED LIMIT)'],
   [42.7, 1, 8, 5, 'NONPROFIT* (*TERMS APPLY)'],
-  [49.5, 1, 14, 9, 'BUY MORE GPUS. SAVE MORE.', true],
+  [49.5, -1, 21, 13, 'BUY MORE GPUS. SAVE MORE.', true],
 ];
 const BOARD_COLS = [['#ff5cc8', '#ffffff'], ['#35e0ff', '#12142b'], ['#ffd23c', '#12142b'], ['#7a6bff', '#ffffff'], ['#12142b', '#ffd23c'], ['#ffffff', '#e2246b']];
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif', SANS = '"Arial Black", "Helvetica Neue", Arial, sans-serif', MONO = '"Courier New", Courier, monospace';
@@ -963,6 +964,32 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
   /** A local frame at (x,y,z) turned by yaw: maps local [lx,ly,lz] to world [x,y,z]. */
   const frame = (x, y, z, yaw) => { const c = Math.cos(yaw), s = Math.sin(yaw); return (lx, ly, lz) => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c]; };
 
+  let setKioskLap;
+  // Project Vend: the office snack agent that stocked tungsten cubes.
+  {
+    const i = I(49.55), side = 1, p = at(i, side * (edge(i, side) + 4.6), 1.75);
+    const yaw = boardYaw(i, side, 1.04), W = frame(p.x, p.y, p.z, yaw);
+    const { cabinet, setLap } = S.tungstenKiosk();
+    cabinet.position.copy(p); cabinet.rotation.y = yaw; ctx.group.add(cabinet);
+    const title = atlas.add(640,150,(g,w,h) => {
+      g.fillStyle = '#fff3d6'; g.fillRect(0,0,w,h);
+      fitText(g,'TUNGSTEN',w/2,h*.32,w-28,82,FONT,'#172236',{lines:1});
+      fitText(g,'SOLD BY THE SNACK',w/2,h*.79,w-24,45,SANS,'#993b24',{lines:1});
+    });
+    atlas.place(title,W(0,5.41,.62),yaw,4.91,1.15);
+    const receipt = atlas.add(200,160,(g,w,h) => {
+      g.fillStyle = '#f4f1d8'; g.fillRect(0,0,w,h);
+      fitText(g,'MANAGER',w/2,50,w-12,35,SANS,'#172236',{lines:1});
+      fitText(g,'PLEASE',w/2,99,w-12,35,SANS,'#172236',{lines:1});
+    });
+    atlas.place(receipt,W(2,2.17,.87),yaw,.53,.5);
+    // The cantilever joins the floating road deck to the vending platform.
+    const arm = at(i, side * (edge(i,side) + 2.5), .95);
+    fixed.add('beam',box(6, .68, 2, .08,1),{p:arm.toArray(),r:[0,facing(i),0]});
+    anchors.push({x:p.x,z:p.z,r:8});
+    setKioskLap = setLap;
+  }
+
   /* --- the centerpiece: the paperclip maximizer, eating the skyline --- */
   {
     const F = FACTORY, f = S.paperclipFactory(), U = f.userData;
@@ -1181,4 +1208,5 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
     atlas.place(r, W(0, 0, 0), syaw, 26, 12.5);
     anchors.push({ x: SX, z: SZ, r: 30 });
   }
+  return setKioskLap;
 }

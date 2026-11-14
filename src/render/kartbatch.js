@@ -31,7 +31,7 @@ function fillAttribute(g, name, values) {
   g.setAttribute(name, new THREE.BufferAttribute(array, components));
 }
 
-export function batchKart(rig, paint) {
+export function batchKart(rig, paint, shadow) {
   const joints = [rig.body, rig.steering, ...rig.wheels, ...rig.spinners, rig.torso, rig.head];
   if (rig.driver2) joints.push(rig.driver2.userData.torso, rig.head2);
   rig.root.updateMatrixWorld(true);
@@ -60,7 +60,7 @@ export function batchKart(rig, paint) {
   for (const [side, geos] of groups) {
     const geometry = mergeGeometries(geos), material = surfaceMaterial(side, paint);
     const mesh = new THREE.SkinnedMesh(geometry, material);
-    mesh.name = 'kart surfaces';
+    mesh.name = 'kart surfaces'; mesh.castShadow = shadow;
     mesh.onBeforeRender = () => { if (material.userData.shader) material.userData.shader.uniforms.uPaintPower.value = paint.emissiveIntensity; };
     mesh.bind(skeleton, new THREE.Matrix4());
     // Encloses the steering, head bob, spinning wheels, and suspension throughout their travel.

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 
 const cellSize = 38;
 const matrix = new THREE.Matrix4();
-const frustum = new THREE.Frustum();
+const frustum = new THREE.Frustum(), lightFrustum = new THREE.Frustum();
 const point = new THREE.Vector3();
 const sphere = new THREE.Sphere();
 const cellOf = (x, z) => Math.floor(x / cellSize) + ',' + Math.floor(z / cellSize);
@@ -22,11 +22,11 @@ function instanceCells(mesh) {
   const matrices = mesh.instanceMatrix, colors = mesh.instanceColor, cells = new Map();
   const packedMatrices = matrices.clone().setUsage(THREE.DynamicDrawUsage);
   const packedColors = colors?.clone().setUsage(THREE.DynamicDrawUsage);
-  const geo = mesh.geometry;
+  const geo = mesh.geometry, bounds = new THREE.Box3();
   if (!geo.boundingSphere) geo.computeBoundingSphere();
   let version = -1, count = 0;
   return {
-    before() {
+    before(camera, light) {
       if (version !== matrices.version || count !== mesh.count) {
         cells.clear(); version = matrices.version; count = mesh.count;
         for (let i = 0; i < count; i++) {
@@ -37,10 +37,15 @@ function instanceCells(mesh) {
           point.copy(sphere.center).addScalar(sphere.radius); cell.bounds.expandByPoint(point);
           point.copy(sphere.center).subScalar(sphere.radius); cell.bounds.expandByPoint(point);
         }
+        // Three also tests the whole mesh. Its sphere must cover every pane, even if
+        // the first render happens to pack only a handful of instances.
+        bounds.makeEmpty();
+        for (const cell of cells.values()) bounds.union(cell.bounds);
+        bounds.getBoundingSphere(mesh.boundingSphere ??= new THREE.Sphere());
       }
       let n = 0;
       for (const cell of cells.values()) {
-        if (!frustum.intersectsBox(cell.bounds)) continue;
+        if (!frustum.intersectsBox(cell.bounds) && !light?.intersectsBox(cell.bounds)) continue;
         for (const id of cell.ids) {
           const src = id * 16, dst = n * 16;
           for (let j = 0; j < 16; j++) packedMatrices.array[dst + j] = matrices.array[src + j];
@@ -78,7 +83,7 @@ function meshCells(mesh) {
   // camera's selection between frames; only rebuild when a cell crosses the frustum.
   const byCamera = new Map(), cellList = [...cells.values()];
   return {
-    before(camera) {
+    before(camera, light) {
       let cache = byCamera.get(camera);
       if (!cache) {
         const Index = p.count > 65535 ? Uint32Array : Uint16Array;
@@ -92,7 +97,7 @@ function meshCells(mesh) {
       }
       let changed = false;
       for (let i = 0; i < cellList.length; i++) {
-        const visible = Number(frustum.intersectsBox(cellList[i].bounds));
+        const visible = Number(frustum.intersectsBox(cellList[i].bounds) || !!light?.intersectsBox(cellList[i].bounds));
         if (visible !== cache.visible[i]) { changed = true; cache.visible[i] = visible; }
       }
       if (changed) {
@@ -128,15 +133,18 @@ export function splitScenery(root) {
     else if (!mesh.isInstancedMesh && (g.index?.count ?? p.count) > 42000 && g.drawRange.count === Infinity && p.usage === THREE.StaticDrawUsage) entry = meshCells(mesh);
     if (entry) entries.push({ mesh, entry });
   });
-  const projection = new THREE.Matrix4();
+  const projection = new THREE.Matrix4(), lightProjection = new THREE.Matrix4();
   return {
-    before(camera) {
+    before(camera, shadowCamera) {
       camera.updateMatrixWorld();
+      if (shadowCamera) lightProjection.multiplyMatrices(shadowCamera.projectionMatrix, shadowCamera.matrixWorldInverse);
       projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       for (const { mesh, entry } of entries) {
         matrix.multiplyMatrices(projection, mesh.matrixWorld);
         frustum.setFromProjectionMatrix(matrix, camera.coordinateSystem, camera.reversedDepth);
-        entry.before(camera);
+        const casts = shadowCamera && mesh.castShadow;
+        if (casts) lightFrustum.setFromProjectionMatrix(matrix.multiplyMatrices(lightProjection, mesh.matrixWorld), shadowCamera.coordinateSystem, shadowCamera.reversedDepth);
+        entry.before(camera, casts ? lightFrustum : null);
       }
     },
     after() { for (const { entry } of entries) entry.after(); },

@@ -38,6 +38,10 @@ export default {
     { pos: [214, 34, -40], pos1: [182, 46, -100], look: [128, 64, -275], look1: [138, 72, -275], fov: 52, dur: 3.0 },
   ],
   laps: 3,
+  driftEntries: [
+    { from: 0.5, to: 2.5, side: 1, inside: 3 },
+    { from: 28.45, to: 30.4, side: -1, inside: 3 },
+  ],
   width: 19,
   sky: 'space',
   skyOverrides: { exposure: 0.95 },

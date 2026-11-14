@@ -332,7 +332,8 @@ export class Kart {
 
     // ----- throttle / brake
     if (!airborne) {
-      if (boosting) {
+      // The brake can trim a boost into a corner. The boost timer keeps running.
+      if (boosting && !brake) {
         vf = approach(vf, topBoost, T.boostAccel * dt);
       } else if (throttle > 0 && !brake) {
         if (vf < top) {

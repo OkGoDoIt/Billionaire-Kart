@@ -339,7 +339,7 @@ export default {
       const x = -150, z = 150; sc.place(fh2, x, z, { yaw: 1.2, scale: 0.85, y: sc.y(x, z) - 0.2 }); taken.push([x, z, 16]);
     }
 
-    gags({ THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, free, local, board, anim });
+    gags({ THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, free, local, board, anim, view });
 
     // oversized beige computers as roadside boulders, in clusters
     const mons = [], towers = [];
@@ -435,7 +435,7 @@ export default {
 };
 
 /* ---------- the gags ---------- */
-function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, board, anim }) {
+function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, board, anim, view }) {
   const { FONT, SANS, fitText } = S;
   const facing = (p, x, z) => Math.atan2(x - p.x, z - p.z);
   const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.redraw = () => { draw(c.getContext('2d'), w, h); t.needsUpdate = true; }; if (document.fonts?.ready) document.fonts.ready.then(t.redraw); return t; };
@@ -526,22 +526,30 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
 
   // ---- the back straight: an update progress bar the size of a building ----
   {
-    const p = spot(22.9, -1, 26), W = 34, H = 15, y = p.y + 9;
-    legs(p, W, 9 + H * 0.5);
-    const st = { pct: 3 };
+    const i = track.indexAtCp(22.9), p = sc.beside(22.9, 1, -track.hwL[i]);
+    p.yaw = p.along + Math.PI;
+    const W = 29, H = 9, y = p.roadY + 10;
+    for (const u of [-W / 2, W / 2]) {
+      const [x, , z] = local(p, u, -0.4, 0), ground = sc.y(x, z) - 0.5;
+      const post = S.post(y + H - ground, 0.48, 0x4772b2);
+      sc.place(post, x, z, { y: ground }); bake.add(post);
+    }
+    const updates = [[3, 'TIME REMAINING: 4 YEARS'], [58, 'TIME REMAINING: 7 MINUTES'], [100, 'RESTARTING...']];
+    let state = 0;
     const tex = canvasTex(1024, 452, xpWindow('INSTALLING UPDATES', (g, x0, y0, w, h) => {
-      fitText(g, `UPDATE ${st.pct}%`, w / 2, y0 + h * 0.2, w * 0.9, 110, SANS, '#12142b', { lines: 1 });
+      fitText(g, `UPDATE ${updates[state][0]}%`, w / 2, y0 + h * 0.2, w * 0.9, 110, SANS, '#12142b', { lines: 1 });
       fitText(g, 'DO NOT TURN OFF YOUR KART', w / 2, y0 + h * 0.45, w * 0.9, 70, SANS, '#e5352b', { lines: 1 });
       const bx = w * 0.07, by = y0 + h * 0.62, bw = w * 0.86, bh = h * 0.2;
       g.fillStyle = '#ffffff'; g.fillRect(bx, by, bw, bh); g.strokeStyle = '#7a7a7a'; g.lineWidth = 6; g.strokeRect(bx, by, bw, bh);
-      g.fillStyle = '#37c34a'; const n = Math.max(1, Math.round(st.pct / 3)); for (let k = 0; k < n; k++) g.fillRect(bx + 10 + k * 34, by + 10, 26, bh - 20);
-      fitText(g, 'TIME REMAINING: 4 YEARS', w / 2, y0 + h * 0.92, w * 0.9, 40, SANS, '#12142b', { lines: 1 });
+      g.fillStyle = '#37c34a'; const step = (bw - 16) / 25, n = Math.max(1, Math.round(updates[state][0] / 4)); for (let k = 0; k < n; k++) g.fillRect(bx + 8 + k * step, by + 6, step - 5, bh - 12);
+      fitText(g, updates[state][1], w / 2, y0 + h * 0.92, w * 0.9, 40, SANS, '#12142b', { lines: 1 });
     }));
     const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6 });
     for (const s of [1, -1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat); m.position.set(...local(p, 0, s > 0 ? 0.05 : -0.35, y + H / 2)); m.rotation.y = p.yaw + (s > 0 ? 0 : Math.PI); group.add(m); }
-    const seq = [1, 2, 3, 3, 2, 3, 1, 2, 3, 3]; let last = -1;
-    anim.push((dt, time) => { const k = Math.floor(time / 2.5) % seq.length; if (k !== last) { last = k; st.pct = seq[k]; tex.redraw(); } });
-    taken.push([p.x, p.z, 22]);
+    anim.push(() => {
+      const next = view.finalLap ? 2 : view.showLap >= 2 ? 1 : 0;
+      if (next !== state) { state = next; tex.redraw(); }
+    });
   }
 
   // ---- the meadow: the shortcut is a minefield ----

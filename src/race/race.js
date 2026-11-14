@@ -154,8 +154,7 @@ export class Race {
   }
 
   _rank() {
-    const L = this.track.length;
-    for (const k of this.karts) k.progress = k.finished ? 1e9 - k.finishRank : k.lap * L + k.s + (k.lap === 0 ? -L : 0);
+    for (const k of this.karts) k.progress = k.finished ? 1e9 - k.finishRank : k.raceDistance;
     const order = this._order || (this._order = this.karts.slice());
     order.sort((a, b) => b.progress - a.progress);
     for (let i = 0; i < order.length; i++) {
@@ -183,7 +182,7 @@ export class Race {
       if (this.endT <= 0 || this.karts.every(k => k.finished)) {
         // anyone still out there is classified in running order
         for (const k of this.order) if (!k.finished) {
-          const L = this.track.length, remaining = (this.laps + 1 - k.lap) * L - k.s;
+          const remaining = this.laps * this.track.length - k.raceDistance;
           k.finished = true; k.finishRank = this.finishOrder.length + 1; k.rank = k.finishRank; k.dnfEstimate = true;
           k.finishTime = this.time + remaining / Math.max(12, k.top * 0.92);
           this.finishOrder.push(k);

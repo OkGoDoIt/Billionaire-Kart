@@ -390,7 +390,13 @@ function dress(ctx) {
   bell.updateMatrixWorld(true);
   group.attach(swing);
   bake.add(bell, false);
-  anim.push((dt, time) => { swing.rotation.z = 0.24 * Math.sin(time * 2.6); });
+  // attach() keeps the mountain-facing transform, which may include a half-turn
+  // in the Euler Z angle. Swing about the hanging bell’s own pivot axis.
+  const rest = swing.quaternion.clone(), bellAxis = new THREE.Vector3(0, 0, 1);
+  anim.push((dt, time) => {
+    swing.quaternion.copy(rest);
+    swing.rotateOnAxis(bellAxis, 0.24 * Math.sin(time * 2.6));
+  });
   // A velvet rope across the hotel doors is the punchline to this session listing.
   {
     const p = faceDriver(sc.beside(16.22, 1, 7.0), 50);

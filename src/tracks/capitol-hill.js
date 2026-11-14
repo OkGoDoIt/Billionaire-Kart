@@ -571,6 +571,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
       for (let j = 0; j < 7; j++) {
         const a = 0.28 + j * 0.17;
         const x = AXIS + side * (13 + 18 * Math.sin(a)), z = POOL.z1 + 14 + 14 * Math.cos(a);
+        if (reach(x, z, 2.1)) continue; // give the outside of the road and its runoff the missing bay
         const h = j === 6 ? 10.4 : 6.6;
         wings.add('limestone', new THREE.BoxGeometry(3.0, h, 1.7), { p: [x, Y + h / 2, z], r: [0, side * a, 0] });
         wings.add('limestone', new THREE.BoxGeometry(3.55, .54, 2.22), { p: [x, Y + h, z], r: [0, side * a, 0] });

@@ -308,30 +308,54 @@ function decorate(ctx) {
   // jungle over the hills
   const jungle = sc.scatter({ count: 360, min: 15, max: 200, maxSlope: 0.75, minGap: 5, where: (x, z, h) => h > 4 && clear(x, z) && Math.hypot(x - CAVE.x, z - CAVE.z) > 30 });
   const jA = partsOf(P.roundTree(21, { h: 8, leafA: 0x3f9e3a, leafB: 0x5dbb45 })), jB = partsOf(P.roundTree(22, { h: 6.5, leafA: 0x57b548, leafB: 0x86d16a })), jP = partsOf(P.palm(13, { h: 11 }));
-  sc.instances(jA, jungle.filter((_, i) => i % 3 === 0), { scale: [0.9, 1.6], yaw: 'random', tilt: 0.05 });
-  sc.instances(jB, jungle.filter((_, i) => i % 3 === 1), { scale: [0.9, 1.5], yaw: 'random', tilt: 0.05 });
-  sc.instances(jP, jungle.filter((_, i) => i % 3 === 2), { scale: [0.8, 1.3], yaw: 'random' });
+  sc.instances(jA, jungle.filter((_, i) => i % 3 === 0), { scale: [0.9, 1.6], cast: false, yaw: 'random', tilt: 0.05 });
+  sc.instances(jB, jungle.filter((_, i) => i % 3 === 1), { scale: [0.9, 1.5], cast: false, yaw: 'random', tilt: 0.05 });
+  sc.instances(jP, jungle.filter((_, i) => i % 3 === 2), { scale: [0.8, 1.3], cast: false, yaw: 'random' });
   const low = sc.scatter({ count: 220, min: 12.5, max: 60, maxSlope: 0.7, minGap: 2.5, where: (x, z, h) => h > 2 && clear(x, z) });
-  sc.instances(partsOf(P.bush(31, { color: 0x4fae3f, flower: 0xff5fa2 })), low.filter((_, i) => i % 3 === 0), { scale: [0.9, 1.8], yaw: 'random' });
-  sc.instances(partsOf(P.bush(32, { color: 0x6cc24f, flower: 0xffd23c })), low.filter((_, i) => i % 3 === 1), { scale: [0.9, 1.7], yaw: 'random' });
-  sc.instances(partsOf(P.bush(33, { color: 0x3f9e3a })), low.filter((_, i) => i % 3 === 2), { scale: [1, 2], yaw: 'random' });
+  sc.instances(partsOf(P.bush(31, { color: 0x4fae3f, flower: 0xff5fa2 })), low.filter((_, i) => i % 3 === 0), { scale: [0.9, 1.8], cast: false, yaw: 'random' });
+  sc.instances(partsOf(P.bush(32, { color: 0x6cc24f, flower: 0xffd23c })), low.filter((_, i) => i % 3 === 1), { scale: [0.9, 1.7], cast: false, yaw: 'random' });
+  sc.instances(partsOf(P.bush(33, { color: 0x3f9e3a })), low.filter((_, i) => i % 3 === 2), { scale: [1, 2], cast: false, yaw: 'random' });
 
   // the headland: big rocks over the hill and around the cave mouth, boulders at the waterline
   const crags = sc.scatter({ count: 70, min: 20, max: 150, maxSlope: 1.2, minGap: 9, where: (x, z, h) => Math.hypot(x - HEAD.x, z - HEAD.z) < 150 && h > 5 && Math.hypot(x - LIGHT.x, z - LIGHT.z) > 12 });
-  sc.instances(partsOf(P.rock(41, { r: 2.4 })), crags, { scale: [1.2, 3.4], yaw: 'random', sink: 0.8, tints: [0x9a8f86, 0x8a8078, 0xb0a497] });
+  sc.instances(partsOf(P.rock(41, { r: 2.4 })), crags, { scale: [1.2, 3.4], cast: false, yaw: 'random', sink: 0.8, tints: [0x9a8f86, 0x8a8078, 0xb0a497] });
   const shore = sc.scatter({ count: 50, min: 13, max: 120, maxSlope: 2, minGap: 6, where: (x, z, h) => h > W - 1.2 && h < W + 1.2 && x < -40 });
-  sc.instances(partsOf(P.rock(42, { r: 1.6 })), shore, { scale: [0.8, 2.2], yaw: 'random', sink: 0.4, tints: [0x9a8f86, 0x7f766f] });
+  sc.instances(partsOf(P.rock(42, { r: 1.6 })), shore, { scale: [0.8, 2.2], cast: false, yaw: 'random', sink: 0.4, tints: [0x9a8f86, 0x7f766f] });
 
   // umbrellas and loungers on the beaches
   const beach = sc.scatter({ count: 110, min: 12.5, max: 70, maxSlope: 0.25, minGap: 4.5, where: (x, z, h) => h > W + 0.5 && h < 2.6 && coastDistance(x, z) > 2 && coastDistance(x, z) < 30 && clear(x, z) });
-  sc.instances(partsOf(C.umbrella()), beach, { scale: [0.95, 1.15], yaw: 'random', tints: C.UMBRELLA_TINTS });
+  sc.instances(partsOf(C.umbrella()), beach, { scale: [0.95, 1.15], cast: false, yaw: 'random', tints: C.UMBRELLA_TINTS });
   const loungers = [];
   for (const b of beach) for (const s of [-1, 1]) { const a = b.yaw; loungers.push({ x: b.x + Math.cos(a) * s * 0.9, z: b.z - Math.sin(a) * s * 0.9, y: b.y, yaw: a }); }
-  sc.instances(partsOf(C.lounger()), loungers, { tints: C.UMBRELLA_TINTS });
+  sc.instances(partsOf(C.lounger()), loungers, { cast: false, tints: C.UMBRELLA_TINTS });
 
   // tiki torches along the promenade and at the pier gate
   const torches = [...sc.along({ from: 17.4, to: 1.9, side: -1, offset: 13.5, spacing: 13, phase: 6.5 }), ...sc.along({ from: 4.9, to: 5.5, side: 1, offset: 13, spacing: 9 }), ...sc.along({ from: 9.9, to: 10.6, side: -1, offset: 13, spacing: 9 })].filter(p => p.y > W + 0.6);
   sc.instances(partsOf(C.tikiTorch()), torches, { scale: [0.95, 1.15], cast: false });
+
+  // The heightfield has only one height per x/z. Its lip connects the hilltop to
+  // the approach as a vertical-looking sheet. Remove just the faces inside the two
+  // arched mouths; the tunnel shell still covers the hill and supplies its interior.
+  {
+    const land = view.trackMesh.getObjectByName('terrain').geometry;
+    const pos = land.getAttribute('position'), indices = land.getIndex().array, visible = [];
+    const mouths = [13.3, 14.15].map(cp => {
+      const i = track.indexAtCp(cp);
+      return { x: track.px[i], y: track.py[i], z: track.pz[i], tx: track.tx[i], tz: track.tz[i] };
+    });
+    for (let n = 0; n < indices.length; n += 3) {
+      const a = indices[n], b = indices[n + 1], c = indices[n + 2];
+      const x = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3, z = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+      const cut = mouths.some(p => {
+        const dx = x - p.x, dz = z - p.z, across = Math.abs(dx * p.tz - dz * p.tx);
+        if (across > 10 || Math.abs(dx * p.tx + dz * p.tz) > 8.5) return false;
+        const heights = [pos.getY(a), pos.getY(b), pos.getY(c)];
+        return Math.min(...heights) < p.y + 8.7 && Math.max(...heights) > p.y - 0.5;
+      });
+      if (!cut) visible.push(a, b, c);
+    }
+    land.setIndex(visible);
+  }
 
   // Keep the rock wall, but leave the portal rim and the apex of the climb exposed.
   // A salt-stained, amber-lit nautical arch makes the mouth visible against the cliff.

@@ -70,12 +70,12 @@ export default {
   skyOverrides: { zenith: 0x2d63c8, horizon: 0xffd0a0, ground: 0xffe4c6, sun: 0xffe0b0, sunDir: [0.45, 0.34, -0.83], sunLight: 0xffdcb0, sunIntensity: 3.5, hemiSky: 0xb2c8ff, hemiGround: 0xf0d4c4, hemiIntensity: 1.05, cloud: 0xfff2e4, cloudShade: 0xe2a796, cloudCover: 0.3, fog: 0xf1d0b4, fogNear: 340, fogFar: 1650, exposure: 1.02 },
   // the painted Alps (two generated strips, prompts and assembly in assets/backdrops/davos-prompts.md): the hero
   // peak stands behind the summit from the town, and dead ahead up the east ridge; a glacier massif fills the rest
-  backdrop: { img: 'assets/backdrops/davos.webp', top: 25, bottom: -5, rot: 0.325 },
+  backdrop: { img: 'assets/backdrops/davos.webp', top: 25, bottom: -14, rot: 0.325 },
   // opening shots: the whole mountain from the valley, the switchbacks and the jump on its face;
   // then the top of the in-run, looking down the jump at the town
   intro: [
     { pos: [-190, 46, 30], pos1: [-170, 52, 52], look: [70, 52, 300], look1: [70, 54, 300], fov: 50, dur: 3.4 },
-    { pos: [5, 80, 282], pos1: [2, 77, 266], look: [6, 31, 171], look1: [5, 16, 122], fov: 58, dur: 3.0 },
+    { pos: [6, 83, 268], pos1: [4, 78, 245], look: [5, 25, 157], look1: [5, 19, 131], fov: 58, dur: 3.0 },
   ],
   offroad: 'snow',
   defaults: { edge: 'open', shoulder: 3.5, outer: 12 },
@@ -158,7 +158,7 @@ export default {
     { from: 29.85, to: 30.5, n: 3, lat: 3 },
   ],
   obstacles: [
-    { kind: 'patrol', model: 'plow', at: 3.5, lats: [7, 8.6], speed: 2.2, effect: 'bump', radius: 2.2 },
+    { kind: 'patrol', model: 'plow', at: 3.83, lats: [7, 8.6], speed: 2.2, effect: 'bump', radius: 2.2 },
   ],
   terrain: {
     cell: 3, margin: 280, blend: 26, water: -5.5,
@@ -261,7 +261,9 @@ function dress(ctx) {
   const roadSign = (at, side, off, text, opts = {}, { w = 10, h = 2.8, legs = 3.4, frame = 0x1f2a44, tw = 768, th = 220 } = {}) => {
     const p = faceDriver(sc.beside(at, side, off));
     put(M.signFrame(w, h, legs, frameMat(frame)), p.x, p.z, { yaw: p.yaw, y: p.y - 0.15 });
-    atlas.place(board(text, opts, tw, th), local(p, 0, 0.09, p.y - 0.15 + legs + h / 2), p.yaw, w, h);
+    const tile = board(text, opts, tw, th), mid = p.y - 0.15 + legs + h / 2;
+    atlas.place(tile, local(p, 0, 0.09, mid), p.yaw, w, h);
+    atlas.place(tile, local(p, 0, -0.40, mid), p.yaw + Math.PI, w, h);
     take(p.x, p.z, w * 0.5);
     return p;
   };
@@ -318,7 +320,6 @@ function dress(ctx) {
     [3.02, 'CRYPTO HOUSE', 'FORMERLY A BAKERY', '#8a2f2a'],
     [3.45, 'IMPACT HOUSE', 'IMPACT TO BE CONFIRMED', '#2a4a6b'],
     [3.88, 'SUSTAINABILITY HOUSE', 'JET PARKING AT REAR', '#2e6b3c'],
-    [4.3, 'FONDUE — $400', 'CHEESE OPTIONAL', BROWN],
   ];
   houses.forEach(([at, name, kicker, bg], k) => {
     const p = sc.beside(at, 1, 32.5);
@@ -329,9 +330,10 @@ function dress(ctx) {
     // front edge of a chalet can hang a full storey above the village.
     const footing = new THREE.Mesh(new THREE.BoxGeometry(10.9, 7, 7.95), frameMat(0x887a74));
     put(footing, p.x, p.z, { yaw: p.yaw, y: p.y - 3.65 });
-    const s = faceDriver(sc.beside(at, 1, 21), 52);
-    put(M.signFrame(13, 4, 4.0, frameMat(0x3a2a1a)), s.x, s.z, { yaw: s.yaw, y: s.y - 0.15 });
-    atlas.place(board(name, { bg, fg: '#ffffff', kicker, kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(s, 0, 0.09, s.y - 0.15 + 4 + 2), s.yaw, 13, 4);
+    const s = faceDriver(sc.beside(at, 1, 20), 52);
+    const signBase = s.y - 0.15;
+    put(M.signFrame(13, 4, 1.2, frameMat(0x3a2a1a)), s.x, s.z, { yaw: s.yaw, y: signBase });
+    atlas.place(board(name, { bg, fg: '#ffffff', kicker, kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(s, 0, 0.09, signBase + 1.2 + 2), s.yaw, 13, 4);
   });
   const piles = [2.8, 3.7].map(at => sc.beside(at, 1, 21)).filter(p => clear(p.x, p.z, 1.5) && free(p.x, p.z, 2));
   sc.instances(partsOf(M.woodPile()), piles, {});
@@ -345,8 +347,10 @@ function dress(ctx) {
   {
     const p = sc.beside(7.0, -1, 9);   // Switchback One's outside, beyond the parapet
     if (clear(p.x, p.z, 2)) {
-      put(M.chalet(21, {}), p.x, p.z, { yaw: p.yaw, y: p.y - 0.3 }); take(p.x, p.z, 9);
-      atlas.place(board('GLÜHWEIN — $250', { bg: BROWN, fg: CREAM, kicker: 'PER SIP', kfg: '#f2c94c', border: GOLD, size: 120 }, 768, 230), local(p, 0, 5.4, p.y + 6.4), p.yaw, 9, 2.7);
+      put(M.chalet(21, {}), p.x, p.z, { yaw: p.yaw, y: p.y - 0.3 }); take(p.x, p.z, 12);
+      const fondue = M.fonduePot();
+      put(fondue, p.x, p.z, { yaw: p.yaw, y: p.y + 8.9, scale: 1.55 });
+      atlas.place(board('$400 FONDUE', { bg: BROWN, fg: CREAM, kicker: 'CHEESE OPTIONAL', kfg: '#f2c94c', border: GOLD, size: 120 }, 768, 230), local(p, 0, 5.4, p.y + 6.4), p.yaw, 12.4, 3.7);
     }
   }
   roadSign(12.0, 1, 4, 'SKI SCHOOL', { bg: '#e23b3b', fg: '#ffffff', kicker: 'LESSON ONE: BE BORN RICH', kfg: '#ffffff', size: 130 }, { w: 9, h: 3, legs: 2.4, frame: 0xe23b3b });
@@ -443,18 +447,19 @@ function dress(ctx) {
     atlas.place(board('BIG AIR', { bg: '#e23b3b', fg: '#ffffff', size: 140, lines: 1 }, 512, 186), local({ ...k0, yaw: k0.along + Math.PI }, 0, 0.09, k0.roadY + 2.6 + 1), k0.along + Math.PI, 5.5, 2);
     // Three snowy delegates hold up their scores beyond the outrun. The
     // last judge is bought; the final placard is a cheque. Read from midair.
-    for (const [x, z, score, bg] of [[-27, 149, '9.8', NAVY], [-12, 139, '9.9', NAVY], [4, 139, '$10M', RED]]) {
+    for (const [x, z, score, bg] of [[31, 145, '9.8', NAVY], [13, 140, '9.9', NAVY], [-5, 133, '$10M', RED]]) {
       const y = sc.y(x, z);
       if (!clear(x, z, 3)) continue;
       const yaw = Math.atan2(-x, 232 - z);
       const podium = M.snowman(8);
-      put(podium, x, z, { yaw, y: y - 0.12, scale: 2.9 });
+      put(podium, x, z, { yaw, y: y - 0.12, scale: 4.15 });
       const paddle = { x, z, yaw };
-      const [px, , pz] = local(paddle, 4.3, 0.15, 0);
-      put(M.signFrame(9, 4.8, 6.2, frameMat(0x81563b)), px, pz, { yaw, y });
+      const [px, , pz] = local(paddle, 5.8, 0.15, 0);
+      put(M.signFrame(12, 6.4, 9.2, frameMat(0x81563b)), px, pz, { yaw, y });
       atlas.place(board(score, { bg, fg: '#ffffff', border: GOLD, size: 156, lines: 1 }, 450, 240),
-        local({ x: px, z: pz, yaw }, 0, 0.09, y + 8.6), yaw, 9, 4.8);
-      take(x, z, 8);
+        local({ x: px, z: pz, yaw }, 0, 0.09, y + 12.4), yaw, 12, 6.4);
+      take(x, z, 11);
+      sightLines.push({ x, z, dx: -x, dz: 230 - z });
     }
     // the landing hill: the K-line, distance boards, flags down both sides, a judges' tower
     for (const [at, txt] of [[22.55, '90 M'], [22.9, '120 M'], [23.25, 'K 140']]) {
@@ -464,7 +469,9 @@ function dress(ctx) {
     sc.instances(partsOf(M.flagPole(13, { color: 0xe23b3b })), [...flagsL, ...flagsR].map(p => ({ ...p, y: p.y - 0.1 })), { cast: false });
     const jt = sc.beside(22.35, -1, 14);
     if (clear(jt.x, jt.z, 3)) {
-      put(M.watchtower({ h: 12 }), jt.x, jt.z, { yaw: jt.yaw, y: jt.y - 0.2 }); take(jt.x, jt.z, 6);
+      const judges = M.watchtower({ h: 12 });
+      judges.remove(judges.userData.beam);
+      put(judges, jt.x, jt.z, { yaw: jt.yaw, y: jt.y - 0.2 }); take(jt.x, jt.z, 6);
       atlas.place(board('JUDGES', { bg: NAVY, fg: '#ffffff', kicker: 'SCORING ON NET WORTH', kfg: '#f2c94c', size: 120 }, 512, 200), local(jt, 0, 2.6, jt.y + 9.6), jt.yaw, 5, 1.95);
     }
     // Blue timing stripes fan across the slope. They follow the banking

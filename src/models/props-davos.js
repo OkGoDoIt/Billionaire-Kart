@@ -602,6 +602,23 @@ export function skier({ skis = true } = {}) {
 const COAT = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
 COAT.userData.tintable = true;
 
+/** The village's fondue chalet advertises with an enamel caquelon on
+    the roof. A long fork spears a bread cube above the melted cheese. */
+export function fonduePot() {
+  const b = new ModelBuilder();
+  b.add('base', cyl(2.1, 2.6, 0.75, 20), { p: [0, 0.38, 0] });
+  b.add('pot', lathe([[0, 0.48], [2.1, 0.5], [3.1, 1.0], [3.9, 2.15], [4.15, 3.4], [3.91, 3.5]], 24));
+  b.add('trim', torus(4.02, 0.16, 8, 24), { p: [0, 3.46, 0], r: [Math.PI / 2, 0, 0] });
+  b.add('cheese', cyl(3.9, 3.83, 0.25, 24), { p: [0, 3.33, 0] });
+  strut(b, 'handle', [3.4, 2.3, 0], [7.0, 3.6, 0], 0.95, 1.05);
+  strut(b, 'steel', [-1.2, 3.3, 0.7], [2.8, 9.85, -0.7], 0.24);
+  strut(b, 'handle', [1.95, 8.46, -0.4], [3.6, 11.18, -0.97], 0.52);
+  b.add('crust', box(2.55, 2.22, 2.21, 0.36, 2), { p: [0.73, 6.49, 0.05], r: [0.2, 0.3, -0.45] });
+  b.add('bread', box(2.23, 1.99, 0.15, 0.21, 1), { p: [0.98, 6.30, 1.06], r: [0.2, 0.3, -0.45] });
+  return b.build({ base: STEEL, pot: RED, trim: WHITE, cheese: plastic(0xffc44f), handle: WOOD_D,
+    steel: STEEL, crust: plastic(0xbf7137), bread: plastic(0xffe7aa) });
+}
+
 /** Alpine race bell. A flared brass mouth, dark interior, and swinging
     clapper sit in a timber frame, like the bells the crowds ring for skiers. */
 export function raceBell() {

@@ -179,7 +179,7 @@ export class App {
       this._onTurn();
     });
   }
-  /** First race only: a short reminder of the two controls people miss. */
+  /** First race only: show the active gas, drift, and item bindings. */
   _hint() {
     const pad = this.input.lastDevice.startsWith('pad'), keys = this.input.keyBinds.kb;
     const family = pad && padFamily(navigator.getGamepads?.()[Number(this.input.lastDevice.slice(3))]?.id);

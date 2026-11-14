@@ -123,7 +123,12 @@ export class Input {
     addEventListener('keyup', e => { this.keys.delete(e.code); this.suppressed.delete(e.code); });
     addEventListener('blur', () => { this.keys.clear(); this.suppressed.clear(); });
     addEventListener('gamepadconnected', e => { this.lastDevice = 'pad' + e.gamepad.index; this.onPads?.(); });
-    addEventListener('gamepaddisconnected', e => { this._endPulse(e.gamepad.index); this.onPads?.(); });
+    addEventListener('gamepaddisconnected', e => {
+      const index = e.gamepad.index;
+      this._endPulse(index);
+      if (index < this.padPrev.length) this.padPrev[index] = {};
+      this.onPads?.();
+    });
     addEventListener('blur', () => { this.rumbleFocused = false; this.stopRumble(); });
     addEventListener('focus', () => { this.rumbleFocused = true; });
     addEventListener('pagehide', () => this.stopRumble());
@@ -224,22 +229,28 @@ export class Input {
       const prev = this.padPrev[i], dev = 'pad' + i;
       const b = n => !!gp.buttons[n]?.pressed;
       const has = a => this.padBinds[a].some(n => b(n));
+      // Compare physical buttons in the current layout. A held B that opened
+      // the editor as Confirm must not become a fresh Back on the next frame.
+      const confirm = editor ? [0] : this.padBinds.accelerate;
+      const back = editor ? [1] : this.padBinds.brake;
+      prev.confirm = confirm.some(n => prev.buttons?.[n]);
+      prev.back = back.some(n => prev.buttons?.[n]);
       /* directions are the D-pad and the left stick, as shipped; pause follows its binding;
          confirm and back DERIVE from the Accelerate and Brake buttons — menus have no
          bindings of their own, and the derivation is exactly the shipped behaviour
          (A confirms, B goes back). alt/alt2 stay on X/Y as before (nothing remaps them) */
-      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: editor ? b(0) : has('accelerate'), back: editor ? b(1) : has('brake'), pause: !editor && has('pause'), alt: b(2), alt2: b(3) };
+      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: confirm.some(b), back: back.some(b), pause: !editor && has('pause'), alt: b(2), alt2: b(3) };
+      this.padPrev[i] = { ...now, buttons: gp.buttons.map(button => button.pressed) };
       if (captured || editor?.exclusive()) {
-        this.padPrev[i] = now; this.padRepeat[i] = 0.38; continue;
+        this.padRepeat[i] = 0.38; continue;
       }
       let anyDir = false;
       for (const k in now) {
-        if (editor && (editor.exclusive() || editor !== this.padEditor)) break;
+        if (editor !== this.padEditor || editor?.exclusive()) break;
         if (now[k] && !prev[k]) { this.lastDevice = dev; this.onAnyInput?.(); this._menu(k, dev); if (['up', 'down', 'left', 'right'].includes(k)) this.padRepeat[i] = 0.38; }
         if (now[k] && ['up', 'down', 'left', 'right'].includes(k)) anyDir = k;
       }
       if (anyDir) { this.padRepeat[i] -= dt; if (this.padRepeat[i] <= 0) { this.padRepeat[i] = 0.12; this._menu(anyDir, dev); } }
-      this.padPrev[i] = now;
     }
   }
 

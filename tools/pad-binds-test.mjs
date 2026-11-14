@@ -185,6 +185,22 @@ const fakePad = pressed => ({ connected: true, id: 'Fake', axes: [0, 0], buttons
   tap(1); tap(0);
   eq(events, ['back', 'confirm'], 'editor: released B and A navigate regardless of driving bindings');
   input.padEditor = null;
+  const editor = { poll: () => false, exclusive: () => false };
+  input.setPadBindings({ accelerate: [1], brake: [0] }, 'both');
+  events.length = 0;
+  input.onMenu = action => {
+    events.push(action);
+    if (action === 'confirm') input.padEditor = editor;
+    if (action === 'back') input.padEditor = null;
+  };
+  const holdB = () => {
+    pads[0] = fakePad([1]);
+    for (let frame = 0; frame < 3; frame++) input._padMenus(0.016);
+    pads[0] = fakePad([]); input._padMenus(0.016);
+  };
+  holdB(); holdB();
+  eq(events, ['confirm', 'back'], 'a held B opens and exits the editor once with swapped bindings');
+  input.onMenu = a => events.push(a);
   // a stored v1 confirm entry is ignored end-to-end: menus still follow Accelerate
   input.setPadBindings({ ...defaultPadBindings(), confirm: [3], back: [3] }, 'both');
   ok(!('confirm' in input.padBinds), 'setPadBindings drops the v1 menu entries');

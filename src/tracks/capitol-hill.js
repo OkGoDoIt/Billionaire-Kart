@@ -706,12 +706,12 @@ function filibuster(ctx, sc, { taken }) {
   // Follow the actual graded hillside. The flared stone treads bend from the top straight
   // through the opening and back onto the lower leg, so the exit is visible from the crest.
   const spine = new THREE.CatmullRomCurve3([
-    [-122, 90], [-108, 86], [-101, 80], [-99.5, 73.5], [-102, 65], [-109, 59], [-120, 57],
+    [-127, 90], [-113, 87], [-104, 81], [-96.5, 73.5], [-100, 66], [-109, 59], [-120, 56],
   ].map(([x, z]) => new THREE.Vector3(x, 0, z)));
   const tread = [], treadUv = [], faces = [];
   for (let j = 0; j <= 72; j++) {
     const u = j / 72, center = spine.getPointAt(u), tangent = spine.getTangentAt(u);
-    const half = 4.1 + 1.35 * Math.abs(2 * u - 1);
+    const half = 5.1 + 1.35 * Math.abs(2 * u - 1);
     for (const side of [-1, 0, 1]) {
       const x = center.x + tangent.z * half * side, z = center.z - tangent.x * half * side;
       tread.push(x, sc.y(x, z) + 0.08, z);
@@ -735,7 +735,7 @@ function filibuster(ctx, sc, { taken }) {
   const landing = new THREE.Mesh(treadGeo, new THREE.MeshStandardMaterial({ map: paving, roughness: 0.92, side: THREE.DoubleSide }));
   landing.receiveShadow = true; group.add(landing);
   // the sign over the steps: FILIBUSTER IN PROGRESS for two laps, CLOTURE INVOKED on the last
-  const SX = -99.5, SZ = 73.5, SY = legY(1, SX) + 0.2;
+  const SX = -96.5, SZ = 73.5, SY = legY(1, SX) + 0.2;
   const draw = open => (g, w, h) => {
     g.fillStyle = open ? '#16a34a' : '#b3122a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.strokeRect(8, 8, w - 16, h - 16);
     C.fitText(g, open ? 'CLOTURE INVOKED' : 'FILIBUSTER IN PROGRESS', w / 2, h * 0.38, w * 0.86, 120, C.SIGN_FONT, '#ffffff', { lines: 1 });
@@ -744,9 +744,9 @@ function filibuster(ctx, sc, { taken }) {
   const signTex = canvasTex(1024, 256, draw(false), { repeat: false });
   {
     const q = new C.Quads();
-    for (const s of [1, -1]) q.panel([SX, SY + 7.2, SZ + s * 0.06], s > 0 ? 0 : Math.PI, 16, 4, [0, 0, 1, 1]);
+    for (const s of [1, -1]) q.panel([SX, SY + 7.2, SZ + s * 0.06], s > 0 ? 0 : Math.PI, 25, 5, [0, 0, 1, 1]);
     const m = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.6, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 0.25 })); m.matrixAutoUpdate = false; group.add(m);
-    const b = new ModelBuilder(); for (const d of [-7.4, 7.4]) { b.add("p", cyl(0.25, 0.25, 9.4, 8), { p: [SX + d, SY + 4.5, SZ] }); track.addCollider(SX + d, SZ, 0.6); }
+    const b = new ModelBuilder(); for (const d of [-12.2, 12.2]) { b.add("p", cyl(0.25, 0.25, 9.4, 8), { p: [SX + d, SY + 4.5, SZ] }); track.addCollider(SX + d, SZ, 0.6); }
     group.add(b.build({ p: plastic(0x2a2d36, 0.5, 0.3) }));
   }
   let shown = false, drop = 0;
@@ -774,7 +774,7 @@ const BOARDS = [
   [9.8, 1, 24, 'DOES TIKTOK USE WIFI?', '#12142b', '#ffd23c'], [12.9, -1, 22, 'THE INTERNET IS A SERIES OF TUBES', '#ffffff', '#1f3f8a'],
   [14.6, 1, 18, 'THIS HEARING BROUGHT TO YOU BY THE WITNESS', '#f2efe6', '#12142b'], [16.8, -1, 18, 'I YIELD MY TIME TO MY DONORS', '#1f3f8a', '#ffd23c'],
   [24.0, 1, 22, 'INSIDER TRADING: MEMBERS ONLY', '#16a34a', '#ffffff'], [28.0, 1, 16, 'BILL: 4,000 PAGES. READ: 0', '#ffffff', '#12142b'],
-  [31.5, -1, 20, 'PASS IT. READ IT LATER.', '#b3122a', '#ffffff'], [35.0, 1, 16, 'SHUTDOWN SEASON TICKETS ON SALE', '#ffd23c', '#12142b'],
+  [31.5, -1, 20, 'PASS IT. READ IT LATER.', '#b3122a', '#ffffff'], [31.8, -1, 19, 'SHUTDOWN SEASON TICKETS ON SALE', '#ffd23c', '#12142b'],
   [37.5, -1, 22, 'NEW TARIFF? CHECK YOUR NOTIFICATIONS', '#12142b', '#ffffff'], [42.0, 1, 18, 'CAMPAIGN PROMISES RECYCLED HERE', '#16a34a', '#ffffff'],
   [44.3, 1, 26, 'LOBBYISTS: USE SIDE ENTRANCE', '#d4af37', '#12142b'],
 ];

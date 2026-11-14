@@ -27,6 +27,7 @@ export class App {
     this.audio = new AudioEngine(this.save);
     this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = []; this._turnOk = false;
     this.wipe = new Wipe();
+    this.wipe.onSound = k => this.audio?.play?.('wipe_' + k);
     this.rng = makeRng(Date.now() & 0xffff);
     this.input.onMenu = (a, d) => this.onMenu(a, d);
     this.input.onAnyInput = () => this.audio?.unlock?.();
@@ -112,7 +113,7 @@ export class App {
   }
 
   /** Checker wipe: cover the screen, swap the scene, reveal. */
-  async transition(fn) { await this.wipe.through(fn); }
+  async transition(fn) { await this.wipe.through(fn, { sound: true }); }
   _clearScene() {
     this.session?.dispose(); this.session = null; this.attract = false; document.body.classList.remove('must-turn');
     this.showroom?.dispose(); this.showroom = null;

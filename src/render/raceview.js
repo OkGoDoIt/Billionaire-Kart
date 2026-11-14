@@ -5,6 +5,7 @@ import { buildTrackMesh, trackUniforms } from '../track/trackmesh.js';
 import { KartView } from './kartview.js';
 import { ChaseCam, IntroCam, TvCam } from './chasecam.js';
 import { Particles, rgbOf } from './particles.js';
+import { releaseCanvases } from './canvasmem.js';
 import { buildItemBox, buildItemModel, coinGeometry, coinMaterial } from '../models/items.js';
 import { OBSTACLE_MODELS } from '../models/props.js';
 import { buildKart } from '../models/kart.js';
@@ -376,6 +377,7 @@ export class RaceView {
     const scene = this.gfx.scene;
     scene.remove(this.root);
     this.root.traverse(o => { if (o.userData?.dispose) o.userData.dispose(); else if (o.isMesh || o.isPoints || o.isSprite) { o.geometry?.dispose?.(); } });
+    releaseCanvases(this.root);   // Safari caps total canvas memory; see canvasmem.js
     this.gfx.setViews([]);
     this.gfx.post.blur = 0; this.gfx.post.flash = 0; this.gfx.post.lines = 0; this.gfx.post.edge = 0; if (this._grade) { Object.assign(this.gfx.post, this._grade); this._grade = null; }
     this.gfx.sun.castShadow = this.gfx.q.shadow > 0; this.gfx.renderer.shadowMap.enabled = this.gfx.sun.castShadow;

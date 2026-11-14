@@ -2,7 +2,7 @@
 /* End-to-end check in a real (headless) browser: walks the menus with the
    keyboard, starts a race, pauses, lets an autopilot finish a one-lap race, and
    reads the results screen. Fails on any page error. Saves screenshots.
-   Usage: node tools/bot.mjs [--out dir] [--mobile] [--keep-going] */
+   Usage: node tools/bot.mjs [--out dir] [--mobile] [--gp [cup name]] [--keep-going] */
 import http from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize, resolve, dirname } from 'node:path';
@@ -195,17 +195,24 @@ try {
     await page.evaluate(`BK.app.quitToMenu()`); await page.waitForFunction('BK.app.menus.screen?.spec.name === "main"', null, { timeout: 15000 }); await page.waitForTimeout(600);
     await page.evaluate(`(() => { const a = BK.app; a.flow = { mode: 'gp', players: 1, devices: ['any'], racers: ['jensen'], cc: 150, level: 'easy' }; a.menus.open('cups'); })()`);
     await page.waitForTimeout(700); await expect('cups', 'grand prix cups'); await shot('20-cups');
-    await page.evaluate(`document.querySelector('.card.cup:not([disabled])').click()`);
-    const races = await page.evaluate('BK.app.gp ? BK.app.gp.tracks.length : 0');
-    for (let r = 0; r < races; r++) {
+    const enabledCups = page.locator('.card.cup:enabled');
+    const card = typeof opt.gp === 'string'
+      ? enabledCups.filter({ has: page.getByRole('heading', { name: opt.gp, exact: true }) })
+      : enabledCups.first();
+    const listed = await card.locator('li').allTextContents();
+    if (listed.length !== 4) throw new Error('Expected four races on the selected cup card');
+    if (mobile) await card.tap(); else await card.click();
+    for (let r = 0; r < listed.length; r++) {
       await page.waitForFunction(`BK.race && !BK.app.attract && BK.app.gp && BK.app.gp.index === ${r} && BK.session.phase`, null, { timeout: 30000 });
+      await page.waitForFunction(name => BK.session?.def.name === name && BK.app.audio.musicId === (BK.session.def.music || BK.session.def.id), listed[r], { timeout: 15000 });
+      console.log('cup race', r + 1, listed[r]);
       await page.waitForTimeout(500); await page.evaluate(autopilot);
       await page.waitForFunction('BK.app.menus.screen?.spec.name === "results"', null, { timeout: 150000 });
       await page.waitForTimeout(900); await shot(`21-gp-results-${r + 1}`);
       await key('Enter', 600);
     }
     await page.waitForFunction('BK.app.menus.screen?.spec.name === "cupResults"', null, { timeout: 30000 }).catch(() => fails.push('no cup results screen after the last race'));
-    await page.waitForTimeout(2500); await shot('22-podium');
+    await page.waitForTimeout(2500); await expect('cupResults', 'final cup standings'); await shot('22-podium');
     console.log('cup totals:', await page.evaluate('JSON.stringify(BK.app.gp.totals)'));
     // the podium screen offers a way back in, not just a way out (#146): the default button runs the same cup again from race 1
     const exits = await page.evaluate(`[...document.querySelectorAll('.screen-cupResults .foot .btn .btn-label')].map(e => e.textContent)`);

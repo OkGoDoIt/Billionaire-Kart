@@ -53,13 +53,17 @@
  "voice/rocket_start.mp3",
  "voice/title.mp3",
  "voice/track_bliss-hills.mp3",
+ "voice/track_boring-tunnel.mp3",
  "voice/track_burning-circuit.mp3",
  "voice/track_capitol-hill.mp3",
  "voice/track_crypto-cove.mp3",
  "voice/track_datacenter-dash.mp3",
+ "voice/track_davos.mp3",
+ "voice/track_international-waters.mp3",
  "voice/track_mars-colony.mp3",
  "voice/track_silicon-valley.mp3",
  "voice/track_singularity-speedway.mp3",
+ "voice/track_wework-memorial.mp3",
  "voice/winner.mp3",
  "voice/you_win.mp3"
 ]

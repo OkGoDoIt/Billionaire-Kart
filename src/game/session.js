@@ -81,14 +81,16 @@ export class RaceSession {
         if (e.type === 'rankDown' && this.race.time > 6 && !kart.finished && Math.random() < 0.45) { const passer = this.race.order[kart.rank - 2]; if (passer && !passer.isPlayer) hud.talk(passer.racer, pick(passer.racer.barks.pass), 2600); }
         if (e.type === 'lap' && e.data > 1 && e.data <= this.race.laps && this.def.lapNotes?.[e.data - 2]) hud.feed(this.def.lapNotes[e.data - 2], 4200);
         const p = kart.playerIndex;
-        if (e.type === 'hit') { const big = e.data.kind === 'tumble'; app.input.rumble(p, 1, big ? 1 : 0.8, big ? 520 : 380); this._hitStop(big ? 0.11 : e.data.kind === 'zap' ? 0.06 : 0.08); }
-        else if (e.type === 'finish') this._slowMo();
-        else if (e.type === 'miniTurbo') app.input.rumble(p, 0.2 + e.data * 0.15, 0.5, 90 + e.data * 40);
-        else if (e.type === 'wall') app.input.rumble(p, Math.min(1, e.data.v / 14), 0.3, 140);
-        else if (e.type === 'land' && e.data > 9) app.input.rumble(p, 0.5, 0.2, 110);
-        else if (e.type === 'boost') app.input.rumble(p, 0.25, 0.6, 180);
-        else if (e.type === 'bump') app.input.rumble(p, 0.4, 0.3, 90);
-        else if (e.type === 'driftTier' && e.data > 0) app.input.rumble(p, 0.1, 0.5, 70);
+        if (e.type === 'finish') { app.input.stopRumble(p); this._slowMo(); }
+        else if (!kart.finished) {
+          if (e.type === 'hit') { const big = e.data.kind === 'tumble'; app.input.rumble(p, 1, big ? 1 : 0.8, big ? 520 : 380); this._hitStop(big ? 0.11 : e.data.kind === 'zap' ? 0.06 : 0.08); }
+          else if (e.type === 'miniTurbo') app.input.rumble(p, 0.2 + e.data * 0.15, 0.5, 90 + e.data * 40);
+          else if (e.type === 'wall') app.input.rumble(p, Math.min(1, e.data.v / 14), 0.3, 140);
+          else if (e.type === 'land' && e.data > 9) app.input.rumble(p, 0.5, 0.2, 110);
+          else if (e.type === 'boost') app.input.rumble(p, 0.25, 0.6, 180);
+          else if (e.type === 'bump') app.input.rumble(p, 0.4, 0.3, 90);
+          else if (e.type === 'driftTier' && e.data > 0) app.input.rumble(p, 0.1, 0.5, 70);
+        }
       }
       app.audio?.kartEvent(e, kart, !!hud);
     } else {
@@ -143,7 +145,7 @@ export class RaceSession {
     app.gfx.render(dt);
   }
 
-  setPaused(p) { this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
+  setPaused(p) { if (p) this.app.input.stopRumble(); this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
 
-  dispose() { for (const h of this.huds) h.dispose(); this.touch?.dispose(); this.view.dispose(); }
+  dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

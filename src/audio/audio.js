@@ -74,7 +74,15 @@ export class AudioEngine {
   /** The tab went to the background: stop making sound until it is back. */
   suspend() { if (this.ctx?.state === 'running') this.ctx.suspend?.().catch(() => {}); this.silent?.pause?.(); }
   get t() { return this.ctx.currentTime; }
-  setVolumes(music, sfx) { this.vol.music = music; this.vol.sfx = sfx; if (!this.ctx) return; this.sfx.gain.value = this.muted ? 0 : sfx; this.mus.gain.value = this.muted ? 0 : music * 0.55; }
+  setVolumes(music, sfx) {
+    this.vol.music = music; this.vol.sfx = sfx;
+    if (!this.ctx) return;
+    this.sfx.gain.value = this.muted ? 0 : sfx;
+    // Replace any recovery ramp left by a hit, including the last scheduled dip value.
+    const t = this.t;
+    this.mus.gain.cancelScheduledValues(t);
+    this.mus.gain.setValueAtTime(this.muted ? 0 : music * 0.55, t);
+  }
   toggleMute() { this.muted = !this.muted; this.setVolumes(this.vol.music, this.vol.sfx); }
   /** Pull the music down for a beat (a hit lands) and bring it back: the hit owns the moment. */
   duck(sec = 0.45) {
@@ -87,7 +95,14 @@ export class AudioEngine {
   load(name) {
     const url = SAMPLES[name] || VOICE[name]; if (!url || !this.ctx) return Promise.resolve(null);
     if (this.buffers.has(name)) return Promise.resolve(this.buffers.get(name));
-    if (!this.loading.has(name)) this.loading.set(name, fetch(url).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => { this.buffers.set(name, buf); return buf; }).catch(() => null));
+    if (!this.loading.has(name)) {
+      const p = fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); }).then(b => this.ctx.decodeAudioData(b)).then(buf => { this.buffers.set(name, buf); return buf; }).catch(() => null);
+      this.loading.set(name, p);
+      /* Free the slot once the request settles. A success is served from buffers after this; a
+         failure (an offline blip, a 503) must not poison the sound for the rest of the session,
+         so the next load() asks again. Callers above still share the one in-flight request. */
+      p.then(() => { if (this.loading.get(name) === p) this.loading.delete(name); });
+    }
     return this.loading.get(name);
   }
   preload(names) { for (const n of names) this.load(n); }

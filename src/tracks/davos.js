@@ -367,9 +367,10 @@ function dress(ctx) {
     }
   }
   roadSign(12.0, 1, 4, 'SKI SCHOOL', { bg: '#e23b3b', fg: '#ffffff', kicker: 'LESSON ONE: BE BORN RICH', kfg: '#ffffff', size: 130 }, { w: 9, h: 3, legs: 2.4, frame: 0xe23b3b });
-  const igloos = [[15.5, 18], [15.9, 23], [16.25, 18]].map(([at, off]) => sc.beside(at, 1, off)).filter(p => clear(p.x, p.z, 4));
+  // Face the entrances along the contour so their carpets rest on short terraces.
+  const igloos = [[14.7, 32], [15.3, 36], [15.6, 36]].map(([at, off]) => sc.beside(at, 1, off)).filter(p => clear(p.x, p.z, 4));
   igloos.forEach(p => take(p.x, p.z, 7));
-  sc.instances(partsOf(M.igloo()), igloos.map(p => ({ ...p, y: p.y - 0.2 })), {});
+  sc.instances(partsOf(M.igloo()), igloos.map(p => ({ ...p, yaw: p.yaw + 1.12, y: p.y - 0.2 })), {});
   roadSign(15.2, 1, 13.5, 'VIP IGLOO — $80,000', { bg: '#e8f3ff', fg: '#1f2a44', kicker: 'PER NIGHT · BRING A COAT', kfg: '#8a2f2a', border: NAVY, size: 118 }, { w: 9.5, h: 2.9, legs: 2.4 });
 
   /* ================= the high traverse and the summit ================= */
@@ -389,22 +390,26 @@ function dress(ctx) {
   bell.updateMatrixWorld(true);
   group.attach(swing);
   bake.add(bell, false);
-  anim.push((dt, time) => { swing.rotation.z = 0.24 * Math.sin(time * 2.6); });
-  // The express baggage lane travels across the course at the top of the climb.
+  // attach() keeps the mountain-facing transform, which may include a half-turn
+  // in the Euler Z angle. Swing about the hanging bell’s own pivot axis.
+  const rest = swing.quaternion.clone(), bellAxis = new THREE.Vector3(0, 0, 1);
+  anim.push((dt, time) => {
+    swing.quaternion.copy(rest);
+    swing.rotateOnAxis(bellAxis, 0.24 * Math.sin(time * 2.6));
+  });
+  // A velvet rope across the hotel doors is the punchline to this session listing.
   {
-    const p = sc.beside(16.4, 0, 0); p.yaw = p.along + Math.PI;
-    const railY = p.roadY + 18;
-    const a = local(p, -22, 0, railY), b = local(p, 22, 0, railY);
-    const rail = M.tubeBetween(a, b, 0.22); group.add(rail); bake.add(rail, false);
-    for (const end of [a, b]) {
-      const base = Math.min(sc.y(end[0], end[2]), railY - 12);
-      put(M.gondolaPylon({ h: railY - base }), end[0], end[2], { y: base, yaw: p.yaw });
-    }
-    const queue = sc.beside(16.27, 1, 3.2);
-    put(M.velvetQueue(), queue.x, queue.z, { y: queue.y, yaw: queue.along + Math.PI / 2, cast: false });
-    const tray = M.luggageCarrier(); tray.rotation.y = p.yaw; group.add(tray);
-    anim.push((dt, time) => { tray.position.fromArray(local(p, 12 * Math.sin(time * 0.28), 0, railY - 8)); });
-    roadSign(16.22, 1, 3.5, 'CARRY-ON ONLY', { bg: '#9c2437', fg: '#ffffff', kicker: 'PRIVATE JET BAGGAGE', kfg: '#ffdf88', size: 150 }, { w: 14.5, h: 4, legs: 4 });
+    const p = faceDriver(sc.beside(16.22, 1, 7.0), 50);
+    // Seat the threshold on the higher side of the carpet; the footing holds
+    // the downhill edge while the rear wall nestles into the snow bank.
+    const [x, , z] = local(p, -3.2, 2.2, 0);
+    const floor = track.terrainHeight(x, z);
+    put(M.conferenceEntrance(), p.x, p.z, { y: floor, yaw: p.yaw });
+    const headline = board('INEQUALITY PANEL', { bg: NAVY, fg: '#ffffff', size: 165, lines: 1, pad: 0.025, shadow: false }, 1024, 132);
+    const restriction = board('INVITATION ONLY', { bg: '#841c32', fg: '#ffecb7', size: 165, lines: 1, pad: 0.025, shadow: false }, 1024, 132);
+    atlas.place(headline, local(p, 0, 0.28, floor + 6.12), p.yaw, 14.2, 1.82);
+    atlas.place(restriction, local(p, 0, 0.29, floor + 4.36), p.yaw, 14.2, 1.75);
+    take(p.x, p.z, 9);
   }
   // the gondola: from the town up to a station below the summit, cabins that actually move
   {

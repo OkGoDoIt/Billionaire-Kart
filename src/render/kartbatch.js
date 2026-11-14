@@ -34,11 +34,14 @@ function fillAttribute(g, name, values) {
 export function batchKart(rig, paint, shadow) {
   const joints = [rig.body, rig.steering, ...rig.wheels, ...rig.spinners, rig.torso, rig.head];
   if (rig.driver2) joints.push(rig.driver2.userData.torso, rig.head2);
+  const movingFlame = rig.driver.userData.flame;
   rig.root.updateMatrixWorld(true);
   const groups = new Map(), removed = [];
   rig.tilt.traverse(o => {
     const m = o.material;
     if (!o.isMesh || !m.isMeshStandardMaterial || m.transparent || m.map || m.emissiveMap) return;
+    // The pilot flame changes length and emission independently of the torso.
+    if (o.parent === movingFlame) return;
     let pivot = o.parent;
     while (pivot && !joints.includes(pivot)) pivot = pivot.parent;
     if (!pivot) return;

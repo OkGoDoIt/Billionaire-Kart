@@ -224,7 +224,7 @@ Pass `solid: <radius in metres>` to `sc.place` or `sc.instances` to make karts b
 
 ## Options added for Bliss Hills and Datacenter Dash
 
-- `intro: [{ pos, look, pos1?, look1?, fov?, dur, grade? }]`: opening shots from fixed cameras, played before the usual flyover. `grade` (`{ sat, contrast, vignette }`) replaces the color grade for that shot.
+- `intro: [{ pos, look, pos1?, look1?, fov?, dur, grade? }]`: opening shots from fixed cameras, played before the usual flyover. `grade` (`{ sat, contrast, vignette }`) replaces the color grade for that shot. To finish at the actual starting slot, an entry can instead be a function of the grid camera’s `{ position, direction, fov }`. It returns a shot with `pose(progress, position, look)` that fills the camera and look-at vectors and returns the vertical field of view. Set `fadeGrade: true` to bring the normal race colors back during that shot.
 - `terrain.marginX` / `terrain.marginZ`: `[low side, high side]`, for scenery that reaches further one way than the others.
 - `look.groundTexture: 'meadow'` with `look.groundScale`: mown-grass ground map. `look.groundMatte: true`: ground with no shine, for saturated colors that must come out pure.
 - `skyOverrides.clearSky: [bearing, halfWidth]` in degrees: a wedge of sky the procedural clouds keep out of, for a track that hangs its own (see `src/render/cloudcard.js`).

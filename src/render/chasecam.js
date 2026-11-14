@@ -124,14 +124,14 @@ export class ChaseCam {
 
 /** Pre-race flyover: a few sweeping shots of the course, then settle behind the grid. */
 export class IntroCam {
-  constructor(track, camera) {
+  constructor(track, camera, shots = track.def?.intro) {
     this.track = track; this.camera = camera; this.t = 0; this.done = false;
     const L = track.length;
     // a track may open with shots of its own: fixed cameras given as { pos, look, pos1?, look1?, fov?, dur }
     // introOnly tracks (enclosed interiors, e.g. WeWork Memorial #193) skip the generic
     // flyover shots below: at h 16 / h 9 they would sit above the ceiling and show only tiles.
     this.shots = [
-      ...(track.def?.intro || []),
+      ...(shots || []),
       ...(track.def?.introOnly ? [] : [
         { s0: L * 0.42, s1: L * 0.5, lat: 14, h: 16, look: 30, dur: 2.6 },
         { s0: L * 0.72, s1: L * 0.8, lat: -12, h: 9, look: 26, dur: 2.6 },
@@ -146,12 +146,13 @@ export class IntroCam {
     for (const s of this.shots) { if (t < s.dur) { shot = s; break; } t -= s.dur; }
     if (this.t >= this.total) { this.done = true; t = shot.dur; }
     this.shot = shot;
-    const f = clamp(t / shot.dur, 0, 1), s = lerp(shot.s0, shot.s1, f);
+    const f = this.progress = clamp(t / shot.dur, 0, 1);
     const P = this._p || (this._p = new THREE.Vector3()), Q = this._q || (this._q = new THREE.Vector3());
-    if (shot.pos) { const a = shot.pos, b = shot.pos1 || a, c = shot.look, d = shot.look1 || c; P.set(lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)); Q.set(lerp(c[0], d[0], f), lerp(c[1], d[1], f), lerp(c[2], d[2], f)); }
-    else { this.track.pointAt(s, shot.lat, P, shot.h); this.track.pointAt(s + shot.look, 0, Q, 1); }
+    let fov = shot.fov || 52;
+    if (shot.pose) fov = shot.pose(f, P, Q);
+    else if (shot.pos) { const a = shot.pos, b = shot.pos1 || a, c = shot.look, d = shot.look1 || c; P.set(lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)); Q.set(lerp(c[0], d[0], f), lerp(c[1], d[1], f), lerp(c[2], d[2], f)); }
+    else { const s = lerp(shot.s0, shot.s1, f); this.track.pointAt(s, shot.lat, P, shot.h); this.track.pointAt(s + shot.look, 0, Q, 1); }
     this.camera.position.copy(P); this.camera.lookAt(Q);
-    const fov = shot.fov || 52;
     if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     return Q;
   }

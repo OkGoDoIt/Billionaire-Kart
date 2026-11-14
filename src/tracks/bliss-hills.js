@@ -2,6 +2,7 @@
    famous default wallpaper as a real place: a roller-coaster of green hills,
    three air-time crests on the way down, a banked bowl, and a meadow you can
    cut with a boost. */
+import { CatmullRomCurve3, Vector3 } from 'three';
 import { fbm, smoothstep, clamp } from '../core/util.js';
 
 import { Scenery, partsOf } from '../render/scenery.js';
@@ -22,6 +23,29 @@ const RIDGE = { z: 345, x0: -190, x1: 170 };   // wind turbines along the skylin
 const lin = hex => [(hex >> 16) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255].map(c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
 const mixInto = (out, c, k) => { out[0] += (c[0] - out[0]) * k; out[1] += (c[1] - out[1]) * k; out[2] += (c[2] - out[2]) * k; };
 const DEG = 180 / Math.PI;
+
+// Travel backward out of the original view. The first bend appears under the hill, then the
+// camera clears both start gates and settles behind the actual kart in its assigned grid slot.
+const wallpaperGrade = { sat: 1, contrast: 1, vignette: 0 };
+function wallpaperPullback(grid) {
+  const opening = new Vector3(VIEW.x, VIEW.eye, VIEW.z);
+  const path = new CatmullRomCurve3([
+    opening, new Vector3(114, 12, -12), new Vector3(65, 20, 0),
+    new Vector3(18, 22, 1), new Vector3(-8, 21, grid.position.z), grid.position,
+  ]);
+  const east = new Vector3(1, 0, 0);
+  return {
+    dur: 7.25, grade: wallpaperGrade, fadeGrade: true,
+    pose(progress, position, look) {
+      const t = smoothstep(0, 1, progress);
+      path.getPointAt(t, position);
+      look.lerpVectors(east, grid.direction, t);
+      look.y -= 0.18 * Math.sin(Math.PI * t);
+      look.multiplyScalar(35).add(position);
+      return VIEW.fov + (grid.fov - VIEW.fov) * t;
+    },
+  };
+}
 
 /* The joke pass. The centerpiece: Clippy, forty metres of paperclip in the infield, offering help to the start grid. */
 const CLIPPY = { x: 55, z: 60, yaw: Math.atan2(-105, -50), H: 44 };
@@ -53,9 +77,11 @@ export default {
   // a deep, clean blue with the sun behind the viewer; the procedural clouds keep out of the east, where the authored ones hang
   skyOverrides: { zenith: 0x1468ee, horizon: 0x8fbcf3, cloudCover: 0.5, sunDir: [-0.5, 0.74, -0.38], clearSky: [90, 50], fog: 0xa3c6f3, fogNear: 520, fogFar: 1900 },
   backdrop: { img: 'assets/backdrops/bliss-hills.webp', top: 27, bottom: -9, rot: 0.3, tint: [1.0, 0.86, 0.42] },   // the painted far hills, pulled toward the same greens
-  // the opening shot is the wallpaper, shown without the game's color grade so the measured colors come out as measured
-  intro: [{ pos: [VIEW.x, VIEW.eye, VIEW.z], look: [VIEW.x + 100, VIEW.eye, VIEW.z], fov: VIEW.fov, dur: 3.2, grade: { sat: 1, contrast: 1, vignette: 0 } },
-    { pos: [-34, 30, 8], look: [CLIPPY.x, 26, CLIPPY.z], pos1: [-10, 30, 16], look1: [CLIPPY.x, 28, CLIPPY.z], fov: 45, dur: 3 }],   // then Clippy, offering to help
+  introOnly: true,
+  intro: [
+    { pos: [VIEW.x, VIEW.eye, VIEW.z], look: [VIEW.x + 100, VIEW.eye, VIEW.z], fov: VIEW.fov, grade: wallpaperGrade, dur: 1.25 },
+    wallpaperPullback,
+  ],
   offroad: 'grass',
   defaults: { edge: 'open', shoulder: 3.5, outer: 13 },
   path: [
@@ -203,13 +229,10 @@ export default {
       const dome = bakeSkyDome(ctx.gfx.renderer, { sky: SKY, cover: CLOUD_COVER, fov: VIEW.fov, small });
       ctx.gfx.sky.setDome(dome);
       const keeper = new THREE.Object3D(); keeper.userData.dispose = dome.dispose; ctx.group.add(keeper);
-      // The far hills and the cleared horizon belong to the opening shot only: they are composed for that one viewpoint.
-      // Once the camera leaves it, the painted horizon runs all the way round like everywhere else.
-      const far = farHills({ points: FAR_HILLS, eye, fov: VIEW.fov, exposure }); ctx.group.add(far);
-      const clear = ctx.gfx.sky.uniforms.uClear.value, clearZ = clear.z;
-      const opening = () => !!(view.intro && !view.intro.done && view.intro.t < view.intro.shots[0].dur);
-      const apply = () => { const on = opening(); far.visible = on; clear.z = on ? clearZ : -2; };
-      apply(); anim.push(apply);
+      // Keep the eastern sky clear from the road as well. Taper each end of the distant ridge
+      // below the horizon, since a moving kart can see outside the original picture.
+      const points = [[1220, 625], [1320, 558], [1460, 523], ...FAR_HILLS, [2250, 514], [2360, 563], [2470, 625]];
+      ctx.group.add(farHills({ points, eye, fov: VIEW.fov, exposure, base: 630 }));
     }
     // the near field: a dark earth bank where the dip runs out of the picture on the left, dry stalks along it, and buttercups
     {

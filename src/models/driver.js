@@ -314,6 +314,21 @@ function arms(ctx, { mat = 'top', len = 'long', cuff = null, puff = false, glove
   }
 }
 
+/** A driver-local pivot at the nozzle keeps the base of the boost flare attached to the barrel. */
+function buildFlame(at, ang) {
+  const tip = 1.325;
+  const core = glow(0xff8a1e, 3.2).clone(), accent = glow(0x9fd4ff, 3.4).clone();
+  for (const m of [core, accent]) m.userData.baseIntensity = m.emissiveIntensity;
+  const b = new ModelBuilder();
+  b.add('core', cyl(0.004, 0.1, 0.5, 14), { p: [0, 1.57 - tip, 0] });
+  b.add('core', sphere(0.085, 12, 8), { p: [0, 1.34 - tip, 0] });
+  b.add('accent', cyl(0.004, 0.05, 0.22, 10), { p: [0, 1.44 - tip, -0.07] });
+  const g = b.build({ core, accent });
+  g.name = 'flame'; g.position.set(...at(tip)); g.rotation.z = -ang;
+  g.userData.mats = [core, accent];
+  return g;
+}
+
 /* ---------- signature props, worn on the back where the chase camera sees them ---------- */
 const PROPS = {
   /** the flamethrower that is legally not a flamethrower, slung across the back with the pilot light on */
@@ -328,9 +343,7 @@ const PROPS = {
     b.add('saw', cyl(0.03, 0.045, 0.05, 12), { p: at(0.7, 0.115), r });
     b.add('black', cyl(0.042, 0.048, 0.5, 12), { p: at(0.95), r });                     // barrel
     b.add('saw', cyl(0.078, 0.058, 0.15, 14), { p: at(1.25), r });                      // nozzle
-    b.add('flame', cyl(0.004, 0.1, 0.5, 14), { p: at(1.57), r });
-    b.add('flame2', cyl(0.004, 0.05, 0.22, 10), { p: [at(1.44)[0], at(1.44)[1], zb - 0.07], r });
-    b.add('flame', sphere(0.085, 12, 8), { p: at(1.34) });
+    ctx.flameGroup = buildFlame(at, ang);   // the pilot flame is its own rig, not baked in: the kart view flares it on boost
     ctx.straps('black', 0.56);
   },
   /** a sack of money on the back: the seven-trillion ask. Slung low and well behind
@@ -640,7 +653,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     skin: plastic(skinHex, 0.62), glove: plastic(0xf4f1ea, 0.6), glove2: plastic(look.top ?? 0xc8222a, 0.5),
     tie: plastic(look.tie ?? 0xd8232a, 0.45), vest: fluoro(0xd8f23a),
     gold: plastic(0xffcf4a, 0.25, 1), silver: plastic(0xc9ced6, 0.25, 1), steel: MAT.chrome, white: MAT.white, black: MAT.black,
-    pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), flame: glow(0xff8a1e, 3.2), flame2: glow(0x9fd4ff, 3.4), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
+    pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
     bot: plastic(0xf2f4f7, 0.3), eye: glow(0x5ce1ff, 2.2),
     lid: plastic(0x33363c, 0.32, 0.85),
     cloth: doubleSided(0xf4f4ee, 0.8),
@@ -651,6 +664,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     default: MAT.dark,
   };
   torso.add(b.build(mats));
+  if (c.flameGroup) torso.add(c.flameGroup);   // Elon's pilot flame rides the torso as its own rig, so it leans and bobbles with him
 
   const head = buildHead(look, faceId);
   head.position.set(0, NECK_Y - P.hunch * 0.08, c.L(0.8) + 0.03 + P.hunch * 0.25);
@@ -658,6 +672,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
 
   g.scale.setScalar(scale);
   g.userData = { head, torso };
+  if (c.flameGroup) g.userData.flame = c.flameGroup;   // only Elon's rig carries one; the kart view animates it
   return g;
 }
 

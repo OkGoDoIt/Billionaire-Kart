@@ -121,27 +121,66 @@ const BLURB = {
 
 /* ---------- the steps overlay ---------- */
 let overlay = null;
-function closeSteps() { overlay?.remove(); overlay = null; }
-export function openInstall() {
+let opener = null;
+let ringed = null;
+/** The menus show focus with a .focus ring, not the browser's outline; the sheet does the same. */
+function ringFocus(elm) {
+  if (ringed === elm) return;
+  ringed?.classList.remove('focus'); ringed = elm;
+  elm?.classList.add('focus');
+}
+function closeSteps() {
+  if (!overlay) return;
+  overlay.remove(); overlay = null; ringFocus(null);
+  const back = opener; opener = null;
+  if (back?.isConnected) { back.classList.add('focus'); back.focus({ preventScroll: true }); }
+}
+function moveFocus(backwards) {
+  const controls = [...overlay.querySelectorAll('button')];
+  const i = controls.indexOf(document.activeElement);
+  const next = (i + (backwards ? -1 : 1) + controls.length) % controls.length;
+  controls[next].focus({ preventScroll: true });
+}
+
+/** The modal owns menu input until dismissed, including stick movement and Start. */
+export function handleInstallAction(action) {
+  if (!overlay) return false;
+  if (action === 'back' || action === 'confirm' || action === 'pause') closeSteps();
+  else if (action === 'up' || action === 'left') moveFocus(true);
+  else if (action === 'down' || action === 'right') moveFocus(false);
+  return true;
+}
+function onSheetKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSteps(); }
+  else if (e.key === 'Tab') { e.preventDefault(); moveFocus(e.shiftKey); }
+}
+export function openInstall(trigger = document.activeElement) {
   const kind = installOffer();
   if (!kind) return;
   if (kind === 'prompt' && deferredPrompt) { promptInstall(); return; }
-  if (kind === 'prompt') { openSteps('menu'); return; }   // forced/screenshot mode: no live event to fire
-  openSteps(kind);
+  if (kind === 'prompt') { openSteps('menu', trigger); return; }   // forced/screenshot mode: no live event to fire
+  openSteps(kind, trigger);
 }
-function openSteps(kind) {
+function openSteps(kind, trigger) {
   closeSteps();
+  opener = trigger instanceof HTMLElement && trigger !== document.body ? trigger : null;
+  opener?.classList.remove('focus');
   const steps = el('ol', { class: 'install-steps' }, stepsFor(kind).map(([head, body], i) =>
     el('li', {}, el('b', {}, el('i', {}, String(i + 1)), head), el('span', { html: body }))));
+  const closeBtn = el('button', { class: 'install-x', 'aria-label': 'Close', onclick: closeSteps, html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>' });
   overlay = el('div', { class: 'install-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Add Billionaire Kart to your Home Screen' },
     el('div', { class: 'install-sheet' },
-      el('button', { class: 'install-x', 'aria-label': 'Close', onclick: closeSteps, html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>' }),
+      closeBtn,
       el('h2', {}, 'Add to Home Screen'),
       el('p', { class: 'install-blurb' }, BLURB[kind]),
       steps,
       el('button', { class: 'btn go install-gotit', onclick: closeSteps }, 'Got it')));
   overlay.addEventListener('pointerdown', e => { if (e.target === overlay) closeSteps(); });
+  overlay.addEventListener('keydown', onSheetKey);
+  overlay.addEventListener('focusin', e => ringFocus(e.target.closest('button')));
   document.body.appendChild(overlay);
+  ringFocus(closeBtn);
+  closeBtn.focus({ preventScroll: true });
 }
 async function promptInstall() {
   const e = deferredPrompt; if (!e) return;
@@ -166,7 +205,7 @@ export function installCard() {
     el('div', { class: 'install-card-btns' },
       kind === 'prompt'
         ? el('button', { class: 'btn go install-do', onclick: () => { card.remove(); openInstall(); } }, 'Install')
-        : el('button', { class: 'btn go install-do', onclick: () => openSteps(kind) }, kind === 'inapp' ? 'How?' : 'Show me how'),
+        : el('button', { class: 'btn go install-do', onclick: e => openSteps(kind, e.currentTarget) }, kind === 'inapp' ? 'How?' : 'Show me how'),
       el('button', { class: 'btn install-later', onclick: () => { store.write({ dismissed: Date.now() }); card.remove(); } }, 'Not now')));
   return card;
 }

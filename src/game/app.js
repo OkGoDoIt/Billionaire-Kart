@@ -2,7 +2,7 @@
    between the title's attract race, the showroom, races, and results. */
 import { Gfx, detectQuality } from '../render/gfx.js';
 import { Input } from '../core/input.js';
-import { Save } from '../core/save.js';
+import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
 import { Wipe } from '../ui/wipe.js';
 import { Showroom } from '../render/showroom.js';
@@ -210,8 +210,8 @@ export class App {
     const mine = results.filter(r => r.isPlayer).sort((a, b) => a.rank - b.rank)[0];
     let records = null;
     if (mine) {
-      records = this.save.recordRace(cfg.trackId, cfg.mode === 'timetrial' ? 'tt' : cfg.cc, mine.time, mine.bestLap, mine.racer.id, mine.rank === 1);
-      if (cfg.mode === 'timetrial' && session.rec && records.newBestRace) this.save.setGhost(cfg.trackId, { racer: session.rec.racer, step: session.rec.step, time: mine.time, d: session.rec.d });
+      records = this.save.recordRace(cfg.trackId, cfg.mode === 'timetrial' ? trialKey(cfg.cc) : cfg.cc, mine.time, mine.bestLap, mine.racer.id, cfg.mode !== 'timetrial' && mine.rank === 1);
+      if (cfg.mode === 'timetrial' && session.rec && records.newBestRace) this.save.setGhost(cfg.trackId, cfg.cc, { racer: session.rec.racer, step: session.rec.step, time: mine.time, d: session.rec.d });
       const st = this.save.data.stats; st.coins += mine.stats.coins; st.hitsGiven += mine.stats.hitsGiven; st.hitsTaken += mine.stats.hitsTaken; this.save.write();
     }
     let gp = null;
@@ -225,7 +225,7 @@ export class App {
     session.touch?.setVisible(false); this._lockLandscape(false); document.body.classList.remove('must-turn');
     // a single race gets the cup's finish framing on the one results screen (#243)
     if (!gp && cfg.mode === 'race') this._raceFinish({ results, track: def, records });
-    else this.menus.reset('results', { results, gp, track: def, records });
+    else this.menus.reset('results', { results, gp, track: def, records, trialCc: cfg.mode === 'timetrial' ? cfg.cc : null });
     this.audio?.event?.('results', mine?.rank);
     this.audio?.music?.('results');
   }

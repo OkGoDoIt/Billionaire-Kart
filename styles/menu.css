@@ -400,3 +400,6 @@ body.must-turn .hud, body.must-turn .track-card, body.must-turn .hint-card { vis
 }
 
 .join-slot small { display: block; font-size: 0.72em; font-weight: 500; opacity: 0.8; margin-top: 0.2em; }
+
+.record-modes { margin-bottom: calc(var(--u) * 1.2); }
+.screen-setup .trial-classes { margin-block: auto; }

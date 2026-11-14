@@ -8,6 +8,7 @@ import { DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindi
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
 import { installCard, installButton, installPanel, onInstallChange } from './install.js';
+import { trialKey } from '../core/save.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
 
 const h = (tag, attrs = {}, ...kids) => {
@@ -243,7 +244,7 @@ export class Menus {
     const choose = r => {
       flow.racers[player] = r.id; A.save.data.last.racer[player] = r.id; A.save.write();
       A.audio?.racerPicked?.(r);
-      if (player + 1 < n) this.open('racers', { player: player + 1 }); else this.open(flow.mode === 'timetrial' ? 'tracks' : 'setup');
+      if (player + 1 < n) this.open('racers', { player: player + 1 }); else this.open('setup');
     };
     // Looking and choosing are separate: a tile shows the racer, the button under the card picks them.
     const go = this.btn('', () => choose(current), { cls: 'go r-go' }), goLabel = go.querySelector('.btn-label');
@@ -275,8 +276,14 @@ export class Menus {
   /* ---------- engine class and rivals ---------- */
   s_setup() {
     const A = this.app, flow = A.flow, last = A.save.data.last;
-    flow.cc = flow.cc || last.cc; flow.level = flow.level || last.level;
-    const ccBtns = CC_LIST.map(cc => { const b = h('button', { class: 'card cc', 'data-f': true, 'data-default': cc === flow.cc, onclick: () => { flow.cc = cc; mark(); this.focus(next); } }, h('div', { class: 'cc-n' }, CLASSES[cc].label), h('div', { class: 'cc-l' }, CLASSES[cc].name), h('div', { class: 'cc-d' }, cc === 50 ? 'Gentle pace' : cc === 100 ? 'The standard' : cc === 150 ? 'Fast and frantic' : 'Growth at all costs')); b.dataset.cc = cc; return b; });
+    const trial = flow.mode === 'timetrial';
+    flow.cc = flow.cc || (trial ? last.trialCc : last.cc); flow.level = flow.level || last.level;
+    const ccBtns = CC_LIST.map(cc => { const b = h('button', { class: 'card cc', 'data-f': true, 'data-default': cc === flow.cc, onclick: () => {
+      flow.cc = cc;
+      if (trial) { last.trialCc = cc; A.save.write(); this.open('tracks'); }
+      else { mark(); this.focus(next); }
+    } }, h('div', { class: 'cc-n' }, CLASSES[cc].label), h('div', { class: 'cc-l' }, CLASSES[cc].name), h('div', { class: 'cc-d' }, cc === 50 ? 'Gentle pace' : cc === 100 ? 'The standard' : cc === 150 ? 'Fast and frantic' : 'Growth at all costs')); b.dataset.cc = cc; return b; });
+    if (trial) return { el: h('div', {}, this.header('Time Trial', 'Choose an engine class.'), h('div', { class: 'cards four trial-classes' }, ccBtns)) };
     const lvBtns = LEVELS.map(([id, label]) => { const b = h('button', { class: 'chip', 'data-f': true, onclick: () => { flow.level = id; mark(); } }, label); b.dataset.lv = id; return b; });
     const lvDesc = h('p', { class: 'lv-desc' });
     const mark = () => { for (const b of ccBtns) b.classList.toggle('sel', +b.dataset.cc === flow.cc); for (const b of lvBtns) b.classList.toggle('sel', b.dataset.lv === flow.level); lvDesc.textContent = LEVELS.find(l => l[0] === flow.level)[2]; };
@@ -307,9 +314,9 @@ export class Menus {
     // rows of four; past eight it takes the 'many' layout (styles/menu.css),
     // which fits a growing roster on the same screen instead of growing a
     // third row off the bottom; the line under the title describes the track in focus
-    const head = this.header('Choose a track', '\u00a0'), sub = head.querySelector('p');
+    const head = this.header(flow.mode === 'timetrial' ? `Time Trial · ${CLASSES[cc].label}` : 'Choose a track', '\u00a0'), sub = head.querySelector('p');
     const cards = TRACKS.map(t => {
-      const best = A.save.bestFor(t.id, flow.mode === 'timetrial' ? 'tt' : cc);
+      const best = A.save.bestFor(t.id, flow.mode === 'timetrial' ? trialKey(cc) : cc);
       const card = h('button', { class: 'card track', 'data-f': true, 'data-default': t.id === A.save.data.last.track, onclick: () => { A.save.data.last.track = t.id; A.save.write(); A.startSingle(t.id); } },
         h('div', { class: 'track-thumb', style: t.thumb ? `background-image:url(${t.thumb})` : '' }, !t.thumb && h('span', {}, t.name[0]), best?.race && h('em', { class: 'track-best' }, `Best ${fmtTime(best.race)}`)), h('h2', {}, t.name));
       const say = () => { sub.textContent = t.tagline || '\u00a0'; };
@@ -331,7 +338,7 @@ export class Menus {
   }
 
   /* ---------- results ---------- */
-  s_results({ results, gp, track, records, best }) {
+  s_results({ results, gp, track, records, best, trialCc }) {
     const A = this.app;
     // One final screen (#243): a single race's finish wears the podium framing — the place
     // headline and trophy — over this same full table, instead of a separate podium step
@@ -370,6 +377,7 @@ export class Menus {
       head
         ? h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, track.name)))
         : h('h1', {}, track.name),
+      trialCc && h('p', { class: 'res-sub' }, `Time Trial · ${CLASSES[trialCc].label}`),
       gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
@@ -603,9 +611,21 @@ export class Menus {
   /* ---------- records ---------- */
   s_records() {
     const A = this.app, st = A.save.data.stats;
-    const rows = TRACKS.map(t => h('tr', {}, h('th', {}, t.name), ...CC_LIST.map(cc => h('td', {}, A.save.bestFor(t.id, cc)?.race ? fmtTime(A.save.bestFor(t.id, cc).race) : '–')), h('td', {}, A.save.bestFor(t.id, 'tt')?.race ? fmtTime(A.save.bestFor(t.id, 'tt').race) : '–')));
-    const el = h('div', {}, this.header('Records', `${st.races} races · ${st.wins} wins · ${st.coins} coins banked · ${st.hitsGiven} hostile takeovers`), h('div', { class: 'panel records' },
-      h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Track'), ...CC_LIST.map(cc => h('th', {}, CLASSES[cc].label)), h('th', {}, 'Time trial'))), h('tbody', {}, rows))));
+    const legacy = TRACKS.some(t => A.save.bestFor(t.id, 'tt')?.race);
+    const heading = h('tr'), body = h('tbody');
+    const draw = trial => {
+      const columns = CC_LIST.map(cc => [CLASSES[cc].label, trial ? trialKey(cc) : cc]);
+      if (trial && legacy) columns.push(['Class unknown', 'tt']);
+      heading.replaceChildren(h('th', { scope: 'col' }, 'Track'), ...columns.map(([title]) => h('th', { scope: 'col' }, title)));
+      body.replaceChildren(...TRACKS.map(t => h('tr', {}, h('th', { scope: 'row' }, t.name),
+        columns.map(([, id]) => { const time = A.save.bestFor(t.id, id)?.race; return h('td', {}, time ? fmtTime(time) : '–'); }))));
+      for (const [value, b] of choices) { b.classList.toggle('sel', value === trial); b.setAttribute('aria-pressed', String(value === trial)); }
+    };
+    const choices = [[false, 'Races'], [true, 'Time Trial']].map(([trial, label]) => [trial, this.btn(label, () => draw(trial), { cls: 'chip' })]);
+    draw(false);
+    const el = h('div', {}, this.header('Records', `${st.races} races · ${st.wins} wins · ${st.coins} coins banked · ${st.hitsGiven} hostile takeovers`),
+      h('div', { class: 'chips record-modes' }, choices.map(([, b]) => b)),
+      h('div', { class: 'panel records' }, h('table', {}, h('thead', {}, heading), body)));
     return { el };
   }
 }

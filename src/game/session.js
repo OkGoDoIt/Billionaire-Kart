@@ -55,7 +55,7 @@ export class RaceSession {
     // time trial: race your own best run, and record this one
     this.rec = null;
     if (config.mode === 'timetrial' && this.race.players.length === 1) {
-      this.view.setGhost(app.save?.ghost(config.trackId));
+      this.view.setGhost(app.save?.ghost(config.trackId, config.cc));
       this.rec = { racer: this.race.players[0].racer.id, step: 0.1, d: [], next: 0 };
     }
     this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;

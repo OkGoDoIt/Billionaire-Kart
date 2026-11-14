@@ -442,13 +442,13 @@ function sectionPt(st, u, out = 0) {
 }
 const uAt = (st, y) => Math.min(1, Math.max(0, (st.top - y) / (st.top - st.k)));
 /** A ruled surface through stations: pts(st) returns the same number of [x, y] for every station. */
-function stripGeo(stations, pts) {
+function stripGeo(stations, pts, side = 1) {
   const pos = [], uv = [], idx = [];
   let n = 0;
   stations.forEach((st, r) => {
     const p = pts(st); n = p.length;
     p.forEach(([x, y], j) => { pos.push(x, y, st.z); uv.push(j / (n - 1), st.z / 8); });
-    if (r) for (let j = 0; j < n - 1; j++) { const a = (r - 1) * n + j, b = a + 1, c = a + n, d = c + 1; idx.push(a, c, b, b, c, d); }
+    if (r) for (let j = 0; j < n - 1; j++) { const a = (r - 1) * n + j, b = a + 1, c = a + n, d = c + 1; if (side < 0) idx.push(a, b, c, b, d, c); else idx.push(a, c, b, b, c, d); }
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
@@ -478,14 +478,14 @@ function hull(b, o) {
   const wl = 1.15;
   for (const [z0, z1] of pieces) {
     const sts = [z0, ...zs.filter(z => z > z0 + 0.5 && z < z1 - 0.5), z1].map(z => station(z, o));
-    for (const s of [1, -1]) b.add('hull', stripGeo(sts, st => range(0, uAt(st, wl), 10).map(u => { const p = sectionPt(st, u); return [p[0] * s, p[1]]; })));
+    for (const s of [1, -1]) b.add('hull', stripGeo(sts, st => range(0, uAt(st, wl), 10).map(u => { const p = sectionPt(st, u); return [p[0] * s, p[1]]; }), s));
     b.add('bottom', stripGeo(sts, st => { const u0 = uAt(st, wl); return [...range(u0, 1, 7).map(u => sectionPt(st, u)), ...range(1, u0, 7).slice(1).map(u => { const p = sectionPt(st, u); return [-p[0], p[1]]; })]; }));
     for (const s of [1, -1]) {
-      b.add('boot', stripGeo(sts, st => [wl + 0.55, wl].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; })));
-      b.add('gold', stripGeo(sts, st => [st.top - 0.75, st.top - 1.15].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; })));
+      b.add('boot', stripGeo(sts, st => [wl + 0.55, wl].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; }), s));
+      b.add('gold', stripGeo(sts, st => [st.top - 0.75, st.top - 1.15].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; }), s));
       if (o.windows) {
         const ws = sts.filter(st => st.z >= o.windows[0] && st.z <= o.windows[1]);
-        if (ws.length > 1) b.add('glass', stripGeo(ws, st => [st.top - 1.6, st.top - 2.9].map(y => { const p = sectionPt(st, uAt(st, y), 0.06); return [p[0] * s, y]; })));
+        if (ws.length > 1) b.add('glass', stripGeo(ws, st => [st.top - 1.6, st.top - 2.9].map(y => { const p = sectionPt(st, uAt(st, y), 0.06); return [p[0] * s, y]; }), s));
       }
     }
     if (z0 > -h + 0.1) b.add('cut', fanGeo(full(station(z0, o)), z0));
@@ -495,8 +495,8 @@ function hull(b, o) {
   if (o.cut) {   // the lintel over the drive-through: topsides above the opening, and a lit ceiling
     const [z0, z1, top] = o.cut, sts = range(z0, z1, 10).map(z => station(z, o));
     for (const s of [1, -1]) {
-      b.add('hull', stripGeo(sts, st => range(0, uAt(st, top), 5).map(u => { const p = sectionPt(st, u); return [p[0] * s, p[1]]; })));
-      b.add('gold', stripGeo(sts, st => [st.top - 0.75, st.top - 1.15].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; })));
+      b.add('hull', stripGeo(sts, st => range(0, uAt(st, top), 5).map(u => { const p = sectionPt(st, u); return [p[0] * s, p[1]]; }), s));
+      b.add('gold', stripGeo(sts, st => [st.top - 0.75, st.top - 1.15].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; }), s));
     }
     const w = station((z0 + z1) / 2, o).w;
     b.add('ceiling', box(w * 2, 0.5, z1 - z0, 0.05, 1), { p: [0, top + 0.25, (z0 + z1) / 2] });
@@ -535,18 +535,13 @@ function tier(b, { x = 0, z0, z1, y0, y1, w, nose = 0.3, tail = 0.9, glassH = 0.
  * o: { L, B, D, name, boot (color), salon: [z0, z1], uppers: [[z0, z1, h]...], helipad: z or null, dishes, accent }
  * Returns a Group; userData: { radar, station(z), spin: [] }.
  */
-export function hopYacht({ L = 74, B = 12, D = 10.5, name = 'YACHT', boot = 0xc8323a, salon = [-20, 12], uppers = [[-16, 6, 3], [-10, 1, 2.4]], helipad = null, lane = 7.6, mast = true, header = null } = {}) {
+export function hopYacht({ L = 74, B = 12, D = 10.5, name = 'YACHT', boot = 0xc8323a, salon = [-20, 12], uppers = [[-16, 6, 3], [-10, 1, 2.4]], helipad = null, lane = 7.6, mast = true, header = null, emblem = null } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder();
   const o = { L, B, D, keel: -3.2, stern: 0.9, rakeFrom: 0.42, bowP: 4.5, rakeTo: 1.6, windows: [-L * 0.42, L * 0.36] };
   hull(b, o);
-  // a second, lower row of hull windows on the taller hulls
-  if (false) for (const s of [1, -1]) {
-    const sts = range(-L * 0.4, L * 0.3, 24).map(z => station(z, o));
-    b.add('glass', stripGeo(sts, st => [st.top - 6.0, st.top - 7.0].map(y => { const p = sectionPt(st, uAt(st, y), 0.06); return [p[0] * s, y]; })));
-  }
   // the salon: two saloons either side of the road, glass to the sea outside and glass to the road inside
   // (the inner windows show the generated salon interior), the ceiling slab carrying the upper decks over the road
-  const [z0, z1] = salon, sh = 5.2, outW = station((z0 + z1) / 2, o).w * 0.96, len = z1 - z0, zc = (z0 + z1) / 2;
+  const [z0, z1] = salon, sh = 8, outW = station((z0 + z1) / 2, o).w * 0.96, len = z1 - z0, zc = (z0 + z1) / 2;
   const roomW = outW - lane, roomX = lane + roomW / 2;
   for (const s of [1, -1]) {
     b.add('house', box(roomW, sh, len, 0.7, 3), { p: [s * roomX, D + sh / 2, zc] });
@@ -558,10 +553,11 @@ export function hopYacht({ L = 74, B = 12, D = 10.5, name = 'YACHT', boot = 0xc8
   // the upper decks, stepping back, full width over the salon
   let y = D + sh + 0.6;
   uppers.forEach(([a, c, h], k) => { tier(b, { x: 0, z0: a, z1: c, y0: y - 0.05, y1: y + h, w: outW - 1.1 - k * 1.3, nose: 0.3, glassH: 0.58 }); y += h; });
+  if (emblem) yachtEmblem(b, emblem, y, uppers.at(-1)[0] + 2.2);
   // rails round the upper decks' aft ends
   { let yy = D + sh + 0.6; uppers.forEach(([a, , h], k) => { const ww = outW - 1.1 - k * 1.3; b.add('chrome', box(ww * 2 - 0.4, 0.08, 0.08, 0.03, 1), { p: [0, yy + 1.0, a - 2.5] }); for (const s of [1, -1]) b.add('chrome', box(0.08, 0.08, 3, 0.03, 1), { p: [s * (ww - 0.3), yy + 1.0, a - 1] }); yy += h; }); }
   // the mast: swept back, radar domes
-  if (mast) {
+  if (mast && emblem !== 'shark') {
     const zc = (uppers[uppers.length - 1][0] + uppers[uppers.length - 1][1]) / 2;
     b.add('house', loft([{ z: -2.0, w: 0.7, h: 0.3, y: y + 0.2 }, { z: -0.8, w: 0.55, h: 2.4, y: y + 2.4 }, { z: 0.5, w: 0.35, h: 3.8, y: y + 3.8 }], 12, 3), { p: [0, 0, zc] });
     b.add('house', sphere(0.95, 14, 10), { p: [1.9, y + 5.2, zc - 0.4] });
@@ -577,16 +573,13 @@ export function hopYacht({ L = 74, B = 12, D = 10.5, name = 'YACHT', boot = 0xc8
     b.add('cushion', box(1.0, 0.32, 0.9, 0.14, 2), { p: [-sideC, D + 0.42, z - 0.9], r: [-0.55, 0, 0] });
   }
   const fore = (z1 + L * 0.38) / 2, fw = station(fore, o).w;
-  if (helipad != null) {
-    b.add('pad', cyl(Math.min(9.5, fw), Math.min(9.5, fw), 0.3, 40), { p: [0, D - 0.12, helipad] });
-    b.add('lamp', torus(Math.min(9.3, fw - 0.2), 0.14, 6, 48), { p: [0, D + 0.05, helipad], r: [Math.PI / 2, 0, 0] });
-  } else for (const s of [1, -1]) b.add('cushion', box(fw - lane - 1.2, 0.4, 5, 0.18, 2), { p: [s * (lane + (fw - lane) / 2), D + 0.2, fore] });
+  if (helipad == null) for (const s of [1, -1]) b.add('cushion', box(fw - lane - 1.2, 0.4, 5, 0.18, 2), { p: [s * (lane + (fw - lane) / 2), D + 0.2, fore] });
   grp.add(b.build({
     hull: WHITE, bottom: paint(0x10233f, { rough: 0.35, clear: 0.5 }), boot: paint(boot, { rough: 0.3, clear: 0.6 }), gold: GOLDP,
     glass: SMOKE, deck: teakMat(), cut: WHITE, house: WHITE, chrome: CHROME,
     ceiling: new THREE.MeshStandardMaterial({ color: 0x7a5236, roughness: 0.55 }),
-    chand: glow(0xffe2a8, 2.2), pool: new THREE.MeshStandardMaterial({ color: 0x0aa7c6, emissive: 0x29d9f0, emissiveIntensity: 0.8, roughness: 0.1 }),
-    cushion: plastic(0xf3ead2, 0.8), pad: plastic(0x2b3440, 0.7), lamp: glow(0xffd23c, 2.4),
+    tally: glow(0xe12922, 1.7), chand: glow(0xffe2a8, 2.2), pool: new THREE.MeshStandardMaterial({ color: 0x0aa7c6, emissive: 0x29d9f0, emissiveIntensity: 0.8, roughness: 0.1 }),
+    cushion: plastic(0xf3ead2, 0.8),
   }));
   // the inner windows: the salon interior, seen from the road through floor-to-ceiling glass
   if (typeof Image !== 'undefined') {
@@ -597,13 +590,28 @@ export function hopYacht({ L = 74, B = 12, D = 10.5, name = 'YACHT', boot = 0xc8
       const m = new THREE.Mesh(g, mat); m.position.set(s * (lane - 0.03), D + sh / 2 - 0.05, zc); m.rotation.y = -s * Math.PI / 2; grp.add(m);
     }
   }
-  if (header) {   // over the salon's aft entrance, facing the karts coming aboard
-    const tex = canvasTex(1024, 192, (g, W, H) => {
-      g.fillStyle = '#10233f'; g.fillRect(0, 0, W, H); g.fillStyle = '#e9b443'; g.fillRect(0, 8, W, 6); g.fillRect(0, H - 14, W, 6);
-      fitText(g, header, W / 2, H / 2 + 4, W - 60, H * 0.62, H * 0.6, FONT, { fill: '#f6e7c1' });
-    }, { repeat: false, aniso: 8 });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(lane * 2 - 0.6, (lane * 2 - 0.6) * 192 / 1024), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6 }));
-    m.position.set(0, D + sh + 0.3, z0 - 0.36); m.rotation.y = Math.PI; grp.add(m);
+  if (header) {
+    const accent = '#' + boot.toString(16).padStart(6, '0');
+    const plaque = boardMesh([header], B * 1.84, 3.2, { bg: '#10233f', accent });
+    plaque.position.set(0, D + sh + 1.1, z0 - 0.5); grp.add(plaque);
+    // Catch the driver's eye above both corners of the landing deck.
+    for (const side of [-1, 1]) {
+      const mx = side * (lane + 1.35);
+      b.add('gold', cyl(0.11,0.14,5.5,8), {p:[mx,D+2.75,-L/2+1.25]});
+      const flag = new THREE.Shape();
+      flag.moveTo(0,0); flag.lineTo(side*2.45,-0.6); flag.lineTo(0,-1.45); flag.closePath();
+      const g = new THREE.ShapeGeometry(flag);
+      b.add('flag',g,{p:[mx,D+5.5,-L/2+1.25]});
+      b.add('life',torus(1.04,0.29,8,20),{p:[mx,D+1.8,-L/2+1.1]});
+    }
+    if (emblem === 'shark') {
+      // The hostile acquisition literally swallows the player.
+      for (let k=0;k<11;k++) {
+        b.add('tooth',cone(0.66,1.05+(k%2)*0.22,3),{p:[(k-5)*1.36,D+sh-0.2,z0-0.42],r:[Math.PI,0,0]});
+      }
+    }
+    const flagMat = paint(boot,{rough:0.55}); flagMat.side = THREE.DoubleSide;
+    grp.add(b.build({gold:GOLDP,flag:flagMat,life:paint(0xf06b32,{rough:0.65}),tooth:WHITE}));
   }
   // her name down both sides, under the gold sheer line
   const tex = canvasTex(2048, 256, (g, W, H) => { g.clearRect(0, 0, W, H); fitText(g, name, W / 2, H / 2 + 6, W - 40, H * 0.86, 230, FONT, { fill: '#10233f', stroke: '#f7f6f2', lw: 10 }); }, { repeat: false, aniso: 8 });
@@ -614,10 +622,14 @@ export function hopYacht({ L = 74, B = 12, D = 10.5, name = 'YACHT', boot = 0xc8
   for (const s of [1, -1]) {
     // bend the name round the hull: each column sits on the hull side at its own z
     const g = nGeo.clone(), p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) { const zz = nzc + p.getX(i) * s, yy = ny + p.getY(i), st = station(zz, o); const sp = sectionPt(st, uAt(st, yy), 0.1); p.setXYZ(i, s * sp[0], yy, zz); }
+    for (let i = 0; i < p.count; i++) { const zz = nzc - p.getX(i) * s, yy = ny + p.getY(i), st = station(zz, o); const sp = sectionPt(st, uAt(st, yy), 0.1); p.setXYZ(i, s * sp[0], yy, zz); }
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, nameMat); m.renderOrder = 2; grp.add(m);
   }
+  // Everything here is rigid with its yacht. Merge repeated material passes
+  // (interior walls, both sides of a sign, and the white deckhouse/hull).
+  const rigid = new THREE.Group(), baker = makeBaker(rigid, true);
+  baker.add(grp); baker.flush(); grp.clear(); grp.add(rigid);
   grp.userData.station = z => station(z, o);
   grp.userData.o = o;
   return grp;
@@ -757,10 +769,29 @@ class Quads {
 /** Merge placed objects by material: one mesh per material for the whole course. */
 export function makeBaker(group, shadows) {
   const buckets = new Map();
-  const push = (mat, g, cast) => { let b = buckets.get(mat); if (!b) buckets.set(mat, b = [[], []]); b[cast && !mat.transparent ? 0 : 1].push(g); };
+  // Paint colors do not need their own draw call. Preserve the actual
+  // lighting model and finish, moving only its diffuse color to the vertices.
+  const finishes = new Map();
+  const push = (mat, g, cast) => {
+    if (mat.isMeshStandardMaterial && !mat.map && !mat.transparent && !mat.vertexColors && !mat.emissive.getHex()) {
+      const key = [mat.type, mat.side, mat.roughness, mat.metalness, mat.clearcoat, mat.clearcoatRoughness, mat.envMapIntensity].join('/');
+      let finish = finishes.get(key);
+      if (!finish) {
+        finish = mat.clone(); finish.color.set(0xffffff); finish.vertexColors = true;
+        finishes.set(key, finish);
+      }
+      const colors = new Float32Array(g.attributes.position.count * 3);
+      for (let i = 0; i < colors.length; i += 3) mat.color.toArray(colors, i);
+      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      mat = finish;
+    }
+    let bucket = buckets.get(mat);
+    if (!bucket) buckets.set(mat, bucket = [[], []]);
+    bucket[cast && !mat.transparent ? 0 : 1].push(g);
+  };
   const norm = (geo, matrix) => {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
-    for (const n of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(n)) g.deleteAttribute(n);
+    for (const n of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(n)) g.deleteAttribute(n);
     if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
     if (!g.attributes.normal) g.computeVertexNormals();
     g.clearGroups();
@@ -822,6 +853,91 @@ export function makeAtlas(group, S = 2048, { emissive = 0.25 } = {}) {
     },
   };
   return api;
+}
+
+/** A pearl office in a scallop shell. The fan is corrugated on both faces
+ * so it still reads as a shell from the water, or in silhouette from the quay. */
+export function shellOffice() {
+  const b = new ModelBuilder();
+  const xAt = a => 10.6 * Math.sin(a), yAt = a => 3.2 + 12.2 * Math.cos(a);
+  const fan = [], ix = [];
+  for (let k = 0; k <= 32; k++) {
+    const a = (k / 32 - 0.5) * 2.76, rib = k % 2 ? 0.72 : 1;
+    fan.push(0.12 * xAt(a), 2.2, 0.1, xAt(a), yAt(a) * (0.98 + 0.02 * rib), -3 + 2.4 * rib);
+    if (k) { const i = 2 * k - 2; ix.push(i, i + 2, i + 1, i + 1, i + 2, i + 3); }
+    if (k % 4 === 0) b.add('lip', tube([[0.12*xAt(a),2.2,0.14], [0.6*xAt(a),2.2+(yAt(a)-2.2)*0.54,-0.13], [xAt(a),yAt(a),-0.5]], 0.12, 6, 6));
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(fan, 3)); geo.setIndex(ix); geo.computeVertexNormals();
+  b.add('shell', geo);
+  b.add('pearl', sphere(3.8, 26, 18), {p:[0,5.6,2.3]});
+  b.add('lip', sphere(1, 24, 10), {p:[0,2.15,1.8],s:[8.7,1.1,5.2]});
+  b.add('pontoon', cyl(9.6,8.4,1.7,32), {p:[0,0.85,1.5],s:[1,1,0.68]});
+  const coral = paint(0xf97070,{rough:0.4,clear:0.6}); coral.side = THREE.DoubleSide;
+  const group = b.build({shell:coral,lip:paint(0xffb078,{rough:0.4}),pearl:paint(0xfff3db,{rough:0.18,clear:1}),pontoon:SMOKE});
+  const plaque = boardMesh(['SHELL COMPANY'], 18.6, 3.7, {bg:'#123548', accent:'#f99b75'});
+  plaque.position.set(0,3.4,6.8); group.add(plaque);
+  return group;
+}
+
+/** A semaphore marshal, with each arm and flag pivoting at the shoulder. */
+export function deckMarshal() {
+  const root = new THREE.Group(), body = new ModelBuilder();
+  const white = WHITE, navy = SMOKE, skin = plastic(0xb87f58, 0.76);
+  for (const side of [-1, 1]) {
+    body.add('navy', capsule(0.14, 0.54, 3, 8), { p: [side * 0.19, 0.49, 0] });
+    body.add('navy', box(0.29, 0.19, 0.44, 0.06, 1), { p: [side * 0.19, 0.1, -0.06] });
+  }
+  body.add('white', sphere(0.43, 12, 10), { p: [0, 1.22, 0], s: [1, 1.24, 0.7] });
+  body.add('skin', sphere(0.26, 12, 10), { p: [0, 1.92, -0.02] });
+  body.add('white', cyl(0.32, 0.29, 0.14, 12), { p: [0, 2.15, 0] });
+  body.add('navy', box(0.51, 0.055, 0.29, 0.02, 1), { p: [0, 2.09, -0.17] });
+  body.add('gold', box(0.67, 0.14, 0.24, 0.04, 1), { p: [0, 1.48, -0.22] });
+  root.add(body.build({ white, navy, skin, gold: GOLDP }));
+  // Both marshals share the same flag geometry. The diagonal division
+  // separates the two halves of each semaphore flag even when backlit.
+  const limb = new ModelBuilder();
+  limb.add('white', capsule(0.13, 0.5, 3, 8), { p: [0, 0.28, 0] });
+  limb.add('skin', sphere(0.14, 8, 6), { p: [0, 0.65, 0] });
+  limb.add('gold', cyl(0.036, 0.036, 1.32, 6), { p: [0, 1.15, 0] });
+  const tri = points => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(points.flat(), 3));
+    geo.computeVertexNormals(); return geo;
+  };
+  const a = [0, 1.82, 0], b = [0.86, 1.82, -0.09], c = [0.86, 1.12, -0.09], d = [0, 1.12, 0];
+  limb.add('red', tri([a, b, c])); limb.add('yellow', tri([a, c, d]));
+  const red = paint(0xf03834, { rough: 0.7 }), yellow = paint(0xffbd27, { rough: 0.7 });
+  red.side = yellow.side = THREE.DoubleSide;
+  const left = limb.build({ white, skin, gold: GOLDP, red, yellow }), right = left.clone();
+  left.position.set(-0.36, 1.54, 0); right.position.set(0.36, 1.54, 0);
+  left.rotation.z = 0.85; right.rotation.z = -0.85;
+  root.add(left, right); return { root, left, right };
+}
+
+/** Each owner has a different roofline visible when arriving from the
+ * previous jump. All geometry is in yacht coordinates, forward is +Z. */
+function yachtEmblem(b, emblem, roofY, z) {
+  if (emblem === 'crown') {
+    b.add('gold', cyl(3.65,3.15,1.45,16), {p:[0,roofY+0.6,z]});
+    for(let j=0;j<8;j++) {
+      const a = j*Math.PI/4, x = 3.23*Math.cos(a), zz = z+3.23*Math.sin(a);
+      b.add('gold', cone(1.42,2.85,6), {p:[x,roofY+2.2,zz]});
+      b.add('boot', sphere(0.32,8,6), {p:[x,roofY+3.65,zz]});
+    }
+  } else if (emblem === 'shark') {
+    const fin = new THREE.Shape();
+    fin.moveTo(-4.9,0); fin.quadraticCurveTo(-2.8,1.2,1.5,7.6);
+    fin.quadraticCurveTo(2.1,3.4,5.2,0); fin.closePath();
+    const g = new THREE.ExtrudeGeometry(fin,{depth:1.1,bevelEnabled:true,bevelThickness:0.25,bevelSize:0.2,bevelSegments:2,steps:1});
+    b.add('boot',g,{p:[0,roofY,z],r:[0,0.42,0]});
+  } else {
+    // Oversized red tally light and the network's live camera lens.
+    b.add('glass', box(8,3.3,3.2,0.5,2), {p:[0,roofY+1.5,z]});
+    b.add('chrome', cyl(1.5,1.75,2.2,18), {p:[2.25,roofY+1.55,z-2.2],r:[Math.PI/2,0,0]});
+    b.add('glass', cyl(1.35,1.35,0.14,18), {p:[2.25,roofY+1.55,z-3.38],r:[Math.PI/2,0,0]});
+    b.add('tally', sphere(0.65,12,8), {p:[-2.8,roofY+3.25,z-0.8]});
+  }
 }
 
 /** A harbour sign face for the atlas: navy ground, gold rules, cream title, gold subtitle. */

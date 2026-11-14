@@ -34,7 +34,7 @@ const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 
 // This test drives a keyboard or a touch screen. A connected controller on the
 // host can otherwise move the menu or disable touch while the bot is playing.
 await ctx.addInitScript(() => {
-  Object.defineProperty(navigator, 'getGamepads', { value: () => [] });
+  Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [] });
   const ignoreHostPad = event => event.stopImmediatePropagation();
   addEventListener('gamepadconnected', ignoreHostPad, true);
   addEventListener('gamepaddisconnected', ignoreHostPad, true);
@@ -244,6 +244,44 @@ try {
       await shot('30-upright-' + name);
     }
   }
+  // Controller discovery must keep the second player's labels after the button is released.
+  await page.evaluate(() => {
+    const { input, menus } = BK.app;
+    const pads = ['DualSense Wireless Controller', 'Xbox Wireless Controller'].map((id, index) => ({
+      id, index, connected: true, axes: [0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ value: 0, pressed: false })),
+    }));
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => pads });
+    menus.reset('pad');
+    const sample = (i, n, down) => {
+      pads[i].buttons[n] = { pressed: down, value: Number(down) };
+      input.poll(1 / 60);
+    };
+    const expectPad = (triggerName, text, row) => {
+      const caption = document.querySelector('.pad-readout').textContent;
+      const trigger = document.querySelector('[data-txt="7"]').textContent;
+      const highlighted = [...document.querySelectorAll('.pad-row.hit .pad-label')].map(el => el.textContent);
+      if (caption !== text || trigger !== triggerName || !highlighted.includes(row)) {
+        throw new Error('Controller discovery: ' + JSON.stringify({ caption, trigger, highlighted }));
+      }
+    };
+    sample(1, 7, true);
+    sample(1, 7, false);
+    expectPad('RT', 'RT — Accelerate', 'Accelerate');
+    sample(0, 6, true);
+    sample(0, 6, false);
+    expectPad('R2', 'L2 — Brake / reverse', 'Brake / reverse');
+    pads[0].connected = false;
+    input.poll(1 / 60);
+    if (document.querySelector('[data-txt="7"]').textContent !== 'RT') throw new Error('Disconnected pad still owns the diagram');
+    document.querySelectorAll('.pad-row')[2].click();
+    sample(1, 7, true);
+    sample(1, 7, false);
+    sample(1, 7, true);
+    expectPad('RT', 'RT — Drift & hop', 'Drift & hop');
+    if (document.querySelector('.pad-row.hit .pad-label').textContent === 'Accelerate') throw new Error('Reassigned pedal still shows gas');
+  });
+  await shot('40-controller-trigger');
 } catch (e) { fails.push('aborted: ' + e.message); await shot('99-failure').catch(() => {}); }
 await browser.close(); server.close();
 const realErrors = [...new Set(errors)].filter(e => !/favicon/.test(e));

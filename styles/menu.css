@@ -427,3 +427,11 @@ button.opt, button.pad-row { font-family: inherit; color: inherit; border: 0; te
   .key-bind, .key-message:not(:empty) { font-size: max(13px, calc(var(--u) * 1.65)); }
   .key-bind { min-height: 34px; }
 }
+@media (orientation: landscape) {
+  .screen-keyboard { padding-top: calc(var(--u) * 1.5 + var(--safe-t)); padding-bottom: calc(var(--u) * 1.5 + var(--safe-b)); }
+  .screen-keyboard .menu-head { margin-bottom: calc(var(--u) * 1.2); }
+  .screen-keyboard .menu-head h1 { font-size: calc(var(--u) * 4); }
+  .key-row { padding-block: calc(var(--u) * 0.12); }
+  .key-bind { min-height: calc(var(--u) * 3.2); }
+  .key-panel .foot .btn { font-size: calc(var(--u) * 2.1); padding-block: calc(var(--u) * 0.8); }
+}

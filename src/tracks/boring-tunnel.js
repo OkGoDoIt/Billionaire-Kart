@@ -80,7 +80,8 @@ export default {
   path: PATH,
   // the whole lap is one bore except the start cutting (cp 15.5 -> 0.45),
   // where the road daylights between the berms
-  tunnels: [{ from: 0.45, to: 15.5, through: true }],
+  tunnels: [{ from: 0.45, to: 6.4, through: true }, { from: 7.6, to: 15.5, through: true }],   // the gap is the Loop Station (#234 item 4): the bore opens under the city
+  backdrop: { img: 'assets/backdrops/boring-tunnel.webp', top: 9, bottom: -0.3 },             // the boomtown skyline, painted (assets/tracks/boring-tunnel/prompts.md)
   sides: [
     { from: 15.5, to: 0.45, edge: 'wall' },   // retaining walls along the open-air cutting: the sponsor boards live here
   ],
@@ -123,20 +124,16 @@ export default {
     // water - 0.9 as drowned. The desert surface never gets near it.
     cell: 3, margin: 210, blend: 26, water: -9,
     fn(x, z) {
-      // the massif the bore is dug through: a high desert plateau with fbm
-      // lumps and rim mesas — with a graded dig apron trenched along the
-      // bore's line. A `through` tunnel is excluded from the terrain conform
-      // (track.js marks its samples as bridges), so beside the bore the raw
-      // fn IS the ground: if it ever sat between the road and the shell top,
-      // the mountain would plug the tube (the conform's blend at the portal
-      // throats, and a low carve across the dive, both did exactly that in
-      // review). The apron floor (-7.5 m) stays below the deepest road
-      // (-6 m) everywhere along the line, and the plateau (~16.5 m and up)
-      // stays above the highest shell top (~12.2 m at the crown).
-      let h = 22 + (fbm(x * 0.008, z * 0.008, 4, 11) - 0.5) * 8;
-      h += (fbm(x * 0.03, z * 0.03, 2, 4) - 0.5) * 3;
-      const d = Math.hypot(x, z);
-      h += smoothstep(240, 430, d) * 26;
+      // the massif the bore is dug through — with a graded dig apron
+      // trenched along the bore's line. A `through` tunnel is excluded from
+      // the terrain conform (track.js marks its samples as bridges), so
+      // beside the bore the raw fn IS the ground: if it ever sat between
+      // the road and the shell top, the mountain would plug the tube (the
+      // conform's blend at the portal throats, and a low carve across the
+      // dive, both did exactly that in review). The apron floor (-7.5 m)
+      // stays below the deepest road (-6 m) everywhere along the line, and
+      // the surface (city table, +14 m) stays above the highest shell top
+      // (~9.2 m at the crown).
       let dp = 1e9;
       for (let k = 0; k < PATH.length; k++) {
         const a = PATH[k].p, b = PATH[(k + 1) % PATH.length].p;
@@ -145,7 +142,19 @@ export default {
         const dx = x - (a[0] + abx * tt), dz = z - (a[2] + abz * tt), dd = dx * dx + dz * dz;
         if (dd < dp) dp = dd;
       }
-      const trench = 1 - smoothstep(34, 62, Math.sqrt(dp));
+      const dLine = Math.sqrt(dp);
+      // #234 item 4: a city stands on top of the bore now. The plateau is a
+      // flat +14 m table (the block grid in decorate stands on it), grading
+      // out to open desert and rim mesas at the horizon. The graded trench
+      // along the line is unchanged: it is the start cutting, the Loop
+      // Station slot, and the guarantee the ground never plugs the bore
+      // (table 14 > highest shell top ~9.2 at the crown; slot floor -7.5
+      // stays below the deepest road -6).
+      let desert = 2.2 + (fbm(x * 0.004 + 9, z * 0.004, 3, 7) - 0.5) * 2.4;
+      desert += smoothstep(240, 430, Math.hypot(x, z)) * 26;
+      const table = 1 - smoothstep(105, 185, dLine);
+      let h = desert * (1 - table) + 14 * table;
+      const trench = 1 - smoothstep(34, 62, dLine);
       return h * (1 - trench) + -7.5 * trench;
     },
   },
@@ -202,11 +211,69 @@ export default {
       { x: dig.x + 6, y: sc.y(dig.x + 6, dig.z - 3), z: dig.z - 3, yaw: 2.8 },
     ], {});
 
+    /* ---- the city on top + the Loop Station (#234 item 4) ---- */
+    const TH = ctx.THREE;
+    const winTex = canvasTex(256, 256, (g) => {
+      g.fillStyle = '#bb905f'; g.fillRect(0, 0, 256, 256);
+      for (let y = 0; y < 8; y++) for (let x = 0; x < 5; x++) {
+        g.fillStyle = (x * 7 + y * 13) % 3 ? '#ffd98f' : '#77582f';
+        g.fillRect(18 + x * 46, 16 + y * 30, 24, 16);
+      }
+    });
+    const distToLine = (x, z) => {
+      let dp = 1e9;
+      for (let k = 0; k < PATH.length; k++) {
+        const a = PATH[k].p, b = PATH[(k + 1) % PATH.length];
+        const abx = b[0] - a[0], abz = b[2] - a[2];
+        const tt = Math.max(0, Math.min(1, ((x - a[0]) * abx + (z - a[2]) * abz) / (abx * abx + abz * abz || 1)));
+        const dx = x - (a[0] + abx * tt), dz = z - (a[2] + abz * tt), dd = dx * dx + dz * dz;
+        if (dd < dp) dp = dd;
+      }
+      return Math.sqrt(dp);
+    };
+    // the block grid on the +14 table: jittered casino towers set back from
+    // the trench apron, standing on the rendered terrain (sc.y), never floating
+    for (let gx = -330; gx <= 330; gx += 44) for (let gz = -210; gz <= 250; gz += 44) {
+      const x = gx + (rng() - 0.5) * 12, z = gz + (rng() - 0.5) * 12;
+      const dl = distToLine(x, z);
+      if (dl < 68 || dl > 145 || rng() < 0.32) continue;
+      const y = sc.y(x, z);
+      if (y < 12.5) continue;
+      sc.place(T.cityTower(winTex, { w: 13 + rng() * 9, d: 13 + rng() * 9, h: 9 + rng() * 21 }), x, z,
+        { yaw: (rng() < 0.5 ? 0 : Math.PI / 2) + (rng() - 0.5) * 0.1, y: y - 0.25 });
+    }
+    // heroes flanking the station: the pyramid hotel north of the slot, a
+    // tall slab on the inside, a half-built tower with its crane to the NE
+    sc.place(T.pyramidHotel(winTex, {}), 105, 188, { yaw: Math.PI, y: sc.y(105, 188) - 0.25 });
+    sc.place(T.cityTower(winTex, { w: 17, d: 15, h: 27 }), 92, 16, { yaw: 0.2, y: sc.y(92, 16) - 0.25 });
+    sc.place(T.constructionSite({}), 196, 182, { yaw: -0.5, y: sc.y(196, 182) - 0.25 });
+
+    // the Loop Station: glass canopy over the bore gap, ribbed, on columns
+    const glassMat = new TH.MeshStandardMaterial({ color: 0xa8d8ea, transparent: true, opacity: 0.22, roughness: 0.12, metalness: 0.05, side: TH.DoubleSide, depthWrite: false });
+    const ribMat = new TH.MeshStandardMaterial({ color: 0x20505e, roughness: 0.5, metalness: 0.4, side: TH.DoubleSide });
+    ctx.group.add(T.stationCanopy(track, 6.38, 7.62, glassMat, ribMat));
+    for (const endAt of [6.45, 7.55]) for (const side of [1, -1]) {
+      const ci = track.indexAtCp(endAt), lat = side * (track.hwL[ci] + 2.3);
+      const p = atPos(endAt, lat), gy = sc.y(p.x, p.z) - 0.3, top = p.y + 2.9;
+      sc.place(T.columnPost(Math.max(1.5, top - gy)), p.x, p.z, { yaw: p.yaw, y: gy });
+    }
+    // platforms along both edges of the station stretch
+    for (const side of [1, -1]) for (let k = 0; k < 5; k++) {
+      const at = 6.52 + k * 0.22, ci = track.indexAtCp(at);
+      const p = atPos(at, side * (track.hwL[ci] + 1.35));
+      sc.place(T.stationPlatform(27), p.x, p.z, { yaw: p.yaw + Math.PI / 2, y: p.y - 0.35 });
+    }
+    // a hanging LOOP STATION sign at the canopy's middle, readable both ways
+    const stTex = signTex('LOOP STATION', { w: 1400, h: 260, size: 190, bg: '#101623', fg: '#39e6c3' });
+    const stp = atPos(7.0, 0);
+    sc.place(T.wallSign(stTex, { w: 11, h: 2.1 }), stp.x, stp.z, { yaw: stp.yaw, y: stp.y + 5.4 });
+    sc.place(T.wallSign(stTex, { w: 11, h: 2.1 }), stp.x, stp.z, { yaw: stp.yaw + Math.PI, y: stp.y + 5.4 });
+
     /* ---- in the bore ---- */
     // the bore's own tube (#234 item 3): dark concrete + the rainbow light
     // strips, one merged geometry each; the colour wave runs on uTime.
-    // TUBE_WINDOWS (below the def) opens the arc where later items cut the
-    // wall away — the station (item 4) and the shortcut junctions (item 6).
+    // TUBE_WINDOWS (module top) opens the arc where item 6 cuts the wall
+    // away at the shortcut junctions.
     const uTime = { value: 0 };
     ctx.group.add(T.boreTube(track, uTime, TUBE_WINDOWS.map(w => ({ ...w, r0: track.indexAtCp(w.from), r1: track.indexAtCp(w.to) }))));
     anim.push((dt, time) => { uTime.value = time; });

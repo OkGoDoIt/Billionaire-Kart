@@ -133,6 +133,127 @@ export function wallSign(tex, { w = 6.2, h = 1.9 } = {}) {
   return grp;
 }
 
+/** A boomtown tower for the city on top (#234 item 4): sandstone shaft with
+ *  a lit-window grid (texture passed in, cloned per tower so the grid scale
+ *  stays constant), a darker cap and a wide asphalt plinth for the block. */
+export function cityTower(tex, { w = 16, d = 16, h = 20 } = {}) {
+  const g = new THREE.Group();
+  const t = tex.clone();
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(Math.max(1, Math.round(w / 5)), Math.max(1, Math.round(h / 5)));
+  t.needsUpdate = true;
+  const wall = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffbe78, emissiveIntensity: 0.75, roughness: 0.85 });
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wall);
+  shaft.position.y = h / 2;
+  g.add(shaft);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(w + 0.9, 0.8, d + 0.9), paint(0x8a6a4a, { rough: 0.8 }));
+  cap.position.y = h + 0.4;
+  g.add(cap);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(w + 11, 0.5, d + 11), paint(0x4c4a48, { rough: 0.95 }));
+  plinth.position.y = 0.25;
+  g.add(plinth);
+  return g;
+}
+
+/** The pyramid hotel: a four-sided stepped pyramid in sandstone with the
+ *  window grid on its slopes and a glowing apex. */
+export function pyramidHotel(tex, { r = 19, h = 16 } = {}) {
+  const g = new THREE.Group();
+  const t = tex.clone();
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(6, 3);
+  t.needsUpdate = true;
+  const wall = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffbe78, emissiveIntensity: 0.6, roughness: 0.85 });
+  const pyr = new THREE.Mesh(new THREE.ConeGeometry(r, h, 4), wall);
+  pyr.position.y = h / 2;
+  pyr.rotation.y = Math.PI / 4;
+  g.add(pyr);
+  const apex = new THREE.Mesh(new THREE.SphereGeometry(0.85, 10, 8), glow(0xff4fa0, 2.2));
+  apex.position.y = h + 0.5;
+  g.add(apex);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(r * 1.9, 0.5, r * 1.9), paint(0x4c4a48, { rough: 0.95 }));
+  plinth.position.y = 0.25;
+  g.add(plinth);
+  return g;
+}
+
+/** A half-built tower frame with a tower crane on top: concrete columns and
+ *  slabs, then the crane mast, jib, counter-jib, cable and hook block. */
+export function constructionSite({ h = 15, craneH = 27 } = {}) {
+  const g = new THREE.Group(), b = new ModelBuilder();
+  for (const sx of [-6, 0, 6]) for (const sz of [-6, 6]) b.add('col', box(0.7, h, 0.7, 0.08, 1), { p: [sx, h / 2, sz] });
+  for (let lvl = 1; lvl <= 3; lvl++) b.add('slab', box(15, 0.5, 15, 0.08, 1), { p: [0, lvl * (h / 3), 0] });
+  b.add('mast', box(0.9, craneH - h, 0.9, 0.08, 1), { p: [0, h + (craneH - h) / 2, 0] });
+  b.add('jib', box(17, 0.7, 0.7, 0.08, 1), { p: [5.5, craneH, 0] });
+  b.add('cjib', box(6, 0.7, 0.7, 0.08, 1), { p: [-4.5, craneH, 0] });
+  b.add('weight', box(1.4, 2.2, 1.2, 0.08, 1), { p: [-7.2, craneH - 1.4, 0] });
+  b.add('cable', box(0.09, 7, 0.09, 0.08, 1), { p: [12.5, craneH - 3.5, 0] });
+  b.add('hook', box(1.1, 0.8, 1.1, 0.08, 1), { p: [12.5, craneH - 7.2, 0] });
+  b.add('cab', box(1.6, 1.6, 1.6, 0.08, 1), { p: [1.2, craneH - 0.6, 0] });
+  const frame = b.build({ col: MAT.concrete, slab: MAT.concrete, mast: paint(YELLOW, { rough: 0.5, metal: 0.3 }), jib: paint(YELLOW, { rough: 0.5, metal: 0.3 }), cjib: paint(YELLOW, { rough: 0.5, metal: 0.3 }), weight: MAT.dark, cable: MAT.dark, hook: MAT.dark, cab: paint(0x2b6cb0, { rough: 0.4 }) });
+  g.add(frame);
+  return g;
+}
+
+/** The Loop Station's glass canopy (#234 item 4): a transparent arc shell
+ *  over the road between two cps, with opaque rib bands every ~12 m. Built
+ *  in world space from the track frames, like boreTube. */
+export function stationCanopy(track, from, to, glassMat, ribMat) {
+  const { ds, px, py, pz, lx, ly, lz, ux, uy, uz, hwL, hwR } = track;
+  const g = new THREE.Group();
+  const r0 = track.indexAtCp(from), r1 = track.indexAtCp(to), STEP = 2, ARC = 10;
+  const arcRow = (r, lift) => {
+    const i = r % track.N, a = hwL[i] + 2.6, b = hwR[i] + 2.6, mid = (a - b) / 2, half = (a + b) / 2, H = 9.4;
+    const pts = [];
+    for (let k = 1; k < ARC; k++) {
+      const ang = Math.PI * (k / ARC), lat = mid + Math.cos(ang) * half, up = Math.sin(ang) * H + lift;
+      pts.push([px[i] + lx[i] * lat + ux[i] * up, py[i] + ly[i] * lat + uy[i] * up, pz[i] + lz[i] * lat + uz[i] * up]);
+    }
+    return pts;
+  };
+  const quadStrip = (rows) => {
+    const pos = [], idx = [];
+    rows.forEach(pts => pts.forEach(p => pos.push(...p)));
+    const w = rows[0].length;
+    for (let r = 0; r < rows.length - 1; r++) for (let k = 0; k < w - 1; k++) {
+      const a0 = r * w + k, a1 = a0 + 1, b0 = a0 + w, b1 = b0 + 1;
+      idx.push(a0, b0, a1, a1, b0, b1);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return geo;
+  };
+  const glassRows = [];
+  for (let r = r0; r <= r1; r += STEP) glassRows.push(arcRow(r, 0));
+  const glass = new THREE.Mesh(quadStrip(glassRows), glassMat);
+  g.add(glass);
+  for (let r = r0; r <= r1; r += Math.round(12 / ds / STEP) * STEP) {
+    const rib = new THREE.Mesh(quadStrip([arcRow(r, 0.06), arcRow(Math.min(r + 1, r1), 0.06)]), ribMat);
+    g.add(rib);
+  }
+  return g;
+}
+
+/** A plain steel column post of a given height (station canopy supports). */
+export function columnPost(h = 4) {
+  const b = new ModelBuilder();
+  b.add('post', box(0.55, h, 0.55, 0.08, 1), { p: [0, h / 2, 0] });
+  b.add('base', box(1.3, 0.25, 1.3, 0.08, 1), { p: [0, 0.12, 0] });
+  return b.build({ post: MAT.steel, base: MAT.dark });
+}
+
+/** One station platform segment: a low slab with a lit edge line. */
+export function stationPlatform(len = 26) {
+  const g = new THREE.Group(), b = new ModelBuilder();
+  b.add('slab', box(len, 0.9, 2.4, 0.08, 1), { p: [0, 0.45, 0] });
+  b.add('edge', box(len, 0.14, 0.3, 0.08, 1), { p: [0, 0.93, -1.0] });
+  const m = b.build({ slab: MAT.concrete, edge: glow(0xffd23c, 1.6) });
+  g.add(m);
+  return g;
+}
+
 /** A sandstone pylon for a portal mouth, with a red band near the top. */
 export function portalPylon({ h = 13 } = {}) {
   const b = new ModelBuilder();

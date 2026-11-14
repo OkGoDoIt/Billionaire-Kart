@@ -111,7 +111,7 @@ export class AIDriver {
     // watch the kart's best distance. No gain of 2 m in 6 s of live racing means it is
     // wedged somewhere; rescue it outright. A rescue may set the kart back a little, so
     // bestProg follows it down instead of counting the setback against the kart.
-    const prog = k.lap * tr.length + k.s;
+    const prog = k.raceDistance;
     if (this.bestProg === null) this.bestProg = prog;
     if (prog > this.bestProg + 2) { this.bestProg = prog; this.progT = 0; }
     else if (k.rescueT <= 0) this.progT += dt;
@@ -348,15 +348,14 @@ export class AIDriver {
     Each driver's per-race form (paceMul) rides underneath the band: the band still
     keeps the field in reach of the human, but it no longer irons them flat. */
 export function rubberBand(race) {
-  const humans = race.karts.filter(k => k.isPlayer);
-  if (!humans.length) { for (const k of race.karts) k.aiSpeedMul = k.ai ? k.ai.lv.speed * (k.ai.paceMul || 1) : 1; return; }
-  const L = race.track.length;
+  const humans = race.players.filter(k => !k.finished);
+  if (!humans.length) { for (const k of race.karts) k.aiSpeedMul = k.ai ? k.ai.lv.speed * (k.ai.paceMul || 1) * (race.cls.ai || 1) : 1; return; }
   let lead = humans[0];
-  for (const h of humans) if (h.lap * L + h.s > lead.lap * L + lead.s) lead = h;
-  const leadP = lead.lap * L + lead.s;
+  for (const h of humans) if (h.raceDistance > lead.raceDistance) lead = h;
+  const leadP = lead.raceDistance;
   for (const k of race.karts) {
     if (!k.ai) continue;
-    const d = (k.lap * L + k.s) - leadP;        // + = ahead of the human
+    const d = k.raceDistance - leadP;        // + = ahead of the human
     const band = k.ai.lv.band;
     const adj = d > 0 ? -band * clamp(d / 110, 0, 1) : band * 1.25 * clamp(-d / 150, 0, 1);
     k.aiSpeedMul = k.ai.lv.speed * (k.ai.paceMul || 1) * (1 + adj) * (race.cls.ai || 1);

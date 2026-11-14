@@ -24,7 +24,7 @@ const BUTTON_NAMES_XB = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Me
 const BUTTON_NAMES_PS = ['Cross', 'Circle', 'Square', 'Triangle', 'L1', 'R1', 'L2', 'R2', 'Share', 'Options', 'L3', 'R3', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', 'PS', 'Touchpad'];
 /** Which naming family a pad uses, from its Gamepad id: PlayStation pads get
     the shapes, everything else gets Xbox-style letters (Switch Pro included). */
-export const padFamily = id => /dual|playstation|sony|wireless controller/i.test(id || '') ? 'ps' : 'xb';
+export const padFamily = id => /dualsense|dualshock|playstation|sony|\b054c\b|^wireless controller$/i.test(id || '') ? 'ps' : 'xb';
 /** The one friendly name for a button — never a raw index, never two naming
     systems at once. */
 export const buttonName = (n, family = 'xb') => (family === 'ps' ? BUTTON_NAMES_PS : BUTTON_NAMES_XB)[n] || 'Button';

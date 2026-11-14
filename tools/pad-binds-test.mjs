@@ -42,6 +42,8 @@ ok([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].every(n => !/\
 eq(padFamily('DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'), 'ps', 'DualSense id -> playstation names');
 eq(padFamily('Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 05c4)'), 'ps', 'DualShock 4 id -> playstation names');
 eq(padFamily('Xbox 360 Controller (STANDARD GAMEPAD Vendor: 045e Product: 028e)'), 'xb', 'Xbox id -> xbox names');
+eq(padFamily('Xbox Wireless Controller'), 'xb', 'Xbox Wireless Controller keeps its printed letters');
+eq(padFamily('Wireless Controller'), 'ps', 'plain Wireless Controller keeps PlayStation shapes');
 eq(padFamily('Fake'), 'xb', 'unknown pad -> xbox names'); eq(padFamily(undefined), 'xb', 'no id -> xbox names');
 
 /* 3. sanitize, including the v1 migration */

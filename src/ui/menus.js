@@ -553,12 +553,14 @@ export class Menus {
     const A = this.app, S = A.save.settings, input = A.input;
     const persist = () => { S.padBinds = JSON.parse(JSON.stringify(input.padBinds)); S.padSteer = input.padSteer; A.save.write(); A.applySettings(); };
     let fam = 'xb';   // naming family of the connected pad; Xbox-style until a PlayStation pad shows up
-    const readout = h('div', { class: 'pad-readout' }, 'Choose an action to change its button.');
+    const idlePrompt = 'Choose an action to change its button.';
+    const readout = h('div', { class: 'pad-readout', role: 'status' }, idlePrompt);
     const diagram = h('div', { class: 'pad-diagram-wrap', html: PAD_SVG });
     const btnEls = new Map(), txtEls = new Map();
     diagram.querySelectorAll('[data-btn]').forEach(el => btnEls.set(+el.dataset.btn, el));
     diagram.querySelectorAll('[data-txt]').forEach(el => txtEls.set(+el.dataset.txt, el));
     let capturing = null, capturePad = null, opener = null, releasePad = null;
+    let displayPad = input.lastDevice.startsWith('pad') ? Number(input.lastDevice.slice(3)) : null;
     let previous = new Map(), flashN = -1, flashUntil = 0;
     const rows = new Map();
     const labelOf = id => PAD_ACTIONS.find(a => a.id === id).label;
@@ -590,8 +592,9 @@ export class Menus {
       if (res.swapped) msg += ` It swapped with ${labelOf(res.swapped)}.`;
       persist(); A.audio?.ui('select'); endCapture(msg, heldPad);
     };
+    const usesButton = (action, n) => input.padBinds[action].includes(n) || !!input.pedals[action]?.includes(n);
     const showPress = n => {
-      const acts = PAD_ACTIONS.filter(a => input.padBinds[a.id].includes(n)).map(a => a.label);
+      const acts = PAD_ACTIONS.filter(a => usesButton(a.id, n)).map(a => a.label);
       readout.textContent = `${buttonName(n, fam)} — ${acts.length ? acts.join(' · ') : 'not used'}`;
       flashN = n; flashUntil = performance.now() + 650;
     };
@@ -612,8 +615,14 @@ export class Menus {
         const n = down.find(n => !previous.get(gp.index)?.includes(n));
         if (n != null && !fresh) fresh = { n, gp };
       }
-      const pressed = new Set([...active.values()].flat());
-      if (fresh || connected) setFamily(padFamily((fresh?.gp || connected).id));
+      const shown = fresh?.gp || (active.has(displayPad) ? gps[displayPad] : connected);
+      if (displayPad !== (shown?.index ?? null)) {
+        flashN = -1;
+        if (!capturing) readout.textContent = idlePrompt;
+      }
+      displayPad = shown?.index ?? null;
+      setFamily(padFamily(shown?.id));
+      const pressed = active.get(displayPad) || [];
       const block = !!capturing || releasePad != null;
       if (capturing && capturePad != null && !active.has(capturePad)) endCapture('Controller disconnected.');
       if (releasePad != null) {
@@ -622,7 +631,7 @@ export class Menus {
       else if (!capturing && fresh) showPress(fresh.n);
       const lit = new Set([...pressed, ...(performance.now() < flashUntil ? [flashN] : [])]);
       for (const [n, el] of btnEls) el.classList.toggle('lit', lit.has(n));
-      for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.toggle('hit', !capturing && input.padBinds[a.id].some(n => lit.has(n)));
+      for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.toggle('hit', !capturing && [...lit].some(n => usesButton(a.id, n)));
       previous = active;
       return block;
     };
@@ -635,7 +644,12 @@ export class Menus {
     }));
     // steering: three plain choices, the current one filled in
     const segBtns = new Map();
-    const drawSteer = () => { for (const [id, b] of segBtns) b.classList.toggle('sel', input.padSteer === id); };
+    const drawSteer = () => {
+      for (const [id, b] of segBtns) {
+        b.classList.toggle('sel', input.padSteer === id);
+        b.setAttribute('aria-pressed', String(input.padSteer === id));
+      }
+    };
     const steerRow = h('div', { class: 'pad-steer' }, h('span', { class: 'pad-label' }, 'Steering'),
       h('div', { class: 'seg' }, STEER_CHOICES.map(([id, label]) => { const b = h('button', { class: 'seg-btn', 'data-f': true, onclick: () => { input.padSteer = id; persist(); drawSteer(); A.audio?.ui('move'); } }, label); segBtns.set(id, b); return b; })));
     const el = h('div', {}, this.header('Controller'),

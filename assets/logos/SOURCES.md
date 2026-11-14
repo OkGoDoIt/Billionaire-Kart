@@ -30,12 +30,10 @@ implies no affiliation or endorsement.
 | `holmes.png` | Theranos | "theranos" wordmark with the teal drop in the "o" — the real Theranos logo | https://commons.wikimedia.org/wiki/File:Theranos_Logo.svg | Public domain |
 | `ellison.png` | Oracle | ORACLE wordmark, red | https://commons.wikimedia.org/wiki/File:Oracle_logo.svg | Public domain |
 | `murdoch.png` | News Corp | News Corp script wordmark (2013–present logo) — primary mapping satisfied, Fox fallback not needed | https://commons.wikimedia.org/wiki/File:News_Corp_logo_2013.svg | Public domain |
-| `soros.png` | Open Society Foundations | "OPEN SOCIETY FOUNDATIONS" wordmark — an official logo asset DOES exist (Commons), so it was saved; no logo was invented | https://commons.wikimedia.org/wiki/File:Open_Society_Foundations_Logo.svg | Public domain |
 
 ## Not-found / fallback register
 - **None outstanding.** Every mapping was satisfied with a verified official asset:
-  Trump (wordmark rather than a crest), Soros/Open Society Foundations (official
-  wordmark exists), Holmes/Theranos (authentic logo on Commons), Murdoch
+  Trump (wordmark rather than a crest), Holmes/Theranos (authentic logo on Commons), Murdoch
   (News Corp primary, no Fox fallback needed).
 - Deviations from the ideal, all deliberate and noted above: NVIDIA and Anthropic
   are symbol+wordmark lockups because no symbol-alone official file is published

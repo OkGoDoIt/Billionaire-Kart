@@ -61,21 +61,33 @@
 .card.track { padding: calc(var(--u) * 1.1) calc(var(--u) * 1.1) calc(var(--u) * 0.9); }
 .card.track h2 { font-size: calc(var(--u) * 2.3); line-height: 1.1; min-height: 2.2em; display: flex; align-items: center; }
 .track-best { position: absolute; right: calc(var(--u) * 0.5); bottom: calc(var(--u) * 0.5); font: normal 700 calc(var(--u) * 1.5) var(--body); color: var(--gold); background: rgba(11,13,32,0.85); border-radius: 2em; padding: 0.15em 0.75em; font-variant-numeric: tabular-nums; }
-/* Past eight tracks the two-row assumption breaks (#161): the grid takes the
-   height the header leaves and shares it between its rows, and each card's
-   thumb flexes to whatever height is left, so a third row never pushes cards
-   off the bottom of the screen. In landscape the roster goes six across, so
-   nine to twelve tracks still fit the same two rows; portrait keeps its two
-   columns (styles/portrait.css) and fits its rows into the tall screen the
-   same way. If even a card's fixed parts cannot fit — a longer roster, a
-   shorter screen — the grid scrolls its own rows instead, and focus already
-   scrolls the focused card into view. At eight tracks or fewer none of this
-   applies and the screen is exactly as it was. */
-.cards.tracks.many { flex: 0 1 auto; min-height: 0; overflow-y: auto; grid-auto-rows: minmax(0, 1fr); }
-@media (orientation: landscape) { .cards.tracks.many { grid-template-columns: repeat(6, 1fr); } }
-.cards.tracks.many .card.track { display: flex; flex-direction: column; min-height: 0; }
-.cards.tracks.many .track-thumb { flex: 1 1 auto; min-height: 0; }
-.cards.tracks.many .card.track h2 { flex: none; font-size: calc(var(--u) * 1.7); }
+/* Let the screen own scrolling, including the space around the focus ring.
+   Every card shares a picture row and title space, even for a short name. */
+.cards.tracks.many {
+  --track-name: calc(var(--u) * 1.48);
+  --track-title-height: 3.3em;
+  --track-photo-min: calc(var(--u) * 6);
+  flex: 1 0 auto;
+  grid-auto-rows: minmax(min-content, 1fr);
+  padding: calc(var(--u) * 1.25);
+}
+@media (orientation: landscape) {
+  .cards.tracks.many { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.cards.tracks.many .card.track {
+  display: grid;
+  grid-template-rows: minmax(var(--track-photo-min), 1fr) auto;
+  min-width: 0;
+  padding-inline: calc(var(--u) * 0.75);
+  scroll-margin: calc(var(--u) * 1.2);
+}
+.cards.tracks.many .track-thumb { height: auto; min-width: 0; }
+.cards.tracks.many .card.track h2 {
+  font-size: var(--track-name);
+  min-height: var(--track-title-height);
+  overflow-wrap: normal;
+}
+.cards.tracks.many .card.focus { transform: none; }
 .card { font: inherit; color: #fff; text-align: left; background: rgba(18,20,43,0.9); border: calc(var(--u) * 0.45) solid #fff; border-radius: calc(var(--u) * 2.6); padding: calc(var(--u) * 2.2) calc(var(--u) * 2.6); cursor: pointer; box-shadow: 0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.4); transition: transform 0.1s; position: relative; }
 .card:disabled { cursor: default; background: rgba(18,20,43,0.94); border-color: rgba(255,255,255,0.3); box-shadow: none; } .card:disabled > * { opacity: 0.35; }
 .card h2 { font-size: calc(var(--u) * 3.6); -webkit-text-stroke: 0.12em var(--ink); }

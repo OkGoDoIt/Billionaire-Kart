@@ -117,7 +117,7 @@ export function tbmChamber() {
     cheek.position.set(s * 6.45, 3.4, -3.4);
     grp.add(cheek);
   }
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.32, 8, 24), MAT.steel);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.32, 8, 24), glow(0xffa63e, 1.9));
   rim.position.set(0, 5.0, -0.2);
   grp.add(rim);
   // the machine itself: neck into the end wall, hero face toward the road
@@ -193,6 +193,22 @@ export function workLight() {
   b.add('head', box(1.15, 0.8, 0.3, 0.06, 1), { p: [0, 2.25, 0], r: [0.35, 0, 0] });
   b.add('face', box(0.95, 0.6, 0.06, 0.03, 1), { p: [0, 2.18, 0.15], r: [0.35, 0, 0] });
   return b.build({ leg: MAT.dark, head: MAT.dark, face: glow(0xfff3cf, 3.2) });
+}
+
+/** An overhead banner for the bore: a wide sign panel hung from the crown
+ *  on two cables, spanning the road so it reads dead-ahead. Origin at the
+ *  panel's bottom-centre; place at road level + ~4.3. Faces +Z. */
+export function hangBanner(tex, { w = 11, h = 1.9 } = {}) {
+  const grp = new THREE.Group();
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.16),
+    [MAT.dark, MAT.dark, MAT.dark, MAT.dark, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 })]);
+  panel.position.y = h / 2;
+  grp.add(panel);
+  const b = new ModelBuilder();
+  for (const s of [1, -1]) b.add('cable', cyl(0.045, 0.045, 1.1, 6), { p: [s * (w / 2 - 0.7), h + 0.55, 0] });
+  b.add('bar', cyl(0.07, 0.07, w - 1.2, 6), { p: [0, h + 0.06, 0], r: [0, 0, Math.PI / 2] });
+  grp.add(b.build({ cable: MAT.dark, bar: MAT.steel }));
+  return grp;
 }
 
 /** A lit wall sign: dark frame plus a textured panel, facing +Z. Origin at panel centre. */

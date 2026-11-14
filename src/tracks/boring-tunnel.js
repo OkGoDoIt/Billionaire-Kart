@@ -21,7 +21,7 @@ import { canvasTex, fitText } from '../render/textures.js';
  *  Item 5's TBM chamber keeps k 5..12 (the L lower arc is the chamber
  *  mouth); item 6's shortcut junctions keep k 0..7 (R-side mouths). */
 const TUBE_WINDOWS = [
-  { from: 4.17, to: 4.43, k0: 5, k1: 12 },   // the Boring Machine's chamber mouth (item 5)
+  { from: 4.17, to: 4.43, k0: 4, k1: 12 },   // the Boring Machine's chamber mouth (item 5; opened to k4 in the owner-directive pass — the Machine must be unmissable)
   { from: 2.95, to: 5.9, k0: 5, k1: 12 },    // the breakthrough junction: one long L-side opening (item 6)
 ];
 
@@ -403,14 +403,21 @@ export default {
       const ci = track.indexAtCp(at);
       const p = atPos(at, side * ((side > 0 ? track.hwL[ci] : track.hwR[ci]) - 0.35));
       const tex = seed % 2 ? signTex(text, { size: 175 }) : signTex(text, { size: 175, bg: '#f7b500', fg: '#1a1d29' });
-      sc.place(T.wallSign(tex, { w: 9, h: 2.6 }), p.x, p.z, { yaw: faceCentre(p, side), y: p.y + 3.1 });
+      sc.place(T.wallSign(tex, { w: 10.5, h: 3.0 }), p.x, p.z, { yaw: faceCentre(p, side), y: p.y + 3.2 });
     };
-    wallSignAt(2.7, -1, 'NEXT EXIT: 40 MILES', 11);
-    wallSignAt(3.9, 1, 'SHORTCUT STILL BEING DUG', 23);
-    wallSignAt(6.4, -1, 'NOT A FLAMETHROWER', 37);
-    wallSignAt(8.15, -1, 'EST. COMPLETION: SOON', 53);
+    // overhead banners (owner directive, Nov 14): dead-ahead over the road,
+    // impossible to glimpse past — the three best lines hang over the bore
+    const bannerAt = (at, text, seed) => {
+      const p = atPos(at, 0);
+      const tex = seed % 2 ? signTex(text, { size: 175 }) : signTex(text, { size: 175, bg: '#f7b500', fg: '#1a1d29' });
+      sc.place(T.hangBanner(tex, { w: 11, h: 1.9 }), p.x, p.z, { yaw: p.yaw + Math.PI, y: p.y + 4.3 });
+    };
+    bannerAt(2.7, 'NEXT EXIT: 40 MILES', 11);
+    wallSignAt(4.1, -1, 'SHORTCUT STILL BEING DUG', 23);   // moved: at 3.9 L it hung in the open junction (nothing behind it since item 6) — now on the R wall facing the cut
+    wallSignAt(6.1, -1, 'NOT A FLAMETHROWER', 37);          // moved in from 6.4: that was the station portal mouth itself
+    bannerAt(8.15, 'EST. COMPLETION: SOON', 53);
     wallSignAt(9.7, 1, 'MIND THE HAIRPIN', 67);
-    wallSignAt(13.4, -1, 'LIGHT AT THE END', 71);
+    bannerAt(13.4, 'LIGHT AT THE END', 71);
 
     // chevron boards on the outside wall of every real corner, inside the bore
     for (const c of track.corners) {
@@ -450,8 +457,9 @@ export default {
 
     // the barrier across the exit mouth, and rubble at both mouths
     const bTex = signTex('SHORTCUT COMING SOON', { w: 1500, h: 400, size: 150, bg: '#f7b500', fg: '#1a1d29' });
-    const bp = atPos(3.22, 11.8);
+    const bp = atPos(3.22, 10.4);
     const barrier = T.shortcutBarrier(bTex);
+    barrier.scale.setScalar(1.3);
     sc.place(barrier, bp.x, bp.z, { yaw: faceCentre(bp, 1), y: sc.y(bp.x, bp.z) - 0.1 });
     sc.instances(partsOf(P.rock(3, { r: 1.1 })), [
       { x: 233, y: sc.y(233, -38), z: -38, yaw: 0.7 }, { x: 235, y: sc.y(235, -27), z: -27, yaw: 2.4 },

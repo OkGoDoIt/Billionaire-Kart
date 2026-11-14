@@ -263,6 +263,31 @@ function dress(ctx) {
     signAt(p.x, p.z, yaw, draw, w, h, up, opts); return p;
   };
   const RUST_HEX = '#c1440e', INK = '#1f1418', CREAM = '#f2efe6';
+  // The samples made it to the depot. The shipping label is still waiting for a ride home.
+  const pickup = sc.beside(23.1, -1, 8);
+  const approach = track.indexAtCp(22.58);
+  const depot = M.sampleDepot();
+  const depotYaw = Math.atan2(track.px[approach] - pickup.x, track.pz[approach] - pickup.z);
+  sc.place(depot, pickup.x, pickup.z, { y: pickup.y, yaw: depotYaw });
+  depot.updateMatrixWorld(true);
+  const tagCenter = depot.localToWorld(new THREE.Vector3(2.55, 4.55, 0.22)).toArray();
+  bake.add(depot); take(pickup.x, pickup.z, 7.5);
+  const postage = ['LABEL CREATED', 'AWAITING PICKUP', 'STILL AWAITING PICKUP'];
+  let pickupStamp = 0;
+  const parcelTag = atlas.add(768, 512, (g, w, h) => {
+    g.fillStyle = CREAM; g.fillRect(0, 0, w, h);
+    // The destination and machine-readable stripes share the top of the shipping label.
+    K.fitText(g, 'RETURN TO EARTH', w * 0.41, h * 0.19, w * 0.77, 108, K.FONT, INK, { lines: 1 });
+    g.fillStyle = INK;
+    let barX = w * 0.82;
+    for (const bar of [3, 7, 2, 4, 3, 8, 2, 6, 3, 4, 8, 2, 2, 4]) {
+      g.fillRect(barX, h * 0.08, bar, h * 0.19); barX += bar + 3;
+    }
+    g.fillStyle = '#92291e'; g.fillRect(0, h * 0.36, w, h * 0.37);
+    K.fitText(g, 'POSTAGE DUE', w / 2, h * 0.55, w * 0.94, 118, K.FONT, '#fff5d9', { lines: 1 });
+    K.fitText(g, postage[pickupStamp], w / 2, h * 0.86, w * 0.94, 68, K.SANS, INK, { lines: 1 });
+  });
+  atlas.place(parcelTag, tagCenter, depotYaw, 7.35, 4.98);
   // painted posters (generated art, tools/gen-posters.mjs): one 2x2 atlas image, one mesh for all of them
   const posters = (() => {
     const tex = new THREE.TextureLoader().load('assets/posters/mars-colony.webp'); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
@@ -596,6 +621,8 @@ function dress(ctx) {
     const mode = view.finalLap || lap >= laps ? 'final' : lap >= 2 ? 'lit' : 'vent';
     if (mode !== rst.mode) { rst.mode = mode; if (mode === 'final') rst.tF = 0; }
     // the boards follow the lap; each canvas is redrawn only when what it says changes
+    const nextStamp = mode === 'final' ? 2 : mode === 'lit' ? 1 : 0;
+    if (nextStamp !== pickupStamp) { pickupStamp = nextStamp; atlas.paint(); }
     const cd = mode === 'vent' ? 0 : 1;
     if (cd !== rst.cd) { rst.cd = cd; setCountdown(cd); }
     const days = rst.boomed ? 0 : mode === 'vent' ? 2 : 3;

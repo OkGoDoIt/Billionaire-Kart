@@ -478,10 +478,15 @@ function hull(b, o) {
   const wl = 1.15;
   for (const [z0, z1] of pieces) {
     const sts = [z0, ...zs.filter(z => z > z0 + 0.5 && z < z1 - 0.5), z1].map(z => station(z, o));
-    for (const s of [1, -1]) b.add('hull', stripGeo(sts, st => range(0, uAt(st, wl), 10).map(u => { const p = sectionPt(st, u); return [p[0] * s, p[1]]; }), s));
+    // Divide the shell itself at the two paint lines. At the raised stem
+    // both boundaries converge on the keel, so no stripe hangs in the air.
+    for (const s of [1, -1]) {
+      const side = (st, u) => { const [x, y] = sectionPt(st, u); return [s * x, y]; };
+      b.add('hull', stripGeo(sts, st => range(0, uAt(st, wl + 0.55), 10).map(u => side(st, u)), s));
+      b.add('boot', stripGeo(sts, st => range(uAt(st, wl + 0.55), uAt(st, wl), 3).map(u => side(st, u)), s));
+    }
     b.add('bottom', stripGeo(sts, st => { const u0 = uAt(st, wl); return [...range(u0, 1, 7).map(u => sectionPt(st, u)), ...range(1, u0, 7).slice(1).map(u => { const p = sectionPt(st, u); return [-p[0], p[1]]; })]; }));
     for (const s of [1, -1]) {
-      b.add('boot', stripGeo(sts, st => [wl + 0.55, wl].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; }), s));
       b.add('gold', stripGeo(sts, st => [st.top - 0.75, st.top - 1.15].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; }), s));
       if (o.windows) {
         const ws = sts.filter(st => st.z >= o.windows[0] && st.z <= o.windows[1]);
@@ -924,11 +929,10 @@ export function shellOffice() {
 /** An oversize self-inking registry stamp with the embossed travel document below. */
 export function registryDesk() {
   const root = new THREE.Group(), bed = new ModelBuilder(), plunger = new ModelBuilder();
-  bed.add('green', box(13.5, 1.4, 6, 0.35, 2), { p: [0, 1.1, 0] });
-  bed.add('paper', box(12.9, 1.7, 5.5, 0.45, 2), { p: [0, 2.4, 0] });
+  bed.add('green', box(13.5, 1.0, 6, 0.30, 2), { p: [0, 0.65, 0] });
+  bed.add('paper', box(12.9, 3.4, 5.5, 0.20, 2), { p: [0, 2.85, 0] });
   for (const side of [-1, 1]) {
     bed.add('brass', cyl(0.33, 0.45, 4.8, 12), { p: [5.6 * side, 5.55, -0.55] });
-    bed.add('ink', box(11.6, 0.1, 0.12), { p: [0, 2.15 + side * 0.35, 2.77] });
   }
   plunger.add('ink', box(12, 0.5, 5.1, 0.22, 2));
   plunger.add('red', box(12.3, 1.2, 5.45, 0.38, 2), { p: [0, 0.72, 0] });
@@ -944,14 +948,14 @@ export function registryDesk() {
     fitText(g, states[lap], w / 2, h * 0.66, w * 0.91, h * 0.56, h * 0.56, FONT, { fill: '#8d2330' });
   };
   const texture = canvasTex(768, 256, draw(0), { repeat: false });
-  const paper = new THREE.Mesh(new THREE.PlaneGeometry(12.6, 3.7), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.78 }));
-  paper.position.set(0, 2.05, 2.98); root.add(paper);
+  const paper = new THREE.Mesh(new THREE.PlaneGeometry(12.5, 3.05), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.78 }));
+  paper.position.set(0, 2.85, 2.77); root.add(paper);
   let current = 0;
   const repaint = () => { const c = texture.image; draw(current)(c.getContext('2d'), c.width, c.height); texture.needsUpdate = true; };
   document.fonts?.ready.then(repaint);
   return { root, update(time, lap) {
     const phase = (time % 2.7) / 2.7;
-    handle.position.y = 3.46 + 3.15 * Math.min(1, Math.abs(phase - 0.5) * 6) ** 1.5;
+    handle.position.y = 4.8 + 3.15 * Math.min(1, Math.abs(phase - 0.5) * 6) ** 1.5;
     const next = Math.min(2, Math.max(0, lap - 1));
     if (current !== next) { current = next; repaint(); }
   } };

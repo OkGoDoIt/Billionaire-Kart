@@ -33,16 +33,24 @@ const RIDGES = [
   { reach: 300, pts: [[345, -10, 34], [350, 175, 62], [275, 395, 112], [70, 445, 128], [-100, 420, 100], [-250, 340, 60]] },
   { reach: 62, pts: [[0, 312, 68], [0, 262, 57], [-1, 220, 35], [-2, 182, 16], [-4, 150, 4]] },
   { reach: 120, pts: [[20, 200, 30], [-120, 175, 24], [-215, 120, 16], [-225, 30, 6]] },
-  { reach: 210, pts: [[90, 485, 240], [-50, 505, 205]] },                 // the horn behind the jump
+  // Narrow summits with a saddle between them, sitting above the broad massif.
+  { reach: 136, horn: true, pts: [[101, 481, 250], [67, 501, 203], [13, 513, 165]] },
+  { reach: 118, horn: true, pts: [[-12, 499, 194], [-57, 510, 215], [-103, 510, 151]] },
   { reach: 160, pts: [[335, 335, 150], [385, 225, 118]] },               // and its east shoulder over the climb
 ];
 function ridgeHeight(x, z) {
   let best = 0;
-  for (const { reach, pts } of RIDGES) for (let k = 0; k + 1 < pts.length; k++) {
+  for (const { reach, horn, pts } of RIDGES) for (let k = 0; k + 1 < pts.length; k++) {
     const [ax, az, ah] = pts[k], [bx, bz, bh] = pts[k + 1];
     const dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
     const d = Math.hypot(x - (ax + dx * t), z - (az + dz * t)), f = 1 - smoothstep(0, reach, d);
-    best = Math.max(best, (ah + (bh - ah) * t) * f * (0.6 + 0.4 * f));
+    let face = f * (0.6 + 0.4 * f);
+    if (horn && d < reach) {
+      const flank = 1 - d / reach;
+      const flute = Math.sin(x * 0.078 + z * 0.033) + Math.sin(x * 0.124 - z * 0.041) * 0.45;
+      face = flank * flank + 0.24 * flute * flank * (1 - flank);
+    }
+    best = Math.max(best, (ah + (bh - ah) * t) * face);
   }
   return best;
 }
@@ -172,7 +180,8 @@ export default {
     color(x, z, h, slope, over, out) {
       if (h < -3) return;
       if (slope >= 0.5) {   // high faces stay snowy: the horn and the massif's crest should not read as bare grey rock
-        const k = smoothstep(70, 130, h) * 0.7;
+        const grain = 0.45 + 0.55 * fbm(x * 0.09, z * 0.09, 2, 52);
+        const k = Math.min(0.91, 0.32 + grain * 0.30 + smoothstep(65, 145, h) * 0.29);
         out[0] += (0.93 - out[0]) * k; out[1] += (0.95 - out[1]) * k; out[2] += (0.99 - out[2]) * k;
         return;
       }
@@ -581,6 +590,11 @@ function dress(ctx) {
     ...sc.along({ from: 29.8, to: 30.5, side: 1, offset: 8, spacing: 7, jitter: 1.6 }),
   ].filter(p => free(p.x, p.z, 2) && clear(p.x, p.z, 0.5) && !onPiste(p.x, p.z));
   pineSets.forEach((set, v) => sc.instances(set, rowSpots.filter((_, i) => i % 4 === v), { scale: [0.8, 1.3], yaw: 'random', sink: 0.2 }));
+  // Broken ledges separate the traverse from the face above; use a handful
+  // of broad, low clusters rather than a line of identical upright stones.
+  const ledges = sc.along({ from: 16.8, to: 19.9, side: 1, offset: 23, spacing: 15, jitter: 3 })
+    .filter(p => clear(p.x, p.z, 3) && free(p.x, p.z, 4));
+  sc.instances(partsOf(P.rock(9, { color: 0x9a9eb0 })), ledges, { scale: [2, 3.5], yaw: 'random', sink: 0.8, cast: false });
   const rocks = sc.scatter({ count: 80, min: 14, max: 200, maxSlope: 1.4, minGap: 9, where: (x, z) => clear(x, z, 1.5) && free(x, z, 3) && !inTown(x, z) });
   sc.instances(partsOf(P.rock(5, { color: 0x666a7c })), rocks, { scale: [0.9, 2.4], yaw: 'random', sink: 0.35 });
 

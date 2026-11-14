@@ -584,7 +584,7 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
     const frame = { ...p, yaw }, faceH = width * 0.188;
     for (const side of [-1, 1]) {
       const x = side * (width / 2 + 0.7);
-      const base = toWorld(frame, [x, 0, 0]), floor = cp < 9.7 ? W - 1 : p.y - 2;
+      const base = toWorld(frame, [x, 0, 0]), floor = cp < 9.8 ? W - 1 : p.y - 2;
       exchange.add('brass', cyl(0.32, 0.52, p.y + height - floor, 8), { p: [base[0], (p.y + height + floor) / 2, base[2]] });
       exchange.add('ink', box(1.1, faceH + 1, 1.1, 0.23), { p: toWorld(frame, [x, height, 0]), r: [0, yaw, 0] });
       exchange.add('brass', box(1.9, 0.35, 1.4, 0.12), { p: toWorld(frame, [x, height + faceH / 2, 0]), r: [0, yaw, 0] });
@@ -594,7 +594,16 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
     atlas.place2(sign, toWorld(frame, [0, height, 0.49]), yaw, width, faceH);
     return frame;
   }
-  marquee(8.94, 'ALL-TIME HIGH', '#ffdb59', 9.4, 21);
+  const mint = new THREE.TextureLoader().load('assets/tracks/crypto-cove/mint.webp');
+  mint.colorSpace = THREE.SRGBColorSpace;
+  const seal = new THREE.MeshBasicMaterial({ map: mint });
+  const highFrame = marquee(8.94, 'ALL-TIME HIGH', '#ffdb59', 9.4, 21);
+  for (const side of [-1, 1]) {
+    const face = new THREE.CircleGeometry(2.1, 36);
+    face.rotateY(highFrame.yaw);
+    face.translate(...toWorld(highFrame, [side * 11.5, 9.4, 0.7]));
+    bake.geo(seal, face);
+  }
   marquee(9.76, 'BOUGHT THE DIP', '#98ffbd', 7.6, 21);
   // The plunge indicator sits beside the gap, facing the approaching driver. Its
   // silhouette, the free water below, and the green landing hoop read in a single view.

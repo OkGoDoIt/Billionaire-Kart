@@ -221,15 +221,7 @@ export class Menus {
     const head = this.header('How many players?', 'Up to four on one screen.');
     const hint = head.querySelector('p');
     const el = h('div', {}, head, h('div', { class: 'cards four' }, cards));
-    /* #273: the choices must follow the devices the player actually has. On a
-       touch-only device the 2/3/4 cards start disabled, but a controller
-       plugged in while this screen is up has to enable them right here —
-       sending the player Back and in again makes a working pad look broken —
-       and unplugging the last one has to disable them again. input.onPads is
-       the Input class's hotplug hook (fired by its gamepadconnected /
-       gamepaddisconnected path); chain onto whatever handler was there and
-       restore it on close, so this screen's listener never outlives it or
-       clobbers another screen's handler. */
+    // Update in place when a pad connects, including while a disabled card has focus.
     const refresh = () => {
       const touchOnly = matchMedia('(pointer: coarse)').matches && !A.input.pads().length;
       cards.forEach((c, i) => { if (i > 0) c.disabled = touchOnly; });

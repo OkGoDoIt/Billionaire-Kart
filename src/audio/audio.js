@@ -74,7 +74,15 @@ export class AudioEngine {
   /** The tab went to the background: stop making sound until it is back. */
   suspend() { if (this.ctx?.state === 'running') this.ctx.suspend?.().catch(() => {}); this.silent?.pause?.(); }
   get t() { return this.ctx.currentTime; }
-  setVolumes(music, sfx) { this.vol.music = music; this.vol.sfx = sfx; if (!this.ctx) return; this.sfx.gain.value = this.muted ? 0 : sfx; /* an explicit mute or slider change outranks a duck still in flight: cancel its scheduled restore, or the ramp would bring the music back over the player's chosen level when it lands */ this.mus.gain.cancelScheduledValues(this.t); this.mus.gain.value = this.muted ? 0 : music * 0.55; }
+  setVolumes(music, sfx) {
+    this.vol.music = music; this.vol.sfx = sfx;
+    if (!this.ctx) return;
+    this.sfx.gain.value = this.muted ? 0 : sfx;
+    // Replace any recovery ramp left by a hit, including the last scheduled dip value.
+    const t = this.t;
+    this.mus.gain.cancelScheduledValues(t);
+    this.mus.gain.setValueAtTime(this.muted ? 0 : music * 0.55, t);
+  }
   toggleMute() { this.muted = !this.muted; this.setVolumes(this.vol.music, this.vol.sfx); }
   /** Pull the music down for a beat (a hit lands) and bring it back: the hit owns the moment. */
   duck(sec = 0.45) {

@@ -141,19 +141,24 @@ function closeSteps() {
   const back = opener; opener = null;
   if (back?.isConnected) back.focus({ preventScroll: true });
 }
-/** True while the steps sheet is up; app.js routes menu back/confirm to it then. */
-export const installStepsOpen = () => !!overlay;
-/** The sheet's one close action, shared by its buttons, Esc, and controller back/confirm. */
-export function closeInstallSteps() { closeSteps(); }
-function onSheetKey(e) {
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSteps(); return; }
-  if (e.key !== 'Tab' || !overlay) return;
+function moveFocus(backwards) {
   const controls = [...overlay.querySelectorAll('button')];
-  if (!controls.length) return;
-  e.preventDefault();
   const i = controls.indexOf(document.activeElement);
-  const next = e.shiftKey ? controls[i <= 0 ? controls.length - 1 : i - 1] : controls[(i + 1) % controls.length];
-  next.focus({ preventScroll: true });
+  const next = (i + (backwards ? -1 : 1) + controls.length) % controls.length;
+  controls[next].focus({ preventScroll: true });
+}
+
+/** The modal owns menu input until dismissed, including stick movement and Start. */
+export function handleInstallAction(action) {
+  if (!overlay) return false;
+  if (action === 'back' || action === 'confirm' || action === 'pause') closeSteps();
+  else if (action === 'up' || action === 'left') moveFocus(true);
+  else if (action === 'down' || action === 'right') moveFocus(false);
+  return true;
+}
+function onSheetKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSteps(); }
+  else if (e.key === 'Tab') { e.preventDefault(); moveFocus(e.shiftKey); }
 }
 export function openInstall() {
   const kind = installOffer();

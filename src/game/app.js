@@ -5,7 +5,7 @@ import { Input, describePadBind, padFamily } from '../core/input.js';
 import { keyName, keyboardBindings } from '../core/keyboard.js';
 import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
-import { installStepsOpen, closeInstallSteps } from '../ui/install.js';
+import { handleInstallAction } from '../ui/install.js';
 import { Wipe } from '../ui/wipe.js';
 import { Showroom } from '../render/showroom.js';
 import { RaceSession, MAX_FRAME_TIME } from './session.js';
@@ -64,10 +64,7 @@ export class App {
   onMenu(action, device) {
     if (action === 'mute') { this.audio?.toggleMute?.(); return; }
     if (action === 'fullscreen') { this.fullscreen(!document.fullscreenElement); return; }
-    // the install guide sheet is a modal over the menus (#274): while it is up,
-    // back and confirm from keyboard or controller go to its close action, not
-    // to the still-mounted menu underneath
-    if (installStepsOpen() && (action === 'back' || action === 'confirm')) { closeInstallSteps(); return true; }
+    if (handleInstallAction(action)) return true;
     if (this.menus.visible) return this.menus.handle(action, device);
     const s = this.session; if (!s || this.attract) return;
     if (action === 'pause' || (action === 'back' && device.startsWith('kb'))) { if (s.phase !== 'intro' && s.race.state !== 'done') this.pause(); else s.skipIntro(); }
@@ -84,21 +81,13 @@ export class App {
     if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
     this.audio?.setVolumes?.(S.music, S.sfx);
     this.shake = S.shake;
-    // A race already running was built with the old racing preferences: push the new
-    // ones onto its human karts and cameras, with the same rules session.js builds
-    // them by, so an Options change made in pause is honored on resume (#272).
-    const s = this.session;
-    if (s) {
-      for (const c of s.view.cams) c.shakeScale = S.shake === false ? 0 : 1;
-      const tt = s.config.mode === 'timetrial';
-      for (const k of s.race.players) {
-        k.autoTrick = !!(S.autoTrick || this.input.touch.active);
-        k.assist = { steer: !tt && S.smartSteer ? 1 : 0 };
-      }
-      // touch play keeps its forced assists, exactly as at session construction
-      if (s.touch && s.race.players.length) {
-        s.race.players[0].autoTrick = true;
-        if (!tt) s.race.players[0].assist = { steer: 1 };
+    const session = this.session;
+    if (session) {
+      for (const cam of session.view.cams) cam.shakeScale = S.shake === false ? 0 : 1;
+      for (const kart of session.race.players) {
+        const touch = !!session.touch && kart.playerIndex === 0;
+        kart.autoTrick = touch || S.autoTrick;
+        kart.assist.steer = session.config.mode !== 'timetrial' && (touch || S.smartSteer) ? 1 : 0;
       }
     }
   }
@@ -219,10 +208,13 @@ export class App {
   /** Called by the session when the flyover ends. */
   onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
 
-  /* The stored config's player entries were built with the settings of their time:
-     rebuild them from the current settings so a restart honors Options changes
-     made since the race started, like a fresh start does (#272). */
-  restartRace() { this.menus.close(); if (this.lastConfig) this.lastConfig.players = this._players(); this._race(this.lastConfig, this.lastCupLine); }
+  restartRace() {
+    const config = this.lastConfig;
+    if (!config) return;
+    const { autoTrick, smartSteer } = this.save.settings;
+    const players = config.players.map(player => ({ ...player, autoTrick, smartSteer }));
+    this._race({ ...config, players }, this.lastCupLine);
+  }
   /* Run the finished cup again from race 1: same cup, class, level, racer picks, and rival grid; the
      standings start empty. The recorded result in the save is untouched — a better run replaces it. */
   restartCup() { const g = this.gp; if (g) this.startCup(g.cup, g.grid); }

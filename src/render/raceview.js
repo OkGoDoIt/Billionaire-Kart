@@ -12,7 +12,7 @@ import { buildItemBox, buildItemModel, coinGeometry, coinMaterial } from '../mod
 import { OBSTACLE_MODELS } from '../models/props.js';
 import { buildKart } from '../models/kart.js';
 import { RACER_BY_ID } from '../content/racers.js';
-import { clamp } from '../core/util.js';
+import { clamp, lerp } from '../core/util.js';
 
 const CONFETTI = [[1, 0.82, 0.24], [1, 0.3, 0.43], [0.22, 0.71, 1], [0.18, 0.9, 0.65], [0.62, 0.42, 1], [1, 1, 1]];
 /** Per-item feedback colour: the ring/burst an item use and a hit land in the item's own colour, so a
@@ -133,7 +133,19 @@ export class RaceView {
     this._lightsOff = n === 0 ? this.time + 2.5 : Infinity;
   }
 
-  startIntro() { this.intro = new IntroCam(this.race.track, this.views[0].camera); }
+  startIntro() {
+    const view = this.views[0], camera = view.camera;
+    let shots = this.def.intro;
+    if (shots?.some(shot => typeof shot === 'function')) {
+      // Ask the race camera for this player's stationary pose, including touch pullback
+      // and split-screen framing, so the introduction can land on the countdown view.
+      const canvas = this.gfx.renderer.domElement;
+      view.cam.update(0, this.viewOf.get(view.cam.kart), canvas.width * view.rect[2] / (canvas.height * view.rect[3]));
+      const grid = { position: camera.position.clone(), direction: camera.getWorldDirection(new THREE.Vector3()), fov: camera.fov };
+      shots = shots.map(shot => typeof shot === 'function' ? shot(grid) : shot);
+    }
+    this.intro = new IntroCam(this.race.track, camera, shots);
+  }
 
   /** Time trial: show a translucent replay of the best run. ghost: { racer, step, time, d: [x,y,z,yaw,...] } */
   setGhost(ghost) {
@@ -335,7 +347,11 @@ export class RaceView {
       const q = this.intro.update(dt); this.views[0].focus.copy(q);
       // a shot may ask for its own color grade (the Bliss Hills opening is shown ungraded); everything after it gets the usual one back
       const want = this.intro.done ? null : this.intro.shot?.grade;
-      if (want && !this._grade) { this._grade = { sat: gfx.post.sat, contrast: gfx.post.contrast, vignette: gfx.post.vignette }; Object.assign(gfx.post, want); }
+      if (want) {
+        this._grade ??= { sat: gfx.post.sat, contrast: gfx.post.contrast, vignette: gfx.post.vignette };
+        const fade = this.intro.shot.fadeGrade ? this.intro.progress : 0;
+        for (const key of ['sat', 'contrast', 'vignette']) gfx.post[key] = lerp(want[key] ?? this._grade[key], this._grade[key], fade);
+      }
       else if (!want && this._grade) { Object.assign(gfx.post, this._grade); this._grade = null; }
     }
     else {

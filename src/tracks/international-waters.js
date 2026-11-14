@@ -457,8 +457,8 @@ function decorate(ctx) {
 
   /* ----- customs on the run home ----- */
   {
-    const desk = W.registryDesk(), spot = sc.beside(43.32, -1, 6.5);
-    sc.place(desk.root, spot.x, spot.z, { y: spot.roadY - 0.2, yaw: faceApproach(spot, 42.65) });
+    const desk = W.registryDesk(), spot = sc.beside(42.78, -1, 8.5);
+    sc.place(desk.root, spot.x, spot.z, { y: spot.roadY - 0.2, yaw: faceApproach(spot, 42.3) });
     anim.push((dt, time) => desk.update(time, view.race.lakeLap));
     const ci = track.indexAtCp(43.05), cg = sc.beside(43.05, 1, -track.hwL[ci]);
     const customs = P.gantry(track.hwL[ci] + track.hwR[ci] + 1.5, 'NOTHING TO DECLARE (EVER)', { color: 0x1d5c46, color2: 0xf3ead2 });

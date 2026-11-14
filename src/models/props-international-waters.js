@@ -938,7 +938,11 @@ export function registryDesk() {
   root.add(bed.build(mats, { cast: false }));
   const handle = plunger.build(mats, { cast: false }); root.add(handle);
   const states = ['PENDING', 'ELSEWHERE', 'CLASSIFIED'];
-  const draw = lap => signFace(['HOME PORT', states[lap]], { bg: '#f5e3af', fg: '#124f45', accent: '#a02e39', rule: false });
+  const draw = lap => (g, w, h) => {
+    g.fillStyle = '#f5e3af'; g.fillRect(0, 0, w, h);
+    fitText(g, 'HOME PORT', w / 2, h * 0.21, w * 0.9, h * 0.27, h * 0.27, FONT, { fill: '#124f45' });
+    fitText(g, states[lap], w / 2, h * 0.66, w * 0.91, h * 0.56, h * 0.56, FONT, { fill: '#8d2330' });
+  };
   const texture = canvasTex(768, 256, draw(0), { repeat: false });
   const paper = new THREE.Mesh(new THREE.PlaneGeometry(12.6, 3.7), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.78 }));
   paper.position.set(0, 2.05, 2.98); root.add(paper);

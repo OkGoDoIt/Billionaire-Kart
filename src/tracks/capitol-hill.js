@@ -505,12 +505,22 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // granite coping round the rim (tall enough to wall the water in), and the gravel walk on the far side
   const cop = partsOf(C.coping(8)), copSpots = [];
   for (let z = POOL.z0 - 0.65 + 4; z < POOL.z1 + 0.65; z += 8) for (const x of [POOL.x0 - 0.65, POOL.x1 + 0.65]) copSpots.push({ x, z: Math.min(z, POOL.z1 + 0.65 - 4), y: Y - 0.65 + 0.32 - 0.33, yaw: Math.PI / 2 });
-  for (let x = POOL.x0 - 1.3 + 4; x < POOL.x1 + 1.3; x += 8) for (const z of [POOL.z0 - 0.65, POOL.z1 + 0.65]) copSpots.push({ x: Math.min(x, POOL.x1 + 1.3 - 4), z, y: Y - 0.65 + 0.32 - 0.33, yaw: 0 });
-  sc.instances(cop, copSpots.map(p => ({ ...p, y: Y - 0.18 })), { cast: false });   // a low lip: anything taller hides the water from the karts
+  // The racing line clips the north-west corner. Terminate the granite at the
+  // causeway on both sides instead of drawing masonry across the asphalt.
+  const endBlock = 2.6, endCount = Math.ceil((POOL.x1 - POOL.x0 + 2.6) / endBlock);
+  const endLen = (POOL.x1 - POOL.x0 + 2.6) / endCount;
+  const endSpots = [];
+  for (let j = 0; j < endCount; j++) for (const z of [POOL.z0 - 0.65, POOL.z1 + 0.65]) {
+    const x = POOL.x0 - 1.3 + endLen * (j + 0.5);
+    if (!reach(x, z, 0.25)) endSpots.push({ x, z, y: Y - 0.18, yaw: 0 });
+  }
+  sc.instances(partsOf(C.coping(endLen)), endSpots, { cast: false });
+  sc.instances(cop, copSpots.filter(p => !track.ground(p.x, p.z, -1, sc.hit).onRoad).map(p => ({ ...p, y: Y - 0.18 })), { cast: false });   // a low lip: anything taller hides the water from the karts
   {
     const b = new ModelBuilder(), walkW = 7;
     b.add('walk', box(walkW, 0.3, LEN + 30, 0.05, 1), { p: [POOL.x1 + 1.3 + walkW / 2, Y - 0.12, ZM] });
-    b.add('walk', box(POOL.x1 - POOL.x0 + 2.6 + walkW, 0.3, 12, 0.05, 1), { p: [AXIS + walkW / 2, Y - 0.12, POOL.z0 - 7.3] });   // across the head
+    const eastClipped = POOL.x0 + 14, eastEnd = POOL.x1 + 1.3 + walkW;
+    b.add('walk', box(eastEnd - eastClipped, 0.3, 12, 0.05, 1), { p: [(eastClipped + eastEnd) / 2, Y - 0.12, POOL.z0 - 7.3] });   // across the head
     b.add('edge', box(0.3, 0.34, LEN + 30, 0.05, 1), { p: [POOL.x1 + 1.3 + walkW + 0.15, Y - 0.1, ZM] });
     group.add(b.build({ walk: plastic(0xdcd2bc, 0.95), edge: plastic(0xbfb6a2, 0.8) }));
   }

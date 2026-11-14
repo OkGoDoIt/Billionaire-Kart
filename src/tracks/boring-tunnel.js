@@ -163,7 +163,7 @@ export default {
   ],
   models: { taxi: () => T.robotaxi(signTex('AUTOPILOT-ISH', { w: 900, h: 200, size: 118, bg: '#101623', fg: '#39e6c3' })) },
   obstacles: [
-    { kind: 'patrol', model: 'taxi', at: 7.0, lats: [-2.8, 2.8], speed: 2.2, effect: 'spin' },   // a robotaxi crossing the Loop Station lane, forever (#234 item 7)
+    { kind: 'patrol', model: 'taxi', at: 6.95, lats: [1.8, 5.6], speed: 1.9, effect: 'spin' },   // a robotaxi forever nosing halfway across the station lane, then thinking better of it (#234 item 7: a full-lane crossing cost +16 hits/race in sim A/B — a wall of spins at racing speed; the half-crossing reads the same from the kart and costs ~0)
     { kind: 'patrol', model: 'bot', at: 6.9, lats: [-4.5, -3.4], speed: 4, effect: 'spin' },   // maintenance bot working the deep run's left wall band (centre sweeps caused 6 hits/race at cp7)
     { kind: 'patrol', model: 'bot', at: 8.8, lats: [4.5, 3.4], speed: 3.5, effect: 'spin' },   // and one working the climb's right wall band
     { kind: 'orbit', model: 'drone', at: 15.6, lat: -4.6, orbit: 0.6, speed: 6, effect: 'spin' }, // survey drone worrying the home straight's left edge (mid-road orbit caused 13 hits/race at cp15.5)

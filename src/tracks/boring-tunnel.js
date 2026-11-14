@@ -161,7 +161,9 @@ export default {
     { from: 12.15, to: 13.05, n: 6, lat: -4 },     // the inside of the Ring Hairpin
     { from: 13.75, to: 14.2, n: 4, lat: 0, air: 2.2 },  // over the crown jump
   ],
+  models: { taxi: () => T.robotaxi(signTex('AUTOPILOT-ISH', { w: 900, h: 200, size: 118, bg: '#101623', fg: '#39e6c3' })) },
   obstacles: [
+    { kind: 'patrol', model: 'taxi', at: 7.0, lats: [-2.8, 2.8], speed: 2.2, effect: 'spin' },   // a robotaxi crossing the Loop Station lane, forever (#234 item 7)
     { kind: 'patrol', model: 'bot', at: 6.9, lats: [-4.5, -3.4], speed: 4, effect: 'spin' },   // maintenance bot working the deep run's left wall band (centre sweeps caused 6 hits/race at cp7)
     { kind: 'patrol', model: 'bot', at: 8.8, lats: [4.5, 3.4], speed: 3.5, effect: 'spin' },   // and one working the climb's right wall band
     { kind: 'orbit', model: 'drone', at: 15.6, lat: -4.6, orbit: 0.6, speed: 6, effect: 'spin' }, // survey drone worrying the home straight's left edge (mid-road orbit caused 13 hits/race at cp15.5)
@@ -319,6 +321,16 @@ export default {
     const stp = atPos(7.0, 0);
     sc.place(T.wallSign(stTex, { w: 11, h: 2.1 }), stp.x, stp.z, { yaw: stp.yaw, y: stp.y + 5.4 });
     sc.place(T.wallSign(stTex, { w: 11, h: 2.1 }), stp.x, stp.z, { yaw: stp.yaw + Math.PI, y: stp.y + 5.4 });
+
+    // the traffic joke (#234 item 7): a queue of driverless robotaxis
+    // parked nose-to-tail on both platforms, waiting for passengers who
+    // are 20 m underground in a tunnel. One more crosses the lane as a
+    // patrol obstacle (def.obstacles, model 'taxi').
+    const taxiTex = signTex('AUTOPILOT-ISH', { w: 900, h: 200, size: 118, bg: '#101623', fg: '#39e6c3' });
+    for (const [at, side] of [[6.55, 1], [6.63, 1], [6.71, 1], [6.79, 1], [6.87, 1], [7.15, 1], [7.23, 1], [6.9, -1], [6.98, -1], [7.3, -1]]) {
+      const ci = track.indexAtCp(at), p = atPos(at, side * (track.hwL[ci] + 1.35));
+      sc.place(T.robotaxi(taxiTex), p.x, p.z, { yaw: p.yaw + (side > 0 ? 0 : Math.PI), y: p.y + 0.55 });
+    }
 
     /* ---- in the bore ---- */
     // the bore's own tube (#234 item 3): dark concrete + the rainbow light

@@ -350,6 +350,42 @@ export function shortcutBarrier(tex) {
   return grp;
 }
 
+/** A robotaxi pod (#234 item 7): driverless, cream pod body, dark glass
+ *  canopy, a spinning sensor puck on the roof, a teal eye-stripe for a face
+ *  and a little roof sign. Invented brand only — the sign texture is passed
+ *  in. Faces +Z. Used parked (scenery) and as the 'taxi' patrol obstacle. */
+export function robotaxi(tex) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('body', box(1.9, 0.85, 4.3, 0.16, 2), { p: [0, 0.62, 0] });
+  b.add('stripe', box(1.94, 0.16, 4.34, 0.05, 1), { p: [0, 0.52, 0] });
+  b.add('glass', box(1.66, 0.6, 2.5, 0.14, 2), { p: [0, 1.28, -0.2] });
+  b.add('puck', cyl(0.34, 0.38, 0.22, 12), { p: [0, 1.68, -0.2] });
+  b.add('eye', box(1.3, 0.13, 0.1, 0.04, 1), { p: [0, 0.78, 2.16] });
+  b.add('tail', box(1.3, 0.1, 0.1, 0.04, 1), { p: [0, 0.82, -2.16] });
+  for (const sx of [1, -1]) for (const sz of [1, -1]) b.add('wheel', cyl(0.34, 0.34, 0.24, 12), { p: [sx * 0.86, 0.34, sz * 1.42], r: [0, 0, Math.PI / 2] });
+  const car = b.build({
+    body: paint(0xf2f0e9, { rough: 0.32, metal: 0.05 }),
+    stripe: paint(0x14b8a6, { rough: 0.4 }),
+    glass: plastic(0x1d2733, 0.15),
+    puck: MAT.dark,
+    eye: glow(0x39e6c3, 2.4),
+    tail: glow(0xff4040, 1.8),
+    wheel: MAT.dark,
+  });
+  grp.add(car);
+  if (tex) {
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.42, 0.3),
+      [MAT.dark, MAT.dark, MAT.dark, MAT.dark, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55 }), MAT.dark]);
+    sign.position.set(0, 1.62, 0.9);
+    grp.add(sign);
+    const sign2 = sign.clone();
+    sign2.rotation.y = Math.PI;
+    sign2.position.z = 0.9;
+    grp.add(sign2);
+  }
+  return grp;
+}
+
 /** A sandstone pylon for a portal mouth, with a red band near the top. */
 export function portalPylon({ h = 13 } = {}) {
   const b = new ModelBuilder();

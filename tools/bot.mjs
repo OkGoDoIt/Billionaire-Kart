@@ -174,13 +174,11 @@ try {
   if (await screen()) fails.push('pause menu did not close on Resume');
   // let an AI driver finish a shortened race for us
   await page.evaluate(`(async () => { const { AIDriver } = await import('./src/race/ai.js'); const { makeRng } = await import('./src/core/util.js'); const s = BK.session; s.race.laps = 1; s.autopilots = s.race.players.map(k => new AIDriver(k, 'hard', makeRng(5))); })()`);
-  // a Quick Race ends on the podium now (#92); the full table is one confirm past it
-  await page.waitForFunction('BK.app.menus.screen?.spec.name === "racePodium"', null, { timeout: CI ? 300000 : 120000 });
-  await page.waitForTimeout(1500); await shot('13-podium');
-  if (!(await page.evaluate("!!BK.app.showroom?.podium && BK.app.showroom.slots.length === 3"))) fails.push('quick race podium: the showroom is not showing a three-kart podium');
-  await tapOrKey('.screen-racePodium .btn.go', 'Enter');
-  await page.waitForFunction('BK.app.menus.screen?.spec.name === "results"', null, { timeout: 30000 });
-  await page.waitForTimeout(1200); await shot('13-results');
+  // a Quick Race ends on one final screen (#243): the full table under the podium framing,
+  // with the showroom's three-kart podium behind it
+  await page.waitForFunction('BK.app.menus.screen?.spec.name === "results"', null, { timeout: CI ? 300000 : 120000 });
+  await page.waitForTimeout(1500); await shot('13-results');
+  if (!(await page.evaluate("!!BK.app.showroom?.podium && BK.app.showroom.slots.length === 3"))) fails.push('quick race finish: the showroom is not showing a three-kart podium');
   const res = await page.evaluate('[...document.querySelectorAll(".screen-results .res-row")].map(r => r.textContent.trim().replace(/\\s+/g, " ")).join(" | ")');
   console.log('results:', res);
 

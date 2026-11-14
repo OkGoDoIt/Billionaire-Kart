@@ -222,27 +222,28 @@ export class App {
     }
     for (const h of session.huds) h.setVisible(false);
     session.touch?.setVisible(false); this._lockLandscape(false); document.body.classList.remove('must-turn');
-    // a single race gets the cup's finish: the podium first, the full table behind it (#92)
-    if (!gp && cfg.mode === 'race') this._racePodium({ results, track: def, records });
+    // a single race gets the cup's finish framing on the one results screen (#243)
+    if (!gp && cfg.mode === 'race') this._raceFinish({ results, track: def, records });
     else this.menus.reset('results', { results, gp, track: def, records });
     this.audio?.event?.('results', mine?.rank);
     this.audio?.music?.('results');
   }
-  _racePodium({ results, track, records }) {
+  /* A Quick Race's one final screen (#243): the showroom podium stands behind the full
+     results table, which wears the podium framing — no separate podium step any more,
+     and no "Full results" detour behind it. */
+  _raceFinish({ results, track, records }) {
     const top3 = [...results].sort((a, b) => a.rank - b.rank).slice(0, 3);
     const mine = results.filter(r => r.isPlayer);
     const best = mine.length ? Math.min(...mine.map(r => r.rank)) : 1;
-    this.lastResults = { results, gp: null, track, records };
     this.menus.close();
     this.transition(() => {
       this._clearScene();
       this.showroom = new Showroom(this.gfx);
       this.showroom.setPodium(top3.map(r => r.racer));
-      this.menus.reset('racePodium', { results, track, records, best });
+      this.menus.reset('results', { results, gp: null, track, records, best });
       this.audio?.event?.('podium', best);
     });
   }
-  showResults() { if (this.lastResults) this.menus.reset('results', this.lastResults); }
   gpNext() {
     const g = this.gp; if (!g) return;
     if (g.index < g.tracks.length - 1) { g.index++; this._gpRace(); return; }

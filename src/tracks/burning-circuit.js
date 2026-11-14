@@ -715,7 +715,7 @@ export default {
       const placard = spot(-2.9, -4.3);
       signAt(placard.x, placard.z, yaw, B.board('LEAVE NO TRACE', { bg: '#163a39', fg: '#fff7dd',
         sub: 'ITEM 000001 · SEQUIN', subFg: '#ffda65', subScale: 0.84, pad: 0.035, lines: 1 }), 11.5, 4.6, 8.5, { y: placard.y });
-      const bag = B.cleanupSack(), bagSpot = spot(4.1, -0.6);
+      const bag = B.cleanupSack(), bagSpot = spot(7.4, -4.2);
       sc.place(bag, bagSpot.x, bagSpot.z, { yaw, y: bagSpot.y, cast: false });
       let lastFill = 0;
       anim.push(() => {

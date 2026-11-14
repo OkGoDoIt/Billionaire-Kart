@@ -15,6 +15,12 @@ import * as P from '../models/props.js';
 import * as T from '../models/props-boring-tunnel.js';
 import { canvasTex, fitText } from '../render/textures.js';
 
+/** Where the bore tube's arc opens instead of closing over the road
+ *  (#234 items 4+6). k runs 0..12 from the R wall (lat −) over the crown to
+ *  the L wall (lat +). The station (item 4) drops the L-side lower arc; the
+ *  shortcut junctions (item 6) drop the R-side lower arc, leaving a header. */
+const TUBE_WINDOWS = [];
+
 const SIGN_FONT = '"Luckiest Guy", "Arial Black", sans-serif';
 /** A worksite sign texture: fitted text (never squashed, via fitText), drawn
     again once the display font arrives so it never stays on the fallback. */
@@ -55,6 +61,7 @@ export default {
   laps: 3,
   width: 13,
   tunnelHeight: 7,                  // a single-lane bore (#234 item 2): the walls close in; the ring sector keeps w:16
+  tunnelShell: false,               // #234 item 3: the bore builds its own tube (dark concrete + rainbow light strips) in decorate
   sky: 'golden',                    // the portal mouths get the golden hour (design doc: mk8-desert)
   offroad: 'sand',
   defaults: { edge: 'open', shoulder: 3, outer: 10 },
@@ -196,6 +203,14 @@ export default {
     ], {});
 
     /* ---- in the bore ---- */
+    // the bore's own tube (#234 item 3): dark concrete + the rainbow light
+    // strips, one merged geometry each; the colour wave runs on uTime.
+    // TUBE_WINDOWS (below the def) opens the arc where later items cut the
+    // wall away — the station (item 4) and the shortcut junctions (item 6).
+    const uTime = { value: 0 };
+    ctx.group.add(T.boreTube(track, uTime, TUBE_WINDOWS.map(w => ({ ...w, r0: track.indexAtCp(w.from), r1: track.indexAtCp(w.to) }))));
+    anim.push((dt, time) => { uTime.value = time; });
+
     // THE BORING MACHINE, chewing the left wall at the bottom of the dive:
     // scaled up so the cutter face fills the view as you exit the chicane
     const mp = atPos(4.4, 8.6);

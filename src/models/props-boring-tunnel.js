@@ -142,6 +142,119 @@ export function portalPylon({ h = 13 } = {}) {
   return b.build({ post: plastic(SANDSTONE, 0.7), cap: plastic(0xbfb49a, 0.7), band: paint(0xe23b3b, { rough: 0.5 }) });
 }
 
+/** The bore's own tube (#234 item 3, replacing the stock shell via
+ *  tunnelShell: false): dark concrete rings every ~1.5 m with subtle 6 m
+ *  banding, portal arch faces at the range ends, and — the track's signature
+ *  look — an emissive strip ring every ~6 m whose colour runs
+ *  hsl(fract(s/120 - time*0.25)) so a rainbow wave travels the bore.
+ *  One merged concrete geometry + one merged strip geometry = 2 draw calls.
+ *  `windows` lets later work open the arc on one side (station, shortcut
+ *  junctions): entries { r0, r1, k0, k1 } in sample/arc-index space clamp the
+ *  arc of every ring in [r0, r1] to [k0, k1] (k runs 0..ARC from the R wall
+ *  over the crown to the L wall). Portals are skipped near window mouths,
+ *  so a window gets no floating arch slice. */
+export function boreTube(track, uTime, windows = []) {
+  const { N, ds, px, py, pz, lx, ly, lz, ux, uy, uz, hwL, hwR } = track;
+  const H = track.def.tunnelHeight ?? 7, ARC = 12, STEP = 2;
+  const group = new THREE.Group();
+  const winAt = r => windows.find(w => r >= w.r0 && r <= w.r1) || null;
+  const kRange = r => { const w = winAt(r); return w ? [w.k0, w.k1] : [0, ARC]; };
+
+  // ---- concrete (tube + portal faces share one geometry) ----
+  const pos = [], nor = [], col = [], idx = [];
+  function arcVerts(r, sh) {
+    const i = r % N, a = hwL[i] + 0.7, b = hwR[i] + 0.7, mid = (a - b) / 2, half = (a + b) / 2;
+    const [k0, k1] = kRange(r), first = pos.length / 3;
+    for (let k = k0; k <= k1; k++) {
+      const ang = Math.PI * (k / ARC), ca = Math.cos(ang), sa = Math.sin(ang), lat = mid + ca * half, up = sa * H;
+      pos.push(px[i] + lx[i] * lat + ux[i] * up, py[i] + ly[i] * lat + uy[i] * up, pz[i] + lz[i] * lat + uz[i] * up);
+      nor.push(-(lx[i] * ca + ux[i] * sa), -(ly[i] * ca + uy[i] * sa), -(lz[i] * ca + uz[i] * sa));
+      col.push(sh, sh, sh);
+    }
+    return { first, k0, k1 };
+  }
+  let prev = null;
+  for (let r = 0; r <= N; r++) {
+    const i = r % N;
+    if (!track.tunnel[i]) { prev = null; continue; }
+    const ring = arcVerts(r, (Math.floor(r / STEP / 4) % 2) ? 0.93 : 1.0);
+    if (prev) {
+      const k0 = Math.max(prev.k0, ring.k0), k1 = Math.min(prev.k1, ring.k1);
+      for (let k = k0; k < k1; k++) {
+        const a0 = prev.first + (k - prev.k0), a1 = a0 + 1, b0 = ring.first + (k - ring.k0), b1 = b0 + 1;
+        idx.push(a0, b0, a1, a1, b0, b1);
+      }
+    }
+    prev = ring;
+    // portal face where a tunnel run starts or ends (not near a window mouth)
+    const isEnd = !track.tunnel[(i + 1) % N] || !track.tunnel[(i - 1 + N) % N];
+    if (isEnd && !winAt(r) && !winAt(r - 1) && !winAt(r + 1)) {
+      const a = hwL[i] + 0.7, b = hwR[i] + 0.7, mid = (a - b) / 2, half = (a + b) / 2, c0 = pos.length / 3;
+      for (let k = 0; k <= ARC; k++) {
+        const ang = Math.PI * (k / ARC), ca = Math.cos(ang), sa = Math.sin(ang);
+        for (const e of [0, 2.2]) {
+          const lat = mid + ca * (half + e), up = sa * (H + e);
+          pos.push(px[i] + lx[i] * lat + ux[i] * up, py[i] + ly[i] * lat + uy[i] * up, pz[i] + lz[i] * lat + uz[i] * up);
+          nor.push(track.tx[i], 0, track.tz[i]);
+          col.push(0.66, 0.66, 0.66);
+        }
+        if (k) { const q = c0 + (k - 1) * 2; idx.push(q, q + 1, q + 2, q + 2, q + 1, q + 3); }
+      }
+    }
+  }
+  const cg = new THREE.BufferGeometry();
+  cg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  cg.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  cg.setIndex(idx);
+  group.add(new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ color: 0x848b93, roughness: 0.96, metalness: 0.02, vertexColors: true, emissive: 0x14120e, side: THREE.DoubleSide })));
+
+  // ---- rainbow strips: a band between ring r and r+1 at every 4th ring ----
+  const sp = [], sa = [], sidx = [];
+  for (let r = 0; r < N; r += STEP) {
+    const i = r % N;
+    if (!track.tunnel[i] || !track.tunnel[(r + 1) % N] || (r / STEP) % 4 !== 0) continue;
+    const rows = [];
+    for (const rr of [r, r + 1]) {
+      const j = rr % N, a = hwL[j] + 0.64, b = hwR[j] + 0.64, mid = (a - b) / 2, half = (a + b) / 2, h = H - 0.06;
+      const [k0, k1] = kRange(rr), first = sp.length / 3;
+      for (let k = k0; k <= k1; k++) {
+        const ang = Math.PI * (k / ARC), lat = mid + Math.cos(ang) * half, up = Math.sin(ang) * h;
+        sp.push(px[j] + lx[j] * lat + ux[j] * up, py[j] + ly[j] * lat + uy[j] * up, pz[j] + lz[j] * lat + uz[j] * up);
+        sa.push(rr * ds);
+      }
+      rows.push({ first, k0, k1 });
+    }
+    const [A, B] = rows, k0 = Math.max(A.k0, B.k0), k1 = Math.min(A.k1, B.k1);
+    for (let k = k0; k < k1; k++) {
+      const a0 = A.first + (k - A.k0), a1 = a0 + 1, b0 = B.first + (k - B.k0), b1 = b0 + 1;
+      sidx.push(a0, a1, b0, a1, b1, b0);
+    }
+  }
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+  sg.setAttribute('aS', new THREE.Float32BufferAttribute(sa, 1));
+  sg.setIndex(sidx);
+  group.add(new THREE.Mesh(sg, new THREE.ShaderMaterial({
+    uniforms: { uTime },
+    vertexShader: /* glsl */`
+      attribute float aS; varying float vS;
+      void main() { vS = aS; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      uniform float uTime; varying float vS;
+      vec3 hsl2rgb(vec3 c) {
+        vec3 rgb = clamp(abs(mod(c.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+        return c.z + c.y * (rgb - 0.5) * (1.0 - abs(2.0 * c.z - 1.0));
+      }
+      void main() {
+        vec3 c = hsl2rgb(vec3(fract(vS / 120.0 - uTime * 0.25), 0.9, 0.55));
+        gl_FragColor = vec4(c * 1.55, 1.0);
+      }`,
+    side: THREE.DoubleSide,
+  })));
+  return group;
+}
+
 /**
  * The dig gantry: a conveyor bridge straddling the road at the Boring
  * Machine, two legs outside the road edges, a truss beam at 8 m, a muck

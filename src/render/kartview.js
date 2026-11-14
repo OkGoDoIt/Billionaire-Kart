@@ -147,6 +147,11 @@ export class KartView {
       const m = new THREE.Mesh(FLAME_GEO, new THREE.MeshBasicMaterial({ color: 0xffa040, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
       m.rotation.x = -Math.PI / 2 + 0.1; m.visible = false; a.add(m); return m;   // straight back from the exhaust, tipped up a touch
     });
+    // Elon's flamethrower pilot flame (#208): only his driver rig carries one. The view flares
+    // it from the nozzle while he boosts; its materials are his own instances, brightened in step.
+    this.flameRig = rig.driver?.userData?.flame ?? null;
+    this.flameMats = this.flameRig?.userData?.mats ?? null;
+    this.flameAmt = 0;
   }
 
   /** Call right before each sim step. */
@@ -236,6 +241,18 @@ export class KartView {
     rig.torso.rotation.z = clamp(this.steerVis * -0.1 + b.z * 0.25, -0.25, 0.25);
     rig.torso.rotation.x = clamp(b.x * 0.3, -0.15, 0.2);
     if (k.finished && k.finishRank <= 3) { rig.torso.rotation.x = -0.12 + Math.sin(this.t * 9) * 0.05; }
+
+    // flamethrower flare: while Elon boosts, the pilot flame stretches from the nozzle to twice
+    // its length, eases back over ~0.15 s when the boost ends, and flickers about the target;
+    // at rest the scale is exactly 1 and the materials sit at exactly their base intensity
+    if (this.flameRig) {
+      const on = k.boostT > 0;
+      this.flameAmt = damp(this.flameAmt, on ? 1 : 0, 20, dt);
+      if (!on && this.flameAmt < 0.002) this.flameAmt = 0;
+      const a = this.flameAmt;
+      this.flameRig.scale.y = 1 + a * (1 + (Math.random() * 2 - 1) * 0.08);
+      for (const m of this.flameMats) m.emissiveIntensity = a === 0 ? m.userData.baseIntensity : m.userData.baseIntensity * (1 + a * 0.6);
+    }
 
     // visibility states
     const blink = k.invulnT > 0 && k.hitT <= 0 && k.rescueT <= 0 && Math.floor(this.t * 16) % 2 === 0;

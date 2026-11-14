@@ -4,6 +4,7 @@
    reads from behind (the chase camera's view). Each outfit is a "kit" named by the
    racer's look; everything for one driver merges into a handful of draw calls. */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, plastic, glow, MAT } from './build.js';
 import { shell } from './kart-geo.js';
 import { FACES } from '../content/faces.js';
@@ -314,6 +315,32 @@ function arms(ctx, { mat = 'top', len = 'long', cuff = null, puff = false, glove
   }
 }
 
+/** The flamethrower's pilot flame as its own little rig (#208): a group whose origin sits
+    at the nozzle tip (t = 1.325 along the barrel) with local +Y along the flame, so the kart
+    view can stretch the flame out of the nozzle while Elon boosts instead of scaling the
+    whole prop. The shapes are the old baked flame exactly — orange core cone and bulb, blue
+    accent behind — at their rest sizes; only their placement changed. The materials are
+    fresh per-driver instances (not the shared glow cache), so the flare can brighten this
+    one flame and restore it exactly; userData.baseIntensity is that exact rest intensity. */
+function buildFlame(at, ang) {
+  const tip = 1.325;
+  const coreMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xff8a1e, emissiveIntensity: 3.2, roughness: 0.4 });
+  const accentMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x9fd4ff, emissiveIntensity: 3.4, roughness: 0.4 });
+  coreMat.userData.baseIntensity = 3.2;
+  accentMat.userData.baseIntensity = 3.4;
+  const coneGeo = cyl(0.004, 0.1, 0.5, 14).toNonIndexed(); coneGeo.translate(0, 1.57 - tip, 0);
+  const bulbGeo = sphere(0.085, 12, 8).toNonIndexed(); bulbGeo.translate(0, 1.34 - tip, 0);
+  const core = new THREE.Mesh(mergeGeometries([coneGeo, bulbGeo], false), coreMat);
+  const accentGeo = cyl(0.004, 0.05, 0.22, 10); accentGeo.translate(0, 1.44 - tip, -0.07);
+  const accent = new THREE.Mesh(accentGeo, accentMat);
+  core.castShadow = accent.castShadow = true;
+  const g = new THREE.Group(); g.name = 'flame';
+  g.position.set(...at(tip)); g.rotation.z = -ang;
+  g.add(core, accent);
+  g.userData.mats = [coreMat, accentMat];
+  return g;
+}
+
 /* ---------- signature props, worn on the back where the chase camera sees them ---------- */
 const PROPS = {
   /** the flamethrower that is legally not a flamethrower, slung across the back with the pilot light on */
@@ -328,9 +355,7 @@ const PROPS = {
     b.add('saw', cyl(0.03, 0.045, 0.05, 12), { p: at(0.7, 0.115), r });
     b.add('black', cyl(0.042, 0.048, 0.5, 12), { p: at(0.95), r });                     // barrel
     b.add('saw', cyl(0.078, 0.058, 0.15, 14), { p: at(1.25), r });                      // nozzle
-    b.add('flame', cyl(0.004, 0.1, 0.5, 14), { p: at(1.57), r });
-    b.add('flame2', cyl(0.004, 0.05, 0.22, 10), { p: [at(1.44)[0], at(1.44)[1], zb - 0.07], r });
-    b.add('flame', sphere(0.085, 12, 8), { p: at(1.34) });
+    ctx.flameGroup = buildFlame(at, ang);   // the pilot flame is its own rig, not baked in: the kart view flares it on boost
     ctx.straps('black', 0.56);
   },
   /** a sack of money on the back: the seven-trillion ask. Slung low and well behind
@@ -651,6 +676,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     default: MAT.dark,
   };
   torso.add(b.build(mats));
+  if (c.flameGroup) torso.add(c.flameGroup);   // Elon's pilot flame rides the torso as its own rig, so it leans and bobbles with him
 
   const head = buildHead(look, faceId);
   head.position.set(0, NECK_Y - P.hunch * 0.08, c.L(0.8) + 0.03 + P.hunch * 0.25);
@@ -658,6 +684,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
 
   g.scale.setScalar(scale);
   g.userData = { head, torso };
+  if (c.flameGroup) g.userData.flame = c.flameGroup;   // only Elon's rig carries one; the kart view animates it
   return g;
 }
 

@@ -479,7 +479,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 poolPoint; uniform float waterTime;')
         .replace('#include <color_fragment>', `#include <color_fragment>
           vec3 eyeRay = normalize(poolPoint - cameraPosition);
-          float across = (poolPoint.x - ${POOL.x0}) / ${POOL.x1 - POOL.x0};
+          float across = (poolPoint.x - ${POOL.x0}) / ${(POOL.x1 - POOL.x0).toFixed(1)};
           float swell = sin(poolPoint.z * 1.52 + poolPoint.x * .43 + waterTime * 1.12)
                       + .45 * sin(poolPoint.z * 3.55 - poolPoint.x * .75 - waterTime * 1.45);
           float banks = smoothstep(.25, .49, abs(across - .5));

@@ -483,7 +483,21 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // A cheap planar reflection. Reflect the eye ray about the surface and intersect the
   // silhouette of the actual monument on its axis. It stays anchored when the camera moves.
   {
-    const g = new THREE.PlaneGeometry(POOL.x1 - POOL.x0 + 0.6, LEN + 0.6); g.rotateX(-Math.PI / 2);
+    // Clip the near edge to the curved promenade. A full rectangular plane would
+    // intersect the asphalt at equal height as the causeway cuts the corner.
+    const waterPos = [], waterFaces = [], start = track.indexAtCp(4.02), end = track.indexAtCp(6.94);
+    let row = 0;
+    for (let i = start; i <= end; i++) {
+      const lat = track.hwL[i] + 3.6, z = track.pz[i] + track.lz[i] * lat;
+      const edge = Math.max(POOL.x0, track.px[i] + track.lx[i] * lat);
+      const atZ = Math.max(POOL.z0, Math.min(POOL.z1, z));
+      waterPos.push(edge, WY, atZ, POOL.x1, WY, atZ);
+      if (row) { const q = 2 * row; waterFaces.push(q - 2, q, q - 1, q - 1, q, q + 1); }
+      row++;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(waterPos, 3));
+    g.setIndex(waterFaces);
     const waterTime = { value: 0 };
     const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
     m.onBeforeCompile = shader => {
@@ -515,7 +529,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
           diffuseColor.rgb = water;
         `);
     };
-    const w = new THREE.Mesh(g, m); w.position.set(AXIS, WY, ZM); group.add(w);
+    const w = new THREE.Mesh(g, m); group.add(w);
     anim.push((dt, time) => { waterTime.value = time; });
   }
   // granite coping round the rim (tall enough to wall the water in), and the gravel walk on the far side

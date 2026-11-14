@@ -232,3 +232,20 @@ export function bleacherStep(len) {
   b.add('back', box(len, .42, .18, .02), { p: [0, .62, -.36] });
   return b.build({ step: paint(0xcac2ae, { rough: .7 }), back: paint(0xbdb49c, { rough: .7 }) });
 }
+
+/** Facilities' moving cart, on the express side of the hot-desk aisle. */
+export function moversDolly() {
+  const b = new ModelBuilder();
+  const block = (mat, w, h, d, x, y, z) => b.add(mat, new THREE.BoxGeometry(w, h, d), { p: [x, y, z] });
+  block('frame', 1.55, .18, 1.25, 0, .35, 0);
+  for (const x of [-.62, .62]) {
+    block('frame', .12, 1.4, .12, x, .92, -.56);
+    for (const z of [-.45, .43]) b.add('wheel', cyl(.18, .18, .14, 8), { p: [x, .17, z], r: [0, 0, Math.PI / 2] });
+  }
+  block('frame', 1.34, .14, .14, 0, 1.59, -.56);
+  for (const [w, h, y] of [[1.4, .65, .77], [1.0, .64, 1.42]]) {
+    block('card', w, h, 1, 0, y, .04);
+    block('tape', .18, h + .015, 1.015, .12, y, .04);
+  }
+  return b.build({ frame: paint(0x1b766e), card: paint(0xce874e), tape: paint(0xffdb92), wheel: MAT.rubber });
+}

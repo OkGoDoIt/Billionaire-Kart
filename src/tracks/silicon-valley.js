@@ -213,6 +213,17 @@ export default {
     const gantry = P.gantry(track.hwL[0] + track.hwR[0] + 1.5, 'START-UP LINE');
     sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY });
     view.startLights = gantry.userData.lights;
+    // a concrete footing under each gantry tower (#242): the Peninsula Run rotation moved the
+    // line onto the Sand Hill hillside, where the ground falls ~2 m from the road on the downhill
+    // side — the rigid gantry, seated at the road's centre height, left that tower standing on air
+    for (const sx of [-1, 1]) {
+      const [tx, , tz] = local({ ...g0, yaw: g0.along }, sx * ((track.hwL[0] + track.hwR[0] + 1.5) / 2 + 1.4), 0, 0);
+      const drop = g0.roadY - track.terrainHeight(tx, tz);
+      if (drop > 0.05) {
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(2.8, drop + 0.4, 2.8), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.85 }));
+        foot.position.set(tx, g0.roadY - (drop + 0.4) / 2 + 0.02, tz); foot.rotation.y = g0.along; ctx.group.add(foot); bake.add(foot);
+      }
+    }
     const stand = P.grandstand({ w: 30, rows: 6, color: 0x2f6bff }), stand2 = P.grandstand({ w: 30, rows: 6, color: 0xe23b3b });
     const seats = [];
     const M = new THREE.Matrix4(), V = new THREE.Vector3();

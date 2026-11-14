@@ -4,7 +4,6 @@
    reads from behind (the chase camera's view). Each outfit is a "kit" named by the
    racer's look; everything for one driver merges into a handful of draw calls. */
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, plastic, glow, MAT } from './build.js';
 import { shell } from './kart-geo.js';
 import { FACES } from '../content/faces.js';
@@ -315,29 +314,18 @@ function arms(ctx, { mat = 'top', len = 'long', cuff = null, puff = false, glove
   }
 }
 
-/** The flamethrower's pilot flame as its own little rig (#208): a group whose origin sits
-    at the nozzle tip (t = 1.325 along the barrel) with local +Y along the flame, so the kart
-    view can stretch the flame out of the nozzle while Elon boosts instead of scaling the
-    whole prop. The shapes are the old baked flame exactly — orange core cone and bulb, blue
-    accent behind — at their rest sizes; only their placement changed. The materials are
-    fresh per-driver instances (not the shared glow cache), so the flare can brighten this
-    one flame and restore it exactly; userData.baseIntensity is that exact rest intensity. */
+/** A driver-local pivot at the nozzle keeps the base of the boost flare attached to the barrel. */
 function buildFlame(at, ang) {
   const tip = 1.325;
-  const coreMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xff8a1e, emissiveIntensity: 3.2, roughness: 0.4 });
-  const accentMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x9fd4ff, emissiveIntensity: 3.4, roughness: 0.4 });
-  coreMat.userData.baseIntensity = 3.2;
-  accentMat.userData.baseIntensity = 3.4;
-  const coneGeo = cyl(0.004, 0.1, 0.5, 14).toNonIndexed(); coneGeo.translate(0, 1.57 - tip, 0);
-  const bulbGeo = sphere(0.085, 12, 8).toNonIndexed(); bulbGeo.translate(0, 1.34 - tip, 0);
-  const core = new THREE.Mesh(mergeGeometries([coneGeo, bulbGeo], false), coreMat);
-  const accentGeo = cyl(0.004, 0.05, 0.22, 10); accentGeo.translate(0, 1.44 - tip, -0.07);
-  const accent = new THREE.Mesh(accentGeo, accentMat);
-  core.castShadow = accent.castShadow = true;
-  const g = new THREE.Group(); g.name = 'flame';
-  g.position.set(...at(tip)); g.rotation.z = -ang;
-  g.add(core, accent);
-  g.userData.mats = [coreMat, accentMat];
+  const core = glow(0xff8a1e, 3.2).clone(), accent = glow(0x9fd4ff, 3.4).clone();
+  for (const m of [core, accent]) m.userData.baseIntensity = m.emissiveIntensity;
+  const b = new ModelBuilder();
+  b.add('core', cyl(0.004, 0.1, 0.5, 14), { p: [0, 1.57 - tip, 0] });
+  b.add('core', sphere(0.085, 12, 8), { p: [0, 1.34 - tip, 0] });
+  b.add('accent', cyl(0.004, 0.05, 0.22, 10), { p: [0, 1.44 - tip, -0.07] });
+  const g = b.build({ core, accent });
+  g.name = 'flame'; g.position.set(...at(tip)); g.rotation.z = -ang;
+  g.userData.mats = [core, accent];
   return g;
 }
 
@@ -665,7 +653,7 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     skin: plastic(skinHex, 0.62), glove: plastic(0xf4f1ea, 0.6), glove2: plastic(look.top ?? 0xc8222a, 0.5),
     tie: plastic(look.tie ?? 0xd8232a, 0.45), vest: fluoro(0xd8f23a),
     gold: plastic(0xffcf4a, 0.25, 1), silver: plastic(0xc9ced6, 0.25, 1), steel: MAT.chrome, white: MAT.white, black: MAT.black,
-    pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), flame: glow(0xff8a1e, 3.2), flame2: glow(0x9fd4ff, 3.4), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
+    pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
     bot: plastic(0xf2f4f7, 0.3), eye: glow(0x5ce1ff, 2.2),
     lid: plastic(0x33363c, 0.32, 0.85),
     cloth: doubleSided(0xf4f4ee, 0.8),

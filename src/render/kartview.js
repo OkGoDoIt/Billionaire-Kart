@@ -166,7 +166,7 @@ export class KartView {
     }
   }
 
-  update(dt, alpha, time, camPos) {
+  update(dt, alpha, time) {
     const k = this.kart, rig = this.rig, p = this.prev, fx = this.fx;
     this.t += dt;
     // interpolated transform
@@ -255,11 +255,17 @@ export class KartView {
     if (this.blob.visible) { const h = clamp(k.y - k.gy, 0, 6), sc = this.scale * (1 + h * 0.12); this.blob.position.set(x, k.gy + 0.06, z); this.blob.scale.set(sc * 1.25, sc * 1.6, 1); this.blob.rotation.z = -yaw; this.blob.material.opacity = 0.42; }
     this._trail(dt);
     this._particles(dt);
-    // name tags fade with distance and hide for karts right next to the camera
-    // (declutter() then fades out any that would land on a nearer tag or on the viewer's own kart)
-    if (camPos) { const d = camPos.distanceTo(this.pos), o = this.tag.userData.base = clamp((60 - d) / 20, 0, 1) * clamp((d - 9) / 5, 0, 1) * 0.92 * (k.rescueT > 0 ? 0.3 : 1); this.tag.material.opacity = o; this.tag.visible = o > 0.02; }
     this.tag.position.y = 2.75 * this.scale;
     void time;
+  }
+
+  /** Distance fade is camera-local, like the decluttering performed by the tag sprite. */
+  prepareTag(camera) {
+    const d = camera.position.distanceTo(this.pos);
+    const opacity = clamp((60 - d) / 20, 0, 1) * clamp((d - 9) / 5, 0, 1) * 0.92 * (this.kart.rescueT > 0 ? 0.3 : 1);
+    this.tag.userData.base = opacity;
+    this.tag.material.opacity = opacity;
+    this.tag.visible = opacity > 0.02;
   }
 
   _ghost(on) {

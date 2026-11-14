@@ -92,7 +92,10 @@ export class RaceView {
     this.fx.setViewport(h, v.camera.fov);
     // a rival close enough to fill the screen (its hat or hair in the lens) is left out of this view
     const cp = v.camera.position, own = v.cam?.kart;
-    for (const kv of this.karts) kv.rig.root.visible = kv.kart === own || (kv.pos.x - cp.x) ** 2 + (kv.pos.y + 0.9 - cp.y) ** 2 + (kv.pos.z - cp.z) ** 2 > 7.3;
+    for (const kv of this.karts) {
+      kv.rig.root.visible = kv.kart === own || (kv.pos.x - cp.x) ** 2 + (kv.pos.y + 0.9 - cp.y) ** 2 + (kv.pos.z - cp.z) ** 2 > 7.3;
+      kv.prepareTag(v.camera);
+    }
   }
   /** The five lights on the start gantry: red in step with the count, green on go. */
   _startLights(n) {
@@ -261,8 +264,7 @@ export class RaceView {
     trackUniforms.uTime.value = this.time;
     this._show();
     this.events();
-    const cam0 = this.views[0].camera.position;
-    for (const v of this.karts) v.update(dt, alpha, this.time, cam0);
+    for (const v of this.karts) v.update(dt, alpha, this.time);
 
     // item boxes spin, bob, and pop back in
     for (const o of this.boxes) {

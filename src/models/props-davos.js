@@ -92,6 +92,56 @@ export function privateJet(seed = 1, { accent = 0xc9a227 } = {}) {
   return g;
 }
 
+/** A giant die-cut delegate credential. The road passes through the lower cutout. */
+export function delegatePass(clearWidth) {
+  const b = new ModelBuilder(), edge = clearWidth / 2 + 1.7;
+  b.add('card', box(clearWidth + 6.8, 6.5, 1.1, 0.55, 3), { p: [0, 11.45, 0] });
+  for (const side of [-1, 1]) {
+    b.add('card', box(3.4, 9.5, 1.1, 0.5, 3), { p: [side * edge, 4.4, 0] });
+    b.add('foil', box(2.6, 0.7, 1.3, 0.18, 2), { p: [side * edge, 1.1, 0] });
+    for (let i = 0; i < 7; i++)
+      b.add('ink', box(0.12 + 0.08 * (i % 3), 3.2, 0.14), { p: [side * edge + (i - 3) * 0.33, 4, 0.57] });
+    strut(b, 'fabric', [side * 0.4, 16.5, 0], [side * 8.6, 26, -1], 1.65, 0.3);
+    strut(b, 'hem', [side * 0.4, 16.5, 0.24], [side * 8.6, 26, -0.76], 0.31, 0.11);
+  }
+  b.add('fabric', box(17.7, 1.1, 0.45, 0.2, 2), { p: [0, 26, -1] });
+  b.add('ink', box(4.6, 1.2, 0.14, 0.45, 2), { p: [0, 13.8, 0.59] });
+  b.add('foil', torus(1.3, 0.3, 8, 24), { p: [0, 15.2, 0.7], s: [0.83, 1.25, 1] });
+  return b.build({ card: WHITE, ink: NAVY, foil: GOLD, fabric: RED, hem: WHITE });
+}
+
+/** A jet-sized airport baggage sizer, with handles and a four-point lift harness. */
+export function luggageCarrier() {
+  const b = new ModelBuilder();
+  // An open luggage cradle keeps the fuselage readable even when viewed from beneath.
+  for (const z of [-2.2, 2.2]) b.add('tray', box(16.7, 0.38, 0.8, 0.15, 2), { p: [0, 0.1, z] });
+  for (const side of [-1, 1]) {
+    b.add('rim', box(17, 0.6, 0.4, 0.14, 1), { p: [0, 0.55, side * 5.35] });
+    b.add('rim', box(0.4, 0.6, 11, 0.14, 1), { p: [side * 8.3, 0.55, 0] });
+    for (const z of [-4.7, 4.7]) strut(b, 'rim', [side * 7.8, 0.65, z], [0, 8, 0], 0.19);
+  }
+    b.add('tag', box(3.2, 1.6, 0.2, 0.2, 2), { p: [-5.4, 0.05, 5.45], r: [0, 0, 0.17] });
+  for (let i = 0; i < 5; i++) b.add('bar', box(0.11 + 0.05 * (i % 2), 0.93, 0.08), { p: [-5.9 + i * 0.26, 0.03, 5.59], r: [0, 0, 0.17] });
+  const tray = b.build({ tray: NAVY, rim: GOLD, tag: RED, bar: WHITE }), jet = privateJet(24, { accent: 0xbf1736 });
+  jet.rotation.y = Math.PI / 2 - 0.19; jet.scale.setScalar(1.04); jet.position.y = 0.38; tray.add(jet);
+  return tray;
+}
+
+/** Brass stanchions and red velvet ropes for the premium luggage queue. */
+export function velvetQueue() {
+  const b = new ModelBuilder();
+  for (let i = 0; i < 5; i++) {
+    const x = i * 2.6 - 5.2;
+    b.add('brass', cyl(0.14, 0.19, 1.55, 8), { p: [x, 0.78, 0] });
+    b.add('brass', sphere(0.27, 8, 6), { p: [x, 1.62, 0] });
+    if (i < 4) {
+      strut(b, 'velvet', [x, 1.4, 0], [x + 1.3, 0.95, 0], 0.16);
+      strut(b, 'velvet', [x + 1.3, 0.95, 0], [x + 2.6, 1.4, 0], 0.16);
+    }
+  }
+  return b.build({ brass: GOLD, velvet: RED });
+}
+
 /** A two-post roadside sign: 'PRIVATE JETS ONLY' and friends. */
 export function roadSign(text, { w = 9, h = 2.4, legs = 3.4, bg = '#1f2a44', fg = '#f4f6f8' } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder();

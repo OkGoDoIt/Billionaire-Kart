@@ -759,6 +759,37 @@ function furnishOffice(ctx, H) {
   };
   tread(114,146,-15.1,4.4,0,3); tread(146,110,-71,4.0,3,4.1);
   tread(92,122,69.2,3.8,6,-3); tread(122,92,19.4,3.8,3,-3);
+  // Continue the stair into the driving surface. A smooth dolly ramp runs
+  // between the two banks of concrete treads and opens onto each flat landing.
+  const tr = ctx.track;
+  for (const [first, last] of [['L7 entry','L-A entry'], ['L8 entry','C7 entry'],
+                               ['L14 entry','L-B entry'], ['L15 entry','L16 entry']]) {
+    const start = tr.sAtCp(AT[first]), end = tr.sAtCp(AT[last]);
+    const count = Math.round((end-start)/1.65), depth = (end-start)/count;
+    for (let n=0; n<count; n++) {
+      const s0 = start+n*depth, s1 = s0+depth;
+      const i = Math.round((s0+s1)/(2*tr.ds));
+      const high = Math.max(tr.pointAt(s0,0,{}).y, tr.pointAt(s1,0,{}).y)+.045;
+      for (const side of [-1,1]) {
+        const outer = side*(side>0 ? tr.hwL[i]-.35 : tr.hwR[i]-.35);
+        const inner = side*3.25;
+        const corner = (s, lat, y) => {
+          const p = tr.pointAt(s,lat,{});
+          return [p.x,y,p.z];
+        };
+        q.quad(corner(s0,inner,high),corner(s0,outer,high),
+          corner(s1,outer,high),corner(s1,inner,high),1,1,0xbcb4a3);
+        const front = tr.ty[i]>0 ? s0 : s1;
+        const nose = front===s0 ? s0+.14 : s1-.14;
+        q.quad(corner(front,inner,high+.005),corner(front,outer,high+.005),
+          corner(nose,outer,high+.005),corner(nose,inner,high+.005),1,1,0xe3b368);
+        q.quad(corner(front,inner,high),corner(front,outer,high),
+          corner(front,outer,high-.25),corner(front,inner,high-.25),1,1,0x655f56);
+        q.quad(corner(s0,inner,high),corner(s1,inner,high),
+          corner(s1,inner,high-.25),corner(s0,inner,high-.25),1,1,0x655f56);
+      }
+    }
+  }
   // Each folded ramp wraps an internal fire separation. Windows from one flight onto
   // the other show the change in level before the driver reaches the half landing.
   for (const bay of [
@@ -889,7 +920,6 @@ function furnishOffice(ctx, H) {
   // this drops a solid curtain into the aisle below. Build low office plinths
   // to exactly the same collision perimeter, with a shallow lip on both sides.
   view.trackMesh.getObjectByName('walls').visible = false;
-  const tr = ctx.track;
   for (const side of [-1,1]) {
     const hw = side > 0 ? tr.hwL : tr.hwR;
     const edge = (i, offset, lift) => {

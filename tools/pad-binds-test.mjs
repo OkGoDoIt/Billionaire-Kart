@@ -152,6 +152,17 @@ const fakePad = pressed => ({ connected: true, id: 'Fake', axes: [0, 0], buttons
   events.length = 0; tap(2); ok(events.includes('back'), 'menu: remapped Brake (X) now goes back');
   events.length = 0; tap(0); tap(1);
   ok(!events.includes('confirm') && !events.includes('back'), 'menu: A and B are inert once Accelerate/Brake moved');
+  // A and B stay predictable in the editor, including the full press used to record a binding.
+  let listening = true;
+  input.padEditor = { poll: () => listening, exclusive: () => listening };
+  events.length = 0;
+  tap(0); pads[0] = fakePad([1]); input._padMenus(0.016);
+  listening = false; input._padMenus(0.016);
+  eq(events, [], 'editor: a captured A or B never activates the menu, even when held');
+  pads[0] = fakePad([]); input._padMenus(0.016);
+  tap(1); tap(0);
+  eq(events, ['back', 'confirm'], 'editor: released B and A navigate regardless of driving bindings');
+  input.padEditor = null;
   // a stored v1 confirm entry is ignored end-to-end: menus still follow Accelerate
   input.setPadBindings({ ...defaultPadBindings(), confirm: [3], back: [3] }, 'both');
   ok(!('confirm' in input.padBinds), 'setPadBindings drops the v1 menu entries');

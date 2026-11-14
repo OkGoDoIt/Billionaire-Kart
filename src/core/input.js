@@ -194,6 +194,8 @@ export class Input {
   /** Menu navigation from gamepads, with auto-repeat on directions. */
   _padMenus(dt) {
     const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+    const editor = this.padEditor;
+    const captured = editor?.poll(gps);
     for (let i = 0; i < Math.min(4, gps.length); i++) {
       const gp = gps[i]; if (!gp || !gp.connected) continue;
       const prev = this.padPrev[i], dev = 'pad' + i;
@@ -203,9 +205,13 @@ export class Input {
          confirm and back DERIVE from the Accelerate and Brake buttons — menus have no
          bindings of their own, and the derivation is exactly the shipped behaviour
          (A confirms, B goes back). alt/alt2 stay on X/Y as before (nothing remaps them) */
-      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: has('accelerate'), back: has('brake'), pause: has('pause'), alt: b(2), alt2: b(3) };
+      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: editor ? b(0) : has('accelerate'), back: editor ? b(1) : has('brake'), pause: !editor && has('pause'), alt: b(2), alt2: b(3) };
+      if (captured || editor?.exclusive()) {
+        this.padPrev[i] = now; this.padRepeat[i] = 0.38; continue;
+      }
       let anyDir = false;
       for (const k in now) {
+        if (editor && (editor.exclusive() || editor !== this.padEditor)) break;
         if (now[k] && !prev[k]) { this.lastDevice = dev; this.onAnyInput?.(); this._menu(k, dev); if (['up', 'down', 'left', 'right'].includes(k)) this.padRepeat[i] = 0.38; }
         if (now[k] && ['up', 'down', 'left', 'right'].includes(k)) anyDir = k;
       }

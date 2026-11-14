@@ -42,8 +42,11 @@
 // Offline support on the live site. Left off on localhost so development never sees a stale file.
 if ('serviceWorker' in navigator) {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-  if (local) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
-  else addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  const gameScope = new URL('./', location.href).href;
+  if (local) navigator.serviceWorker.getRegistration(gameScope).then(r => {
+    if (r?.scope === gameScope) return r.unregister();
+  }).catch(() => {});
+  else navigator.serviceWorker.register(new URL('sw.js', gameScope)).catch(() => {});
 }
 </script>
 </body>

@@ -1,34 +1,70 @@
-/* Billionaire Kart service worker.
-   - Code and pages: network first, so a new release shows up as soon as you are online.
-   - Art, audio, fonts: served from cache at once, and refreshed in the background, so a changed picture
-     shows up on the next visit without anyone having to clear anything.
-   - Offline: everything you have already loaded keeps working.
-   It also evicts the caches of the old v1 build and reloads any page that build was still serving. */
-const VERSION = 'bk2-4';
+/* Network-first game code, stale-while-revalidate media. The installation
+   fetches the startup shell because the first online page is not controlled. */
+importScripts('./offline-shell.js');
+const scope = self.registration.scope;
+const CACHE = 'billionaire-kart:' + scope;
+const shellPage = new URL('index.html', scope).href;
 const ASSET = /\.(webp|png|jpg|jpeg|mp3|ogg|woff2)$/i;
+const inScope = address => address.startsWith(scope);
 
-self.addEventListener('install', e => { e.waitUntil(self.skipWaiting()); });
-self.addEventListener('activate', e => {
-  e.waitUntil((async () => {
-    const keys = await caches.keys();
-    const hadOld = keys.some(k => !k.startsWith('bk2-'));
-    await Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)));
-    await self.clients.claim();
-    if (hadOld) for (const c of await self.clients.matchAll({ type: 'window' })) c.navigate(c.url).catch(() => {});
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await cache.addAll(SHELL.map(path => new Request(new URL(path, scope), { cache: 'reload' })));
+    await self.skipWaiting();
   })());
 });
-self.addEventListener('fetch', e => {
-  const req = e.request, url = new URL(req.url);
-  if (req.method !== 'GET' || url.origin !== location.origin) return;
-  e.respondWith((async () => {
-    const cache = await caches.open(VERSION);
-    if (ASSET.test(url.pathname)) {
-      const hit = await cache.match(req);
-      const fresh = fetch(req).then(res => { if (res.ok) cache.put(req, res.clone()); return res; });
-      if (hit) { e.waitUntil(fresh.catch(() => {})); return hit; }
-      return fresh;
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const legacy = (await caches.keys()).filter(name => /^(?:bk-v|bk2-)\d+$/.test(name));
+    // Old caches had a single origin-wide name. Keep anything belonging to a
+    // sibling deployment, including other paths inside the same legacy cache.
+    for (const name of legacy) {
+      const old = await caches.open(name), next = await caches.open(CACHE);
+      for (const request of await old.keys()) {
+        if (!inScope(request.url)) continue;
+        if (ASSET.test(new URL(request.url).pathname) && !await next.match(request)) {
+          const hit = await old.match(request);
+          if (hit) await next.put(request, hit);
+        }
+        await old.delete(request);
+      }
+      if (!(await old.keys()).length) await caches.delete(name);
     }
-    try { const res = await fetch(req); if (res.ok) cache.put(req, res.clone()); return res; }
-    catch { return (await cache.match(req)) || (await cache.match('./index.html')) || Response.error(); }
+    await self.clients.claim();
   })());
+});
+
+async function fetchAndStore(request, cache) {
+  const response = await fetch(request);
+  if (response.ok && response.status !== 206) {
+    // A full quota must not turn a usable network response into an error.
+    await cache.put(request, response.clone()).catch(() => {});
+  }
+  return response;
+}
+
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET' || !inScope(request.url) || request.headers.has('range')) return;
+  const cache = caches.open(CACHE);
+  if (ASSET.test(new URL(request.url).pathname)) {
+    const hit = cache.then(c => c.match(request));
+    const fresh = cache.then(c => fetchAndStore(request, c));
+    // Register the lifetime promise immediately, including when a cached
+    // response finishes before the network update.
+    event.waitUntil(fresh.catch(() => {}));
+    event.respondWith(hit.then(response => response || fresh));
+    return;
+  }
+  event.respondWith(cache.then(async c => {
+    try { return await fetchAndStore(request, c); }
+    catch {
+      const hit = await c.match(request);
+      if (hit) return hit;
+      if (request.mode === 'navigate') return (await c.match(shellPage)) || Response.error();
+      return Response.error();
+    }
+  }));
 });

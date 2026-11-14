@@ -11,6 +11,7 @@ import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { makeRng } from '../core/util.js';
 
 export const STEP = 1 / 60;
+const SLOW_MO = 1.1;   // seconds of real time the finish slow motion takes to ease back to full speed
 
 export class RaceSession {
   /**
@@ -64,6 +65,8 @@ export class RaceSession {
 
   /** Freeze the action briefly (one screen only: in split-screen a pause for one player would stall the others). */
   _hitStop(sec) { if (this.race.players.length === 1) this.hitStopT = Math.max(this.hitStopT || 0, sec); }
+  /** Crossing the line: the race drops to a third of its speed for a beat and eases back (one screen only). */
+  _slowMo() { if (this.race.players.length === 1) this.slowT = SLOW_MO; }
 
   skipIntro() { if (this.phase === 'intro') { this.view.intro.done = true; } }
 
@@ -78,7 +81,9 @@ export class RaceSession {
         if (e.type === 'rankDown' && this.race.time > 6 && !kart.finished && Math.random() < 0.45) { const passer = this.race.order[kart.rank - 2]; if (passer && !passer.isPlayer) hud.talk(passer.racer, pick(passer.racer.barks.pass), 2600); }
         if (e.type === 'lap' && e.data > 1 && e.data <= this.race.laps && this.def.lapNotes?.[e.data - 2]) hud.feed(this.def.lapNotes[e.data - 2], 4200);
         const p = kart.playerIndex;
-        if (e.type === 'hit') { app.input.rumble(p, 1, 0.8, 380); this._hitStop(0.07); }
+        if (e.type === 'hit') { const big = e.data.kind === 'tumble'; app.input.rumble(p, 1, big ? 1 : 0.8, big ? 520 : 380); this._hitStop(big ? 0.11 : e.data.kind === 'zap' ? 0.06 : 0.08); }
+        else if (e.type === 'finish') this._slowMo();
+        else if (e.type === 'miniTurbo') app.input.rumble(p, 0.2 + e.data * 0.15, 0.5, 90 + e.data * 40);
         else if (e.type === 'wall') app.input.rumble(p, Math.min(1, e.data.v / 14), 0.3, 140);
         else if (e.type === 'land' && e.data > 9) app.input.rumble(p, 0.5, 0.2, 110);
         else if (e.type === 'boost') app.input.rumble(p, 0.25, 0.6, 180);
@@ -97,7 +102,7 @@ export class RaceSession {
         const { by, victim, with: w } = e.data, name = ITEMS[w]?.name || (w === 'star' ? 'Hype Cycle' : w === 'squash' ? 'a full-size kart' : w);
         const hv = this.hudOf.get(victim), hb = by && this.hudOf.get(by);
         // the one who got hit sees it shouted across the screen, then hears about it from whoever did it
-        if (hv) { hv.banner(ITEMS[w]?.hit || HIT_LINES[w] || 'HIT!', 'bad small', 1300); if (by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer) hv.talk(by.racer, pick(by.racer.barks.taunt)); } }
+        if (hv) { hv.banner(ITEMS[w]?.hit || HIT_LINES[w] || 'HIT!', 'bad small', 1300, 2); if (by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer) hv.talk(by.racer, pick(by.racer.barks.taunt)); } }
         if (hb && by !== victim) { this._hitStop(0.05); hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer) hb.talk(victim.racer, pick(victim.racer.barks.hit)); }
       } else if (e.type === 'steal') { const h = this.hudOf.get(e.data.by); if (h) h.feed(`You stole ${ITEMS[e.data.id].name} from <b>${e.data.from.racer.name}</b>`); }
       // the suit has arrived over the leader: their feed says so, in terms — the hover is the warning window
@@ -115,6 +120,7 @@ export class RaceSession {
       const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
       // hit pause: the world holds still for a few frames when a hit lands, so it feels heavy
       if (this.hitStopT > 0) { this.hitStopT -= dt; dt = 0; }
+      if (this.slowT > 0) { this.slowT -= dt; const f = 1 - Math.max(0, this.slowT) / SLOW_MO; dt *= 0.3 + 0.7 * f * f; }
       this.acc = Math.max(0, Math.min(this.acc + dt, STEP * 5));   // never in debt: a race that owes time would sit frozen until it had paid it back (#103)
       while (this.acc >= STEP) {
         view.snapshot();

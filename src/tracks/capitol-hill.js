@@ -12,10 +12,38 @@ import * as C from '../models/props-capitol-hill.js';
 import { canvasTex } from '../render/textures.js';
 import { ModelBuilder, cyl, box, plastic, paint } from '../models/build.js';
 
-export const CAPITOL = { x: -85, z: 147, y: 19.5, ax: 66, az: 34 };   // plateau (half-axes) the capitol stands on
-export const POOL = { x0: 171, x1: 203, z0: 64, z1: 214, depth: -1.4 }; // the reflecting pool, east of the pool run
-export const OBELISK = { x: 113, z: 236 };                             // centre of the bend round the obelisk
+export const CAPITOL = { x: -85, z: 147, y: 27, ax: 66, az: 34 };   // plateau (half-axes) the capitol stands on
+// #140 round 3: THE Reflecting Pool. A long, narrow basin (18 x 152 m, about 1:8) whose west coping is the
+// edge of the pool run, on one axis with the memorial at its head (north) and the monument at its foot (south)
+export const POOL = { x0: 167.6, x1: 185.6, z0: 62, z1: 214, floor: -0.3, water: 0.6, coping: 166.3 };
+export const AXIS = (POOL.x0 + POOL.x1) / 2;
+export const OBELISK = { x: AXIS, z: 276, h: 58, w: 7.2 };              // the monument, hero scale, at the foot of the pool's axis
+const MEMORIAL = { x: 189, z: 17 };                                     // the memorial at the head of the pool, dead ahead down the Avenue
 
+// The Filibuster's legs (z of the centreline, and the road's height at its two ends) and the terrace lines between
+// them: the hillside steps down in stone-walled terraces, one per leg, so each hairpin drops you a storey.
+const LEGS = [{ z: 147, xa: -165, ya: 26.5, xb: -125, yb: 27 }, { z: 98, xa: -165, ya: 23, xb: -90, yb: 17.2 }, { z: 49, xa: -145, ya: 9.4, xb: -90, yb: 13.6 }, { z: 0, xa: -145, ya: 5.8, xb: -75, yb: 1.2 }];
+const legY = (k, x) => { const L = LEGS[k], t = Math.min(1, Math.max(0, (x - L.xa) / (L.xb - L.xa))); return L.ya + (L.yb - L.ya) * t; };
+export const TERRACES = [{ z: 122.5, x0: -146, x1: -126 }, { z: 73.5, x0: -168, x1: -114 }, { z: 24.5, x0: -126, x1: -86 }];   // walls: upper leg to the north
+export const CLOTURE = { x0: -114, x1: -72 };   // hairpin two's infield and the gap in the middle wall: fenced until the final lap
+const terraceY = (x, z) => {
+  for (let k = 0; k < 3; k++) {
+    const L = TERRACES[k].z;
+    if (z >= L + 3.2) return legY(k, x) - 0.15;
+    if (z >= L) { const t = (z - L) / 3.2; return legY(k + 1, x) - 0.15 + (legY(k, x) - legY(k + 1, x)) * t; }
+  }
+  return legY(3, x) - 0.15;
+};
+/** A generated texture from assets/tracks/capitol-hill (see tools/gen-capitol-art.mjs), tiled; browser only. */
+const artCache = {};
+const artTex = (THREE, name, key = name) => {
+  if (artCache[key]) return artCache[key];
+  const t = new THREE.TextureLoader().load(`assets/tracks/capitol-hill/${name}.webp`);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+  return (artCache[key] = t);
+};
+/** The cloture steps open when the race leader starts the final lap (the same rule for rivals and for the barricade). */
+export const clotureOpen = race => !!race?.karts?.some(k => k.lap >= (race.laps ?? 3));
 const segDist = (x, z, ax, az, bx, bz) => {
   const dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
   return Math.hypot(x - ax - dx * t, z - az - dz * t);
@@ -25,9 +53,9 @@ export default {
   id: 'capitol-hill',
   name: 'Capitol Hill Climb',
   tagline: 'Three laps: the only term limit in town.',
-  lapNotes: ['<b>Debt ceiling raised.</b> Nobody is surprised.', '<b>Debt ceiling raised again.</b> Final lap, probably.'],   // shown as laps two and three begin
+  lapNotes: ['<b>Debt ceiling raised.</b> Nobody is surprised.', '<b>Cloture invoked.</b> The steps past hairpin two are open.'],   // shown as laps two and three begin
   // the opening shot: the revolving door between REGULATOR and INDUSTRY, suits going round
-  intro: [{ pos: [-22, 30, -30], pos1: [-6, 33, -16], look: [62, 32, 52], look1: [62, 30, 54], fov: 54, dur: 3.2 }],
+  intro: [{ pos: [96, 9, 214], pos1: [88, 11, 196], look: [80, 24, 150], look1: [80, 22, 146], fov: 54, dur: 3.2 }],
   laps: 3,
   width: 17,
   sky: 'golden',
@@ -39,55 +67,64 @@ export default {
     { p: [68, 0, 0] },                           // 1
     { p: [106, 0.2, 0], w: 18 },                   // 2 turn one, right
     { p: [134.3, 0.6, 11.7], w: 18 },              // 3
-    { p: [148, 0.7, 40], w: 18 },                  // 4
+    { p: [152, 0.7, 40], w: 18 },                  // 4
     { p: [156, 0.6, 100] },                        // 5 the Reflecting Pool, pool on the left
-    { p: [154, 0.6, 168] },                        // 6
-    { p: [146, 0.9, 235], w: 18 },               // 7 round the obelisk, right
+    { p: [156, 0.6, 168] },                        // 6
+    { p: [151, 0.9, 233], w: 18 },               // 7 round the obelisk, right
     { p: [129.5, 1.3, 263.6], w: 18 },           // 8
     { p: [96.5, 1.8, 263.6], w: 18 },            // 9
-    { p: [80, 2.7, 235], w: 18 },                // 10
-    { p: [80, 5, 182] },                         // 11 the Mall leg, climbing north
-    { p: [80, 8.5, 130] },                       // 12 the Climb: left
-    { p: [71.2, 10.3, 108.8] },                  // 13
-    { p: [50, 12, 100] },                        // 14
-    { p: [25, 13, 100] },                        // 15 left again, through the cherry trees
-    { p: [6.2, 14.4, 106.6] },                   // 16
-    { p: [-4.3, 15.8, 123.5] },                  // 17 right, up to the Rotunda
-    { p: [-14.8, 17.4, 140.4] },                 // 18
-    { p: [-33.6, 18.8, 147] },                   // 19
-    { p: [-45, 19.5, 147] },                     // 20 the Rotunda: red carpet under the dome
-    { p: [-85, 19.5, 147] },                     // 21
-    { p: [-125, 19.5, 147] },                    // 22 out the far side, the district below
-    { p: [-165, 19, 147], w: 18 },               // 23 the Filibuster: hairpin one, right
-    { p: [-177.2, 18.5, 143.7], w: 18, bank: -4 }, // 24
-    { p: [-186.2, 18, 134.8], w: 18, bank: -7 },  // 25
-    { p: [-189.5, 17.5, 122.5], w: 18, bank: -8 }, // 26
-    { p: [-186.2, 17, 110.2], w: 18, bank: -7 },  // 27
-    { p: [-177.2, 16.5, 101.3], w: 18, bank: -4 }, // 28
-    { p: [-165, 16, 98], w: 18 },                // 29
-    { p: [-90, 13.4, 98], w: 18 },               // 30 hairpin two, left
-    { p: [-77.8, 12.9, 94.7], w: 18, bank: 4 },  // 31
-    { p: [-68.8, 12.3, 85.8], w: 18, bank: 7 },  // 32
-    { p: [-65.5, 11.8, 73.5], w: 18, bank: 8 },  // 33
-    { p: [-68.8, 11.3, 61.2], w: 18, bank: 7 },  // 34
-    { p: [-77.8, 10.7, 52.3], w: 18, bank: 4 },  // 35
-    { p: [-90, 10.2, 49], w: 18 },               // 36
-    { p: [-145, 7, 49], w: 18 },                 // 37 hairpin three, right
-    { p: [-157.2, 6.4, 45.7], w: 18, bank: -4 },  // 38
-    { p: [-166.2, 5.9, 36.8], w: 18, bank: -7 },  // 39
-    { p: [-169.5, 5.3, 24.5], w: 18, bank: -8 },  // 40
-    { p: [-166.2, 4.7, 12.2], w: 18, bank: -7 },  // 41
-    { p: [-157.2, 4.2, 3.3], w: 18, bank: -4 },   // 42
-    { p: [-145, 3.6, 0], w: 18 },                // 43
-    { p: [-75, 1, 0] },                          // 44 onto the Avenue
+    { p: [80, 3, 235], w: 18 },                // 10
+    { p: [80, 6.8, 182] },                         // 11 the Mall leg, climbing north
+    { p: [80, 11.6, 130] },                       // 12 the Climb: left
+    { p: [71.2, 13.8, 108.8] },                  // 13
+    { p: [50, 16, 100] },                        // 14
+    { p: [25, 18.3, 100] },                        // 15 left again, through the cherry trees
+    { p: [6.2, 20.3, 106.6] },                   // 16
+    { p: [-4.3, 22.4, 123.5] },                  // 17 right, up to the Rotunda
+    { p: [-14.8, 24.5, 140.4] },                 // 18
+    { p: [-33.6, 26.3, 147] },                   // 19
+    { p: [-45, 27, 147] },                     // 20 the Rotunda: red carpet under the dome
+    { p: [-85, 27, 147] },                     // 21
+    { p: [-125, 27, 147] },                    // 22 out the far side, the district below
+    { p: [-165, 26.5, 147], w: 18 },               // 23 the Filibuster: hairpin one, right
+    { p: [-177.2, 26.0, 143.7], w: 18, bank: -4 }, // 24
+    { p: [-186.2, 25.4, 134.8], w: 18, bank: -7 },  // 25
+    { p: [-189.5, 24.8, 122.5], w: 18, bank: -8 }, // 26
+    { p: [-186.2, 24.2, 110.2], w: 18, bank: -7 },  // 27
+    { p: [-177.2, 23.6, 101.3], w: 18, bank: -4 }, // 28
+    { p: [-165, 23, 98], w: 18 },                // 29
+    { p: [-90, 17.2, 98], w: 18 },               // 30 hairpin two, left
+    { p: [-77.8, 16.6, 94.7], w: 18, bank: 4 },  // 31
+    { p: [-68.8, 16.0, 85.8], w: 18, bank: 7 },  // 32
+    { p: [-65.5, 15.4, 73.5], w: 18, bank: 8 },  // 33
+    { p: [-68.8, 14.8, 61.2], w: 18, bank: 7 },  // 34
+    { p: [-77.8, 14.2, 52.3], w: 18, bank: 4 },  // 35
+    { p: [-90, 13.6, 49], w: 18 },               // 36
+    { p: [-145, 9.4, 49], w: 18 },                 // 37 hairpin three, right
+    { p: [-157.2, 8.8, 45.7], w: 18, bank: -4 },  // 38
+    { p: [-166.2, 8.2, 36.8], w: 18, bank: -7 },  // 39
+    { p: [-169.5, 7.6, 24.5], w: 18, bank: -8 },  // 40
+    { p: [-166.2, 7.0, 12.2], w: 18, bank: -7 },  // 41
+    { p: [-157.2, 6.4, 3.3], w: 18, bank: -4 },   // 42
+    { p: [-145, 5.8, 0], w: 18 },                // 43
+    { p: [-75, 1.2, 0] },                          // 44 onto the Avenue
   ],
   sides: [
     { from: 43.6, to: 1.7, side: 'R', edge: 'wall' },                          // grandstand wall along the Avenue
-    { from: 4.4, to: 7.1, side: 'L', outer: 33, hoarding: false },             // the Reflecting Pool: run wide into the shallows
+    { from: 4.3, to: 6.75, side: 'L', shoulder: 1.2, outer: 1.3, blend: 1.4, hoarding: false }, // the Reflecting Pool: the coping is the edge of the road
+    { from: 6.75, to: 7.15, side: 'L', outer: 7, blend: 6, hoarding: false },             // the fountain plaza at its foot
     { from: 5.7, to: 7.0, side: 'R', outer: 32, shoulder: 4, hoarding: false }, // the Mall: open lawn between the pool run...
     { from: 10.15, to: 11.6, side: 'R', outer: 32, shoulder: 4, hoarding: false }, // ...and the Mall leg (cut it with a boost)
     { from: 19.3, to: 20.0, edge: 'wall' },                                     // forecourt walls either side of the capitol
     { from: 22.0, to: 22.35, edge: 'wall' },
+    { from: 23.0, to: 29.0, side: 'R', outer: 2.2 },                            // hairpins one and three: the infields hold their set pieces
+    { from: 37.0, to: 43.0, side: 'R', outer: 2.2 },
+    { from: 29.6, to: 36.45, side: 'L', outer: 16.5, hoarding: false },         // hairpin two's infield and the cloture steps: open ground,
+                                                                                 // fenced off (decorate) until the final lap
+  ],
+  ramps: [
+    { at: 29.22, len: 9, lift: 2.1, lat: -3.5, w: 5.5 },   // off the top of each downhill leg: a trick line on one side, the dive is long
+    { at: 36.56, len: 9, lift: 2.1, lat: 3.5, w: 5.5 },
   ],
   tunnels: [{ from: 20.0, to: 22.0, through: false }],
   zones: [
@@ -102,7 +139,7 @@ export default {
     { at: 29.35, lat: 3, w: 4.5 },                  // between hairpins one and two: only if you dare
     { at: 43.35, lat: 0, w: 5 },                    // out of the Filibuster, onto the Avenue
   ],
-  itemRows: [{ at: 4.6 }, { at: 13.6 }, { at: 21.5 }, { at: 36.5 }, { at: 44.4, n: 3 }],
+  itemRows: [{ at: 4.6 }, { at: 13.6 }, { at: 21.5 }, { at: 36.85 }, { at: 44.4, n: 3 }],
   coins: [
     { from: 0.15, to: 0.6, n: 4, lat: 4 },
     { from: 5.2, to: 6.4, n: 5, lat: [6.5, 7] },            // along the pool edge: one slip and you are in the water
@@ -113,7 +150,11 @@ export default {
     { from: 39.0, to: 41.0, n: 3, lat: -6 },
   ],
   // rivals cut the Mall too, on the lane between the topiary and the protest signs (see docs/track-authoring.md)
-  shortcuts: [{ name: 'the Mall', from: 5.9, to: 11.2, path: [[149, 178], [136, 188], [100, 191], [88, 182]] }],
+  shortcuts: [
+    { name: 'the Mall', from: 5.9, to: 11.2, path: [[149, 178], [136, 188], [100, 191], [88, 182]] },
+    // the final lap only: cloture is invoked, the barricade folds away, and the steps cut out hairpin two
+    { name: 'cloture', from: 29.66, to: 36.4, path: [[-101, 85], [-99, 74], [-101, 62]], skill: 0.4, chance: 1.4, when: race => clotureOpen(race) },
+  ],
   obstacles: [
     // the motorcade crawls across the road
     { kind: 'patrol', model: 'motorcade', at: 1.35, lats: [-9, -5], speed: 3.5, effect: 'spin', radius: 2.0 },
@@ -122,9 +163,9 @@ export default {
     { kind: 'orbit', model: 'drone', at: 14.4, lat: -5, orbit: 3, speed: 5, effect: 'spin', lift: 0.6 },
     { kind: 'orbit', model: 'drone', at: 18.7, lat: 5.5, orbit: 2.5, speed: 4.5, effect: 'spin', lift: 0.6 },
     // red tape at the hairpins
-    { kind: 'static', model: 'redtape', at: 26.0, lat: -7.2, effect: 'bump', radius: 1.4 },
+    { kind: 'static', model: 'redtape', at: 26.0, lat: -1.0, effect: 'bump', radius: 1.4 },
     { kind: 'static', model: 'redtape', at: 35.6, lat: -6.4, effect: 'bump', radius: 1.4 },
-    { kind: 'static', model: 'redtape', at: 40.0, lat: -7.2, effect: 'bump', radius: 1.4 },
+    { kind: 'static', model: 'redtape', at: 40.0, lat: -1.0, effect: 'bump', radius: 1.4 },
   ],
   terrain: {
     cell: 3, margin: 240, blend: 16, water: -0.95,
@@ -140,13 +181,24 @@ export default {
       h += (fbm(x * 0.007, z * 0.007, 3, 13) - 0.35) * 9 * smoothstep(150, 260, dc);
       h += smoothstep(230, 420, dc) * 30;
       h = Math.max(h, 0.2);
+      // the Filibuster's terraces, faded into the plain hill round the hairpins
+      const tk = smoothstep(-178, -162, x) * (1 - smoothstep(-90, -76, x)) * smoothstep(-14, 0, z) * (1 - smoothstep(150, 166, z));
+      if (tk > 0) {
+        let ty = terraceY(x, z);
+        // the cloture steps: a straight drop from the middle leg to the one below, through the gap in the wall
+        if (x > CLOTURE.x0 - 4 && x < CLOTURE.x1 + 4 && z > 56 && z < 91) { const t = smoothstep(58, 89, z), cx = smoothstep(CLOTURE.x0 - 4, CLOTURE.x0, x) * (1 - smoothstep(CLOTURE.x1, CLOTURE.x1 + 4, x)); ty = ty * (1 - cx) + (legY(2, x) - 0.15 + (legY(1, x) - legY(2, x)) * t) * cx; }
+        h = h * (1 - tk) + ty * tk;
+      }
       // a flat top for the capitol
       const cd = Math.hypot((x - CAPITOL.x) / CAPITOL.ax, (z - CAPITOL.z) / CAPITOL.az);
       const top = 1 - smoothstep(0.9, 1.35, cd);
       h = h * (1 - top) + CAPITOL.y * top;
-      // the reflecting pool: a crisp rectangle dipped below the water
-      const pk = smoothstep(POOL.x0 - 2, POOL.x0 + 1, x) * (1 - smoothstep(POOL.x1 - 1, POOL.x1 + 2, x)) * smoothstep(POOL.z0 - 2, POOL.z0 + 1, z) * (1 - smoothstep(POOL.z1 - 1, POOL.z1 + 2, z));
-      h = h * (1 - pk) + POOL.depth * pk;
+      // the reflecting pool: a crisp rectangle dipped to a shallow floor under its own water (decorate lays the surface)
+      const pk = smoothstep(POOL.x0 - 0.6, POOL.x0 + 0.6, x) * (1 - smoothstep(POOL.x1 - 0.6, POOL.x1 + 0.6, x)) * smoothstep(POOL.z0 - 0.6, POOL.z0 + 0.6, z) * (1 - smoothstep(POOL.z1 - 0.6, POOL.z1 + 0.6, z));
+      if (pk > 0) h = h * (1 - pk) + POOL.floor * pk;
+      // the walks and the plaza round it stay level with the coping
+      const wk = (x > POOL.x0 - 4 && x < POOL.x1 + 22 && z > POOL.z0 - 14 && z < POOL.z1 + 50) ? 1 : 0;
+      if (wk && !pk) h = Math.min(h, 0.62);
       return h;
     },
   },
@@ -166,7 +218,8 @@ export default {
   /** Dress the course. ctx: { THREE, track, group, gfx, anim, view } */
   decorate(ctx) {
     const { THREE, track, anim, view } = ctx, sc = new Scenery(ctx), rng = sc.rng;
-    const taken = [[COMPLEX.x, COMPLEX.z, 40], [STATUE.x, STATUE.z, 15], [LECTERN.x, LECTERN.z, 12], [MAZE.x, MAZE.z, 26], [CANNON.x, CANNON.z, 9]];   // footprints of landmarks: [x, z, r]
+    const ds = doorSite(track), dcx = Math.cos(ds.yaw), dsx = Math.sin(ds.yaw);
+    const taken = [[ds.x - dcx * DOOR.span / 2, ds.z + dsx * DOOR.span / 2, 14], [ds.x + dcx * DOOR.span / 2, ds.z - dsx * DOOR.span / 2, 14], [ds.x, ds.z, 12], [STATUE.x, STATUE.z, 15], [LECTERN.x, LECTERN.z, 16], [PERMIT.x, PERMIT.z, 16], [MAZE.x, MAZE.z, 26], [CANNON.x, CANNON.z, 9]];   // footprints of landmarks: [x, z, r]
     const free = (x, z, pad = 0) => !taken.some(([tx, tz, r]) => (tx - x) ** 2 + (tz - z) ** 2 < (r + pad) ** 2);
     const inPool = (x, z, m = 0) => x > POOL.x0 - m && x < POOL.x1 + m && z > POOL.z0 - m && z < POOL.z1 + m;
     const onPlateau = (x, z, k = 1.1) => Math.hypot((x - CAPITOL.x) / CAPITOL.ax, (z - CAPITOL.z) / CAPITOL.az) < k;
@@ -242,16 +295,19 @@ export default {
       });
     }
 
-    // the obelisk in the middle of the bend; a ring of flags on its plinth
-    const obeliskRing = [];
+    // the monument at the foot of the pool's axis (#140 round 3): hero scale, about 66 m to the tip, seen from most of the lap,
+    // ringed by flags at its foot like the real one
+    const obeliskRing = [], mon = C.obelisk({ h: OBELISK.h, w: OBELISK.w });
     {
       const y = sc.y(OBELISK.x, OBELISK.z);
-      sc.place(C.obelisk(), OBELISK.x, OBELISK.z, { y: y - 0.3, solid: 7 });
-      const ring = [];
-      for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; ring.push({ x: OBELISK.x + Math.cos(a) * 5.4, y: y + 1.9, z: OBELISK.z + Math.sin(a) * 5.4, yaw: -a }); }
-      obeliskRing.push(...ring);
-      taken.push([OBELISK.x, OBELISK.z, 12]);
+      sc.place(mon, OBELISK.x, OBELISK.z, { y: y - 0.3, solid: OBELISK.w * 1.25 });
+      for (let k = 0; k < 28; k++) { const a = (k / 28) * Math.PI * 2; const x = OBELISK.x + Math.cos(a) * 19, z = OBELISK.z + Math.sin(a) * 19; obeliskRing.push({ x, y: sc.y(x, z) - 0.1, z, yaw: -a }); }
+      taken.push([OBELISK.x, OBELISK.z, 22]);
     }
+    ctx.monument = mon;
+    { const t = artTex(THREE, 'ashlar', 'monument'); t.repeat.set(4, OBELISK.h / 4); mon.traverse(o => { if (o.isMesh && o.material.color?.getHex() === 0xece6d6) { o.material = o.material.clone(); o.material.map = t; o.material.color.setHex(0xfaf6ee); o.material.flatShading = true; } }); }
+    reflectingPool(ctx, sc, { taken, free, reach });
+    filibuster(ctx, sc, { taken });
 
     // memorial halls round the district, and the fountain on the lawn
     const halls = [[114, 306, Math.PI], [-20, -72, 0]].map(([x, z, yaw]) => ({ x, z, yaw, y: sc.y(x, z) - 0.3 }));
@@ -292,8 +348,8 @@ export default {
     sc.instances(flagA, avFlags.filter((_, i) => i % 3 === 0), {});
     sc.instances(flagB, avFlags.filter((_, i) => i % 3 === 1), {});
     sc.instances(flagC, avFlags.filter((_, i) => i % 3 === 2), {});
-    sc.instances(flagA, obeliskRing.filter((_, k) => k % 2 === 0), { scale: 0.7 });
-    sc.instances(flagB, obeliskRing.filter((_, k) => k % 2 === 1), { scale: 0.7 });
+    sc.instances(flagA, obeliskRing.filter((_, k) => k % 2 === 0), {});
+    sc.instances(flagB, obeliskRing.filter((_, k) => k % 2 === 1), {});
     const southFlags = sc.along({ from: 43.7, to: 1.6, side: -1, offset: 1.4, spacing: 34, phase: 32 });
     sc.instances(flagA, southFlags, {});
     const lamp = partsOf(C.streetLamp());
@@ -302,41 +358,10 @@ export default {
       ...sc.along({ from: 11.7, to: 19.2, side: 1, offset: 4.8, spacing: 22 }), ...sc.along({ from: 11.7, to: 19.2, side: -1, offset: 4.8, spacing: 22, phase: 11 }),
       ...sc.along({ from: 22.5, to: 43.2, side: 1, offset: 12.8, spacing: 26 }),
     ].filter(p => !reach(p.x, p.z, 0.6) && free(p.x, p.z));
-    for (let z = POOL.z0; z <= POOL.z1; z += 15) lamps.push({ x: POOL.x1 + 3.5, z, y: sc.y(POOL.x1 + 3.5, z), yaw: 0 });
     sc.instances(lamp, lamps, { cast: false });
 
-    // the reflecting pool: a stone balustrade along its far side and ends
-    const bal = partsOf(C.balustrade(4)), balSpots = [];
-    for (let z = POOL.z0 + 2; z < POOL.z1 - 1; z += 4) balSpots.push({ x: POOL.x1 + 1.6, z, y: sc.y(POOL.x1 + 1.6, z), yaw: Math.PI / 2 });
-    for (const zz of [POOL.z0 - 1.6, POOL.z1 + 1.6]) for (let x = POOL.x1 - 2; x > POOL.x0 + 2; x -= 4) if (!reach(x, zz, 0.5)) balSpots.push({ x, z: zz, y: sc.y(x, zz), yaw: 0 });
-    sc.instances(bal, balSpots, { sink: 0.05, cast: false });
-
-    // the reflecting pool, ROUND 2 (#140): it rendered swimming-pool blue and Roger called it.
-    // The water is murky green now (look.water), and the surface itself carries the joke (the
-    // MKW water-frame principle): algae mats in three greens, scum strips along both edges,
-    // resident ducks, and signage at both reading distances — a pool-scale board at the north
-    // end facing the approaching road, and a smaller one standing IN the water on the far side.
-    {
-      const WY = track.water + 0.07, matSpots = [];
-      for (let k = 0; k < 46; k++) matSpots.push({ x: rng.range(POOL.x0 + 2.5, POOL.x1 - 2.5), z: rng.range(POOL.z0 + 3, POOL.z1 - 3), y: WY, yaw: rng.range(0, 6.28) });
-      sc.instances(partsOf(C.algaePatch(0x3e7a24)), matSpots.slice(0, 16), { scale: [1.3, 4.4], cast: false });
-      sc.instances(partsOf(C.algaePatch(0x639c33)), matSpots.slice(16, 32), { scale: [1.1, 3.6], cast: false });
-      sc.instances(partsOf(C.algaePatch(0x8aa832)), matSpots.slice(32), { scale: [0.9, 2.8], cast: false });
-      const strips = [];
-      for (let z = POOL.z0 + 6; z < POOL.z1 - 4; z += 11) { strips.push({ x: POOL.x0 + 1.15, z, y: WY, yaw: Math.PI / 2 }); strips.push({ x: POOL.x1 - 1.15, z: z + 5, y: WY, yaw: Math.PI / 2 }); }
-      sc.instances(partsOf(C.algaeStrip()), strips, { scale: [0.8, 1.25], cast: false });
-      const duckProto = C.duck(), ducks = [];
-      for (const [dx, dz, dyaw] of [[183, 104, 2.6], [194.5, 152, -0.7], [178.5, 196, 1.4]]) {
-        const d = duckProto.clone(); sc.place(d, dx, dz, { yaw: dyaw, y: track.water - 0.06 }); ducks.push(d);
-      }
-      anim.push((dt, time) => ducks.forEach((d, n) => { d.position.y = track.water - 0.06 + Math.sin(time * 0.9 + n * 2.1) * 0.055; d.rotation.z = Math.sin(time * 0.7 + n * 1.7) * 0.05; }));
-      sc.place(C.poolSign(), (POOL.x0 + POOL.x1) / 2, POOL.z0 - 8, { yaw: Math.PI });
-      sc.place(C.poolSignSmall(), POOL.x1 - 4.5, 150, { yaw: -Math.PI / 2, y: POOL.depth });
-      taken.push([(POOL.x0 + POOL.x1) / 2, POOL.z0 - 8, 11]);
-    }
-
     // the Mall: protest signs and clipped topiary to thread between on the shortcut (solid)
-    const mallSpots = [[118, 160], [104, 176], [130, 182], [114, 198], [100, 212], [134, 208], [120, 222], [108, 154], [138, 160], [126, 236]];
+    const mallSpots = [[104, 176], [130, 182], [114, 198], [100, 212], [134, 208], [138, 160]];
     const signSpots = [], topiSpots = [];
     mallSpots.forEach(([x, z], k) => { const spot = { x, z, y: sc.y(x, z), yaw: rng() * 6.28 }; (k % 3 === 2 ? topiSpots : signSpots).push(spot); });
     const signA = partsOf(C.signCluster(3)), signB = partsOf(C.signCluster(8));
@@ -353,7 +378,6 @@ export default {
       ...sc.along({ from: 11.6, to: 19.3, side: 1, offset: 21, spacing: 9, jitter: 2.5 }), ...sc.along({ from: 11.6, to: 19.3, side: -1, offset: 21, spacing: 9, jitter: 2.5 }),
       ...sc.along({ from: 10.2, to: 11.6, side: 1, offset: 13.5, spacing: 8, jitter: 1 }),
     ];
-    for (let z = POOL.z0 - 6; z <= POOL.z1 + 6; z += 9) for (const dx of [10, 17]) cherrySpots.push({ x: POOL.x1 + dx + rng.range(-1.5, 1.5), z: z + rng.range(-2, 2), y: 0 });
     cherrySpots.push(...sc.scatter({ count: 60, min: 14, max: 70, maxSlope: 0.5, minGap: 7, where: (x, z) => (onPlateau(x, z, 1.6) && !onPlateau(x, z, 1.02)) || (x > -60 && x < 100 && z > 20 && z < 95) }));
     const cherries = cherrySpots.filter(p => ok(p.x, p.z, 1.5)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
     const chA = partsOf(C.cherryTree(1, { h: 6.5 })), chB = partsOf(C.cherryTree(4, { h: 7.2, pinkA: 0xf9c7da, pinkB: 0xf2a2c2 })), chC = partsOf(C.cherryTree(7, { h: 5.8, pinkA: 0xf4a6c4, pinkB: 0xe57aa6 }));
@@ -375,7 +399,7 @@ export default {
     sc.instances(partsOf(C.flowerBed(5, { colors: [0xffffff, 0xf7b8d0, 0xd4af37] })), beds.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.3] });
 
     // woods everywhere outside the formal gardens, oaks dotted over the lawns
-    const formal = (x, z) => (Math.abs(z) < 48 && x > -150 && x < 175) || (x > -45 && x < 140 && z > 20 && z < 95) || inMall(x, z) || (x > 148 && x < 232 && z > 30 && z < 250) || onPlateau(x, z, 1.2);
+    const formal = (x, z) => (Math.abs(z) < 48 && x > -150 && x < 175) || (x > -45 && x < 140 && z > 20 && z < 95) || inMall(x, z) || (x > 150 && x < 245 && z > -20 && z < 312) || onPlateau(x, z, 1.2);
     const woods = sc.scatter({ count: 440, min: 13, max: 230, maxSlope: 0.8, minGap: 5.5, where: (x, z) => !formal(x, z) && ok(x, z, 1.5) });
     const oakA = partsOf(P.roundTree(1, { h: 8, leafA: 0x4f9e3f, leafB: 0x6fbf4a })), oakB = partsOf(P.roundTree(2, { h: 9.5, leafA: 0x3f8f3a, leafB: 0x5cae45 })), oakC = partsOf(P.roundTree(3, { h: 7, leafA: 0x6bb84a, leafB: 0x8fcc5a }));
     for (const near of [true, false]) {                                  // distant trees skip the shadow pass
@@ -386,11 +410,6 @@ export default {
     }
     const lawnOaks = sc.scatter({ count: 45, min: 14, max: 140, maxSlope: 0.4, minGap: 16, where: (x, z) => formal(x, z) && !inMall(x, z) && !onPlateau(x, z, 1.2) && ok(x, z, 1.5) });
     sc.instances(oakB, lawnOaks, { scale: [1.0, 1.5], yaw: 'random', tilt: 0.03 });
-    // the strips between the Filibuster's legs: a row of cherries and lamps
-    const strip = [];
-    for (let x = -150; x <= -95; x += 7) strip.push({ x, z: 73.5 + rng.range(-1, 1) }, { x: x + 3.5, z: 122.5 + rng.range(-1, 1) });
-    const stripOk = strip.filter(p => ok(p.x, p.z, 0.8)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
-    sc.instances(partsOf(C.cherryTree(9, { h: 6 })), stripOk, { scale: [0.8, 1.1], yaw: 'random' });
     const low = sc.scatter({ count: 170, min: 12.5, max: 60, maxSlope: 0.7, minGap: 2.6, where: (x, z) => ok(x, z, 0.8) && !inMall(x, z) });
     sc.instances(partsOf(P.bush(1, { color: 0x4f9e3f })), low.filter((_, i) => i % 3 === 0), { scale: [0.8, 1.6], yaw: 'random', cast: false });
     sc.instances(partsOf(P.bush(2, { color: 0x5fae45, flower: 0xf7b8d0 })), low.filter((_, i) => i % 3 === 1), { scale: [0.8, 1.5], yaw: 'random', cast: false });
@@ -426,13 +445,214 @@ export default {
   },
 };
 
+/* ---------- the Reflecting Pool (#140 round 3) ----------
+   Built from the real one's defining features: a very long, narrow rectangular basin on one axis with a columned memorial
+   at its head and the monument at its foot, pale granite coping all round, wide gravel walks along both long sides lined
+   with a double row of tall elms, lamps along the walks. The pool run's left edge IS the west coping: karts race within
+   a metre or two of the water for the whole 150 m. Then the twist, as the second read: the water is algae green, mats
+   and scum float on it, the ducks have moved in, and the sign at the closest pass says so. */
+function reflectingPool(ctx, sc, { taken, free, reach }) {
+  const { THREE, track, anim, group } = ctx, rng = sc.rng;
+  const Y = 0.62, WY = POOL.water, LEN = POOL.z1 - POOL.z0, ZM = (POOL.z0 + POOL.z1) / 2;
+  // the water: one long sheet, glassy so it carries the sky, murky green underneath
+  {
+    const g = new THREE.PlaneGeometry(POOL.x1 - POOL.x0 + 0.6, LEN + 0.6); g.rotateX(-Math.PI / 2);
+    // a murky green with lighter swirls of algae through it, and only a little of the sky on top
+    // deep teal-green water with pale ripple lines across it (so it reads as water at a glance, not as paving), and
+    // swirls of algae through it
+    const tex = canvasTex(256, 1024, (c, w, h) => {
+      c.fillStyle = '#1f5a4c'; c.fillRect(0, 0, w, h);
+      for (let k = 0; k < 120; k++) { c.fillStyle = `rgba(${70 + (k * 37) % 50},${120 + (k * 53) % 40},${40 + (k * 13) % 20},${0.14 + (k % 4) * 0.05})`; c.beginPath(); c.ellipse((k * 97) % w, (k * 389) % h, 8 + (k * 7) % 26, 16 + (k * 11) % 54, 0, 0, 7); c.fill(); }
+      c.strokeStyle = 'rgba(190,235,220,0.55)'; c.lineCap = 'round';
+      for (let k = 0; k < 90; k++) { const x = (k * 151) % w, y = (k * 233) % h, l = 18 + (k * 13) % 40; c.lineWidth = 2 + (k % 3); c.beginPath(); c.moveTo(x - l / 2, y); c.quadraticCurveTo(x, y - 4, x + l / 2, y); c.stroke(); }
+    });
+    tex.repeat.set(2, 6);
+    const m = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.55, metalness: 0.0, envMapIntensity: 0.12 });   // little sky in it: at kart height a mirror reads as paving
+    const w = new THREE.Mesh(g, m); w.position.set(AXIS, WY, ZM); w.receiveShadow = true; group.add(w);
+    anim.push((dt, time) => { tex.offset.set(Math.sin(time * 0.05) * 0.01, time * 0.004); });
+    // the reflection everyone takes the photo for: the monument, a long pale shimmer down the axis toward it
+    const rt = canvasTex(64, 512, (c, w, h) => {
+      const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,248,232,0)'); gr.addColorStop(0.55, 'rgba(255,248,232,0.35)'); gr.addColorStop(1, 'rgba(255,248,232,0.7)');
+      c.fillStyle = gr; for (let y = 0; y < h; y += 6) { const wv = w * (0.3 + 0.25 * Math.sin(y * 0.21) * Math.sin(y * 0.05)); c.fillRect(w / 2 - wv / 2, y, wv, 4); }
+    }, { repeat: false });
+    const rg = new THREE.PlaneGeometry(4.2, LEN * 0.62); rg.rotateX(-Math.PI / 2);
+    const rm = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ map: rt, transparent: true, depthWrite: false, fog: true }));
+    rm.position.set(AXIS, WY + 0.012, POOL.z1 - LEN * 0.31); rm.renderOrder = 2; group.add(rm);
+  }
+  // granite coping round the rim (tall enough to wall the water in), and the gravel walk on the far side
+  const cop = partsOf(C.coping(8)), copSpots = [];
+  for (let z = POOL.z0 - 0.65 + 4; z < POOL.z1 + 0.65; z += 8) for (const x of [POOL.x0 - 0.65, POOL.x1 + 0.65]) copSpots.push({ x, z: Math.min(z, POOL.z1 + 0.65 - 4), y: Y - 0.65 + 0.32 - 0.33, yaw: Math.PI / 2 });
+  for (let x = POOL.x0 - 1.3 + 4; x < POOL.x1 + 1.3; x += 8) for (const z of [POOL.z0 - 0.65, POOL.z1 + 0.65]) copSpots.push({ x: Math.min(x, POOL.x1 + 1.3 - 4), z, y: Y - 0.65 + 0.32 - 0.33, yaw: 0 });
+  sc.instances(cop, copSpots.map(p => ({ ...p, y: Y - 0.18 })), { cast: false });   // a low lip: anything taller hides the water from the karts
+  {
+    const b = new ModelBuilder(), walkW = 7;
+    b.add('walk', box(walkW, 0.3, LEN + 30, 0.05, 1), { p: [POOL.x1 + 1.3 + walkW / 2, Y - 0.12, ZM] });
+    b.add('walk', box(POOL.x1 - POOL.x0 + 2.6 + walkW, 0.3, 12, 0.05, 1), { p: [AXIS + walkW / 2, Y - 0.12, POOL.z0 - 7.3] });   // across the head
+    b.add('edge', box(0.3, 0.34, LEN + 30, 0.05, 1), { p: [POOL.x1 + 1.3 + walkW + 0.15, Y - 0.1, ZM] });
+    group.add(b.build({ walk: plastic(0xdcd2bc, 0.95), edge: plastic(0xbfb6a2, 0.8) }));
+  }
+  // the near side: pale paving from the kerb to the coping at road height, so the road meets the pool in stone, not
+  // lawn, and the water sits level with it: at kart height anything that stands up between the road and the water hides it
+  {
+    const i0 = track.indexAtCp(4.3), i1 = track.indexAtCp(6.75), pos = [], uv = [], idx = [];
+    for (let i = i0, r = 0; i <= i1; i++, r++) {
+      const latA = track.hwL[i] + 1.05, latB = Math.max(latA + 0.2, (POOL.coping + 0.1 - track.px[i]) / Math.max(0.3, track.lx[i]));
+      const y = track.py[i] + track.ly[i] * (track.hwL[i] + 1.1) + 0.04;
+      for (const lat of [latA, latB]) { const x = track.px[i] + track.lx[i] * lat, z = track.pz[i] + track.lz[i] * lat; pos.push(x, y, z); uv.push(lat / 5, z / 5); }
+      if (i < i1) { const q = r * 2; idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+    const tex = artTex(THREE, 'paving');
+    const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    mesh.receiveShadow = true; group.add(mesh);
+  }
+  // the elms: a double row along the far walk the whole length, and along the inside of the run where the Mall is not open
+  const elmSpots = [];
+  for (let z = POOL.z0 - 8; z <= POOL.z1 + 10; z += 9.5) for (const x of [POOL.x1 + 11.5, POOL.x1 + 19.5]) elmSpots.push({ x: x + rng.range(-0.6, 0.6), z: z + rng.range(-1, 1) });
+  for (let z = 52; z <= 230; z += 9.5) { if (z > 172 && z < 204) continue; for (const x of [134, 126]) elmSpots.push({ x: x + rng.range(-0.6, 0.6), z: z + rng.range(-1, 1) }); }
+  const elms = elmSpots.filter(p => free(p.x, p.z) && !reach(p.x, p.z, 0.4)).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.1 }));
+  sc.instances(partsOf(C.elm(3, { h: 15 })), elms.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9 });
+  sc.instances(partsOf(C.elm(8, { h: 16, leafA: 0x467f37, leafB: 0x58983f })), elms.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9 });
+  // lamps along the far walk
+  const lamps = [];
+  for (let z = POOL.z0 + 6; z < POOL.z1; z += 19) lamps.push({ x: POOL.x1 + 8.6, z, y: Y - 0.05, yaw: 0 });
+  sc.instances(partsOf(C.streetLamp()), lamps, { cast: false });
+  for (let z = POOL.z0 - 8; z <= POOL.z1 + 10; z += 9.5) taken.push([POOL.x1 + 15.5, z, 6]);
+  taken.push([AXIS, ZM, LEN / 2 + 6]);
+
+  // the twist: algae mats in three greens, scum along the coping, ducks in residence
+  {
+    const matSpots = [];
+    for (let k = 0; k < 54; k++) matSpots.push({ x: rng.range(POOL.x0 + 1.5, POOL.x1 - 1.5), z: rng.range(POOL.z0 + 2, POOL.z1 - 2), y: WY + 0.015, yaw: rng.range(0, 6.28) });
+    sc.instances(partsOf(C.algaePatch(0x3e7a24)), matSpots.slice(0, 18), { scale: [1.0, 3.0], cast: false });
+    sc.instances(partsOf(C.algaePatch(0x639c33)), matSpots.slice(18, 36), { scale: [0.9, 2.6], cast: false });
+    sc.instances(partsOf(C.algaePatch(0x8aa832)), matSpots.slice(36), { scale: [0.8, 2.2], cast: false });
+    const strips = [];
+    for (let z = POOL.z0 + 5; z < POOL.z1 - 4; z += 9) { strips.push({ x: POOL.x0 + 0.62, z, y: WY + 0.01, yaw: Math.PI / 2 }); strips.push({ x: POOL.x1 - 0.62, z: z + 4.5, y: WY + 0.01, yaw: Math.PI / 2 }); }
+    sc.instances(partsOf(C.algaeStrip()), strips, { scale: [0.7, 1.2], cast: false });
+    const duckProto = C.duck(), ducks = [];
+    for (const [dx, dz, dyaw] of [[POOL.x0 + 3.2, 96, 2.6], [POOL.x0 + 4.5, 101, 2.2], [AXIS + 3, 150, -0.7], [POOL.x0 + 2.6, 186, 1.4], [AXIS + 5, 124, 0.4]]) {
+      const d = duckProto.clone(); sc.place(d, dx, dz, { yaw: dyaw, y: WY - 0.05, scale: 1.25 }); ducks.push(d);
+    }
+    anim.push((dt, time) => ducks.forEach((d, n) => { d.position.y = WY - 0.05 + Math.sin(time * 0.9 + n * 2.1) * 0.05; d.rotation.z = Math.sin(time * 0.7 + n * 1.7) * 0.05; d.position.x += Math.sin(time * 0.15 + n) * dt * 0.15; }));
+    // at the closest pass, on the far walk, angled to the karts coming down the run
+    sc.place(C.poolSign(), POOL.x1 + 4.6, 118, { yaw: -Math.PI / 2 - 0.55, y: Y - 0.1 });
+    sc.place(C.poolSignSmall(), AXIS + 2, POOL.z0 + 12, { yaw: Math.PI + 0.25, y: POOL.floor });
+  }
+
+  // the fountain plaza at the foot of the pool, on the axis, between the water and the monument
+  {
+    const FX = AXIS, FZ = POOL.z1 + 24, fnt = C.fountain({ r: 9 });
+    sc.place(fnt, FX, FZ, { y: Y - 0.25 }); taken.push([FX, FZ, 13]);
+    const jet = fnt.userData.jet.clone().multiplyScalar(1).add(fnt.position);
+    const ring = []; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; ring.push([FX + Math.cos(a) * 6.5, FZ + Math.sin(a) * 6.5]); }
+    anim.push(dt => {
+      if (!ctx.view.fx) return;
+      for (let i = 0; i < ctx.view.fx.count(60, dt); i++) {
+        const [x, z] = i % 3 ? ring[(i * 7) % ring.length] : [jet.x, jet.z], up = i % 3 ? 6 : 10;
+        const a = rng() * 6.283, sp = 0.5 + rng() * 0.8;
+        ctx.view.fx.spark(x, jet.y - 0.5, z, Math.cos(a) * sp, up + rng() * 2.5, Math.sin(a) * sp, [0.75, 0.88, 1], 0.3, 1.2);
+      }
+    });
+  }
+
+  // the memorial at the head of the pool, facing down the axis; its name on the attic
+  {
+    const mem = C.lincolnMemorial(), yaw = Math.atan2(AXIS - MEMORIAL.x, ZM - MEMORIAL.z);
+    sc.place(mem, MEMORIAL.x, MEMORIAL.z, { yaw, y: sc.y(MEMORIAL.x, MEMORIAL.z) - 0.4 });
+    taken.push([MEMORIAL.x, MEMORIAL.z, 30]);
+    const tex = canvasTex(1024, 96, (g, w, h) => { g.fillStyle = '#ede7da'; g.fillRect(0, 0, w, h); C.fitText(g, 'THE LOBBYIST MEMORIAL', w / 2, h * 0.56, w * 0.92, 72, C.SIGN_FONT, '#6f6553', { lines: 1 }); }, { repeat: false });
+    const q = new C.Quads(), a = mem.userData.attic, c = Math.cos(yaw), s = Math.sin(yaw), y0 = sc.y(MEMORIAL.x, MEMORIAL.z) - 0.4;
+    q.panel([MEMORIAL.x + a[0] * c + (a[2] + 0.06) * s, y0 + a[1], MEMORIAL.z - a[0] * s + (a[2] + 0.06) * c], yaw, mem.userData.wide * 0.82, 2.6, [0, 0, 1, 1]);
+    const m = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 })); m.matrixAutoUpdate = false; group.add(m);
+  }
+}
+
+/* ---------- the Filibuster's terraces and the cloture steps ----------
+   The north face of the hill steps down in stone terraces, one per leg: each terrace wall stands between two legs
+   with a balustrade along its top, flags and lamps on it, so from below it is a storey of dressed stone and from above
+   a parapet with the next leg dropping away beneath. Hairpin two's infield and the gap in the middle wall are the
+   cloture steps: fenced with barricades for two laps, open on the final one. */
+function filibuster(ctx, sc, { taken }) {
+  const { THREE, track, anim, group, view } = ctx;
+  const stone = artTex(THREE, 'ashlar');
+  const mat = new THREE.MeshStandardMaterial({ map: stone, color: 0xf4efe6, roughness: 0.85 }), capMat = new THREE.MeshStandardMaterial({ color: 0xd2c8b4, roughness: 0.7 });
+  const pos = [], uv = [], idx = [], cpos = [], cidx = [];
+  const quad = (P, U, a, b, c, d, ua, ub, uc, ud) => { const n = P.length / 3; P.push(...a, ...b, ...c, ...d); if (U) U.push(...ua, ...ub, ...uc, ...ud); return n; };
+  const balSpots = [], flagSpots = [], lampSpots = [];
+  TERRACES.forEach((T, k) => {
+    const step = 2, n = Math.ceil((T.x1 - T.x0) / step);
+    const up = x => legY(k, x) - 0.15 + 0.3, lo = x => legY(k + 1, x) - 0.15 - 0.8, z0 = T.z, z1 = T.z + 3.4;
+    for (let j = 0; j < n; j++) {
+      // the gap for the cloture steps in the middle wall
+      const xa = T.x0 + j * step, xb = Math.min(T.x1, xa + step);
+      const a = [xa, lo(xa), z0], b = [xb, lo(xb), z0], c = [xb, up(xb), z0], d = [xa, up(xa), z0];
+      let q = quad(pos, uv, a, b, c, d, [xa / 4, a[1] / 3.2], [xb / 4, b[1] / 3.2], [xb / 4, c[1] / 3.2], [xa / 4, d[1] / 3.2]);
+      idx.push(q, q + 2, q + 1, q, q + 3, q + 2);
+      q = quad(cpos, null, [xa, up(xa), z0 - 0.25], [xb, up(xb), z0 - 0.25], [xb, up(xb), z1], [xa, up(xa), z1]);
+      cidx.push(q, q + 2, q + 1, q, q + 3, q + 2);
+      q = quad(cpos, null, [xa, up(xa) - 0.35, z0 - 0.25], [xb, up(xb) - 0.35, z0 - 0.25], [xb, up(xb), z0 - 0.25], [xa, up(xa), z0 - 0.25]);
+      cidx.push(q, q + 2, q + 1, q, q + 3, q + 2);
+    }
+    // end caps, so the wall's thickness reads where it stops
+    for (const [x, s] of [[T.x0, -1], [T.x1, 1]]) {
+      const q = quad(pos, uv, [x, lo(x), z0], [x, lo(x), z1], [x, up(x), z1], [x, up(x), z0], [0, lo(x) / 3.2], [0.85, lo(x) / 3.2], [0.85, up(x) / 3.2], [0, up(x) / 3.2]);
+      if (s > 0) idx.push(q, q + 2, q + 1, q, q + 3, q + 2); else idx.push(q, q + 1, q + 2, q, q + 2, q + 3);
+    }
+    for (let x = T.x0 + 2; x <= T.x1 - 2; x += 4) balSpots.push({ x, z: z0 + 0.45, y: up(x), yaw: 0 });
+    for (let x = T.x0 + 6; x <= T.x1 - 4; x += 16) flagSpots.push({ x, z: z0 + 1.6, y: up(x), yaw: 0 });
+    for (let x = T.x0 + 14; x <= T.x1 - 4; x += 16) lampSpots.push({ x, z: z0 + 1.6, y: up(x), yaw: 0 });
+    taken.push(...Array.from({ length: Math.ceil((T.x1 - T.x0) / 8) + 1 }, (_, m) => [T.x0 + m * 8, z0 + 1.7, 5]));
+  });
+  const mk = (P, U, I, m) => {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); if (U) g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+    g.setIndex(I); g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, m); mesh.castShadow = sc.shadows; mesh.receiveShadow = true; group.add(mesh); return mesh;
+  };
+  mk(pos, uv, idx, mat); mk(cpos, null, cidx, capMat);
+  sc.instances(partsOf(C.balustrade(4)), balSpots, { cast: false });
+  sc.instances(partsOf(C.flagpole({ a: 0xb3122a, b: 0xf2efe6, h: 7 })), flagSpots, {});
+  sc.instances(partsOf(C.streetLamp()), lampSpots, { cast: false });
+
+  // the cloture fence: barricades just off the inside edge from the middle leg round hairpin two and back along the
+  // leg below, with a sign over the steps. They are solid until the race leader starts the final lap, then fold away.
+  const fence = sc.along({ from: 29.66, to: 36.42, side: 1, offset: 2.4, spacing: 1.3 }).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.05, yaw: p.yaw + Math.PI / 2 }));
+  const fenceMeshes = sc.instances(partsOf(C.barricade()), fence, { cast: false });
+  const gate = [];
+  for (const p of fence) { track.addCollider(p.x, p.z, 0.85); track.eachCollider(p.x, p.z, c => { if (c.x === p.x && c.z === p.z) gate.push(c); }); }
+  // the sign over the steps: FILIBUSTER IN PROGRESS for two laps, CLOTURE INVOKED on the last
+  const SX = (CLOTURE.x0 + CLOTURE.x1) / 2 - 8, SZ = 73.5, SY = legY(1, SX) + 0.2;
+  const draw = open => (g, w, h) => {
+    g.fillStyle = open ? '#16a34a' : '#b3122a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.strokeRect(8, 8, w - 16, h - 16);
+    C.fitText(g, open ? 'CLOTURE INVOKED' : 'FILIBUSTER IN PROGRESS', w / 2, h * 0.38, w * 0.86, 120, C.SIGN_FONT, '#ffffff', { lines: 1 });
+    C.fitText(g, open ? 'DEBATE CUT SHORT: TAKE THE STEPS' : 'STEPS CLOSED UNTIL THE FINAL LAP', w / 2, h * 0.74, w * 0.86, 56, C.SANS, '#ffd23c', { lines: 1 });
+  };
+  const signTex = canvasTex(1024, 256, draw(false), { repeat: false });
+  {
+    const q = new C.Quads();
+    for (const s of [1, -1]) q.panel([SX, SY + 7.2, SZ + s * 0.06], s > 0 ? 0 : Math.PI, 16, 4, [0, 0, 1, 1]);
+    const m = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.6, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 0.25 })); m.matrixAutoUpdate = false; group.add(m);
+    const b = new ModelBuilder(); for (const d of [-7.4, 7.4]) { b.add("p", cyl(0.25, 0.25, 9.4, 8), { p: [SX + d, SY + 4.5, SZ] }); track.addCollider(SX + d, SZ, 0.6); }
+    group.add(b.build({ p: plastic(0x2a2d36, 0.5, 0.3) }));
+  }
+  let shown = false, drop = 0;
+  anim.push(dt => {
+    const open = clotureOpen(view.race);
+    if (open !== shown) { shown = open; const g = signTex.image.getContext('2d'); draw(open)(g, signTex.image.width, signTex.image.height); signTex.needsUpdate = true; for (const c of gate) c.r = open ? 0 : 0.85; }
+    const target = open ? 1 : 0;
+    if (drop !== target) { drop += Math.sign(target - drop) * Math.min(Math.abs(target - drop), dt * 1.4); for (const m of fenceMeshes) m.position.y = -1.6 * drop; }
+  });
+}
+
 /* ---------- the joke pass ---------- */
-// the revolving door complex sits on the lawn between the Avenue and the Climb, its axis running NW (REGULATOR) to SE (INDUSTRY)
-const COMPLEX = { x: 62, z: 52, yaw: Math.PI / 4, off: 19 };
-const STATUE = { x: 200, z: 262 };        // at the head of the reflecting pool, looking down it
+// the revolving door spans the Mall leg on a skybridge between its two towers, where the climb gets steep
+const DOOR = { cp: 11.72, span: 62, deckY: 10.2 };
+const doorSite = track => { const i = track.indexAtCp(DOOR.cp); return { x: track.px[i], y: track.py[i], z: track.pz[i], yaw: track.yaw[i], i }; };
+const STATUE = { x: 112, z: 236 };        // in the middle of the bend at the foot of the pool, looking back up the pool run
 const CANNON = { x: 121, z: 114 };        // beside the Climb, aimed at the dome
-const LECTERN = { x: -238, z: 124 };      // beyond hairpin one
-const MAZE = { x: -222, z: 18 };          // beyond hairpin three
+const LECTERN = { x: -167, z: 122.5 };    // in the infield of hairpin one: you drive round him
+const MAZE = { x: -222, z: 18 };
+const PERMIT = { x: -146, z: 24.5 };      // in the infield of hairpin three: the red tape, at the scale it is really issued          // beyond hairpin three
 const BOARDS = [
   [2.3, 1, 20, 'DEMOLITION VIEWING: NEXT LEFT', '#d4af37', '#12142b'],
   [1.3, 1, 24, 'THOUGHTS AND PRAYERS (AND NOTHING ELSE)', '#1f3f8a', '#ffffff'], [3.4, 1, 22, 'YOUR CALL IS IMPORTANT TO OUR DONORS', '#ffffff', '#b3122a'],
@@ -457,32 +677,35 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const pole = (x, z, y0, y1, r = 0.22) => posts.add('pole', cyl(r, r, Math.max(0.1, y1 - y0), 8), { p: [x, (y0 + y1) / 2, z] });
   const leaderLap = () => { const race = view.race; let lap = 1; if (race?.karts) for (const k of race.karts) if (Number.isFinite(k.lap)) lap = Math.max(lap, Math.min(k.lap, (race.laps ?? 3) + 1)); return lap; };
 
-  /* ---- 1. the centerpiece: a giant revolving door between REGULATOR and INDUSTRY ---- */
-  const cx = C.revolvingDoorComplex({ off: COMPLEX.off }), cy = sc.y(COMPLEX.x, COMPLEX.z) - 0.4;
-  sc.place(cx, COMPLEX.x, COMPLEX.z, { yaw: COMPLEX.yaw, y: cy });
-  const door = cx.userData.door; door.removeFromParent();
-  const co = { x: COMPLEX.x, y: cy, z: COMPLEX.z, yaw: COMPLEX.yaw };
-  door.position.set(COMPLEX.x, cy, COMPLEX.z); door.rotation.y = COMPLEX.yaw; group.add(door);
+  /* ---- 1. the centerpiece: the revolving door between REGULATOR and INDUSTRY, built over the Mall leg ----
+     The two towers stand either side of the climb and a glass skybridge joins them with the revolving door on it:
+     the karts drive under the door while the suits go round over their heads, from one tower to the other. */
+  const co = doorSite(track), cy = co.y;
+  const cx = C.revolvingDoorBridge({ span: DOOR.span, deckY: DOOR.deckY });
+  sc.place(cx, co.x, co.z, { yaw: co.yaw, y: cy });
+  const door = cx.userData.door, drum = toWorld(co, cx.userData.drum); door.removeFromParent();
+  door.position.set(drum[0], drum[1], drum[2]); door.rotation.y = co.yaw; group.add(door);
   bake.add(cx);
+  for (const s of [-1, 1]) { const t = toWorld(co, [s * DOOR.span / 2, 0, 0]); track.addCollider(t[0], t[2], 10.5); }
   const sg = cx.userData.signs;
   const sReg = atlas.add(1024, 240, (g, w, h) => { g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h); g.strokeStyle = '#d4af37'; g.lineWidth = 14; g.strokeRect(10, 10, w - 20, h - 20); fitText(g, 'REGULATOR', w / 2, h * 0.55, w * 0.88, 180, F, '#1f3f8a', { lines: 1 }); });
   const sInd = atlas.add(1024, 240, (g, w, h) => { g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.strokeStyle = '#38ff74'; g.lineWidth = 14; g.strokeRect(10, 10, w - 20, h - 20); fitText(g, 'INDUSTRY', w / 2, h * 0.55, w * 0.88, 180, F, '#38ff74', { lines: 1 }); });
-  atlas.place2(sReg, toWorld(co, sg.reg), COMPLEX.yaw, 22, 5.15);
-  atlas.place2(sInd, toWorld(co, sg.ind), COMPLEX.yaw, 22, 5.15);
+  atlas.place2(sReg, toWorld(co, sg.reg), co.yaw, 22, 5.15);
+  atlas.place2(sInd, toWorld(co, sg.ind), co.yaw, 22, 5.15);
   const sDoor = atlas.add(1024, 330, (g, w, h) => {
     g.fillStyle = '#d4af37'; g.fillRect(0, 0, w, h); g.fillStyle = '#12142b'; g.fillRect(12, 12, w - 24, h - 24);
     fitText(g, 'REVOLVING DOOR', w / 2, h * 0.38, w * 0.84, 150, F, '#ffd23c', { lines: 1 });
     fitText(g, 'SAME PEOPLE, NEW BUSINESS CARDS', w / 2, h * 0.76, w * 0.84, 62, SANS, '#ffffff', { lines: 1 });
     for (const [x0, dir] of [[w * 0.06, 1], [w * 0.94, -1]]) { g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.beginPath(); g.arc(x0, h * 0.4, 30, dir > 0 ? 0.3 : 3.4, dir > 0 ? 5.5 : 8.6); g.stroke(); }
   });
-  atlas.place2(sDoor, toWorld(co, sg.door), COMPLEX.yaw, 30, 9.7);
+  atlas.place2(sDoor, toWorld(co, sg.door), co.yaw, 21, 6.8);
   for (const k of ['reg', 'ind']) for (const d of [-7, 7]) { const p = toWorld(co, [sg[k][0] + d, 0, 0]); pole(p[0], p[2], cy + sg[k][1] - 7, cy + sg[k][1] - 2.4, 0.3); }
-  { const p = toWorld(co, [0, 0, 0]); for (const d of [-9, 9]) { const q = toWorld(co, [d, 0, 0]); pole(q[0], q[2], cy + 26, cy + sg.door[1] - 4.6, 0.35); } void p; }
-  // the suits inside, going round with the door
-  const SUITS = [0, 1, 2, 3].flatMap(k => [[4.4, k * Math.PI / 2 - 0.16], [7.0, k * Math.PI / 2 + 0.14]]);   // two per quarter of the door
-  const suits = sc.instances(partsOf(C.suit()), SUITS.map(() => ({ x: COMPLEX.x, y: cy, z: COMPLEX.z, yaw: 0 })), { tints: C.SUIT_TINTS, cast: false });
+  for (const d of [-6, 6]) { const q = toWorld(co, [d, 0, 0]); pole(q[0], q[2], cy + DOOR.deckY + 11, cy + sg.door[1] - 3.2, 0.3); }
+  // the suits, going round with the door
+  const SUITS = [0, 1, 2, 3].flatMap(k => [[2.6, k * Math.PI / 2 - 0.3], [5.1, k * Math.PI / 2 + 0.35]]);   // two per quarter of the door
+  const suits = sc.instances(partsOf(C.suit()), SUITS.map(() => ({ x: drum[0], y: drum[1], z: drum[2], yaw: 0 })), { tints: C.SUIT_TINTS, cast: false });
   for (const m of suits) m.frustumCulled = false;
-  const Ms = new THREE.Matrix4(), Qs = new THREE.Quaternion(), Ps = new THREE.Vector3(), Ss = new THREE.Vector3(3.3, 3.3, 3.3), Ys = new THREE.Vector3(0, 1, 0);
+  const Ms = new THREE.Matrix4(), Qs = new THREE.Quaternion(), Ps = new THREE.Vector3(), Ss = new THREE.Vector3(2.5, 2.5, 2.5), Ys = new THREE.Vector3(0, 1, 0);
 
   /* ---- 2. the Avenue: the congressional portfolio, on a stock ticker you cannot miss ---- */
   const tickAt = sc.beside(2.0, 1, 40), tickYaw = yawTo(tickAt, { x: -20, z: 0 }), tickY = tickAt.y + 16;
@@ -528,8 +751,8 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const ceilTex = canvasTex(512, 128, (g, w, h) => { g.fillStyle = '#b3122a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffd23c'; g.lineWidth = 8; g.strokeRect(6, 6, w - 12, h - 12); fitText(g, 'DEBT CEILING', w / 2, h * 0.55, w - 50, 96, F, '#ffffff', { lines: 1 }); }, { repeat: false });
   const ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.6, emissive: 0xffffff, emissiveMap: ceilTex, emissiveIntensity: 0.2 });
   { const q = new C.Quads(); for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; q.panel([Math.sin(a) * 1.08, -1.8, Math.cos(a) * 1.08], a, 3.1, 1.9, [0, 0, 1, 1]); } collar.add(new THREE.Mesh(q.geometry(), ceilMat)); }   // four faces, one mesh, scaled with the collar
-  const halfSide = y => (3.55 + (2.35 - 3.55) * Math.min(1, Math.max(0, (y - 3.1) / 26))) / Math.SQRT2;
-  const ceil = { y: 6 };
+  const halfSide = y => ctx.monument.userData.half(y);
+  const ceil = { y: OBELISK.h * 0.2 };
 
   /* ---- 5. beside the Climb: the K Street cash cannon, firing at the dome ---- */
   const capTop = (() => { const i0 = track.indexAtCp(20), i1 = track.indexAtCp(22); return new THREE.Vector3((track.px[i0] + track.px[i1]) / 2, track.py[i0] + 40, (track.pz[i0] + track.pz[i1]) / 2); })();
@@ -617,7 +840,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   }
 
   /* ---- 7. beyond hairpin one: the filibuster, live ---- */
-  const LS = 2.1, lec = C.filibusterLectern(), lecYaw = yawTo(LECTERN, roadPt(22.6)), lecY = sc.y(LECTERN.x, LECTERN.z) - 0.4;
+  const LS = 1.0, lec = C.filibusterLectern(), lecYaw = yawTo(LECTERN, roadPt(22.4)), lecY = sc.y(LECTERN.x, LECTERN.z) - 0.4;
   sc.place(lec, LECTERN.x, LECTERN.z, { yaw: lecYaw, y: lecY, scale: LS });
   const page = lec.userData.page; lec.updateMatrixWorld(true);
   { const holder = new THREE.Group(); holder.applyMatrix4(lec.matrixWorld); page.removeFromParent(); holder.add(page); group.add(holder); }
@@ -640,6 +863,18 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
     const s = atlas.add(1024, 300, (g, w, h) => { g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h); g.fillStyle = '#1f3f8a'; g.fillRect(0, 0, w, h * 0.2); fitText(g, 'HEDGE MAZE', w / 2, h * 0.1, w * 0.5, 44, SANS, '#ffffff', { lines: 1 }); fitText(g, 'DISTRICT 7', w / 2, h * 0.47, w * 0.8, 130, F, '#12142b', { lines: 1 }); fitText(g, '(FINAL SHAPE, DRAWN BY THE WINNER)', w / 2, h * 0.8, w * 0.86, 48, SANS, '#b3122a', { lines: 1 }); });
     atlas.place2(s, [signAt.x, y0 + 8.4, signAt.z], fy, 22, 6.45);
     for (const d of [-8, 8]) pole(signAt.x + Math.cos(fy) * d, signAt.z - Math.sin(fy) * d, y0 - 0.5, y0 + 5.2, 0.3);
+  }
+
+  /* ---- 8b. hairpin three's infield: the red tape dispenser, at the scale permits are really issued ---- */
+  {
+    const S = 4.6, yaw = yawTo(PERMIT, roadPt(36.9)), y = sc.y(PERMIT.x, PERMIT.z) - 0.3, rt = C.redTape();
+    const px = PERMIT.x - Math.sin(yaw) * 4.5, pz = PERMIT.z - Math.cos(yaw) * 4.5;
+    sc.place(rt, px, pz, { yaw, y, scale: S }); bake.add(rt);
+    track.addCollider(px, pz, 4.5); track.addCollider(px + Math.sin(yaw) * 5, pz + Math.cos(yaw) * 5, 3);
+    const at = toWorld({ x: px, y, z: pz, yaw }, [0, 0, -7]);
+    const s = atlas.add(1024, 300, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#d0142f'; g.fillRect(0, 0, w, h * 0.22); fitText(g, 'PERMIT OFFICE', w / 2, h * 0.11, w * 0.6, 50, SANS, '#ffffff', { lines: 1 }); fitText(g, 'NOW SERVING: 1997', w / 2, h * 0.5, w * 0.86, 120, F, '#12142b', { lines: 1 }); fitText(g, 'PLEASE ALLOW 6 TO 8 YEARS', w / 2, h * 0.8, w * 0.8, 52, SANS, '#d0142f', { lines: 1 }); });
+    atlas.place2(s, [at[0], y + 15, at[2]], yaw, 16, 4.7);
+    for (const d of [-6, 6]) pole(at[0] + Math.cos(yaw) * d, at[2] - Math.sin(yaw) * d, y - 0.5, y + 12.7, 0.3);
   }
 
   /* ---- 9. the super PAC blimp ---- */
@@ -689,20 +924,20 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const T = { tick: 0, ceilShown: -1 };
   anim.push((dt, time) => {
     // the door turns, and the suits go round with it
-    door.rotation.y = COMPLEX.yaw + time * 0.32;
+    door.rotation.y = co.yaw + time * 0.32;
     SUITS.forEach(([r, a0], n) => {
       const a = a0 + time * 0.32;
-      Ps.set(COMPLEX.x + Math.sin(a) * r, cy + 0.8, COMPLEX.z + Math.cos(a) * r); Qs.setFromAxisAngle(Ys, a + Math.PI / 2);
+      Ps.set(drum[0] + Math.sin(a) * r, drum[1] + 0.05, drum[2] + Math.cos(a) * r); Qs.setFromAxisAngle(Ys, a + Math.PI / 2);
       Ms.compose(Ps, Qs, Ss); for (const m of suits) m.setMatrixAt(n, Ms);
     });
     for (const m of suits) m.instanceMatrix.needsUpdate = true;
     // the ticker
     T.tick += dt; if (T.tick > 0.08) { T.tick = 0; drawTicker(time); }
     // the debt ceiling goes up a notch every lap (and creeps between)
-    const lap = leaderLap(), target = Math.min(28.5, 6 + (lap - 1) * 9 + Math.min(4, (time % 40) * 0.05));
+    const lap = leaderLap(), H = OBELISK.h, target = Math.min(H * 0.92, H * (0.2 + (lap - 1) * 0.3) + Math.min(H * 0.08, (time % 40) * 0.12));
     ceil.y += (target - ceil.y) * Math.min(1, dt * 0.8);
     const hs = halfSide(ceil.y) + 0.35, wy = ob.y + ceil.y;
-    collar.position.set(OBELISK.x, wy, OBELISK.z); collar.scale.set(hs, 1, hs);
+    collar.position.set(OBELISK.x, wy, OBELISK.z); collar.scale.set(hs, hs / 2.5, hs);
     // cash flying from the cannon to the dome
     for (let k = 0; k < BILLS; k++) {
       billT[k] += dt; if (billT[k] > 5.2) billT[k] -= 5.2;

@@ -76,6 +76,12 @@ export class AudioEngine {
   get t() { return this.ctx.currentTime; }
   setVolumes(music, sfx) { this.vol.music = music; this.vol.sfx = sfx; if (!this.ctx) return; this.sfx.gain.value = this.muted ? 0 : sfx; this.mus.gain.value = this.muted ? 0 : music * 0.55; }
   toggleMute() { this.muted = !this.muted; this.setVolumes(this.vol.music, this.vol.sfx); }
+  /** Pull the music down for a beat (a hit lands) and bring it back: the hit owns the moment. */
+  duck(sec = 0.45) {
+    if (!this.ctx || this.muted || this.pausedLoops) return;
+    const g = this.mus.gain, t = this.t, full = this.vol.music * 0.55;
+    g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(full * 0.3, t + 0.03); g.setValueAtTime(full * 0.3, t + sec * 0.5); g.linearRampToValueAtTime(full, t + sec);
+  }
 
   /* ---------- samples ---------- */
   load(name) {
@@ -323,14 +329,14 @@ export class AudioEngine {
     switch (e.type) {
       case 'coin': if (local) this.play('coin', { rate: 1 + Math.min(kart.coins, 10) * 0.02 }); break;
       case 'hop': if (local) this.play('hop', { vol: 0.6 }); break;
-      case 'land': if (local && e.data > 5) this.play('land', { vol: clamp(e.data / 18, 0.3, 1) }); break;
+      case 'land': if (local && e.data > 5) { this.play('land', { vol: clamp(e.data / 18, 0.3, 1) }); if (e.data > 12) this.play('thud', { vol: clamp((e.data - 10) / 10, 0.3, 0.8) }); } break;
       case 'driftTier': if (local && e.data > 0) this.play('tier' + e.data); break;
-      case 'miniTurbo': this.play('miniturbo', { vol: v, rate: 0.9 + e.data * 0.1 }); break;
+      case 'miniTurbo': this.play('miniturbo', { vol: v, rate: 0.9 + e.data * 0.1 }); if (local) this.play('mt_pop' + clamp(e.data, 1, 3)); break;
       case 'boost': if (e.data !== 'mini') this.play('boost', { vol: v * 0.9 }); break;
       case 'trick': if (local) this.play('trick'); break;
       case 'rocketStart': if (local) { this.play('boost'); this.say(e.data >= 1 ? 'rocket_start' : 'nice_start'); } break;
       case 'burnout': if (local) this.play('burnout'); break;
-      case 'hit': this.play(e.data.kind === 'tumble' ? 'hit_big' : e.data.kind === 'zap' ? 'zap' : 'hit', { vol: v }); if (local) this.play('spin', { vol: 0.7 }); break;
+      case 'hit': this.play(e.data.kind === 'tumble' ? 'hit_big' : e.data.kind === 'zap' ? 'zap' : 'hit', { vol: v }); if (local) { this.play('spin', { vol: 0.7 }); this.play('thud', { vol: e.data.kind === 'tumble' ? 1 : 0.7 }); this.duck(e.data.kind === 'tumble' ? 0.7 : 0.45); } break;
       case 'wall': this.play('wall', { vol: v * clamp(e.data.v / 14, 0.3, 1) }); break;
       case 'bump': this.play('bump', { vol: v * clamp(e.data.v / 10, 0.3, 1) }); break;
       case 'roulette': if (local) this.play('roulette'); break;
@@ -341,9 +347,9 @@ export class AudioEngine {
       case 'rescue': if (local) this.play('rescue'); break;
       case 'inked': if (local) this.play('ink'); break;
       case 'robbed': if (local) this.play('steal'); break;
-      case 'lap': if (local) { if (e.data === kart.race.laps && kart.race.laps > 1) { this._exciteCrowd(0.55); this.play('crowd', { vol: 0.55, gap: 0.6 }); } else if (e.data > 1) this._exciteCrowd(0.3); if (e.data > 1 && e.data <= kart.race.laps) { this.play('lap'); if (e.data === kart.race.laps) this.say('final_lap', { force: true }); } } break;
-      case 'finish': if (local) { this.play(e.data <= 3 ? 'finish_good' : 'finish'); this.say(e.data === 1 ? 'winner' : 'finish', { force: true, delay: 0.4 }); this._exciteCrowd(1); this.play('crowd', { vol: e.data <= 3 ? 0.85 : 0.6, gap: 0.6 }); } break;
-      case 'rankUp': if (local && kart.race.time > 4) { this.play('rank_up', { vol: 0.5 }); if (e.data === 1) this.say('first_place'); } break;
+      case 'lap': if (local) { if (e.data === kart.race.laps && kart.race.laps > 1) { this._exciteCrowd(0.55); this.play('crowd', { vol: 0.55, gap: 0.6 }); } else if (e.data > 1) this._exciteCrowd(0.3); if (e.data > 1 && e.data <= kart.race.laps) { if (e.data === kart.race.laps) { this.play('final_sting'); this.say('final_lap', { force: true, delay: 0.35 }); } else this.play('lap'); } } break;
+      case 'finish': if (local) { this.play('line'); this.play(e.data <= 3 ? 'finish_good' : 'finish'); this.say(e.data === 1 ? 'winner' : 'finish', { force: true, delay: 0.4 }); this._exciteCrowd(1); this.play('crowd', { vol: e.data <= 3 ? 0.85 : 0.6, gap: 0.6 }); } break;
+      case 'rankUp': if (local && kart.race.time > 4) { this.play(e.data === 1 ? 'rank_first' : 'rank_up', { vol: e.data === 1 ? 0.8 : 0.5 }); if (e.data === 1) this.say('first_place'); } break;
       case 'rankDown': if (local && kart.race.time > 4) this.play('rank_down', { vol: 0.4 }); break;
       case 'draft': if (local) this.play('boost', { vol: 0.6, rate: 1.2 }); break;
     }
@@ -371,8 +377,8 @@ export class AudioEngine {
   }
   event(name, data) {
     if (!this.ctx) return;
-    if (name === 'pause') { this.pausedLoops = true; this.crowdDuck = true; if (this.crowd?.gain) this.crowd.gain.gain.setTargetAtTime(0, this.t, 0.12); this.play('ui_back'); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.2, this.t, 0.1); }
-    else if (name === 'resume') { this.pausedLoops = false; this.crowdDuck = false; this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.55, this.t, 0.1); }
+    if (name === 'pause') { this.pausedLoops = true; this.crowdDuck = true; if (this.crowd?.gain) this.crowd.gain.gain.setTargetAtTime(0, this.t, 0.12); this.play('ui_back'); this.mus.gain.cancelScheduledValues(this.t); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.2, this.t, 0.1); }
+    else if (name === 'resume') { this.pausedLoops = false; this.crowdDuck = false; this.mus.gain.cancelScheduledValues(this.t); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.55, this.t, 0.1); }
     else if (name === 'results') { this.stopLoops(); this.setMusicRate(1); if (data === 1) this.say('you_win', { delay: 0.3 }); this._crowdMode('ambient'); }
     else if (name === 'podium') { this.play('finish_good'); this.say(data === 1 ? 'champion' : 'cup_over', { force: true, delay: 0.5 }); this._crowdMode('ambient'); }
     else if (name === 'introStart') { this.stopLoops(); this.pausedLoops = false; this._crowdMode('race'); }
@@ -507,6 +513,19 @@ const SYNTH = {
   finish: a => a.arp([72, 76, 79, 84], { type: 'square', step: 0.11, dur: 0.3, vol: 0.14 }),
   finish_good: a => a.arp([72, 76, 79, 84, 88, 91, 96], { type: 'square', step: 0.09, dur: 0.34, vol: 0.14 }),
   rank_up: a => a.tone({ type: 'triangle', f: 700, f1: 1100, dur: 0.1, vol: 0.14 }),
+  // into the lead: the overtake blip, then a bright fifth on top
+  rank_first: a => { a.tone({ type: 'triangle', f: 700, f1: 1100, dur: 0.1, vol: 0.14 }); a.tone({ type: 'square', f: NOTE(88), dur: 0.16, vol: 0.07, delay: 0.08 }); a.tone({ type: 'square', f: NOTE(95), dur: 0.24, vol: 0.06, delay: 0.15 }); },
+  // mini-turbo release, layered over the sample: each tier hits harder. Blue is a tight thump; orange adds a rising
+  // saw; purple adds a bright crack and a sparkle on top, so a held drift pays out a sound worth waiting for.
+  mt_pop1: a => { a.tone({ type: 'sine', f: 180, f1: 70, dur: 0.12, vol: 0.22 }); a.noise({ dur: 0.08, vol: 0.12, type: 'highpass', f: 2600 }); },
+  mt_pop2: a => { a.tone({ type: 'sine', f: 160, f1: 55, dur: 0.18, vol: 0.28 }); a.tone({ type: 'sawtooth', f: 260, f1: 1040, dur: 0.22, vol: 0.06 }); a.noise({ dur: 0.12, vol: 0.16, type: 'highpass', f: 2200 }); },
+  mt_pop3: a => { a.tone({ type: 'sine', f: 150, f1: 45, dur: 0.24, vol: 0.32 }); a.tone({ type: 'sawtooth', f: 300, f1: 1500, dur: 0.26, vol: 0.07 }); a.noise({ dur: 0.16, vol: 0.22, type: 'bandpass', f: 5200, q: 0.8 }); a.arp([96, 100, 103], { type: 'square', step: 0.045, dur: 0.1, vol: 0.05, delay: 0.06 }); },
+  // weight under a hit or a heavy landing: a low body thump and a mid knock that small speakers can still carry
+  thud: (a, v) => { a.tone({ type: 'sine', f: 110, f1: 38, dur: 0.28, vol: 0.45 * v }); a.tone({ type: 'triangle', f: 240, f1: 120, dur: 0.09, vol: 0.18 * v }); },
+  // the final lap: a rising brass-like sting, louder and longer than a lap tick
+  final_sting: a => { a.arp([67, 72, 76], { type: 'sawtooth', step: 0.09, dur: 0.14, vol: 0.07 }); a.tone({ type: 'sawtooth', f: NOTE(79), dur: 0.55, vol: 0.08, delay: 0.27 }); a.tone({ type: 'square', f: NOTE(84), dur: 0.55, vol: 0.05, delay: 0.27 }); a.noise({ dur: 0.5, vol: 0.06, type: 'highpass', f: 6000, delay: 0.27 }); },
+  // crossing the line: a cymbal splash over a boom
+  line: a => { a.noise({ dur: 0.9, vol: 0.16, type: 'highpass', f: 5000, attack: 0.003 }); a.tone({ type: 'sine', f: 90, f1: 40, dur: 0.5, vol: 0.35 }); },
   rank_down: a => a.tone({ type: 'triangle', f: 600, f1: 380, dur: 0.12, vol: 0.12 }),
 };
 

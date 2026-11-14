@@ -63,12 +63,13 @@ const GradeShader = {
     tDiffuse: { value: null }, uVignette: { value: 0.26 }, uSat: { value: 1.18 }, uContrast: { value: 1.08 },
     uBlur: { value: 0 }, uCenter: { value: new THREE.Vector2(0.5, 0.45) }, uFlash: { value: 0 }, uFlashColor: { value: new THREE.Color(1, 1, 1) },
     uLift: { value: new THREE.Color(0, 0, 0) }, uGain: { value: new THREE.Color(1, 1, 1) }, uSingle: { value: 1 },
+    uLines: { value: 0 }, uTime: { value: 0 }, uAspect: { value: 16 / 9 }, uEdge: { value: 0 }, uEdgeColor: { value: new THREE.Color(1, 0.2, 0.3) },
   },
   vertexShader: /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: /* glsl */`
     precision highp float;
-    uniform sampler2D tDiffuse; uniform float uVignette, uSat, uContrast, uBlur, uFlash, uSingle;
-    uniform vec2 uCenter; uniform vec3 uFlashColor, uLift, uGain; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float uVignette, uSat, uContrast, uBlur, uFlash, uSingle, uLines, uTime, uAspect, uEdge;
+    uniform vec2 uCenter; uniform vec3 uFlashColor, uLift, uGain, uEdgeColor; varying vec2 vUv;
     void main() {
       vec3 c;
       if (uBlur > 0.002) {
@@ -83,6 +84,21 @@ const GradeShader = {
       c = c * uGain + uLift;
       float v = smoothstep(1.05, 0.3, length((vUv - 0.5) * vec2(1.0, 0.86)) * 1.25);
       c *= mix(1.0, mix(1.0 - uVignette, 1.0, v), uSingle);
+      // speed lines: thin pale wedges streaming out of the vanishing point, kept to the outer edge of the frame
+      // so the road ahead stays clean. More rays and brighter dashes as the boost gets stronger.
+      if (uLines > 0.01) {
+        vec2 d = (vUv - uCenter) * vec2(uAspect, 1.0);
+        float r = length(d), u = atan(d.y, d.x) / 6.2832 + 0.5, cell = floor(u * 110.0);
+        float h = fract(sin(cell * 91.7) * 43758.5), h2 = fract(sin(cell * 17.3 + 4.1) * 1937.1);
+        float ph = fract(r * 1.3 - uTime * (2.4 + h * 2.2) + h2);
+        float dash = smoothstep(0.0, 0.06, ph) * smoothstep(0.62, 0.18, ph);
+        float thin = smoothstep(0.6, 1.0, 1.0 - abs(fract(u * 110.0) - 0.5) * 2.0);
+        float mask = smoothstep(0.38 * uAspect / 1.78 + 0.08, 0.95 * uAspect / 1.78, r);
+        float on = step(1.0 - uLines * 0.85, h);
+        c = mix(c, vec3(1.0), dash * thin * mask * on * min(1.0, uLines * 1.6) * 0.3);   // halved opacity (#222): the lines read as a hint of speed, not an overlay
+      }
+      // edge glow: a hit, the final lap, or the finish tints the rim of the frame for a moment, never the middle
+      c = mix(c, uEdgeColor, uEdge * (1.0 - v) * 0.85);
       c = mix(c, uFlashColor, uFlash);
       gl_FragColor = vec4(c, 1.0);
     }`,
@@ -117,7 +133,7 @@ export class Gfx {
     this.scene = new THREE.Scene();
     this.views = [];
     this.time = 0; this.scale = 1; this._ft = 16; this._scaleCooldown = 2;
-    this.post = { blur: 0, flash: 0, flashColor: new THREE.Color(1, 1, 1), vignette: 0.26, sat: 1.18, contrast: 1.08 };
+    this.post = { blur: 0, lines: 0, edge: 0, edgeColor: new THREE.Color(1, 0.2, 0.3), flash: 0, flashColor: new THREE.Color(1, 1, 1), vignette: 0.26, sat: 1.18, contrast: 1.08 };
 
     // lights (configured by setSky)
     this.sun = new THREE.DirectionalLight(0xffffff, 3); this.sun.name = 'sun';
@@ -237,6 +253,7 @@ export class Gfx {
     if (this.sky) this.sky.update(this.time);
     const u = this.grade.uniforms, p = this.post;
     u.uBlur.value = this.views.length === 1 ? p.blur : 0; u.uFlash.value = p.flash; u.uFlashColor.value.copy(p.flashColor);
+    u.uLines.value = this.views.length === 1 ? p.lines : 0; u.uEdge.value = this.views.length === 1 ? p.edge : 0; u.uEdgeColor.value.copy(p.edgeColor); u.uTime.value = this.time; u.uAspect.value = this.canvas.width / Math.max(1, this.canvas.height);
     u.uVignette.value = p.vignette; u.uSat.value = p.sat; u.uContrast.value = p.contrast;
     this.renderer.info.reset();
     this.composer.render(dt);

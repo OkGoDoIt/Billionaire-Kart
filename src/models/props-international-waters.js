@@ -8,7 +8,8 @@
    text goes through fitText: it shrinks to fit and never squashes, and
    boardMesh textures both faces, so every board has a finished back. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, loft, plastic, glow, paint, MAT } from './build.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, loft, capsule, plastic, glow, paint, MAT } from './build.js';
 import { canvasTex, fitText } from '../render/textures.js';
 
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif';
@@ -110,55 +111,6 @@ export function lanternString(span = 26) {
     paper: plastic(0xf3e2c2, 0.85), red: plastic(0xd94f3d, 0.85), glow: glow(0xffb45e, 1.5),
   };
   grp.add(b.build(mats));
-  return grp;
-}
-
-/* ---------- the dry dock on the north straight ---------- */
-/** The giant name banner rigged on the dry-docked yacht's hull side.
-    30 x 7 m in the yacht's local units; letters close to 4.5 m tall. */
-export function hullName(text) {
-  const grp = new THREE.Group();
-  const tex = canvasTex(2048, 512, (g, W, H) => {
-    g.fillStyle = '#7a5c14'; g.fillRect(0, 0, W, H);
-    g.strokeStyle = '#ffe9a8'; g.lineWidth = 10; g.strokeRect(18, 18, W - 36, H - 36);
-    fitText(g, text, W / 2, H / 2 + 8, W - 120, H * 0.7, 320, FONT, { fill: '#ffe9a8' });
-  }, { repeat: false, aniso: 8 });
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(30, 7), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }));
-  grp.add(face);
-  const back = new THREE.Mesh(new THREE.BoxGeometry(30.3, 7.3, 0.18), new THREE.MeshStandardMaterial({ color: 0x3a2f10, roughness: 0.7 }));
-  back.position.z = -0.1; grp.add(back);
-  return grp;
-}
-
-/** The dry dock itself: two pile cradle towers holding a yacht hull clear of
-    the sea while the road runs between them. Local frame: +Z along the road,
-    towers at x = +-30, cradle beams at y ~9.4, waterline at y = 0. */
-export function dryDock() {
-  const grp = new THREE.Group(), b = new ModelBuilder();
-  for (const sx of [1, -1]) {
-    for (const sz of [1, -1]) {
-      b.add('pile', cyl(0.85, 0.95, 13.5, 10), { p: [sx * 30, 1.8, sz * 26] });
-      b.add('pile', cyl(0.85, 0.95, 13.5, 10), { p: [sx * 30, 1.8, sz * 9] });
-      b.add('brace', box(0.5, 12.5, 0.5, 0.2, 1), { p: [sx * 28.4, 3.4, sz * 17.5], r: [0, 0, sx * 0.62] });
-    }
-    b.add('beam', box(3.4, 1.6, 62, 0.3, 2), { p: [sx * 30, 9.4, 0] });
-    for (const z of [-16, 0, 16]) b.add('saddle', box(4.6, 1.1, 7, 0.2, 2), { p: [sx * 17.5, 9.6, z], r: [0, 0, sx * 0.5] });
-    b.add('scaffold', box(1.4, 10.6, 30, 0.2, 2), { p: [sx * 36.5, 5.6, 0] });
-    b.add('plank', box(2.6, 0.3, 30, 0.1, 1), { p: [sx * 34.6, 8.2, 0] });
-    b.add('plank', box(2.6, 0.3, 30, 0.1, 1), { p: [sx * 34.6, 4.6, 0] });
-    b.add('lamp', sphere(0.3, 10, 8), { p: [sx * 28.2, 8.3, -12] });
-    b.add('lamp', sphere(0.3, 10, 8), { p: [sx * 28.2, 8.3, 12] });
-  }
-  grp.add(b.build({
-    pile: plastic(0x5a4632, 0.75, 0.2), beam: plastic(0x74552a, 0.6, 0.35), brace: plastic(0x4c3a24, 0.7, 0.2),
-    saddle: paint(0x8a6a30, { rough: 0.6 }), scaffold: plastic(0x8f97a3, 0.55, 0.5), plank: paint(0xb08d4f, { rough: 0.8 }),
-    lamp: glow(0xffd9a0, 1.8),
-  }));
-  for (const sx of [1, -1]) {
-    const sign = boardMesh(['DRY DOCK 12', 'REPAIRS WELCOME'], 9, 2.6);
-    sign.position.set(sx * 31.9, 3.6, 8); sign.rotation.y = sx > 0 ? -Math.PI / 2 : Math.PI / 2;
-    grp.add(sign);
-  }
   return grp;
 }
 
@@ -440,5 +392,478 @@ export function navMine() {
   }
   b.add('lamp', sphere(0.13, 10, 8), { p: [0, 2.05, 0] });
   grp.add(b.build({ body: plastic(0x2b3440, 0.45, 0.6), ring: MAT.dark, dark: MAT.dark, lamp: glow(0xff4a3d, 2.6) }));
+  return grp;
+}
+
+/* =====================================================================
+   The yacht toolkit (quality pass): a hull generator with real sections,
+   a raked stem and a flat teak deck, sleek lofted superstructure tiers,
+   and two yachts built from it: the gigayacht the lap runs through and
+   along, and the marina yachts whose bows reach over the start straight.
+   Hull frame: bow +Z, port +X, waterline y = 0.
+   ===================================================================== */
+const WHITE = paint(0xf7f6f2, { rough: 0.22, clear: 0.9 });
+const SMOKE = paint(0x14263a, { rough: 0.08, metal: 0.5, clear: 1 });
+const GOLDP = paint(0xe9b443, { rough: 0.25, metal: 0.75, clear: 0.6 });
+const CHROME = MAT.chrome;
+let teakTex = null;
+/** Teak deck planks with black caulking lines, tiling along the length. */
+export function teakMat() {
+  if (!teakTex) teakTex = canvasTex(256, 256, (g, W, H) => {
+    const n = 8, w = W / n;
+    for (let i = 0; i < n; i++) {
+      const v = 0.88 + ((i * 53) % 13) / 70;
+      g.fillStyle = `rgb(${Math.round(196 * v)},${Math.round(142 * v)},${Math.round(88 * v)})`; g.fillRect(i * w, 0, w, H);
+      g.fillStyle = 'rgba(90,55,25,0.16)'; for (let k = 0; k < 6; k++) g.fillRect(i * w + 3 + k * 5, 0, 1.2, H);
+      g.fillStyle = '#2a1d12'; g.fillRect(i * w, 0, 2.2, H);
+      const cut = ((i * 97) % 200) + 30; g.fillRect(i * w, cut, w, 2);
+    }
+  }, { aniso: 8 });
+  return new THREE.MeshStandardMaterial({ map: teakTex, roughness: 0.78 });
+}
+
+/** Hull section numbers at z: half-beam w, keel k, deck top. */
+function station(z, o) {
+  const { L, B, D, keel = -3.4, stern = 0.88, rakeFrom = 0.45, sheer = 0, rakeTo = 1.4, bowP = 2.4 } = o, h = L / 2, t = z / h;
+  let w = t <= 0 ? B * (1 - (1 - stern) * t * t) : B * Math.pow(Math.max(0, 1 - Math.pow(t, bowP)), 0.62);
+  w = Math.max(w, 0.06);
+  const top = D + sheer * Math.max(0, t) ** 2;
+  let k = keel;
+  if (t > rakeFrom) { const u = (t - rakeFrom) / (1 - rakeFrom); k = keel + (top - rakeTo - keel) * Math.pow(u, 1.45); }
+  if (t < -0.84) k = keel + (0.35 - keel) * Math.min(1, (-t - 0.84) / 0.16);
+  return { z, w, k, top };
+}
+/** Point on the hull section: u runs 0 at the deck edge to 1 at the keel. */
+function sectionPt(st, u, out = 0) {
+  const y = st.top + (st.k - st.top) * u;
+  const uv = Math.min(0.86, Math.max(0.3, (st.top - 1) / (st.top - st.k)));
+  const g = u < uv ? 1 : Math.pow(Math.max(0, 1 - ((u - uv) / (1 - uv)) ** 2), 0.7);
+  return [st.w * g * (1 + 0.035 * (1 - u)) + out, y];
+}
+const uAt = (st, y) => Math.min(1, Math.max(0, (st.top - y) / (st.top - st.k)));
+/** A ruled surface through stations: pts(st) returns the same number of [x, y] for every station. */
+function stripGeo(stations, pts) {
+  const pos = [], uv = [], idx = [];
+  let n = 0;
+  stations.forEach((st, r) => {
+    const p = pts(st); n = p.length;
+    p.forEach(([x, y], j) => { pos.push(x, y, st.z); uv.push(j / (n - 1), st.z / 8); });
+    if (r) for (let j = 0; j < n - 1; j++) { const a = (r - 1) * n + j, b = a + 1, c = a + n, d = c + 1; idx.push(a, c, b, b, c, d); }
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+/** Flat polygon (a fan from the centroid) in the plane z = const. */
+function fanGeo(pts, z) {
+  let cx = 0, cy = 0; for (const [x, y] of pts) { cx += x; cy += y; } cx /= pts.length; cy /= pts.length;
+  const pos = [cx, cy, z], idx = [];
+  pts.forEach(([x, y]) => pos.push(x, y, z));
+  for (let i = 0; i < pts.length; i++) idx.push(0, 1 + i, 1 + ((i + 1) % pts.length));
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+const range = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a + (b - a) * (i / n));
+
+/**
+ * Hull parts into a ModelBuilder (materials: hull, bottom, deck, cut, gold, boot, glass, ceiling).
+ * o: { L, B, D, keel, stern, rakeFrom, sheer, cut: [z0, z1, top] (a drive-through), windows: [z0, z1] }
+ */
+function hull(b, o) {
+  const h = o.L / 2, N = Math.round(o.L / 2.2);
+  const zs = range(-h, h - 0.02, N);
+  const pieces = o.cut ? [[-h, o.cut[0]], [o.cut[1], h - 0.02]] : [[-h, h - 0.02]];
+  const full = st => [...range(0, 1, 14).map(u => sectionPt(st, u)), ...range(1, 0, 14).slice(1).map(u => { const p = sectionPt(st, u); return [-p[0], p[1]]; })];
+  const wl = 1.15;
+  for (const [z0, z1] of pieces) {
+    const sts = [z0, ...zs.filter(z => z > z0 + 0.5 && z < z1 - 0.5), z1].map(z => station(z, o));
+    for (const s of [1, -1]) b.add('hull', stripGeo(sts, st => range(0, uAt(st, wl), 10).map(u => { const p = sectionPt(st, u); return [p[0] * s, p[1]]; })));
+    b.add('bottom', stripGeo(sts, st => { const u0 = uAt(st, wl); return [...range(u0, 1, 7).map(u => sectionPt(st, u)), ...range(1, u0, 7).slice(1).map(u => { const p = sectionPt(st, u); return [-p[0], p[1]]; })]; }));
+    for (const s of [1, -1]) {
+      b.add('boot', stripGeo(sts, st => [wl + 0.55, wl].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; })));
+      b.add('gold', stripGeo(sts, st => [st.top - 0.75, st.top - 1.15].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; })));
+      if (o.windows) {
+        const ws = sts.filter(st => st.z >= o.windows[0] && st.z <= o.windows[1]);
+        if (ws.length > 1) b.add('glass', stripGeo(ws, st => [st.top - 1.6, st.top - 2.9].map(y => { const p = sectionPt(st, uAt(st, y), 0.06); return [p[0] * s, y]; })));
+      }
+    }
+    if (z0 > -h + 0.1) b.add('cut', fanGeo(full(station(z0, o)), z0));
+    if (z1 < h - 0.1) b.add('cut', fanGeo(full(station(z1, o)), z1));
+    if (z0 <= -h + 0.1) b.add('hull', fanGeo(full(station(z0, o)), z0));
+  }
+  if (o.cut) {   // the lintel over the drive-through: topsides above the opening, and a lit ceiling
+    const [z0, z1, top] = o.cut, sts = range(z0, z1, 10).map(z => station(z, o));
+    for (const s of [1, -1]) {
+      b.add('hull', stripGeo(sts, st => range(0, uAt(st, top), 5).map(u => { const p = sectionPt(st, u); return [p[0] * s, p[1]]; })));
+      b.add('gold', stripGeo(sts, st => [st.top - 0.75, st.top - 1.15].map(y => { const p = sectionPt(st, uAt(st, y), 0.05); return [p[0] * s, y]; })));
+    }
+    const w = station((z0 + z1) / 2, o).w;
+    b.add('ceiling', box(w * 2, 0.5, z1 - z0, 0.05, 1), { p: [0, top + 0.25, (z0 + z1) / 2] });
+  }
+  // the deck: one flat plate over the whole planform
+  const shape = new THREE.Shape(), sts = zs.map(z => station(z, o));
+  sts.forEach((st, i) => { const x = st.w * 1.035; if (i) shape.lineTo(x, -st.z); else shape.moveTo(x, -st.z); });
+  for (let i = sts.length - 1; i >= 0; i--) shape.lineTo(-sts[i].w * 1.035, -sts[i].z);
+  const dg = new THREE.ShapeGeometry(shape, 1); dg.rotateX(-Math.PI / 2);
+  const p = dg.attributes.position, uvs = dg.attributes.uv;
+  for (let i = 0; i < p.count; i++) { const z = p.getZ(i), st = station(z, o); p.setY(i, st.top - 0.04); uvs.setXY(i, p.getX(i) / 4, z / 4); }
+  dg.computeVertexNormals();
+  b.add('deck', dg);
+}
+
+/** One superstructure tier as a sleek lofted block with a wraparound glass band. */
+function tier(b, { x = 0, z0, z1, y0, y1, w, nose = 0.3, tail = 0.9, glassH = 0.5, mat = 'house' }) {
+  const hh = (y1 - y0) / 2, yc = (y0 + y1) / 2, len = z1 - z0;
+  const secs = (ww, h, y) => [
+    { z: z0, w: ww * tail, h: h * 0.96, y, x, n: 5 },
+    { z: z0 + len * 0.08, w: ww, h, y, x, n: 5 },
+    { z: z1 - len * 0.3, w: ww, h, y, x, n: 5 },
+    { z: z1 - len * 0.08, w: ww * (0.55 + nose * 0.6), h: h * 0.96, y, x, n: 4 },
+    { z: z1, w: ww * nose, h: h * 0.9, y: y - h * 0.04, x, n: 3 },
+  ];
+  b.add(mat, loft(secs(w, hh, yc), 28, 5));
+  const gs = secs(w + 0.14, hh * glassH, yc + hh * 0.12); gs[0].z += 0.9; gs[0].w = (w + 0.14) * tail * 0.92;
+  b.add('glass', loft(gs, 28, 5));
+}
+
+/**
+ * A superyacht the lap races across: the road runs down her centreline from the
+ * aft deck, through the main-deck salon (twin glass-walled saloons either side,
+ * the upper decks carried overhead) and over the foredeck to a ramp at the bow.
+ * Hull frame: bow +Z, port +X, waterline y = 0, the road at deck height D on X = 0.
+ * o: { L, B, D, name, boot (color), salon: [z0, z1], uppers: [[z0, z1, h]...], helipad: z or null, dishes, accent }
+ * Returns a Group; userData: { radar, station(z), spin: [] }.
+ */
+export function hopYacht({ L = 74, B = 12, D = 10.5, name = 'YACHT', boot = 0xc8323a, salon = [-20, 12], uppers = [[-16, 6, 3], [-10, 1, 2.4]], helipad = null, lane = 7.6, mast = true, header = null } = {}) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  const o = { L, B, D, keel: -3.2, stern: 0.9, rakeFrom: 0.42, bowP: 4.5, rakeTo: 1.6, windows: [-L * 0.42, L * 0.36] };
+  hull(b, o);
+  // a second, lower row of hull windows on the taller hulls
+  if (false) for (const s of [1, -1]) {
+    const sts = range(-L * 0.4, L * 0.3, 24).map(z => station(z, o));
+    b.add('glass', stripGeo(sts, st => [st.top - 6.0, st.top - 7.0].map(y => { const p = sectionPt(st, uAt(st, y), 0.06); return [p[0] * s, y]; })));
+  }
+  // the salon: two saloons either side of the road, glass to the sea outside and glass to the road inside
+  // (the inner windows show the generated salon interior), the ceiling slab carrying the upper decks over the road
+  const [z0, z1] = salon, sh = 5.2, outW = station((z0 + z1) / 2, o).w * 0.96, len = z1 - z0, zc = (z0 + z1) / 2;
+  const roomW = outW - lane, roomX = lane + roomW / 2;
+  for (const s of [1, -1]) {
+    b.add('house', box(roomW, sh, len, 0.7, 3), { p: [s * roomX, D + sh / 2, zc] });
+    b.add('glass', box(roomW, sh * 0.62, len - 1.2, 0.5, 2), { p: [s * (roomX + 0.12), D + sh * 0.52, zc] });
+  }
+  b.add('house', box(outW * 2, 0.8, len + 0.6, 0.35, 2), { p: [0, D + sh + 0.3, zc] });
+  b.add('ceiling', box(lane * 2 - 0.1, 0.1, len - 0.4, 0.04, 1), { p: [0, D + sh - 0.15, zc] });
+  for (let z = z0 + 2.5; z < z1 - 1.5; z += 3.5) for (const x of [-3.5, 0, 3.5]) b.add('chand', cyl(0.32, 0.32, 0.08, 10), { p: [x, D + sh - 0.22, z] });
+  // the upper decks, stepping back, full width over the salon
+  let y = D + sh + 0.6;
+  uppers.forEach(([a, c, h], k) => { tier(b, { x: 0, z0: a, z1: c, y0: y - 0.05, y1: y + h, w: outW - 1.1 - k * 1.3, nose: 0.3, glassH: 0.58 }); y += h; });
+  // rails round the upper decks' aft ends
+  { let yy = D + sh + 0.6; uppers.forEach(([a, , h], k) => { const ww = outW - 1.1 - k * 1.3; b.add('chrome', box(ww * 2 - 0.4, 0.08, 0.08, 0.03, 1), { p: [0, yy + 1.0, a - 2.5] }); for (const s of [1, -1]) b.add('chrome', box(0.08, 0.08, 3, 0.03, 1), { p: [s * (ww - 0.3), yy + 1.0, a - 1] }); yy += h; }); }
+  // the mast: swept back, radar domes
+  if (mast) {
+    const zc = (uppers[uppers.length - 1][0] + uppers[uppers.length - 1][1]) / 2;
+    b.add('house', loft([{ z: -2.0, w: 0.7, h: 0.3, y: y + 0.2 }, { z: -0.8, w: 0.55, h: 2.4, y: y + 2.4 }, { z: 0.5, w: 0.35, h: 3.8, y: y + 3.8 }], 12, 3), { p: [0, 0, zc] });
+    b.add('house', sphere(0.95, 14, 10), { p: [1.9, y + 5.2, zc - 0.4] });
+    b.add('house', sphere(0.8, 14, 10), { p: [-1.6, y + 5.0, zc - 0.4] });
+  }
+  // aft deck: a pool to port, sun loungers to starboard; foredeck: sunpads or a helipad
+  const aft = (-L / 2 + z0) / 2, sideC = lane + (station(aft, o).w - lane) / 2;
+  b.add('pool', box(station(aft, o).w - lane - 1.4, 0.3, Math.min(9, (z0 + L / 2) * 0.55), 0.1, 1), { p: [sideC, D + 0.02, aft] });
+  b.add('chrome', box(station(aft, o).w - lane - 0.8, 0.35, Math.min(9, (z0 + L / 2) * 0.55) + 0.6, 0.12, 1), { p: [sideC, D - 0.05, aft] });
+  for (let k = 0; k < 4; k++) {
+    const z = aft - 4.5 + k * 3;
+    b.add('cushion', box(1.0, 0.32, 2.0, 0.14, 2), { p: [-sideC, D + 0.16, z] });
+    b.add('cushion', box(1.0, 0.32, 0.9, 0.14, 2), { p: [-sideC, D + 0.42, z - 0.9], r: [-0.55, 0, 0] });
+  }
+  const fore = (z1 + L * 0.38) / 2, fw = station(fore, o).w;
+  if (helipad != null) {
+    b.add('pad', cyl(Math.min(9.5, fw), Math.min(9.5, fw), 0.3, 40), { p: [0, D - 0.12, helipad] });
+    b.add('lamp', torus(Math.min(9.3, fw - 0.2), 0.14, 6, 48), { p: [0, D + 0.05, helipad], r: [Math.PI / 2, 0, 0] });
+  } else for (const s of [1, -1]) b.add('cushion', box(fw - lane - 1.2, 0.4, 5, 0.18, 2), { p: [s * (lane + (fw - lane) / 2), D + 0.2, fore] });
+  grp.add(b.build({
+    hull: WHITE, bottom: paint(0x10233f, { rough: 0.35, clear: 0.5 }), boot: paint(boot, { rough: 0.3, clear: 0.6 }), gold: GOLDP,
+    glass: SMOKE, deck: teakMat(), cut: WHITE, house: WHITE, chrome: CHROME,
+    ceiling: new THREE.MeshStandardMaterial({ color: 0x7a5236, roughness: 0.55 }),
+    chand: glow(0xffe2a8, 2.2), pool: new THREE.MeshStandardMaterial({ color: 0x0aa7c6, emissive: 0x29d9f0, emissiveIntensity: 0.8, roughness: 0.1 }),
+    cushion: plastic(0xf3ead2, 0.8), pad: plastic(0x2b3440, 0.7), lamp: glow(0xffd23c, 2.4),
+  }));
+  // the inner windows: the salon interior, seen from the road through floor-to-ceiling glass
+  if (typeof Image !== 'undefined') {
+    const tex = salonTex(), tile = 9.4, reps = Math.max(1, Math.round((len - 1.4) / tile));
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.35 });
+    for (const s of [1, -1]) {
+      const g = new THREE.PlaneGeometry(len - 1.4, sh - 0.9); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * reps);
+      const m = new THREE.Mesh(g, mat); m.position.set(s * (lane - 0.03), D + sh / 2 - 0.05, zc); m.rotation.y = -s * Math.PI / 2; grp.add(m);
+    }
+  }
+  if (header) {   // over the salon's aft entrance, facing the karts coming aboard
+    const tex = canvasTex(1024, 192, (g, W, H) => {
+      g.fillStyle = '#10233f'; g.fillRect(0, 0, W, H); g.fillStyle = '#e9b443'; g.fillRect(0, 8, W, 6); g.fillRect(0, H - 14, W, 6);
+      fitText(g, header, W / 2, H / 2 + 4, W - 60, H * 0.62, H * 0.6, FONT, { fill: '#f6e7c1' });
+    }, { repeat: false, aniso: 8 });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(lane * 2 - 0.6, (lane * 2 - 0.6) * 192 / 1024), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6 }));
+    m.position.set(0, D + sh + 0.3, z0 - 0.36); m.rotation.y = Math.PI; grp.add(m);
+  }
+  // her name down both sides, under the gold sheer line
+  const tex = canvasTex(2048, 256, (g, W, H) => { g.clearRect(0, 0, W, H); fitText(g, name, W / 2, H / 2 + 6, W - 40, H * 0.86, 230, FONT, { fill: '#10233f', stroke: '#f7f6f2', lw: 10 }); }, { repeat: false, aniso: 8 });
+  const nameMat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const nz0 = -L * 0.3, nz1 = L * 0.24, nl = nz1 - nz0, nzc = (nz0 + nz1) / 2;
+  const nh = Math.min(nl / 8, D - 3.0 - 2.4), ny = 1.95 + nh / 2;
+  const nGeo = new THREE.PlaneGeometry(nl, nh, 40, 1);
+  for (const s of [1, -1]) {
+    // bend the name round the hull: each column sits on the hull side at its own z
+    const g = nGeo.clone(), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const zz = nzc + p.getX(i) * s, yy = ny + p.getY(i), st = station(zz, o); const sp = sectionPt(st, uAt(st, yy), 0.1); p.setXYZ(i, s * sp[0], yy, zz); }
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, nameMat); m.renderOrder = 2; grp.add(m);
+  }
+  grp.userData.station = z => station(z, o);
+  grp.userData.o = o;
+  return grp;
+}
+
+let salonTexCache = null;
+/** The generated salon interior (assets/tracks/international-waters/salon.webp), tiling along the windows. */
+function salonTex() {
+  if (!salonTexCache) { salonTexCache = new THREE.TextureLoader().load('assets/tracks/international-waters/salon.webp'); salonTexCache.colorSpace = THREE.SRGBColorSpace; salonTexCache.wrapS = THREE.RepeatWrapping; salonTexCache.anisotropy = 8; }
+  return salonTexCache;
+}
+
+/** White foam round a hull at the waterline: a ribbon a little outside the hull's waterline outline, in hull frame. */
+export function foamRing(o, width = 1.6) {
+  const pts = [], h = o.L / 2;
+  for (let k = 0; k <= 60; k++) { const z = -h + (o.L * k) / 60, st = station(Math.min(z, h - 0.5), o); pts.push([sectionPt(st, uAt(st, 0))[0], z]); }
+  const ring = [...pts.map(([x, z]) => [x, z]), ...pts.slice().reverse().map(([x, z]) => [-x, z])];
+  const pos = [], uv = [], idx = [];
+  ring.forEach(([x, z], i) => {
+    const [px, pz] = ring[(i + 1) % ring.length], [qx, qz] = ring[(i - 1 + ring.length) % ring.length];
+    let nx = pz - qz, nz = -(px - qx); const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
+    if (nx * x + nz * z < 0) { nx = -nx; nz = -nz; }
+    pos.push(x - nx * 0.3, 0, z - nz * 0.3, x + nx * width, 0, z + nz * width); uv.push(i / 8, 0, i / 8, 1);
+    const a = i * 2, c = ((i + 1) % ring.length) * 2; idx.push(a, c, a + 1, a + 1, c, c + 1);
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+let foamTex = null;
+/** Soft broken white foam, fading outward (v = 0 at the hull, 1 at the edge). */
+export function foamMaterial() {
+  if (!foamTex) foamTex = canvasTex(256, 64, (g, W, H) => {
+    g.clearRect(0, 0, W, H);
+    for (let i = 0; i < 260; i++) { const x = Math.random() * W, y = Math.pow(Math.random(), 1.6) * H, r = 2 + Math.random() * 6; g.fillStyle = `rgba(255,255,255,${0.55 * (1 - y / H)})`; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+    const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  }, { aniso: 4 });
+  return new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, opacity: 0.85 });
+}
+
+/**
+ * A marina superyacht moored bow-on to the quay, the raked stem reaching out
+ * over the road, merged into the shared builder b (materials from YACHT_MATS).
+ * Placed by x, z, yaw (bow toward yaw), waterline y = 0. Returns the hull numbers.
+ */
+export function marinaYacht(b, { L = 92, B = 9.5, D = 7.6, x = 0, z = 0, yaw = 0, boot = 'bootRed', tiers = 3 } = {}) {
+  const s = new ModelBuilder();
+  const o = { L, B, D, keel: -2.6, stern: 0.88, rakeFrom: 0.28, sheer: 2.2, rakeTo: 1.0, windows: [-L * 0.35, L * 0.32] };
+  hull(s, o);
+  const sw = B * 0.82;
+  tier(s, { x: 0, z0: -L * 0.36, z1: L * 0.14, y0: D - 0.05, y1: D + 3.0, w: sw, nose: 0.3 });
+  if (tiers > 1) tier(s, { x: 0, z0: -L * 0.3, z1: L * 0.07, y0: D + 3.0, y1: D + 5.8, w: sw - 0.8, nose: 0.28 });
+  if (tiers > 2) tier(s, { x: 0, z0: -L * 0.2, z1: L * 0.01, y0: D + 5.8, y1: D + 8.1, w: sw - 1.7, nose: 0.3, glassH: 0.6 });
+  const mastY = D + (tiers > 2 ? 8.1 : 5.8);
+  s.add('house', sphere(1.0, 14, 10), { p: [1.4, mastY + 1.4, -L * 0.1] });
+  s.add('house', sphere(0.8, 14, 10), { p: [-1.4, mastY + 1.3, -L * 0.1] });
+  s.add('house', cyl(0.25, 0.4, 2.2, 8), { p: [0, mastY + 1.0, -L * 0.1] });
+  for (const sd of [1, -1]) s.add('chrome', tube(range(L * 0.12, L * 0.46, 6).map(zz => { const st = station(zz, o); return [sd * (st.w - 0.35), st.top + 1.0, zz]; }), 0.07, 18, 5));
+  s.add('pool', box(4.4, 0.5, 5, 0.25, 2), { p: [0, station(L * 0.25, o).top + 0.3, L * 0.25] });
+  const grp = s.build({}), M = new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
+  grp.traverse(m => { if (m.isMesh) b.add(m.name === 'boot' ? boot : m.name, m.geometry.applyMatrix4(M)); });
+  o.station = zz => station(zz, o);
+  return o;
+}
+export const YACHT_MATS = () => ({
+  hull: WHITE, bottom: paint(0x10233f, { rough: 0.35, clear: 0.5 }), gold: GOLDP, glass: SMOKE, deck: teakMat(),
+  cut: WHITE, house: WHITE, chrome: CHROME, pool: new THREE.MeshStandardMaterial({ color: 0x0aa7c6, emissive: 0x29d9f0, emissiveIntensity: 0.7, roughness: 0.1 }),
+  bootRed: paint(0xc8323a, { rough: 0.3, clear: 0.6 }), bootBlue: paint(0x2456a6, { rough: 0.3, clear: 0.6 }), bootGold: paint(0xd9a63a, { rough: 0.3, metal: 0.5, clear: 0.6 }), bootTeal: paint(0x1b9aa6, { rough: 0.3, clear: 0.6 }),
+});
+
+/* ---------- life on the water ---------- */
+/** A jet ski, about 3.2 m, rider aboard. Facing +Z. */
+export function jetSki(color = 0xe2603d) {
+  const b = new ModelBuilder();
+  b.add('body', loft([{ z: -1.6, w: 0.55, h: 0.3, y: 0.35, n: 3 }, { z: -0.4, w: 0.62, h: 0.42, y: 0.4, n: 3 }, { z: 0.9, w: 0.5, h: 0.36, y: 0.45, n: 2.6 }, { z: 1.6, w: 0.1, h: 0.2, y: 0.6, n: 2.2 }], 12, 3));
+  b.add('seat', box(0.5, 0.25, 1.1, 0.12, 2), { p: [0, 0.85, -0.6] });
+  b.add('dark', box(0.9, 0.12, 0.12, 0.05, 1), { p: [0, 1.15, 0.45] });
+  b.add('rider', capsule(0.26, 0.55, 4, 8), { p: [0, 1.4, -0.35], r: [0.35, 0, 0] });
+  b.add('skin', sphere(0.2, 10, 8), { p: [0, 1.92, -0.15] });
+  b.add('vest', box(0.6, 0.45, 0.4, 0.15, 2), { p: [0, 1.35, -0.38], r: [0.35, 0, 0] });
+  return b.build({ body: paint(color, { rough: 0.3, clear: 0.7 }), seat: MAT.black, dark: MAT.dark, rider: plastic(0x23252c, 0.6), skin: plastic(0xe0ac85, 0.7), vest: plastic(0xff7a1a, 0.6) });
+}
+
+/** A gull: two wing panels in a shallow V, body between. Facing +Z, about 1.6 m span. */
+export function gull() {
+  const b = new ModelBuilder();
+  b.add('w', box(0.8, 0.04, 0.34, 0.02, 1), { p: [0.38, 0.1, 0], r: [0, 0, 0.25] });
+  b.add('w', box(0.8, 0.04, 0.34, 0.02, 1), { p: [-0.38, 0.1, 0], r: [0, 0, -0.25] });
+  b.add('w', sphere(0.14, 8, 6), { p: [0, 0, 0.05], s: [1, 0.9, 2.4] });
+  b.add('tip', box(0.26, 0.05, 0.3, 0.02, 1), { p: [0.82, 0.21, -0.02], r: [0, 0, 0.25] });
+  b.add('tip', box(0.26, 0.05, 0.3, 0.02, 1), { p: [-0.82, 0.21, -0.02], r: [0, 0, -0.25] });
+  return b.build({ w: plastic(0xf4f4f0, 0.7), tip: plastic(0x2a2d33, 0.7) });
+}
+
+/** A beach bar on the sand spit: thatched hut, counter, stools. Facing +Z. */
+export function beachBar() {
+  const b = new ModelBuilder();
+  b.add('wood', box(7.6, 1.15, 2.2, 0.15, 2), { p: [0, 0.58, 1.6] });
+  b.add('top', box(8.2, 0.2, 2.6, 0.08, 1), { p: [0, 1.22, 1.6] });
+  for (const sx of [-3.6, 3.6]) for (const sz of [-1.6, 2.6]) b.add('wood', cyl(0.14, 0.17, 3.6, 8), { p: [sx, 1.8, sz] });
+  b.add('straw', cone(6.6, 2.6, 10), { p: [0, 4.6, 0.5], s: [1, 1, 0.7] });
+  for (let k = 0; k < 5; k++) { b.add('stool', cyl(0.3, 0.3, 0.12, 10), { p: [-3 + k * 1.5, 0.82, 3.5] }); b.add('wood', cyl(0.05, 0.05, 0.8, 6), { p: [-3 + k * 1.5, 0.4, 3.5] }); }
+  for (let k = 0; k < 6; k++) b.add('bottle' + (k % 3), cyl(0.09, 0.11, 0.45, 8), { p: [-2.4 + k * 0.9, 1.55, 1.2] });
+  return b.build({
+    wood: plastic(0x8a5a36, 0.85), top: plastic(0xb98a5a, 0.7), straw: plastic(0xd9b26a, 0.95), stool: paint(0xe2603d, { rough: 0.5 }),
+    bottle0: glow(0x6ee7ff, 0.6), bottle1: glow(0xffd23c, 0.6), bottle2: glow(0xff6aa0, 0.6),
+  });
+}
+
+/* ---------- draw-call savers: a baker that merges placed props by material,
+   and a text atlas that packs every sign face into one canvas (after Crypto Cove) ---------- */
+class Quads {
+  constructor() { this.p = []; this.n = []; this.u = []; }
+  quad(a, b, c, d, uv = [0, 0, 1, 1]) {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = d[0] - a[0], vy = d[1] - a[1], vz = d[2] - a[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    const t = [[uv[0], uv[1]], [uv[2], uv[1]], [uv[2], uv[3]], [uv[0], uv[3]]];
+    for (const k of [0, 1, 2, 0, 2, 3]) { const q = [a, b, c, d][k]; this.p.push(q[0], q[1], q[2]); this.n.push(nx, ny, nz); this.u.push(t[k][0], t[k][1]); }
+  }
+  /** A flat panel facing yaw (0 = +Z), centred at c, w by h. */
+  panel(c, yaw, w, h, uv) {
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    const P = (sx, sy) => [c[0] + rx * w / 2 * sx, c[1] + h / 2 * sy, c[2] + rz * w / 2 * sx];
+    this.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), uv);
+  }
+  get empty() { return !this.p.length; }
+  geometry() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.u, 2));
+    g.computeBoundingSphere();
+    return g;
+  }
+}
+
+/** Merge placed objects by material: one mesh per material for the whole course. */
+export function makeBaker(group, shadows) {
+  const buckets = new Map();
+  const push = (mat, g, cast) => { let b = buckets.get(mat); if (!b) buckets.set(mat, b = [[], []]); b[cast && !mat.transparent ? 0 : 1].push(g); };
+  const norm = (geo, matrix) => {
+    const g = geo.index ? geo.toNonIndexed() : geo.clone();
+    for (const n of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(n)) g.deleteAttribute(n);
+    if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+    if (!g.attributes.normal) g.computeVertexNormals();
+    g.clearGroups();
+    if (matrix) {
+      g.applyMatrix4(matrix);
+      if (matrix.determinant() < 0) for (const a of Object.values(g.attributes)) { const s = a.itemSize, arr = a.array; for (let i = 0; i < a.count; i += 3) for (let k = 0; k < s; k++) { const t = arr[(i + 1) * s + k]; arr[(i + 1) * s + k] = arr[(i + 2) * s + k]; arr[(i + 2) * s + k] = t; } }
+    }
+    return g;
+  };
+  return {
+    /** Bake a placed object (and take it out of the scene). */
+    add(obj, cast = true) {
+      obj.updateMatrixWorld(true);
+      obj.traverse(o => { if (o.isMesh && !o.isInstancedMesh && !Array.isArray(o.material)) push(o.material, norm(o.geometry, o.matrixWorld), cast); });
+      obj.removeFromParent();
+    },
+    /** Bake a ModelBuilder's buckets (geometry already in world space). */
+    builder(b, mats, cast = true) { const grp = b.build(mats); grp.traverse(o => { if (o.isMesh) push(o.material, norm(o.geometry, null), cast); }); },
+    flush() {
+      for (const [mat, lists] of buckets) lists.forEach((list, k) => {
+        if (!list.length) return;
+        const geo = mergeGeometries(list, false); list.forEach(g => g.dispose());
+        geo.computeBoundingSphere();
+        const m = new THREE.Mesh(geo, mat); m.castShadow = k === 0 && shadows; m.receiveShadow = false; m.matrixAutoUpdate = false; m.renderOrder = mat.transparent ? 2 : 0; group.add(m);
+      });
+      buckets.clear();
+    },
+  };
+}
+
+/** Text panels packed into big canvases, one mesh per canvas; redrawn once the web fonts arrive. */
+export function makeAtlas(group, S = 2048, { emissive = 0.25 } = {}) {
+  const pages = [], newPage = () => {
+    const c = document.createElement('canvas'); c.width = c.height = S;
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: emissive, roughness: 0.6 });
+    const p = { c, g: c.getContext('2d'), tex, mat, q: new Quads(), x: 0, y: 0, row: 0, items: [] }; pages.push(p); return p;
+  };
+  newPage();
+  const alloc = (w, h) => {
+    let p = pages[pages.length - 1];
+    if (p.x + w > S) { p.x = 0; p.y += p.row + 2; p.row = 0; }
+    if (p.y + h > S) { p = newPage(); }
+    const r = { p, x: p.x, y: p.y, w, h }; p.x += w + 2; p.row = Math.max(p.row, h); return r;
+  };
+  const api = {
+    add(w, h, draw) { const r = alloc(w, h); r.draw = draw; r.p.items.push(r); return r; },
+    place(r, c, yaw, w, h) { const { p } = r; p.q.panel(c, yaw, w, h, [r.x / S, 1 - (r.y + r.h) / S, (r.x + r.w) / S, 1 - r.y / S]); },
+    /** Two faces back to back, so the sign reads the right way round from both sides. */
+    place2(r, c, yaw, w, h, gap = 0.08) {
+      const fx = Math.sin(yaw) * gap, fz = Math.cos(yaw) * gap;
+      api.place(r, [c[0] + fx, c[1], c[2] + fz], yaw, w, h); api.place(r, [c[0] - fx, c[1], c[2] - fz], yaw + Math.PI, w, h);
+    },
+    paint() { for (const p of pages) { p.g.clearRect(0, 0, S, S); for (const r of p.items) { p.g.save(); p.g.translate(r.x, r.y); p.g.beginPath(); p.g.rect(0, 0, r.w, r.h); p.g.clip(); r.draw(p.g, r.w, r.h); p.g.restore(); } p.tex.needsUpdate = true; } },
+    flush() {
+      api.paint();
+      for (const p of pages) if (!p.q.empty) { const m = new THREE.Mesh(p.q.geometry(), p.mat); m.matrixAutoUpdate = false; group.add(m); }
+      if (typeof document !== 'undefined' && document.fonts?.ready) document.fonts.ready.then(() => api.paint());
+    },
+  };
+  return api;
+}
+
+/** A harbour sign face for the atlas: navy ground, gold rules, cream title, gold subtitle. */
+export const signFace = (lines, { bg = '#10222e', fg = '#f3ead2', accent = '#e8b64c', rule = true } = {}) => (g, W, H) => {
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  if (rule) { g.fillStyle = accent; g.fillRect(0, H * 0.04, W, H * 0.025); g.fillRect(0, H * 0.935, W, H * 0.025); }
+  const n = lines.length;
+  lines.forEach((text, i) => {
+    const one = n === 1, cy = one ? H * 0.53 : (i === 0 ? H * 0.37 : H * 0.73);
+    fitText(g, text, W / 2, cy, W * 0.9, one ? H * 0.62 : (i === 0 ? H * 0.42 : H * 0.3), one ? H * 0.6 : H * (i === 0 ? 0.42 : 0.3), FONT, { fill: i === 0 ? fg : accent });
+  });
+};
+
+/** A yacht's name for the atlas: navy letters on hull white. */
+export const nameFace = text => (g, W, H) => {
+  g.fillStyle = '#f7f6f2'; g.fillRect(0, 0, W, H);
+  fitText(g, text, W / 2, H / 2 + 4, W * 0.94, H * 0.84, H * 0.8, FONT, { fill: '#10233f' });
+};
+
+/** A pile for the piers: unit height (scaled by the instance), foot at y = 0. */
+export function pile() {
+  const b = new ModelBuilder();
+  b.add('pile', cyl(0.5, 0.58, 1, 10), { p: [0, 0.5, 0] });
+  return b.build({ pile: plastic(0x6b5340, 0.85) });
+}
+/** The weed-and-barnacle band a pile shows when the tide goes out. Centre at y = 0.9. */
+export function pileBand() {
+  const b = new ModelBuilder();
+  b.add('band', cyl(0.62, 0.66, 1.8, 10), { p: [0, 0.9, 0] });
+  return b.build({ band: plastic(0x2f4a33, 0.95) });
+}
+
+/** A drink cart crossing the teak: a gold trolley, an umbrella, champagne on ice. ~1.2 m radius. */
+export function drinkCart() {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('gold', box(1.8, 0.12, 1.1, 0.05, 1), { p: [0, 0.95, 0] });
+  b.add('gold', box(1.8, 0.1, 1.1, 0.05, 1), { p: [0, 0.4, 0] });
+  for (const sx of [-0.8, 0.8]) for (const sz of [-0.45, 0.45]) { b.add('gold', cyl(0.04, 0.04, 0.9, 6), { p: [sx, 0.67, sz] }); b.add('dark', sphere(0.12, 8, 6), { p: [sx, 0.12, sz] }); }
+  b.add('ice', cyl(0.3, 0.24, 0.4, 12), { p: [-0.4, 1.2, 0] });
+  for (const k of [-0.1, 0.1]) b.add('bottle', cyl(0.07, 0.09, 0.6, 8), { p: [-0.4 + k, 1.45, k] });
+  b.add('pole', cyl(0.03, 0.03, 1.8, 6), { p: [0.5, 1.9, 0] });
+  b.add('shade', cone(1.25, 0.5, 12), { p: [0.5, 2.85, 0] });
+  grp.add(b.build({ gold: GOLDP, dark: MAT.dark, ice: plastic(0xdfe8ee, 0.2, 0.6), bottle: plastic(0x1f5a32, 0.3), pole: MAT.chrome, shade: paint(0xe2603d, { rough: 0.6 }) }));
   return grp;
 }

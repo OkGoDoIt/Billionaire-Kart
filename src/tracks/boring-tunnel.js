@@ -22,6 +22,14 @@ import { canvasTex, fitText } from '../render/textures.js';
  *  mouth); item 6's shortcut junctions keep k 0..7 (R-side mouths). */
 const TUBE_WINDOWS = [
   { from: 4.17, to: 4.43, k0: 5, k1: 12 },   // the Boring Machine's chamber mouth (item 5)
+  { from: 2.95, to: 5.9, k0: 5, k1: 12 },    // the breakthrough junction: one long L-side opening (item 6)
+];
+
+/** Junction gaps in def.tunnels that the tube still covers (item 6): the
+ *  road is underground there, only its L wall opens. The station gap
+ *  (6.4–7.6) is NOT covered — it daylights. */
+const TUBE_COVER = [
+  { from: 2.95, to: 5.9 },
 ];
 
 const SIGN_FONT = '"Luckiest Guy", "Arial Black", sans-serif';
@@ -85,11 +93,49 @@ export default {
   path: PATH,
   // the whole lap is one bore except the start cutting (cp 15.5 -> 0.45),
   // where the road daylights between the berms
-  tunnels: [{ from: 0.45, to: 6.4, through: true }, { from: 7.6, to: 15.5, through: true }],   // the gap is the Loop Station (#234 item 4): the bore opens under the city
+  tunnels: [{ from: 0.45, to: 2.95, through: true }, { from: 5.9, to: 6.4, through: true }, { from: 7.6, to: 15.5, through: true }],   // gaps: the Loop Station (#234 item 4) + the two shortcut junctions (item 6)
   backdrop: { img: 'assets/backdrops/boring-tunnel.webp', top: 9, bottom: -0.3 },             // the boomtown skyline, painted (assets/tracks/boring-tunnel/prompts.md)
   sides: [
     { from: 15.5, to: 0.45, edge: 'wall' },   // retaining walls along the open-air cutting: the sponsor boards live here
+    // #234 item 6: the breakthrough cut's junctions. The cut crosses the
+    // S-bend's inside (the L side at both ends); the facing side opens onto
+    // the dug bench (outer 30, no hoardings to block the mouths), the far
+    // side stays a wall. The bench surface itself is def.lake below.
+    { from: 2.95, to: 5.9, side: 'L', edge: 'open', outer: 30, hoarding: false },
+    { from: 2.95, to: 5.9, side: 'R', edge: 'wall' },
   ],
+  // #234 item 6: the shortcut breaks through on the final lap. The lake
+  // hook carries the joke: the side bore's floor is WET CEMENT (speed 0.2)
+  // until the final lap, then sets hard and fast (0.92). levelForLap stays
+  // deep below the bench, so it never reads as water — no drownings, and
+  // the AI's dry-path check always passes; the shortcuts entry's `when`
+  // is what actually gates it to the final lap.
+  lake: {
+    inside(x, z) {
+      const seg = [[226, -48], [225, -30], [228, -6], [228, 10], [224, 22]];
+      for (let k = 0; k < seg.length - 1; k++) {
+        const [ax, az] = seg[k], [bx, bz] = seg[k + 1];
+        const abx = bx - ax, abz = bz - az;
+        const tt = Math.max(0, Math.min(1, ((x - ax) * abx + (z - az) * abz) / (abx * abx + abz * abz || 1)));
+        const dx = x - (ax + abx * tt), dz = z - (az + abz * tt);
+        if (dx * dx + dz * dz < 16.5 * 16.5) return true;
+      }
+      return false;
+    },
+    levelForLap() { return -50; },
+    surface(depth, race) {
+      return race.lakeLap >= race.laps
+        ? { id: 'cement', speed: 0.92, grip: 0.95, dust: 0xb9b3a4, rumble: 0.25, offroad: true }
+        : { id: 'wet-cement', speed: 0.2, grip: 0.5, dust: 0x9d968b, rumble: 0.4, offroad: true };
+    },
+  },
+  shortcuts: [{
+    name: 'The Breakthrough',
+    from: 2.8, to: 5.1,
+    path: [[226, -48], [225, -30], [228, -6], [228, 10], [224, 22]],
+    skill: 0.55,
+    when: (race) => race.lakeLap >= race.laps,
+  }],
   zones: [
     { from: 2.2, to: 8.8, skin: 'metal' },   // riveted plates from the dive's foot along the deep run
     { from: 12.1, to: 13.2, skin: 'neon' },  // the ring sector glows
@@ -280,7 +326,9 @@ export default {
     // TUBE_WINDOWS (module top) opens the arc where item 6 cuts the wall
     // away at the shortcut junctions.
     const uTime = { value: 0 };
-    ctx.group.add(T.boreTube(track, uTime, TUBE_WINDOWS.map(w => ({ ...w, r0: track.indexAtCp(w.from), r1: track.indexAtCp(w.to) }))));
+    ctx.group.add(T.boreTube(track, uTime,
+      TUBE_WINDOWS.map(w => ({ ...w, r0: track.indexAtCp(w.from), r1: track.indexAtCp(w.to) })),
+      TUBE_COVER.map(w => ({ r0: track.indexAtCp(w.from), r1: track.indexAtCp(w.to) }))));
     anim.push((dt, time) => { uTime.value = time; });
 
     // THE BORING MACHINE at hero scale (#234 item 5): a dead-end side bore
@@ -364,6 +412,62 @@ export default {
         sc.place(board, track.px[i] + lx * lat, track.pz[i] + lz * lat, { yaw: Math.atan2(-side * lx, -side * lz), y: track.py[i], lift: 0.9 });
       }
     }
+
+    /* ---- the breakthrough cut (#234 item 6): slab, barrier, rubble ---- */
+    // a cement slab on the dug bench along the cut line: wet (dark, glossy)
+    // until the final lap, then set (pale, matte) — the surface speed flips
+    // with it via def.lake. y follows the rendered terrain, tucked under
+    // the road edges at both ends.
+    const cutPts = [[227, -56], [226, -48], [225, -30], [228, -6], [228, 10], [224, 22], [221.5, 26]];
+    const slabPos = [], slabIdx = [];
+    cutPts.forEach(([x, z], k) => {
+      const [nx, nz] = cutPts[Math.min(k + 1, cutPts.length - 1)], [px2, pz2] = cutPts[Math.max(k - 1, 0)];
+      let dx = nx - px2, dz = nz - pz2; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+      for (const s of [1, -1]) {
+        const vx = x + dz * 5.5 * s, vz = z - dx * 5.5 * s;
+        slabPos.push(vx, sc.y(vx, vz) + 0.07, vz);
+      }
+      if (k) { const a0 = (k - 1) * 2; slabIdx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2); }
+    });
+    const slabGeo = new TH.BufferGeometry();
+    slabGeo.setAttribute('position', new TH.Float32BufferAttribute(slabPos, 3));
+    slabGeo.setIndex(slabIdx);
+    slabGeo.computeVertexNormals();
+    const cementMat = new TH.MeshStandardMaterial({ color: 0x76746d, roughness: 0.3, metalness: 0.05 });
+    ctx.group.add(new TH.Mesh(slabGeo, cementMat));
+
+    // the barrier across the exit mouth, and rubble at both mouths
+    const bTex = signTex('SHORTCUT COMING SOON', { w: 1500, h: 400, size: 150, bg: '#f7b500', fg: '#1a1d29' });
+    const bp = atPos(3.22, 11.8);
+    const barrier = T.shortcutBarrier(bTex);
+    sc.place(barrier, bp.x, bp.z, { yaw: faceCentre(bp, 1), y: sc.y(bp.x, bp.z) - 0.1 });
+    sc.instances(partsOf(P.rock(3, { r: 1.1 })), [
+      { x: 233, y: sc.y(233, -38), z: -38, yaw: 0.7 }, { x: 235, y: sc.y(235, -27), z: -27, yaw: 2.4 },
+      { x: 231, y: sc.y(231, 13), z: 13, yaw: 1.5 }, { x: 234, y: sc.y(234, 22), z: 22, yaw: 3.0 },
+    ], { scale: [0.8, 1.7], tints: [0x8d8d94, 0x767680, 0x9a938a] });
+
+    // the breakthrough: on the final lap the barrier tips flat in a burst
+    // of dust and the cement sets
+    let tip = 0, burstDone = false;
+    const wet = new TH.Color(0x76746d), dry = new TH.Color(0xa8a296);
+    anim.push((dt) => {
+      if (view.finalLap) {
+        if (!burstDone) {
+          burstDone = true;
+          for (let k = 0; k < 22; k++) {
+            view.fx.dust(bp.x + rng.range(-2.6, 2.6), sc.y(bp.x, bp.z) + rng.range(0.2, 2.2), bp.z + rng.range(-1, 1),
+              rng.range(-1.6, 1.6), rng.range(0.6, 2.6), rng.range(-1.6, 1.6), [0.66, 0.6, 0.5], 1.8 + rng() * 2.2, 1.8, 0.55);
+          }
+        }
+        if (tip < 1) {
+          tip = Math.min(1, tip + dt * 1.7);
+          const e = 1 - (1 - tip) * (1 - tip);
+          barrier.userData.pivot.rotation.x = -1.32 * e;
+          cementMat.color.lerpColors(wet, dry, e);
+          cementMat.roughness = 0.3 + 0.6 * e;
+        }
+      }
+    });
 
     /* ---- the desert above ---- */
     const rocks = sc.scatter({ count: 130, min: 14, max: 170, maxSlope: 0.85, minGap: 4 });

@@ -330,6 +330,26 @@ export function stationPlatform(len = 26) {
   return g;
 }
 
+/** The SHORTCUT COMING SOON barrier (#234 item 6): two posts, a sign panel
+ *  and a striped skirt, built on a pivot at its base so the final-lap
+ *  breakthrough can tip it flat (userData.pivot). Faces +Z. */
+export function shortcutBarrier(tex) {
+  const grp = new THREE.Group();
+  const pivot = new THREE.Group();
+  grp.add(pivot);
+  const b = new ModelBuilder();
+  for (const s of [1, -1]) b.add('post', box(0.28, 2.3, 0.28, 0.08, 1), { p: [s * 2.5, 1.15, 0] });
+  b.add('skirt', box(5.6, 0.55, 0.18, 0.08, 1), { p: [0, 0.32, 0.05] });
+  const frame = b.build({ post: MAT.steel, skirt: paint(0xe8641e, { rough: 0.6 }) });
+  pivot.add(frame);
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.5, 0.14),
+    [MAT.dark, MAT.dark, MAT.dark, MAT.dark, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }), MAT.dark]);
+  panel.position.set(0, 1.62, 0.06);
+  pivot.add(panel);
+  grp.userData.pivot = pivot;
+  return grp;
+}
+
 /** A sandstone pylon for a portal mouth, with a red band near the top. */
 export function portalPylon({ h = 13 } = {}) {
   const b = new ModelBuilder();
@@ -350,12 +370,15 @@ export function portalPylon({ h = 13 } = {}) {
  *  space clamp the arc of every ring in [r0, r1] to [k0, k1] (k runs 0..ARC
  *  from the L wall base over the crown to the R wall base). Portals are
  *  skipped near window mouths, so a window gets no floating arch slice. */
-export function boreTube(track, uTime, windows = []) {
+export function boreTube(track, uTime, windows = [], extraCover = []) {
   const { N, ds, px, py, pz, lx, ly, lz, ux, uy, uz, hwL, hwR } = track;
   const H = track.def.tunnelHeight ?? 7, ARC = 12, STEP = 2;
   const group = new THREE.Group();
   const winAt = r => windows.find(w => r >= w.r0 && r <= w.r1) || null;
   const kRange = r => { const w = winAt(r); return w ? [w.k0, w.k1] : [0, ARC]; };
+  // the tube also spans the shortcut-junction gaps in def.tunnels (the road
+  // is still underground there; only the station gap stays open to the sky)
+  const covered = r => track.tunnel[r % N] || extraCover.some(w => r >= w.r0 && r <= w.r1);
 
   // ---- concrete (tube + portal faces share one geometry) ----
   const pos = [], nor = [], col = [], idx = [];
@@ -373,7 +396,7 @@ export function boreTube(track, uTime, windows = []) {
   let prev = null;
   for (let r = 0; r <= N; r++) {
     const i = r % N;
-    if (!track.tunnel[i]) { prev = null; continue; }
+    if (!covered(r)) { prev = null; continue; }
     const ring = arcVerts(r, (Math.floor(r / STEP / 4) % 2) ? 0.93 : 1.0);
     if (prev) {
       const k0 = Math.max(prev.k0, ring.k0), k1 = Math.min(prev.k1, ring.k1);
@@ -383,8 +406,8 @@ export function boreTube(track, uTime, windows = []) {
       }
     }
     prev = ring;
-    // portal face where a tunnel run starts or ends (not near a window mouth)
-    const isEnd = !track.tunnel[(i + 1) % N] || !track.tunnel[(i - 1 + N) % N];
+    // portal face where a covered run starts or ends (not near a window mouth)
+    const isEnd = !covered(r + 1) || !covered(r - 1);
     if (isEnd && !winAt(r) && !winAt(r - 1) && !winAt(r + 1)) {
       const a = hwL[i] + 0.7, b = hwR[i] + 0.7, mid = (a - b) / 2, half = (a + b) / 2, c0 = pos.length / 3;
       for (let k = 0; k <= ARC; k++) {
@@ -410,7 +433,7 @@ export function boreTube(track, uTime, windows = []) {
   const sp = [], sa = [], sidx = [];
   for (let r = 0; r < N; r += STEP) {
     const i = r % N;
-    if (!track.tunnel[i] || !track.tunnel[(r + 1) % N] || (r / STEP) % 4 !== 0) continue;
+    if (!covered(r) || !covered(r + 1) || (r / STEP) % 4 !== 0) continue;
     const rows = [];
     for (const rr of [r, r + 1]) {
       const j = rr % N, a = hwL[j] + 0.64, b = hwR[j] + 0.64, mid = (a - b) / 2, half = (a + b) / 2, h = H - 0.06;

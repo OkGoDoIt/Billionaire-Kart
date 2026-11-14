@@ -55,8 +55,11 @@ export default {
   name: 'Capitol Hill Climb',
   tagline: 'Three laps: the only term limit in town.',
   lapNotes: ['<b>Debt ceiling raised.</b> Nobody is surprised.', '<b>Cloture invoked.</b> The steps past hairpin two are open.'],   // shown as laps two and three begin
-  // the opening shot: the revolving door between REGULATOR and INDUSTRY, suits going round
-  intro: [{ pos: [96, 9, 214], pos1: [88, 11, 196], look: [80, 24, 150], look1: [80, 22, 146], fov: 54, dur: 3.2 }],
+  intro: [
+    { pos: [AXIS - 2, 5.8, POOL.z0 - 14], pos1: [AXIS, 4, POOL.z0 + 16],
+      look: [AXIS, 12, POOL.z1 + 24], look1: [AXIS, 11, POOL.z1 + 24], fov: 52, dur: 2.25 },
+    { pos: [96, 9, 214], pos1: [88, 11, 196], look: [80, 24, 150], look1: [80, 22, 146], fov: 54, dur: 2.2 },
+  ],
   laps: 3,
   width: 17,
   sky: 'golden',

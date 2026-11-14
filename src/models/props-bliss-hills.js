@@ -319,3 +319,25 @@ export function waitCursor() {
   b.add('sand', cyl(0.14, 0.14, 4, 8), { p: [0, -1.4, 0] });
   return b.build({ case: plastic(0x142952), edge: plastic(0x91e4ff), sand: glow(0xffb526, 0.32) });
 }
+
+/** The suspended, right-angled paths of a pipes screensaver. Elbows and flanges match the tube diameter. */
+export function screensaverPipe(points, color) {
+  const b = new ModelBuilder();
+  const up = new THREE.Vector3(0, 1, 0), delta = new THREE.Vector3();
+  const q = new THREE.Quaternion(), e = new THREE.Euler();
+  for (const [i, a] of points.entries()) {
+    b.add('pipe', sphere(0.96, 12, 8), { p: a });
+    if (!i) continue;
+    const prev = points[i - 1];
+    delta.set(a[0] - prev[0], a[1] - prev[1], a[2] - prev[2]);
+    const len = delta.length();
+    e.setFromQuaternion(q.setFromUnitVectors(up, delta.normalize()));
+    const rotation = [e.x, e.y, e.z];
+    b.add('pipe', cyl(0.9, 0.9, len, 12), { p: a.map((v, k) => (v + prev[k]) / 2), r: rotation });
+    for (const end of [-1, 1]) {
+      const u = 0.5 + end * (0.5 - Math.min(0.17, 1.2 / len));
+      b.add('cuff', cyl(1.08, 1.08, 0.4, 12), { p: a.map((v, k) => prev[k] + (v - prev[k]) * u), r: rotation });
+    }
+  }
+  return b.build({ pipe: plastic(color, 0.24, 0.44), cuff: plastic(0xc6d9ea, 0.3, 0.6) });
+}

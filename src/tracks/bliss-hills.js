@@ -624,6 +624,59 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
     taken.push([p.x, p.z, 10]);
   }
 
+  // The cleared squares themselves describe the shortcut. Conform each one to the meadow and swale.
+  // The square border and printed number share a texture; the kart still feels grass underneath.
+  {
+    const path = [[-48, 174], ...track.def.shortcuts[0].path, [-30, 95]];
+    const marks = ['1', '2', '1', '3'];
+    const tex = canvasTex(512, 128, (g) => {
+      for (const [i, n] of marks.entries()) {
+        const x = i * 128;
+        g.fillStyle = '#52635e'; g.fillRect(x, 0, 128, 128);
+        g.fillStyle = '#d3dcce'; g.fillRect(x + 4, 4, 118, 118);
+        g.fillStyle = '#abb8ac'; g.fillRect(x + 8, 8, 114, 114);
+        fitText(g, n, x + 64, 64, 90, 92, XP, ['#153fac', '#1d6c38', '#153fac', '#ab3628'][i], { lines: 1 });
+      }
+    });
+    const pos = [], uv = [];
+    for (let j = 1; j < path.length; j++) {
+      const [x0, z0] = path[j - 1], [x1, z1] = path[j];
+      const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 5.5));
+      const tx = (x1 - x0) / len, tz = (z1 - z0) / len;
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n, cx = x0 + (x1 - x0) * t, cz = z0 + (z1 - z0) * t;
+        if (track.roadDistance(cx, cz) < 3.5) continue;
+        const type = (j + k) % marks.length;
+        for (const [u, v] of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]]) {
+          const along = (v - 0.5) * (len / n - 0.6), across = (u - 0.5) * 5.1;
+          const x = cx + tx * along + tz * across, z = cz + tz * along - tx * across;
+          pos.push(x, sc.y(x, z) + 0.09, z);
+          uv.push((type + 0.01 + 0.98 * u) / 4, v);
+        }
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    group.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 })));
+  }
+
+  // A growing pipes screensaver on the outside of the lake S. Three colors trace distinct runs.
+  {
+    const p = sc.beside(29.8, -1, 16);
+    const paths = [
+      [[-16,-2,0],[-16,11,0],[-5,11,0],[-5,17,0],[6,17,0],[6,3,0]],
+      [[-11,-2,4],[-11,7,4],[1,7,4],[1,21,4],[13,21,4],[13,13,4],[17,13,4]],
+      [[-19,-2,-4],[-19,18,-4],[-12,18,-4],[-12,25,-4],[10,25,-4],[10,10,-4],[19,10,-4]],
+    ];
+    const pipes = paths.map((path, i) => {
+      const mesh = B.screensaverPipe(path, [0x0ecebf, 0xff9d15, 0xec3989][i]);
+      sc.place(mesh, p.x, p.z, { yaw: p.along + Math.PI / 2, y: p.y }); return mesh;
+    });
+    taken.push([p.x, p.z, 18]);
+    anim.push(() => { pipes.forEach((pipe, i) => { pipe.visible = (view.showLap || 1) >= i + 1; }); });
+  }
+
   // ---- the finish: the solitaire win cascade, bouncing along the pit grandstands ----
   {
     const faces = [['A', '#e5352b', 'heart'], ['K', '#12142b', 'spade'], ['Q', '#e5352b', 'diamond'], ['J', '#12142b', 'club']];

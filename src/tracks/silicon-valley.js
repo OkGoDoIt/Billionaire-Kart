@@ -9,6 +9,7 @@ import * as S from '../models/props-silicon-valley.js';
 const POND = { x: -40, z: 102, r: 46 };
 const RING = { x: -40, z: 102, r: 72, band: 15 };
 const ROCKET = { x: 286, z: 96 };
+const DEPOT = { x: 271, z: -40, level: 7.7 };
 /* The bay the Golden Gate crosses (#168): a strait running south from the infield to a
    basin outside the loop. The terrain fn floods everything within the strait's reach
    (the scatter water check keeps scenery out of it). Axis: a two-segment polyline. */
@@ -182,7 +183,8 @@ export default {
       // the bay (#168): the strait the bridge crosses, flooded last so nothing refills it
       const bay = 1 - smoothstep(BAY_R, BAY_R + BAY_SLOPE, bayDist(x, z));
       h = h * (1 - bay) + BAY_FLOOR * bay;
-      return h;
+      const bank = smoothstep(14, 23, Math.hypot(x - DEPOT.x, z - DEPOT.z));
+      return DEPOT.level * (1 - bank) + h * bank;
     },
   },
   look: {
@@ -515,7 +517,7 @@ function gags({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken, l
 
   // ---- the bridge exit: robotaxis frozen in a ring around one traffic cone ----
   {
-    const c = sc.beside(22.04, 1, 19), R = 8;
+    const c = DEPOT, R = 8;
     // A level motor pool cut into the far bank. Step the retaining drum down
     // into the rendered hillside; all ten vehicles stand on the same slab.
     const rim = Array.from({ length: 24 }, (_, k) => {

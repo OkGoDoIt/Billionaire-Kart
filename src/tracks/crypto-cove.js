@@ -199,6 +199,15 @@ function decorate(ctx) {
   sc.along({ from: 18.3, to: 0.95, side: 1, offset: 6.5, spacing: 36 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
   const jk = jokes(ctx, sc, { standSpots, seats, gantryAt: g0 });
+  // The animated lip uses the same rising and crashing colors as the exchange.
+  const ramp = view.trackMesh.userData.mats.ramp.uniforms;
+  ramp.uA.value.setHex(0x135c42); ramp.uB.value.setHex(0x77ffac);
+  let crashed = false;
+  anim.push(() => {
+    if (!crashed && view.finalLap) {
+      crashed = true; ramp.uA.value.setHex(0x8b2136); ramp.uB.value.setHex(0xff9f77);
+    }
+  });
 
   // road skins: planks on the pier, packed sand on the beach (drawn just above the road)
   const timber = plankTexture();
@@ -302,7 +311,7 @@ function decorate(ctx) {
   sc.instances(partsOf(P.bush(33, { color: 0x3f9e3a })), low.filter((_, i) => i % 3 === 2), { scale: [1, 2], yaw: 'random' });
 
   // the headland: big rocks over the hill and around the cave mouth, boulders at the waterline
-  const crags = sc.scatter({ count: 70, min: 13, max: 150, maxSlope: 1.2, minGap: 9, where: (x, z, h) => Math.hypot(x - HEAD.x, z - HEAD.z) < 150 && h > 5 && Math.hypot(x - LIGHT.x, z - LIGHT.z) > 12 });
+  const crags = sc.scatter({ count: 70, min: 20, max: 150, maxSlope: 1.2, minGap: 9, where: (x, z, h) => Math.hypot(x - HEAD.x, z - HEAD.z) < 150 && h > 5 && Math.hypot(x - LIGHT.x, z - LIGHT.z) > 12 });
   sc.instances(partsOf(P.rock(41, { r: 2.4 })), crags, { scale: [1.2, 3.4], yaw: 'random', sink: 0.8, tints: [0x9a8f86, 0x8a8078, 0xb0a497] });
   const shore = sc.scatter({ count: 50, min: 13, max: 120, maxSlope: 2, minGap: 6, where: (x, z, h) => h > W - 1.2 && h < W + 1.2 && x < -40 });
   sc.instances(partsOf(P.rock(42, { r: 1.6 })), shore, { scale: [0.8, 2.2], yaw: 'random', sink: 0.4, tints: [0x9a8f86, 0x7f766f] });
@@ -317,6 +326,25 @@ function decorate(ctx) {
   // tiki torches along the promenade and at the pier gate
   const torches = [...sc.along({ from: 17.4, to: 1.9, side: -1, offset: 13.5, spacing: 13, phase: 6.5 }), ...sc.along({ from: 4.9, to: 5.5, side: 1, offset: 13, spacing: 9 }), ...sc.along({ from: 9.9, to: 10.6, side: -1, offset: 13, spacing: 9 })].filter(p => p.y > W + 0.6);
   sc.instances(partsOf(C.tikiTorch()), torches, { scale: [0.95, 1.15], cast: false });
+
+  // Keep the rock wall, but leave the portal rim and the apex of the climb exposed.
+  // A salt-stained, amber-lit nautical arch makes the mouth visible against the cliff.
+  {
+    const s = track.sAtCp(13.28), p = track.pointAt(s, 0, {}), yaw = track.yawAt(s);
+    const masonry = new ModelBuilder(), span = 10.7, spring = 2.4;
+    for (let n = 0; n < 13; n++) {
+      const a = (n + 0.5) * Math.PI / 13, x = span * Math.cos(a), y = spring + 6.8 * Math.sin(a);
+      masonry.add(n % 3 === 0 ? 'salt' : 'rock', box(1.7, 1.05, 1.2, 0.12), {
+        p: [p.x + Math.cos(yaw) * x, p.y + y, p.z - Math.sin(yaw) * x],
+        r: [0, yaw, Math.atan2(-6.8 * Math.cos(a), span * Math.sin(a)), 'YXZ'] });
+    }
+    for (const side of [-1, 1]) {
+      const x = p.x + side * span * Math.cos(yaw), z = p.z - side * span * Math.sin(yaw);
+      masonry.add('rock', box(1.1, 5, 1.4, 0.15), {p: [x, p.y, z], r: [0, yaw, 0]});
+      masonry.add('light', cyl(0.48, 0.54, 1.6, 8), {p: [x, p.y + 2.1, z]});
+    }
+    ctx.group.add(masonry.build({rock: plastic(0x414b50), salt: plastic(0x93a19a), light: new THREE.MeshBasicMaterial({color: 0xffd389})}));
+  }
 
   // arrow boards on the outside of every real corner (not over the sea)
   for (const c of track.corners) {

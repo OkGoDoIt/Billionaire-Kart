@@ -24,17 +24,20 @@ function bayDist(x, z) {
   }
   return d;
 }
-/* The two islands. The Founder's Fountain sits on the run to the line between x = -52 and -12; Sand Hill's median
-   between z = 32 and 70 on the climb. Both sit on the left of the main lane at lat 11.4 (rivals on the racing line
-   never touch them); posts: control-point params of their collision circles, every 2.5 m. */
-const ISLAND_LAT = 11.4, ISLAND_R = 2.4;
+/* The two islands. The Founder's Fountain sits on the run home between x = -52 and -12 at lat 11.4; the VC office
+   island splits Sand Hill Road at the start/finish (the Peninsula Run fork, #135) between z = 46 and 72 at lat 13.5.
+   Posts: control-point params of their collision circles, every 2.5 m. */
+const ISLAND_LAT = 11.4, ISLAND_R = 2.4, VC_LAT = 13.5;
+/* The due-diligence gauntlet: a cone row along the island's edge (at-param, lat 18.5) guarding the inside lane.
+   The lane's line runs at lat ~22; dive at the island and due diligence bumps you. (Cones on the lane's outer
+   edge sat exactly on the entry overshoot arc and wedged karts — traced in the fork audit.) */
+const GAUNTLET = [[0.55, 18.5], [0.68, 18.5], [0.81, 18.5], [0.94, 18.5]];
 const xToCp = x => x < -82 ? 15 + (x + 112) / 30 : x < -58 ? 16 + (x + 82) / 24 : x < -18 ? 17 + (x + 58) / 40 : 18 + (x + 18) / 18;
 const zToCp = z => (z - 24) / 50;                 // Sand Hill: cp 0 is at z = 24, cp 1 at z = 74
-const FOUNTAIN = { x0: -52, x1: -12, posts: [] }, MEDIAN = { z0: 32, z1: 70, posts: [] };
+const FOUNTAIN = { x0: -52, x1: -12, posts: [] }, VC = { z0: 46, z1: 72, posts: [] };
 for (let x = FOUNTAIN.x0; x <= FOUNTAIN.x1 + 0.01; x += 2.5) FOUNTAIN.posts.push(xToCp(x));
-for (let z = MEDIAN.z0; z <= MEDIAN.z1 + 0.01; z += 2.5) MEDIAN.posts.push(zToCp(z));
+for (let z = VC.z0; z <= VC.z1 + 0.01; z += 2.5) VC.posts.push(zToCp(z));
 /** The race leader's lap (1 = the first lap): the LP lane opens when the leader starts lap 2. */
-const leaderLap = race => race.karts.reduce((m, k) => Math.max(m, k.lap), 0);
 /* The centerpiece: the PIVOT TO AI tower in the infield beyond the grandstands, facing the start straight. */
 const PIVOT = { x: 125, z: 72, yaw: -2.03, w: 36, h: 36, legs: 16 };
 
@@ -71,8 +74,8 @@ export default {
      deck crossing is the late-lap climax. The loop is the pilot v2 loop rotated so the
      line sits on Sand Hill: new cp N = old cp (N + 4) mod 23. */
   path: [
-    { p: [245, 6.6, 24], wl: 22 },// 0 start/finish on Sand Hill Road: the VC row, the median split (the LP lane on the left)
-    { p: [241, 5.2, 74], wl: 22 },// 1
+    { p: [245, 6.6, 24], wl: 27 },// 0 start/finish on Sand Hill Road: the VC fork — the office island splits the road (inside lane on the left)
+    { p: [241, 5.2, 74], wl: 27 },// 1
     { p: [236, 4.5, 116] },      // 2 the dip at the foot of the climb
     { p: [168, 13, 178] },       // 3 Partner Summit: the climb's crest
     { p: [84, 12.5, 150], w: 15 },// 4 esses at the top
@@ -88,15 +91,15 @@ export default {
     { p: [-138, 0, -24] },       // 14 back north, and left into the Quad
     { p: [-112, 0, 0], w: 14 },  // 15 the Quad arcade: 14 m between the arches
     { p: [-82, 0, 0], w: 14 },   // 16
-    { p: [-58, 0, 0], wl: 22 },  // 17 the Founder's Fountain splits the road (island on the left)
-    { p: [-18, 0, 0], wl: 22 },  // 18
+    { p: [-58, 0, 0] },          // 17 the Founder's Fountain: the island is off-road dressing now (the split moved to Sand Hill, #135)
+    { p: [-18, 0, 0] },          // 18
     { p: [0, 0, 0] },            // 19 the old line: the run east to the bridge
     { p: [95, 0, 0] },           // 20
     { p: [162, 4.5, -40], w: 19 },// 21 the bridge approach: swings south off the shore, climbing onto the deck
     { p: [246, 8, -26], w: 19 }, // 22 far shore: the Golden Gate deck ends in a big sweeper back to the line
   ],
   sides: [
-    { from: 15.8, to: 20.6, side: 'L', edge: 'wall' },   // pit wall along the grandstand side (the fountain's inside lane runs along it)
+    { from: 15.8, to: 20.6, side: 'L', edge: 'wall' },   // pit wall along the grandstand side
     { from: 14.95, to: 15.8, edge: 'wall', wallHeight: 1.1 }, // the Quad arcade: walls right under the arches
     { from: 5.6, to: 6.9, edge: 'wall' },               // crest and jump are fenced in
     { from: 8.45, to: 10.4, shoulder: 1.6, outer: 3.2 }, // Palm Drive: the palms stand close, behind a low wall
@@ -111,29 +114,35 @@ export default {
   boosts: [
     { at: 19.55, lat: 0, w: 5 },
     { at: 22.45, lat: 0, w: 5 },
-    { at: 0.35, lat: 17.4, w: 4.5 }, { at: 0.95, lat: 17.4, w: 4.5 }, // Sand Hill: the LP lane's reward, two pads (the second re-timed in #215 item 4)
+    { at: 0.78, lat: 21.5, w: 4.5 },                     // the fork's inside lane: a pad mid-gauntlet — the lane's reward (the LP lane's pads set the precedent; an entry pad wedged karts on the island tip)
     { at: 2.2, lat: -4, w: 4.5 },
     { at: 12.3, lat: 3, w: 4.5 },                        // the Oval: a pad on the outside line round the hairpin (lat 5 -> 3, #215 item 1)
-    { at: 17.55, lat: 17.4, w: 4.5 },                    // the fountain's inside lane: narrow, walled, and quick
+    { at: 17.55, lat: 5, w: 4.5 },                       // past the fountain plaza, on the run to the bridge
   ],
-  itemRows: [{ at: 20.5 }, { at: 3.6 }, { at: 7.6 }, { at: 9.35 }, { at: 17.25, n: 3 }],
+  itemRows: [{ at: 20.5 }, { at: 0.55 }, { at: 3.6 }, { at: 7.6 }, { at: 9.35 }, { at: 17.25, n: 3 }],
   coins: [
     { from: 19.2, to: 19.5, n: 4, lat: 4.5 }, { from: 21.15, to: 21.85, n: 5, lat: 0 },
     { from: 0.15, to: 0.85, n: 5, lat: [-3, 3] },        // Sand Hill's main lane
+    { from: 0.3, to: 0.85, n: 6, lat: 22.5 },            // the fork's inside lane: a coin line through the gauntlet
     { from: 4.2, to: 4.9, n: 5, lat: [-4, 4] }, { from: 6.34, to: 6.5, n: 3, lat: 0, air: 2.6 },
     { from: 8.6, to: 9.1, n: 4, lat: -4 },
     { from: 11.3, to: 12.7, n: 6, lat: -5 },             // the Oval: coins on the inside line
-    { from: 17.15, to: 18.05, n: 6, lat: 17.4 },         // the fountain's inside lane
+    { from: 17.15, to: 18.05, n: 6, lat: 5.5 },          // past the fountain plaza
   ],
-  // Two islands split the road, each a row of round static obstacles off the main lane (lat 11.4, so rivals on the
-  // racing line never touch them; the same collision in the browser and the simulator), drawn in decorate().
-  // Rivals stay on the main lane unless a shortcut sends them round the other side.
-  obstacles: [...FOUNTAIN.posts, ...MEDIAN.posts].map(at => ({ kind: 'static', model: 'hidden', at, lat: ISLAND_LAT, radius: ISLAND_R, effect: 'bump' })),
-  models: { hidden: () => S.nothing() },
+  // The two islands are rows of round static obstacles (the same collision in the browser and the simulator),
+  // drawn in decorate(): the fountain's bollard ring keeps karts out of the plaza, and the VC office island
+  // splits Sand Hill at the line. The gauntlet cones are real obstacles too — bump one and due diligence costs time.
+  obstacles: [
+    ...FOUNTAIN.posts.map(at => ({ kind: 'static', model: 'hidden', at, lat: ISLAND_LAT, radius: ISLAND_R, effect: 'bump' })),
+    ...VC.posts.map(at => ({ kind: 'static', model: 'hidden', at, lat: VC_LAT, radius: ISLAND_R, effect: 'bump' })),
+    ...GAUNTLET.map(([at, lat]) => ({ kind: 'static', model: 'cone', at, lat, radius: 0.9, effect: 'bump' })),
+  ],
+  models: { hidden: () => S.nothing(), cone: () => P.cone3d() },
   shortcuts: [
-    // the LP lane opens on lap 2 (#121): until then the gate across it is shut
-    { name: 'the LP lane', from: 22.55, to: 1.6, path: [[250, 4], [258, 20], [261.5, 42], [258, 72]], skill: 0.3, when: race => leaderLap(race) >= 2 },
-    { name: 'fountain', from: 15.8, to: 19.4, path: [[-76, -8], [-62, -16.5], [-12, -17.4]], skill: 0.3 },
+    // Peninsula Run (#135): the VC fork at the start/finish. Inside the office island is the shorter way round,
+    // but it runs the due-diligence cone gauntlet; outside is clean and carries the item row. The two sides are
+    // balanced to <=0.3 s by the lone-rival audit (the item 4 harness method) — see the PR body for the numbers.
+    { name: 'the VC fork', from: 22.55, to: 1.5, path: [[253.2, 21.8], [260.6, 32.5], [264.8, 49.7], [263.8, 66.4], [260.7, 79.9], [253.7, 91.3]], skill: 0.3 },
   ],
   terrain: {
     cell: 3, margin: 150, blend: 30, water: -1.4,
@@ -835,7 +844,7 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
   }
 }
 
-/* ---------- Sand Hill Road: the median, the LP lane's gate, the firms, the summit pod ---------- */
+/* ---------- Sand Hill Road: the VC office island and the fork, the firms, the summit pod ---------- */
 function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, board, legs, anim, view }) {
   const PV = new THREE.Vector3();
   const at = (cp, lat = 0) => { const s = track.sAtCp(cp); track.pointAt(s, lat, PV); const yaw = track.yawAt(s); return { x: PV.x, y: PV.y, z: PV.z, yaw, back: yaw + Math.PI, i: track.indexAtCp(cp) }; };
@@ -863,44 +872,26 @@ function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, boa
   };
   const firmBoard = k => atlas.add(1024, 340, firmDraw(k, true)), firmPlate = k => atlas.add(768, 256, firmDraw(k, false));
 
-  // ---- the median: lawn and hedges, two firms' monument signs, and the gate across the LP lane ----
+  // ---- the VC office island: the fork's centrepiece — a glass office slab on a landscaped plinth ----
   {
-    const zm = (MEDIAN.z0 + MEDIAN.z1) / 2, L = MEDIAN.z1 - MEDIAN.z0 + ISLAND_R * 2, c = at(zToCp(zm), ISLAND_LAT);
+    const zm = (VC.z0 + VC.z1) / 2, L = VC.z1 - VC.z0 + ISLAND_R * 2, c = at(zToCp(zm), VC_LAT);
     const md = S.medianIsland(L, ISLAND_R * 2); sc.place(md, c.x, c.z, { yaw: c.yaw, y: c.y - 0.08 });
-    // pitch the island to the road's fall (#242): the road drops ~1.1 m along the median, and the
+    // pitch the island to the road's fall (#242): the road drops ~1.1 m along Sand Hill, and the
     // rigid island hovered half a metre over the tarmac at its downhill end
-    const yA = at(zToCp(MEDIAN.z0), ISLAND_LAT).y, yB = at(zToCp(MEDIAN.z1), ISLAND_LAT).y;
+    const yA = at(zToCp(VC.z0), VC_LAT).y, yB = at(zToCp(VC.z1), VC_LAT).y;
     md.rotateX(Math.atan2(yA - yB, L)); bake.add(md);
     const surfBase = dz => (c.y - 0.08) + (yB - yA) * dz / L;   // the pitched island's base plane, at dz along it
-    const trees = [-12, 0, 12].map(dz => ({ x: c.x + Math.sin(c.yaw) * dz, z: c.z + Math.cos(c.yaw) * dz, y: surfBase(dz) + 0.48, yaw: rng() * 6.28 }));
+    // the office slab: glass, pitched with the island, seated on the plinth's lawn (its top is surfBase + 0.56)
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(4.2, 8, 19), new THREE.MeshStandardMaterial({ color: 0x8fb8d8, metalness: 0.4, roughness: 0.22 }));
+    slab.position.set(c.x, surfBase(0) + 0.56 + 4, c.z); slab.rotation.y = c.yaw; slab.rotateX(Math.atan2(yA - yB, L)); group.add(slab);
+    const signY = surfBase(0) + 0.56 + 6.9, signT = board('SAND HILL CAPITAL', { bg: '#12395c', fg: '#ffffff', kicker: 'TERM SHEET TOWERS', kfg: '#ffd23c', size: 110 }, 1024, 300);
+    for (const s of [-1, 1]) { const q = local({ ...c, yaw: c.yaw }, s * 2.16, 0, signY); atlas.place(signT, q, c.yaw + s * Math.PI / 2, 11.5, 3.4); }
+    const trees = [-13, 13].map(dz => ({ x: c.x + Math.sin(c.yaw) * dz, z: c.z + Math.cos(c.yaw) * dz, y: surfBase(dz) + 0.48, yaw: rng() * 6.28 }));
     sc.instances(partsOf(P.roundTree(21, { h: 6.5, leafA: 0x3f9e3a, leafB: 0x5dbb45 })), trees, { scale: [0.9, 1.1] });
-    for (const [k, z] of [[0, MEDIAN.z0 + 4], [1, MEDIAN.z0 + 22]]) {
-      const n = at(zToCp(z), ISLAND_LAT), mon = S.monument(4.2), my = n.y + 0.45; sc.place(mon, n.x, n.z, { yaw: n.back, y: my }); bake.add(mon, false);
+    for (const [k, z] of [[0, VC.z0 + 2], [1, VC.z1 - 2]]) {
+      const n = at(zToCp(z), VC_LAT), mon = S.monument(4.2), my = n.y + 0.45; sc.place(mon, n.x, n.z, { yaw: n.back, y: my }); bake.add(mon, false);
       const pn = mon.userData.panel; atlas.place(firmPlate(k), [n.x + Math.sin(n.back) * pn.z, my + pn.y, n.z + Math.cos(n.back) * pn.z], n.back, pn.w, pn.h);
     }
-    // the gate: shut on lap 1 (LIMITED PARTNERS ONLY), open from lap 2 (#121) — karts bounce off it until then
-    const gz = MEDIAN.z0 - 3.5, gl = (ISLAND_LAT + ISLAND_R + 0.3 + track.hwL[at(zToCp(gz)).i]) / 2, gc = at(zToCp(gz), gl);
-    const lane = track.hwL[gc.i] - (ISLAND_LAT + ISLAND_R) - 0.6, gate = S.lpGate(lane / 2);
-    gate.position.set(gc.x, gc.y, gc.z); gate.rotation.y = gc.yaw + Math.PI / 2; group.add(gate);
-    const posts = [];
-    for (let l = -lane / 2 + 0.6; l <= lane / 2 - 0.6; l += 1.3) { const q = at(zToCp(gz), gl + l); track.addCollider(q.x, q.z, 0.75); track.eachCollider(q.x, q.z, o => { if (Math.abs(o.x - q.x) < 1e-6 && Math.abs(o.z - q.z) < 1e-6) posts.push(o); }); }
-    const beamH = 6.2, bc = [gc.x, gc.y + beamH, gc.z];
-    for (const s of [-1, 1]) { const q = at(zToCp(gz), gl + s * (lane / 2 + 0.9)), pst = S.post(beamH + 1.6, 0.28, 0x2b2f36); sc.place(pst, q.x, q.z, { y: q.y }); bake.add(pst, false); }   // no shadow casters: draw-call headroom (#215 item 7)
-    const c2 = document.createElement('canvas'); c2.width = 768; c2.height = 220;
-    const tex = new THREE.CanvasTexture(c2); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    let open = false;
-    const draw = () => { (open ? S.signDraw('PITCH DAY: COME ON IN', { bg: '#16a34a', fg: '#ffffff', kicker: 'THE LP LANE IS OPEN', kfg: '#ffd23c', size: 118 }) : S.signDraw('LIMITED PARTNERS ONLY', { bg: '#1a1d29', fg: '#ffc928', kicker: 'PRIVATE DRIVE · OPENS LAP 2', kfg: '#ffffff', size: 118 }))(c2.getContext('2d'), 768, 220); tex.needsUpdate = true; };
-    draw(); if (document.fonts?.ready) document.fonts.ready.then(draw);
-    const smat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6, side: THREE.DoubleSide });
-    const sw = lane + 1.6, sm = new THREE.Mesh(new THREE.PlaneGeometry(sw, sw * 220 / 768), smat);
-    sm.position.set(...bc); sm.rotation.y = gc.back; group.add(sm);
-    let swing = 0;
-    anim.push(dt => {
-      const want = leaderLap(view.race) >= 2;
-      if (want !== open) { open = want; draw(); if (open) for (const o of posts) { o.x += 1e5; } }
-      swing += ((open ? 1 : 0) - swing) * Math.min(1, dt * 1.8);
-      const [a, b] = gate.userData.leaves; a.rotation.y = -swing * 1.5; b.rotation.y = swing * 1.5;
-    });
     taken.push([c.x, c.z, 28]);
   }
 

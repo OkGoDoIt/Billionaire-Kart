@@ -138,6 +138,13 @@ export class Menus {
     const all = [...this.screen.el.querySelectorAll('[data-f]')].filter(e => e.offsetParent !== null && !e.disabled);
     if (!all.length) return;
     if (!this.focusEl || !all.includes(this.focusEl)) return this.focus(all[0]);
+    // From a volume minus or plus, horizontal movement reaches its partner
+    // before a nearby button in a different settings row.
+    const volume = this.focusEl.closest('.volume');
+    if (volume && (dir === 'left' || dir === 'right')) {
+      const pair = volume.querySelectorAll('button'), next = pair[dir === 'left' ? 0 : 1];
+      if (this.focusEl !== next) return this.focus(next);
+    }
     // value controls respond to left/right themselves
     if ((dir === 'left' || dir === 'right') && this.focusEl.hasAttribute('data-adjust') && getComputedStyle(this.focusEl.parentElement).display !== 'grid') { this.focusEl.dispatchEvent(new CustomEvent('adjust', { detail: dir === 'right' ? 1 : -1 })); return; }
     const r = this.focusEl.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;

@@ -633,7 +633,9 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
     face.translate(...toWorld(highFrame, [side * 11.5, 9.4, 0.7]));
     bake.geo(seal, face);
   }
-  marquee(9.76, 'BOUGHT THE DIP', '#98ffbd', 7.6, 21);
+  // The 200cc chart dive lands past CP10. Keep the finish marquee beyond the
+  // touchdown so both the kart and the trailing camera pass beneath it on the road.
+  marquee(10.46, 'BOUGHT THE DIP', '#98ffbd', 9.8, 21);
   // The plunge indicator sits beside the gap, facing the approaching driver. Its
   // silhouette, the free water below, and the green landing hoop read in a single view.
   {

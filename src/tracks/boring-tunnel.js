@@ -290,24 +290,51 @@ export default {
     anim.push((dt) => { clock.userData.hand.rotation.z += dt * 1.1; });
     // One continuous strip per side, including where the spline control points spread out.
     for (const side of [1, -1]) {
-      const platforms = [], cars = [];
+      const platforms = [];
       const begin = track.sAtCp(6.43), end = track.sAtCp(7.59), count = Math.ceil((end - begin) / 7), step = (end - begin) / count;
       for (let n = 0; n < count; n++) {
         const distance = begin + (n + 0.5) * step, i = Math.round(distance / track.ds);
         const p = atPos(track.cp[i], side * ((side > 0 ? track.hwL[i] : track.hwR[i]) + 1.7));
         platforms.push({ x: p.x, z: p.z, y: p.y - 0.38, yaw: p.yaw + side * Math.PI / 2 });
-        if (side > 0 && n < 9 || side < 0 && n > 10 && n < 18) cars.push({ x: p.x, z: p.z, y: p.y + 0.53, yaw: p.yaw + (side > 0 ? Math.PI : 0) });
       }
       sc.instances(partsOf(T.stationPlatform(step + 0.3)), platforms, { cast: false });
-      sc.instances(partsOf(T.robotaxi()), cars);
     }
     const stationBoard = (at, title, detail) => {
       const p = atPos(at);
       sc.place(T.departuresBoard(signTex(title, { w: 1200, h: 215, bg: '#143f52', fg: '#91ffe5' }),
         signTex(detail, { w: 1200, h: 240, bg: '#111c2c', fg: '#ffcc5b' })), p.x, p.z, { yaw: p.yaw + Math.PI, y: p.y + 3.9 });
     };
-    stationBoard(6.94, 'LOOP STATION', 'AUTOPILOT-ISH');
-    stationBoard(7.48, 'NEXT TRAIN', 'TAKE A CAR');
+    const stationProp = (obj, at, lat, scale = 1, turn = 0, lift = .53) => {
+      const p = atPos(at, lat);
+      return sc.place(obj, p.x, p.z, { y: p.y + lift, yaw: p.yaw + turn, scale, cast: false });
+    };
+    // The lime body, orange spiral, dark chassis and eye whites read from
+    // across the carriageway. Run the exhibit when a human actually approaches.
+    stationProp(T.timingLane(), 6.77, -9.55, 1, Math.PI / 2);
+    const snail = stationProp(T.paceSnail(), 6.77, -8.65, 1.04, 2.45, .8);
+    snail.scale.x *= -1; // Keep the shell toward the road and the head moving down the timing lane.
+    stationProp(T.stalledPrototype(), 6.75, -11.45, 1.10, Math.PI / 2 - .32, .8);
+    stationProp(T.trialOfficial(), 6.79, 8.55, 1.15, Math.PI + .22);
+    const tape = atPos(6.77, -8.65), start = track.sAtCp(6.33), finish = track.sAtCp(6.76);
+    const statusSigns = ['SNAIL LEADS', 'PHOTO FINISH', 'SNAIL WINS'].map(line =>
+      signTex(line, { w: 1050, h: 220, bg: '#163d41', fg: '#c4ff97' }));
+    const raceBoard = T.departuresBoard(signTex('SPEED TRIAL', { w: 1050, h: 220, bg: '#20313b', fg: '#ffce51' }), statusSigns[0]);
+    stationProp(raceBoard, 6.89, 0, .88, Math.PI, 4.25);
+    const resultFace = raceBoard.children.at(-1).material;
+    anim.push((dt, time) => {
+      const racer = view.race.players[0] || view.race.order[0];
+      if (!racer) return;
+      const t = Math.max(0, Math.min(1, (racer.s - start) / (finish - start)));
+      const along = -3.8 + 8.2 * t;
+      snail.position.x = tape.x + along * Math.sin(tape.yaw);
+      snail.position.z = tape.z + along * Math.cos(tape.yaw);
+      snail.userData.stalks.rotation.z = .032 * Math.sin(time * 2.2);
+      resultFace.map = statusSigns[Math.max(0, Math.min(2, racer.lap - 1))];
+    });
+    stationBoard(7.27, 'MASS TRANSIT', 'NEXT FOUR, PLEASE');
+    stationProp(T.boardingQueue(), 7.13, 9.55, 1.22, Math.PI / 2 + .19, .28);
+    stationProp(T.fourSeatShuttle(), 7.30, 9.05, 1.42, Math.PI / 2);
+    stationProp(T.boardingArrow(), 7.25, 8.15, 1.18, Math.PI - .18, 4.9);
 
     /* ---- in the bore ---- */
     // the bore's own tube (#234 item 3): dark concrete + the rainbow light
@@ -321,6 +348,15 @@ export default {
     // while the express lane passes on the opposite side of the chamber.
     const chamber = T.tbmChamber(), faceX = 198.5, faceZ = 5, faceY = 0.1, yaw = 2.66;
     sc.place(chamber, faceX, faceZ, { yaw, y: faceY });
+    const bricks = atPos(4.30, -12.7);
+    sc.place(T.brickShowroom(), bricks.x, bricks.z, { y: bricks.y - .18, yaw: bricks.yaw + Math.PI - .28, scale: 1.58, cast: false });
+    const showroomSign = T.departuresBoard(signTex('AFFORDABLE HOUSING', { w: 1180, h: 220, bg: '#633825', fg: '#ffdda2' }),
+      signTex('SOME ASSEMBLY REQUIRED', { w: 1180, h: 220, bg: '#2d2829', fg: '#ffe9ca' }));
+    const sale = atPos(4.20, -4.1);
+    sc.place(showroomSign, sale.x, sale.z, { y: sale.y + 6.05, yaw: sale.yaw + Math.PI - .10, scale: .89, cast: false });
+    const spare = atPos(4.19, -9.75);
+    sc.place(T.wallSign(signTex('VACUUM SOLD SEPARATELY', { w: 960, h: 160, bg: '#4b332b', fg: '#f7e5c4' }), { w: 6.1, h: .88 }),
+      spare.x, spare.z, { y: spare.y + 2.06, yaw: spare.yaw + Math.PI - .3, cast: false });
     const faceP = { x: faceX, y: faceY, z: faceZ };
     const dustP = { x: faceX + 3.9, y: faceY - 4.4, z: faceZ + 0.8 };
     anim.push((dt) => {

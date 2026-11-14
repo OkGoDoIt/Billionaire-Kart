@@ -43,6 +43,11 @@ export default {
   name: 'International Waters',
   tagline: 'No jurisdiction. No speed limit.',
   laps: 3,
+  driftEntries: [
+    { from: 7.3, to: 9.4, side: -1, inside: 3.5 },
+    { from: 13, to: 15.5, side: -1, inside: 3.5 },
+    { from: 40.6, to: 42.6, side: 1, inside: 4 },
+  ],
   width: 18,
   sky: 'day',
   skyOverrides: { zenith: 0x0d5bd6, horizon: 0x9fdcff, sunDir: [0.42, 0.6, 0.52], fogNear: 320, fogFar: 1500, sunIntensity: 3.5, cloudCover: 0.36 },
@@ -52,7 +57,7 @@ export default {
   // a figure eight: the low road (cp ~9.5, +1.6 m) runs down the channel under
   // the jump from SOVEREIGN IMMUNITY to FAIR & BALANCED (cp ~27, +12 m)
   path: [
-    { p: [40, 0.6, -110] },            // 0 start/finish: the marina quay, heading west under the bows
+    { p: [40, 0.6, -110] },            // 0 start/finish: the marina quay, heading west past the bows
     { p: [-50, 0.6, -111] },           // 1
     { p: [-100, 0.4, -106] },          // 2 the Sandbar Hairpin: turn-in, onto the spit
     { p: [-140, 0.3, -97] },           // 3
@@ -130,7 +135,7 @@ export default {
     { at: 18.25, len: 10, lift: 2.4 },            // the quay ramp, onto SOVEREIGN IMMUNITY
     { at: 25.5, len: 10, lift: 2.6 },             // off her bow helipad, over the channel
     { at: 31.47, len: 10, lift: 2.4 },            // off FAIR & BALANCED
-    { at: 37.46, len: 10, lift: 2.4 },            // off HOSTILE TAKEOVER, home to the causeway
+    { at: 37.46, len: 10, lift: 1.65 },            // off HOSTILE TAKEOVER, home to the causeway
   ],
   gaps: [{ from: 18.96, to: 21.46 }, { from: 25.98, to: 27.95 }, { from: 31.99, to: 34.17 }, { from: 38.01, to: 39.53 }],
   boosts: [
@@ -174,7 +179,12 @@ export default {
     surface: (depth, race) => depth > 0 ? WADE : race.lakeLap >= race.laps ? WET_SAND : DRY_SAND,
   },
   shortcuts: [
-    { name: 'sandbar', from: 2.25, to: 6.35, path: [[-108, -94], [-122, -86], [-128, -76], [-122, -66], [-108, -58]], when: race => race.lakeLap >= race.laps },
+    {
+      name: 'sandbar', from: 2.25, to: 6.85,
+      // Straighten onto the eastbound causeway before aiming for the channel.
+      path: [[-108, -94], [-122, -86], [-128, -76], [-122, -66], [-108, -58], [-92, -49]],
+      when: race => race.lakeLap >= race.laps,
+    },
   ],
   lapNotes: [
     `<b>Customs has been notified.</b> They sent a postcard.`,
@@ -400,27 +410,27 @@ function decorate(ctx) {
     }
   });
 
-  /* ----- the marina: three superyachts moored bow-on, raked bows over the quay ----- */
+  /* ----- the marina: three superyachts moored bow-on, bows alongside the quay ----- */
   const marina = new ModelBuilder();
   const bows = [
     { x: 74, name: 'TAX EXEMPT', boot: 'bootTeal', L: 88, tiers: 3 },
     { x: -4, name: 'EXTRADITION DENIED', boot: 'bootGold', L: 96, tiers: 3 },
     { x: -62, name: 'OFFSHORE ACCOUNT', boot: 'bootRed', L: 84, tiers: 2 },
   ];
-  const bowNames = [];
+  const nameGroup = new THREE.Group(), names = W.makeAtlas(nameGroup, 1024, { cutout: true, emissive: 0.08 });
   for (const m of bows) {
-    const zc = -112 - 9 - m.L * 0.41;
+    // Align the actual bow tips beyond the outside of the 18 m quay.
+    const zc = -124 - m.L / 2;
     const o = W.marinaYacht(marina, { L: m.L, B: 9.5, D: 7.6, x: m.x, z: zc, yaw: 0, boot: m.boot, tiers: m.tiers });
-    const st = o.station(m.L * 0.3);
-    for (const s of [1, -1]) bowNames.push({ text: m.name, x: m.x + s * (st.w * 1.04 + 0.12), y: WL + st.top - 2.3, z: zc + m.L * 0.3, yaw: s * Math.PI / 2, len: m.L * 0.26 });
+    const tile = names.add(944, 96, W.nameFace(m.name));
+    W.marinaLettering(names, tile, o, m.x, zc);
   }
   {
     const grp = marina.build(W.YACHT_MATS()); grp.position.y = WL; group.add(grp);
-    // Only the projecting hulls shade the quay. The aft furniture and upper
-    // decks lie over open water and cannot put a shadow on the road.
+    // Only the large hulls need to cast shadows beside the quay.
     grp.traverse(o => { if (o.isMesh) o.castShadow = sc.shadows && o.name === 'hull'; });
     floaters.push({ g: grp, base: WL, ph: 0.6, amp: 0, tideOnly: true });
-    for (const n of bowNames) { const r = atlas.add(1024, 128, W.nameFace(n.text)); atlas.place(r, [n.x, n.y, n.z], n.yaw, n.len, n.len / 8); }
+    names.flush(); grp.add(nameGroup);
   }
 
   /* ----- the sand spit at the hairpin: palms, a beach bar, the tide board ----- */
@@ -457,6 +467,9 @@ function decorate(ctx) {
 
   /* ----- customs on the run home ----- */
   {
+    const desk = W.registryDesk(), spot = sc.beside(42.78, -1, 8.5);
+    sc.place(desk.root, spot.x, spot.z, { y: spot.roadY - 0.2, yaw: faceApproach(spot, 42.3) });
+    anim.push((dt, time) => desk.update(time, view.race.lakeLap));
     const ci = track.indexAtCp(43.05), cg = sc.beside(43.05, 1, -track.hwL[ci]);
     const customs = P.gantry(track.hwL[ci] + track.hwR[ci] + 1.5, 'NOTHING TO DECLARE (EVER)', { color: 0x1d5c46, color2: 0xf3ead2 });
     for (const light of customs.userData.lights) light.removeFromParent();

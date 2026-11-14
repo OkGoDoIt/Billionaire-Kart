@@ -248,7 +248,7 @@ export class Gfx {
 
   setViews(views) { this.views = views; this.grade.uniforms.uSingle.value = views.length === 1 ? 1 : 0; }
 
-  render(dt) {
+  render(dt, frameTime = dt) {
     this.time += dt;
     if (this.sky) this.sky.update(this.time);
     const u = this.grade.uniforms, p = this.post;
@@ -257,7 +257,7 @@ export class Gfx {
     u.uVignette.value = p.vignette; u.uSat.value = p.sat; u.uContrast.value = p.contrast;
     this.renderer.info.reset();
     this.composer.render(dt);
-    this._autoScale(dt);
+    this._autoScale(frameTime);
   }
 
   /** Dynamic resolution: trade pixels for frame rate when the GPU is struggling. */

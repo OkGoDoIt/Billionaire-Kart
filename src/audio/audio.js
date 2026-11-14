@@ -161,14 +161,14 @@ export class AudioEngine {
     for (const o of [o1, o2, sub, trem]) o.start();
     return L;
   }
-  _killLoops() { for (const L of this.loops) { for (const o of [L.o1, L.o2, L.sub, L.trem]) { try { o.stop(); } catch { /* already stopped */ } } for (const n of [L.drift, L.rumble, L.wind, L.jet]) { try { n.s.stop(); } catch { /* already stopped */ } n.g.disconnect(); } L.out.disconnect(); L.panNode?.disconnect(); } this.loops = []; }
+  _killLoops(keep = 0) { for (const L of this.loops.splice(keep)) { for (const o of [L.o1, L.o2, L.sub, L.trem]) { try { o.stop(); } catch { /* already stopped */ } } for (const n of [L.drift, L.rumble, L.wind, L.jet]) { try { n.s.stop(); } catch { /* already stopped */ } n.g.disconnect(); } L.out.disconnect(); L.panNode?.disconnect(); } }
 
   /** Per rendered frame during a race. */
   frame(dt, race, view) {
     if (!this.ctx) return;
     const players = race.players, quiet = race.state === 'done' || this.pausedLoops;
     while (this.loops.length < players.length) this.loops.push(this._makeLoop());
-    while (this.loops.length > players.length) { const L = this.loops.pop(); this.loops.push(L); this._killLoops(); }
+    if (this.loops.length > players.length) this._killLoops(players.length);
     const t = this.t, n = Math.max(1, players.length), k1 = 1 / Math.sqrt(n);
     players.forEach((k, i) => {
       const L = this.loops[i], pan = n === 1 ? 0 : (i % 2 ? 0.35 : -0.35);

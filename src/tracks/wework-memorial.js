@@ -38,6 +38,15 @@ function buildPath() {
     for (let k = 1; k < steps; k++) { const f = k / steps, a = a0 + total * f; const pt = { p: [cx + Math.cos(a) * r, ay + (y1 - ay) * f, cz + Math.sin(a) * r], w }; if (wl != null) pt.wl = wl; if (wr != null) pt.wr = wr; pts.push(pt); }
     push(label, exit[0], y1, exit[1], w, wl, wr);
   }
+  function landing(label, endX, z, direction, radius, y, w, wl) {
+    const [x,,startZ] = last(), side = Math.sign(z-startZ), outer = endX + direction*radius;
+    const m = Math.SQRT1_2;
+    line(null,endX,startZ,y,w,8,wl);
+    arc(null,endX,startZ+side*radius,[endX+direction*radius*m,startZ+side*radius*(1-m)],[outer,startZ+side*radius],y,w,wl);
+    line(null,outer,z-side*radius,y,w,6,wl);
+    arc(null,endX,z-side*radius,[endX+direction*radius*m,z-side*radius*(1-m)],[endX,z],y,w,wl);
+    line(label,x,z,y,w,6,wl);
+  }
   push('L1 entry', -71, 0, 58, 19);
   line('L1 mid W', -41, 58, 0, 19, 30);
   line('START', -12, 58, 0, 19, 30);
@@ -48,10 +57,11 @@ function buildPath() {
   arc('C2 exit', 48, -8, [62.14, -22.14], [48, -28], 0.99, 22, 13.5);  // r20, far feature ramp @ 8.0% + inside (L) apron wl 13.5 (#237 step 3)
   line('touchdown', 35.7, -28, 0, 22, 7);
   line('L3 mid', 0, -28, 0, 22, 18);
-  line('C3 entry', -40, -28, 0, 23, 20, 13);
-  arc('C3 exit', -40, -6, [-55.56, -21.56], [-62, -6], 0, 21, 13);   // r22
-  line('C4 entry', -62, 0, 0, 15, 6);
+  line('C3 entry', -46, -28, 0, 23, 20, 15);
+  arc('C3 exit', -46, -12, [-57.31, -23.31], [-62, -12], 0, 21, 15);   // r16
+  line('C4 entry', -62, 0, 0, 15, 6, 10);
   arc('L5 entry', -44, 0, [-56.73, 12.73], [-44, 18], 0, 15);    // C4 r18
+  pts[AT['C4 entry'] + 1].wl = 10; // carry the apron past the office elbow
   line('L5 mid', -4, 18, 0, 15, 20);
   // Through the kitchen under the lounge, then around the *outside* of the
   // mezzanine descent. These two lanes used to meet at the foot of the ramp.
@@ -60,11 +70,12 @@ function buildPath() {
   line('C6 entry', 97, -10, 0, 18, 8);
   arc('L7 entry', 114, -10, [101.98, -22.02], [114, -27], 0, 18, null, 10);
   line('L-A entry', 146, -27, 3, 18, 12);
-  arc('L8 entry', 146, -43, [162, -43], [146, -59], 3, 18, 11);
-  line('C7 entry', 110, -59, 6, 18, 12);
-  arc('L9 entry', 110, -43, [98.69, -54.31], [94, -43], 6, 18, 11);
-  line('C8 entry', 94, -30, 6, 18, 13);
-  arc('L10 entry', 78, -30, [89.31, -18.69], [78, -14], 6, 20, null, 11);
+  landing('L8 entry', 150, -59, 1, 12.5, 3, 18, 10.8);
+  line('C7 entry', 110, -59, 7.1, 18, 12);
+  arc('L9 entry', 110, -43, [98.69, -54.31], [94, -43], 8.25, 18, 11);
+  line('C8 entry', 94, -30, 9, 18, 13);
+  arc('L10 entry', 78, -30, [89.31, -18.69], [78, -14], 9, 20, null, 11);
+  line('gallery threshold', 51, -14, 8.8, 17, 10);
   line('L10 mid', -21, -14, 6, 16.5, 29);                           // executive row (w 16→16.5, #237 step 3)
   line('C9 entry', -80, -14, 6, 17, 29);
   arc('L11 entry', -80, 4, [-92.73, -8.73], [-98, 4], 6, 17);    // C9 r18
@@ -76,7 +87,7 @@ function buildPath() {
   arc('L13 entry', 80.64, 38, [72.99, 56.48], [80.64, 58], 6, 19, 11);  // second half of the balcony S, radius 20
   line('L14 entry', 92, 58, 6, 14, 20);                             // Stair B throat (w 13→14, #237 step 3)
   line('L-B entry', 122, 58, 3, 18, 10, 11);  // fire stair upper flight, 10%
-  arc('L15 entry', 122, 45, [135, 45], [122, 32], 3, 18, 11);        // final fire-stair landing
+  landing('L15 entry', 126, 32, 1, 11.8, 3, 17, 11.4);        // final fire-stair landing
   line('L16 entry', 92, 32, 0, 16.5, 10, 10.5);  // fire stair lower flight, 10%
   line('L17 entry', 72, 32, 0, 13, 20);                             // atrium return (w 12→13, #237 step 3)
   line('L17 mid', 0, 32, 0, 13, 36);
@@ -87,6 +98,8 @@ function buildPath() {
   function apron(first, last, side, halfWidth) {
     for (let i = AT[first]; i <= AT[last]; i++) pts[i][side] = halfWidth;
   }
+  // Open the inside before braking for the square fire-door landing.
+  pts[AT['L-B entry'] - 1].wl = pts[AT['L-B entry']].wl = 11.4;
   apron('C1 exit', 'C2 entry', 'wl', 13);
   apron('L7 entry', 'L-A entry', 'wl', 15);
   apron('L8 entry', 'C7 entry', 'wl', 18);
@@ -110,6 +123,9 @@ export default {
   name: 'WeWork Memorial',
   tagline: 'A facilities tour of a dead coworking empire.',
   laps: 3,
+  driftEntries: [
+    { from: 57.6, to: 61.2, side: 1, inside: 4 },
+  ],
   width: 19,
   autoBank: 0,                         // flat office floors meet the room slabs at every edge
   sky: 'studio',                       // indoor backstop only — the building is the enclosure
@@ -120,6 +136,7 @@ export default {
   // the opening: three shots composed INSIDE the building (#193) — the generic
   // Shoot inside the rooms with the chase sightline clear of both floors.
   introOnly: true,
+  thumbView: { at: AT['touchdown'], lat: -6.8, h: 4.3, back: 1, look: 37 },
   intro: [
     // a) the lobby, low, along the start straight toward the gantry and the $47B → $0 board
     { pos: [-60, 2.5, 50], pos1: [-40, 3, 52], look: [30, 4, 60], look1: [30, 4, 60], fov: 58, dur: 3.0 },
@@ -172,11 +189,11 @@ export default {
     // On the final lap the movers leave their dolly on the express stripe.
     { kind: 'timed', model: 'dolly', at: AT['L3 mid'] + 0.87, lat: -5, period: 1, duty: 1, effect: 'bump', radius: 1.15, fromLap: -1 },
     // the phone-booth slalom, all on the flat mezzanine deck (z = 23, 15, 7, -1)
-    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.295), lat: 6.45, effect: 'bump', radius: 0.95 },
-    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.477), lat: -6.45, effect: 'bump', radius: 0.95 },
-    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.659), lat: 6.45, effect: 'bump', radius: 0.95 },
-    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.841), lat: -6.45, effect: 'bump', radius: 0.95 },
-    { kind: 'static', model: 'neonO', at: AT['C3 exit'] - 0.35, lat: -6, effect: 'bump', radius: 1.9 },   // the fallen O
+    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.295), lat: 8.7, effect: 'bump', radius: 0.85 },
+    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.477), lat: -7.45, effect: 'bump', radius: 0.85 },
+    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.659), lat: 8.7, effect: 'bump', radius: 0.85 },
+    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.841), lat: -7.45, effect: 'bump', radius: 0.85 },
+    { kind: 'static', model: 'neonO', at: AT['L3 mid'] + 1.35, lat: -8.25, effect: 'bump', radius: 1.52 },   // the fallen O
     { kind: 'static', model: 'papers', at: AT['C6 entry'] - 0.9, lat: -6.2, effect: 'squash', radius: 1.6 },  // IPO paperwork (at -0.5→-0.9, lat -3.5→-6.2, #237 step 4: was on the racing line into C6, 9-10 hits/race at cp 39.5)
     { kind: 'static', model: 'papers', at: between('L15 entry', 'L16 entry', 0.5), lat: 4, effect: 'squash', radius: 1.6 },  // repossession paperwork
     { kind: 'patrol', model: 'bot', at: between('HP entry', 'L1 entry', 1.8), lats: [-8.4, -6.0], speed: 1.6, effect: 'spin', radius: 1.2 },  // the cleaning bot
@@ -332,10 +349,45 @@ function decorate(ctx) {
   const ceilMat = new THREE.MeshBasicMaterial({ map: ceilTex, vertexColors: true , side: THREE.DoubleSide});
   const ceilDarkMat = new THREE.MeshBasicMaterial({ map: ceilDarkTex, vertexColors: true , side: THREE.DoubleSide});
 
+  // Use the same slab and road dimensions for the camera as for the visible building.
+  const roofs = [];
+  const addRoof = (x0, z0, x1, z1, y, grade = 0) => roofs.push({x0, z0, x1, z1, y, grade});
+  const roadRoofs = [];
+  for (let i = 0; i < track.N; i += 3) {
+    const j = (i + 3) % track.N;
+    if (Math.max(track.py[i], track.py[j]) < 1.8) continue;
+    const margin = Math.max(track.hwL[i], track.hwR[i], track.hwL[j], track.hwR[j]) + .55;
+    roadRoofs.push({
+      i, j,
+      x0: Math.min(track.px[i], track.px[j]) - margin, x1: Math.max(track.px[i], track.px[j]) + margin,
+      z0: Math.min(track.pz[i], track.pz[j]) - margin, z1: Math.max(track.pz[i], track.pz[j]) + margin,
+    });
+  }
+  track.cameraCeiling = (x, z, floor) => {
+    let ceiling = Infinity;
+    for (const r of roofs) {
+      if (x < r.x0 || x > r.x1 || z < r.z0 || z > r.z1) continue;
+      const underside = r.y + (x - r.x0) * r.grade;
+      if (underside > floor + 1.45) ceiling = Math.min(ceiling, underside);
+    }
+    for (const r of roadRoofs) {
+      if (x < r.x0 || x > r.x1 || z < r.z0 || z > r.z1) continue;
+      const {i, j} = r, dx = track.px[j] - track.px[i], dz = track.pz[j] - track.pz[i];
+      const t = Math.max(0, Math.min(1, ((x - track.px[i]) * dx + (z - track.pz[i]) * dz) / (dx * dx + dz * dz)));
+      const rx = x - track.px[i] - t * dx, rz = z - track.pz[i] - t * dz;
+      const lateral = rx * track.lx[i] + rz * track.lz[i];
+      const along = rx * track.tx[i] + rz * track.tz[i];
+      const underside = track.py[i] + (track.py[j] - track.py[i]) * t - .30;
+      if (Math.abs(along) < .55 && lateral < track.hwL[i] + .5 && lateral > -track.hwR[i] - .5 && underside > floor + 1.45) {
+        ceiling = Math.min(ceiling, underside);
+      }
+    }
+    return ceiling;
+  };
   const WQ = new Quads(THREE), FQ = new Quads(THREE), CQ = new Quads(THREE), CDQ = new Quads(THREE), SQ = new Quads(THREE), KQ = new Quads(THREE);
   const wall = (x0, y0, z0, x1, y1, z1) => WQ.box(x0, y0, z0, x1, y1, z1);
-  const slab = (x0, z0, x1, z1, yTop, mat) => { const q = mat === 'carpet' ? KQ : SQ; q.quad([x0, yTop, z0], [x1, yTop, z0], [x1, yTop, z1], [x0, yTop, z1], (x1 - x0) / 4, (z1 - z0) / 4); q.quad([x0, yTop - .26, z1], [x1, yTop - .26, z1], [x1, yTop, z1], [x0, yTop, z1], (x1 - x0) / 3, .1, 0x8f887a); q.quad([x1, yTop - .26, z0], [x0, yTop - .26, z0], [x0, yTop, z0], [x1, yTop, z0], (x1 - x0) / 3, .1, 0x8f887a); q.quad([x1, yTop - .26, z1], [x1, yTop - .26, z0], [x1, yTop, z0], [x1, yTop, z1], (z1 - z0) / 3, .1, 0x8f887a); q.quad([x0, yTop - .26, z0], [x0, yTop - .26, z1], [x0, yTop, z1], [x0, yTop, z0], (z1 - z0) / 3, .1, 0x8f887a); };
-  const ceil = (x0, z0, x1, z1, y, dark = false) => { const q = dark ? CDQ : CQ; q.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], (x1 - x0) / 6, (z1 - z0) / 6); };
+  const slab = (x0, z0, x1, z1, yTop, mat) => { addRoof(x0,z0,x1,z1,yTop-.26); const q = mat === 'carpet' ? KQ : SQ; q.quad([x0, yTop, z0], [x1, yTop, z0], [x1, yTop, z1], [x0, yTop, z1], (x1 - x0) / 4, (z1 - z0) / 4); q.quad([x0, yTop - .26, z1], [x1, yTop - .26, z1], [x1, yTop, z1], [x0, yTop, z1], (x1 - x0) / 3, .1, 0x8f887a); q.quad([x1, yTop - .26, z0], [x0, yTop - .26, z0], [x0, yTop, z0], [x1, yTop, z0], (x1 - x0) / 3, .1, 0x8f887a); q.quad([x1, yTop - .26, z1], [x1, yTop - .26, z0], [x1, yTop, z0], [x1, yTop, z1], (z1 - z0) / 3, .1, 0x8f887a); q.quad([x0, yTop - .26, z0], [x0, yTop - .26, z1], [x0, yTop, z1], [x0, yTop, z0], (z1 - z0) / 3, .1, 0x8f887a); };
+  const ceil = (x0, z0, x1, z1, y, dark = false) => { addRoof(x0,z0,x1,z1,y); const q = dark ? CDQ : CQ; q.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], (x1 - x0) / 6, (z1 - z0) / 6); };
 
   /* ---- plate + perimeter + roof (no sky anywhere: the roof is one slab) ---- */
   SQ.quad([-124, -.09, -78], [182, -.09, -78], [182, -.09, 84], [-124, -.09, 84], 306 / 4, 162 / 4);
@@ -357,9 +409,14 @@ function decorate(ctx) {
   ceil(-45, 3, 42, 25, 8.7);
   ceil(103, 20, 152, 74, 13.3);
   /* ---- Floor 2 slabs ---- */
-  slab(-84, -27, 57, -3.0, 5.94, 'carpet');                                  // executive row
+  slab(-84, -26.7, -18, -3.0, 5.94, 'carpet');                                  // executive row
   FQ.box(-77, 5.94, -27.4, 42, 12.5, -27.0);                                 // exec-row office fronts (frosted; stops west of the C8 swing)
-  slab(57, -22, 78, -5.4, 5.94, 'carpet');                                   // seam with the upper stair exit
+  // The boardrooms follow the gallery grade. Only the occupied floor spans the lower aisle.
+  const grade = 2.8 / 72, west = -18, east = 43, back = -27.1, front = -21.4;
+  const low = 5.94 + (west + 21) * grade, high = 5.94 + (east + 21) * grade;
+  KQ.quad([west, low, back], [east, high, back], [east, high, front], [west, low, front], 15, 1.4);
+  SQ.quad([west, low-.26, front], [east, high-.26, front], [east, high, front], [west, low, front], 15, .1, 0x8f887a);
+  addRoof(west, back, east, front, low-.26, grade);
   slab(-116, 28, 56, 46.6, 5.94, 'carpet');                                  // south balcony
   // The curved throat rests on its own ribbon over the climbing lobby road.
   slab(-116, -16, -78, 28, 5.94, 'carpet');                                  // meeting gallery floor
@@ -368,7 +425,7 @@ function decorate(ctx) {
   /* ---- mezzanine deck + bridge ---- */
   slab(58, -8, 79, 36, 3.44, 'stone');
   FQ.box(82, 3.44, -8, 82.3, 8.9, 26);                                      // frosted office fronts, east
-  ceil(59, 26, 77, 38, 3.18);                                                // bridge soffit light panels
+  ceil(60, 28, 75, 34, 3.25);                                                // bridge soffit light panels
 
   /* ---- floor overlays ---- */
   KQ.quad([-88, -.02, -52], [80, -.02, -52], [80, -.02, 2], [-88, -.02, 2], 168 / 4, 54 / 4);   // field carpet
@@ -514,20 +571,23 @@ function dressSectors(ctx, H) {
   bakePlace(W.deskUnit(), 78.2, 14, { yaw: -Math.PI / 2, y: 3.44 });       // the lone lit office
   for (const z of [21, 3]) bakePlace(W.planter(2.6), 58.6, z, { yaw: Math.PI / 2, y: 3.44 });
   { // DO NOT DISTURB on the second booth, facing the road (atlas panel)
-    const bp = atPos(between('C1 exit', 'C2 entry', 0.477), -6.45, 1.95);
+    const bp = atPos(between('C1 exit', 'C2 entry', 0.477), -7.45, 1.95);
     putSign(['DO NOT DISTURB — PERMANENTLY'], 1.7, .34, bp.x, bp.y, bp.z, bp.yaw / DEG + 180, { bg: '#23262d', fg: '#ffb3ab', size: 70 });
   }
 
   /* ================= S3: cubicle field ================= */
   putSign(['DO WHAT YOU L  VE'], 26, 3.6, -88.5, 4.6, -28, 90, { bg: '#14060d', fg: '#ff7dbe', size: 150 });
   putSign(['GROWTH (HOCKEY STICK)'], 11, 2.4, 0, 6, 1.55, 180, { bg: '#274b63', fg: '#ffe9a8' });
-  const cub = partsOf(W.cubicleCluster());
-  const spots = [];
-  for (const x of [-66, -53, -40, -27, -14, -1, 12, 25, 38, 51]) spots.push({ x, y: 0, z: -45, yaw: 0 });
-  for (const x of [-31, -18, -5, 8, 21]) spots.push({ x, y: 0, z: -11.7, yaw: Math.PI });
-  spots.push({ x: -79, y: 0, z: -28, yaw: Math.PI / 2 });
-  sc.instances(cub, spots, { cast: false, scale: 1.23 });
-  bakePlace(W.deskUnit(), -52, -10.5, { yaw: Math.PI, y: 0 });
+  // The main carpet is the aisle between two banks. Local +Z is the open side.
+  for (const side of [-1,1]) {
+    for (const [j,x] of [-36,-23.6,-11.2,1.2,13.6,26].entries()) {
+      // Pull the last three inside desks back from the widened turning apron.
+      const rowZ = side < 0 ? -42.3 : (x < 0 ? -10.3 : -13.3);
+      const pod = W.workPods((j + (side === 1 ? 1 : 0)) % 3 ? 0x426f71 : 0xa96351, j % 3 !== 0);
+      bakePut(pod, x, 0, rowZ, side < 0 ? 0 : 180);
+    }
+  }
+  bakePlace(W.deskUnit(), -46, -7, { yaw: Math.PI, y: 0 });
   bakePlace(W.deskUnit(), 30, -10.5, { yaw: Math.PI, y: 0 });
   bakePlace(W.paperStack(), 62, -45, { yaw: .7, y: 0 });
   bakePlace(W.paperStack(), -72, -44, { yaw: 2.1, y: 0 });
@@ -570,11 +630,11 @@ function dressSectors(ctx, H) {
   const exitWall = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.4, .25), new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: .9 }));
   exitWall.position.set(138, 4.6, -39.9); group.add(exitWall); bake.add(exitWall);
   putSign(['EXIT'], 1.6, .5, 138, 5.9, -39.7, 0, { bg: '#123d22', fg: '#7dffce', size: 110 });
-  bakePut(W.elevatorDoors(), 175.6, 2.9, -43, -90);
-  putSign(['OUT OF ORDER SINCE 2019'], 3.2, .6, 175.35, 6.4, -43, -90, { bg: '#23262d', fg: '#ffb3ab', size: 80 });
+  bakePut(W.elevatorDoors(), 175.6, 2.9, -29.6, -90);
+  putSign(['OUT OF ORDER SINCE 2019'], 3.2, .6, 175.35, 6.4, -29.6, -90, { bg: '#23262d', fg: '#ffb3ab', size: 80 });
 
   /* ================= S7: executive row ================= */
-  for (const x of [-64, -48, -32, -16, 0, 32, 48]) bakePlace(W.deskUnit(), x, -24.4, { yaw: .4, y: 5.94, scale: 1.5 });
+  for (const x of [-64,-40,-16,8,32]) { const rise=Math.max(0,(x+21)/72)*2.8; bakePut(W.boardTable(),x,6.36+rise,-25.4); }
   bakePlace(W.parachuteCase(), 20, -3.4, { y: 5.94, scale: 1.35 });
   putSign(['IN CASE OF BANKRUPTCY'], 2.6, .5, 20, 7.9, -3.95, 180, { bg: '#8a6d2f', fg: '#fff3c4', size: 80 });
   putSign(['DREAM BIG.', 'EXIT BIGGER.'], 4.2, 2.0, -40, 8.7, -22.35, 0, { bg: '#3a2a4a', fg: '#e8d8ff', size: 105 });
@@ -649,20 +709,11 @@ function furnishOffice(ctx, H) {
   const graphic = (text, x, y, z, yaw, width, height, bg, fg) =>
     putSign([text], width, height, x, y, z, yaw, { w: 768, h: 192, bg, fg, size: 158 });
 
-  // Individual acoustic islands sit outside the lane. Monitor faces and chair
-  // backs rise above the partitions so this reads as desks from a low camera.
-  for (const x of [-52, -35, -18, -1, 16, 33]) {
-    for (const z of [-42.5, -14.4]) {
-      if (x === -52 && z > -20) continue; // leave the cubicle-field hairpin clear
-      box(x, 0, z, 8.2, 1.46, 1.85, teal);
-      box(x, 1.47, z, 8.7, .22, 2.5, oak);
-      for (const dx of [-2.2, 2.15]) {
-        box(x+dx, 1.69, z, .3, .68, .3, ink);
-        box(x+dx, 2.11, z, .22, 1.28, 2.12, ink);
-        box(x+dx+.12, 2.22, z, .035, 1.02, 1.87, dx > 0 ? 0xa8dac8 : 0xf5bf81);
-        box(x+dx+.31, 1.7, z, .45, .055, 1.06, 0x444849);
-      }
-    }
+  // Desk lamps over the rear bank form individual pools of warm light against the felt.
+  for (const x of [-33, -8, 17, 37]) {
+    box(x,5.35,-44.8,6.1,.35,1.45,ink);
+    box(x,5.27,-44.8,5.78,.09,1.26,ivory);
+    for (const dx of [-2.4,2.4]) box(x+dx,5.68,-44.8,.09,7.8,.09,ink);
   }
   // The giant tap wall is built from real tanks, tap handles, the tiled
   // back bar, a drip tray, shelves of cups, and a scalloped hanging canopy.
@@ -686,33 +737,119 @@ function furnishOffice(ctx, H) {
   }
   for (let x=-34; x<=12; x+=2.4) box(x, 6.1, 5.45, 2.4, .56, 4.6, (Math.round((x+34)/2.4)%2) ? ivory : teal);
 
-  // The boardroom is an open executive suite, framed in walnut. A long
-  // conference table and angled displays are visible across the racing line.
-  for (const x of [-58,-39,-20,-1,18,37]) {
-    box(x, 5.98, -25.5, 13, 2.0, .3, oak);
-    box(x, 7.98, -25.5, 13.3, .16, 1.8, oak);
-    box(x, 8.15, -25.5, .32, .4, .32, ink);
-    box(x, 8.52, -25.45, 3.6, 1.75, .22, ink);
-    box(x, 8.65, -25.30, 3.26, 1.46, .05, 0x8abec7);
-    for (const dx of [-5.8,5.8]) {
-      box(x+dx, 6.0, -25.6, .25, 6.1, .4, oak);
-      box(x+dx, 12.0, -25.5, .36, .22, 5.4, oak);
+  // Ribbed walnut frames and a brass cornice set the executive gallery apart.
+  for (const x of [-64,-40,-16,8,32]) {
+    const rise=Math.max(0,(x+21)/72)*2.8;
+    box(x,6.02+rise,-26.2,18.2,.36,4.8,0x956952);
+    for(const dx of [-8.6,8.6]) {
+      box(x+dx,6.02+rise,-25.8,.42,6.16-rise,1.08,0x84513e);
+      box(x+dx,12.1,-24.55,.44,.36,3.58,0xc59a56);
     }
   }
-  // Digit-sized landing stripes and repeated nosings make the two stair
-  // flights read as switchbacks from below, without putting steps on the road.
-  for (const [x0,x1,z0,base,rise,color] of [
-    [114,146,-27,0,3,teal], [146,110,-59,3,3,teal],
-    [92,122,58,6,-3,coral], [122,92,32,3,-3,coral],
+  // Four actual side flights meet full-depth half landings. Sloping, continuous handrails and
+  // enclosed risers distinguish these from a line of barriers beside a metal road.
+  const tread = (x0,x1,z,w,base,rise) => {
+    const steps=18, dx=(x1-x0)/steps, bottom=Math.min(base,base+rise)-.25;
+    for(let i=0;i<steps;i++) {
+      const top=base+rise*(i+.5)/steps, x=x0+dx*(i+.5);
+      box(x,bottom,z,Math.abs(dx)+.02,top-bottom,w,0xb1a695);
+      box(x-dx*.43,top,z,.18,.055,w,0xffc756);
+      if(i%3===0) for(const side of [-1,1]) box(x,top,z+side*(w*.5-.08),.13,1.34,.13,ink);
+    }
+    for(const side of [-1,1]) {
+      const edge=z+side*(w*.5-.08);
+      const a=[x0,base+1.45,edge], b=[x1,base+rise+1.45,edge];
+      q.quad([a[0],a[1]-.16,edge-.12],[b[0],b[1]-.16,edge-.12],[b[0],b[1],edge-.12],[a[0],a[1],edge-.12],1,1,ink);
+      q.quad([a[0],a[1],edge-.12],[b[0],b[1],edge-.12],[b[0],b[1],edge+.12],[a[0],a[1],edge+.12],1,1,ivory);
+      q.quad([a[0],a[1],edge+.12],[b[0],b[1],edge+.12],[b[0],b[1]-.16,edge+.12],[a[0],a[1]-.16,edge+.12],1,1,ink);
+    }
+  };
+  tread(114,146,-15.1,4.4,0,3); tread(146,110,-71,4.0,3,4.1);
+  tread(92,122,69.2,3.8,6,-3); tread(122,92,19.4,3.8,3,-3);
+  // Continue the stair into the driving surface. A smooth dolly ramp runs
+  // between the two banks of concrete treads and opens onto each flat landing.
+  const tr = ctx.track;
+  for (const [first, last] of [['L7 entry','L-A entry'], ['L8 entry','C7 entry'],
+                               ['L14 entry','L-B entry'], ['L15 entry','L16 entry']]) {
+    const start = tr.sAtCp(AT[first]), end = tr.sAtCp(AT[last]);
+    const count = Math.round((end-start)/1.65), depth = (end-start)/count;
+    for (let n=0; n<count; n++) {
+      const s0 = start+n*depth, s1 = s0+depth;
+      const i = Math.round((s0+s1)/(2*tr.ds));
+      const high = Math.max(tr.pointAt(s0,0,{}).y, tr.pointAt(s1,0,{}).y)+.045;
+      for (const side of [-1,1]) {
+        const outer = side*(side>0 ? tr.hwL[i]-.35 : tr.hwR[i]-.35);
+        const inner = side*3.25;
+        const corner = (s, lat, y) => {
+          const p = tr.pointAt(s,lat,{});
+          return [p.x,y,p.z];
+        };
+        q.quad(corner(s0,inner,high),corner(s0,outer,high),
+          corner(s1,outer,high),corner(s1,inner,high),1,1,0xbcb4a3);
+        const front = tr.ty[i]>0 ? s0 : s1;
+        const nose = front===s0 ? s0+.14 : s1-.14;
+        q.quad(corner(front,inner,high+.005),corner(front,outer,high+.005),
+          corner(nose,outer,high+.005),corner(nose,inner,high+.005),1,1,0xe3b368);
+        q.quad(corner(front,inner,high),corner(front,outer,high),
+          corner(front,outer,high-.25),corner(front,inner,high-.25),1,1,0x655f56);
+        q.quad(corner(s0,inner,high),corner(s1,inner,high),
+          corner(s1,inner,high-.25),corner(s0,inner,high-.25),1,1,0x655f56);
+      }
+    }
+  }
+  // Each folded ramp wraps an internal fire separation. Windows from one flight onto
+  // the other show the change in level before the driver reaches the half landing.
+  for (const bay of [
+    { start: 114, end: 135, z: -43, top: 12.8, colour: teal },
+    { start: 94, end: 122, z: 45, top: 11.4, colour: coral },
   ]) {
-    const inside = z0 === -27 || z0 === 58 ? -1 : 1;
-    for (let i=0; i<14; i++) {
-      const a=i/14, x=x0+(x1-x0)*a, z=z0+inside*(z0 === -27 || z0 === -59 ? 19.5 : 12.6), y=base+rise*a;
-      box(x, y-.24, z, Math.abs(x1-x0)/14+.02, .36, 2.15, oak);
-      box(x, y+.13, z, .12, .035, 2.15, color);
-      if (i%3===0) box(x, y+.16, z, .12, 1.25, .12, ink);
+    const {start,end,z,top,colour} = bay, width = end - start, middle = (start + end) / 2;
+    box(middle, 0, z, width, 4.25, 1.4, colour);
+    box(middle, 4.25, z, width+.12, .22, 1.55, ivory);
+    box(middle, 7.7, z, width, top-7.7, 1.4, colour);
+    box(middle, 7.48, z, width+.12, .22, 1.55, ink);
+    for (const x of [start, middle, end]) box(x, 0, z, .65, top, 1.46, ink);
+    for (const x of [start+width*.25, start+width*.75]) box(x, 4.45, z, .18, 3.04, .19, ink);
+    // The square steel upper frame connects the two flights at ceiling level.
+    for (const x of [start+1, end-1]) {
+      const span = z < 0 ? 57 : 56, height = z < 0 ? 13.7 : 12.6;
+      box(x, height, z, 1.05, .53, span, ink);
+      box(x, height-.13, z, 1.38, .13, span, colour);
+      for (const side of [-1,1]) box(x, height-.19, z+side*12.5, .48, .07, 7, ivory);
     }
   }
+  // A two-storey fire-door reveal and clerestory windows mark the end of each return.
+  for (const [x,z,color,label] of [[174.6,-43,teal,'02'],[149.8,45,coral,'01']]) {
+    box(x+.35,0,z,.42,11,18,0x58636a);
+    box(x,2.84,z,.5,4.55,6.4,ivory); box(x-.26,3.02,z,.28,4.10,5.92,color);
+    box(x-.43,3.04,z,.12,4.04,.10,ink);
+    for(const dz of [-1.49,1.49]) {box(x-.43,5.06,z+dz,.10,1.28,.58,0xa1c8ca);box(x-.49,4.09,z+dz,.13,.15,2.07,ivory);}
+    graphic(label,x-.27,9.22,z,-90,5.3,3.4,'#263941','#f5d4a5');
+    // From the approaching kart the transverse fire escape reads in profile:
+    // both sawtooth flights, the bridge in front of the fire doors, and the balustrade.
+    const wallX = x - 1.65, nearX = wallX - 1.12;
+    box(wallX, 2.62, z, 2.66, .32, 6.5, ink);
+    for (const [startZ, startY, rise] of [[z-17,.12,2.82],[z+3.2,2.94,3.7]]) {
+      const run = 13.8, count = 13, step = run / count;
+      for (let i = 0; i < count; i++) {
+        const posZ = startZ + (i + .5) * step, height = startY + (i + 1) * rise / count;
+        box(wallX, height-.37, posZ, 2.68, .37, step+.04, ivory);
+        box(nearX-.16, height-.34, posZ, .25, .34, step+.04, ink);
+        box(wallX, height-.02, posZ-step*.42, 2.72, .085, .18, 0xf7bd54);
+        if (i % 2 === 0) box(nearX, height, posZ, .12, 1.14, .12, ink);
+      }
+      const top = startY+rise+1.27, bottom = startY+1.27;
+      q.quad([nearX,bottom,startZ],[nearX,top,startZ+run],
+        [nearX,top-.17,startZ+run],[nearX,bottom-.17,startZ],1,1,ivory);
+      q.quad([nearX+.17,bottom,startZ],[nearX+.17,top,startZ+run],
+        [nearX,top,startZ+run],[nearX,bottom,startZ],1,1,ink);
+    }
+
+    for(const dz of [-7,7]) {box(x-.43,8.24,z+dz,.16,2.32,3.62,0x9ab5b7);box(x-.53,8.24,z+dz,.19,2.32,.15,ink);}
+  }
+  // Right-angled corridors beyond the rounded driving apex; baseboards wrap the corner.
+  box(-75.3,0,-34.8,.55,4.3,15.5,teal); box(-65.1,0,-42.4,20.5,4.3,.55,teal);
+  box(-75.0,.23,-34.8,.22,.31,15.5,ivory);box(-65.1,.23,-42.09,20.4,.31,.22,ivory);
   // The stairwells carry a wrap of colour around the return and up onto the
   // second floor. Repeated tall piers make the depth of the stair bay clear.
   for (let x=106; x<=174; x+=8) {
@@ -747,8 +884,8 @@ function furnishOffice(ctx, H) {
       } g.closePath(); g.fill();
     }
   });
-  atlas.place(turns,[175.6,4.4,-43],-Math.PI/2,15.5,3);
-  atlas.place(turns,[150.31,4.4,45],-Math.PI/2,14,2.8);
+  atlas.place(turns,[174.19,6.05,-56.1],-Math.PI/2,6.1,1.5);
+  atlas.place(turns,[149.3,5.15,56.5],-Math.PI/2,6.1,1.5);
   // Suspended at the end of the lobby straight, well above the feature ramp.
   box(40.12, 8.68, 58, .16, 4.05, 17.7, ink);
   for (const z of [50.4,65.6]) box(40.12, 12.73, z, .10, 3.27, .10, ink);
@@ -778,8 +915,8 @@ function furnishOffice(ctx, H) {
   box(21, 5.90, -37.5, .10, 7.70, .10, ink);
   // The inner end hangs from the executive balcony above it.
   box(21, 5.72, -18.5, .10, .18, .10, ink);
-  graphic('STAIR A  ↑', 175.65, 8.3, -43, -90, 18, 3.3, '#216057', '#ffe7a6');
-  graphic('FIRE STAIR  ↓', 150.3, 8.3, 45, -90, 18, 3.3, '#87372c', '#fff0cb');
+  graphic('STAIR A  ↑', 174.1, 8.35, -56.1, -90, 7.9, 1.9, '#216057', '#ffe7a6');
+  graphic('FIRE STAIR  ↓', 149.15, 7.7, 56.5, -90, 8.2, 1.8, '#87372c', '#fff0cb');
   graphic('PLEASE CHECK IN', -102, 5.0, 36, 90, 14, 2.5, '#473746', '#ffcf8d');
   for (const x of [-70,-48,-26,-4,18,40,62]) {
     box(x, .16, 79, 14, 7.5, .38, 0xc69c70);
@@ -790,7 +927,6 @@ function furnishOffice(ctx, H) {
   // this drops a solid curtain into the aisle below. Build low office plinths
   // to exactly the same collision perimeter, with a shallow lip on both sides.
   view.trackMesh.getObjectByName('walls').visible = false;
-  const tr = ctx.track;
   for (const side of [-1,1]) {
     const hw = side > 0 ? tr.hwL : tr.hwR;
     const edge = (i, offset, lift) => {

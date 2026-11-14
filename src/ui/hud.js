@@ -124,6 +124,10 @@ export class Hud {
   banner(text, cls = '', ms = 1400, prio = 1, queue = false) {
     const now = performance.now();
     if (now < (this._bUntil || 0) && prio < (this._bPrio || 0)) { if (queue) this._bNext = { text, cls, ms, prio, at: now }; return; }
+    // A launch event can arrive immediately before GO in the same frame.
+    // Remember the interrupted callout just as we would if GO had arrived first.
+    if (this._bReplay && now - this._bReplay.at < 100 && prio > this._bReplay.prio) this._bNext = this._bReplay;
+    this._bReplay = queue ? { text, cls, ms, prio, at: now } : null;
     const b = this.$.banner; b.className = 'hud-banner ' + cls; b.textContent = text;
     void b.offsetWidth; b.classList.add('show'); clearTimeout(this._bt);
     this._bPrio = prio; this._bUntil = now + ms;
@@ -164,6 +168,10 @@ export class Hud {
       case 'incoming': this.warn(e.data.type); break;
       case 'itemReady': this.pop(this.$.item); break;
       case 'miniTurbo': break;
+      case 'hit':
+        if (e.data.kind === 'zap') this.banner(ITEMS.crash.hit, 'bad small', 1500, 2, true);
+        break;
+      case 'burnout': this.banner('ENGINE STALLED!', 'bad small', 1000, 2, true); break;
       case 'rocketStart': this.banner(e.data >= 1 ? 'ROCKET START!' : 'NICE START!', 'good', 1100, 2, true); break;
       case 'trickLand': this.banner('TRICK!', 'good small', 700); break;
       case 'draft': this.banner('SLIPSTREAM!', 'good small', 800); break;

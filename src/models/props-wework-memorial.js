@@ -197,6 +197,57 @@ export function balustrade(len) {
   return b.build({ glass: GLASS, rail: paint(0xc9a227, { rough: .3, metal: .8 }), post: MAT.dark });
 }
 
+/** Joined workstations. The aisles open on +Z and the high return walls are visible
+    end-on to a kart travelling along the bank. Everything bakes into the office palette. */
+export function workPods(feltColor, occupied = true) {
+  const b = new ModelBuilder();
+  const block = (name, x, y, z, w, h, d) => b.add(name, new THREE.BoxGeometry(w,h,d), {p:[x,y+h/2,z]});
+  block('felt', 0, .1, -2.45, 11.8, 2.45, .26);
+  block('trim', 0, 2.55, -2.45, 12, .10, .35);
+  for (const x of [-5.85, 0, 5.85]) {
+    block('felt', x, .1, -.45, .24, 2.45, 4.1);
+    block('trim', x, 2.55, -.45, .33, .10, 4.16);
+    block('trim', x, .10, 1.63, .32, 2.45, .12);
+  }
+  for (const [i,x] of [-3,3].entries()) {
+    block('oak',x,1.17,-1.30,5.2,.16,1.86);
+    block('oak',x-1.82,1.17,-.12,1.56,.16,1.36);
+    block('ink',x-1.92,.08,-1.25,.20,1.14,1.33);
+    block('bin',x+1.66,.03,-1.30,.85,.78,.72);
+    block('ink',x,1.33,-1.50,.22,.63,.24);
+    block('ink',x,1.86,-1.55,2.28,1.35,.19);
+    block(i?'blue':'sand',x,1.98,-1.443,2.05,1.09,.025);
+    block('oak',x,1.38,-.74,1.1,.06,.34);
+    block('ink',x,.03,.83,.18,.68,.18);
+    block('ink',x,.04,.83,1.12,.10,.18); block('ink',x,.04,.83,.18,.10,1.05);
+    block('chair',x,.67,.82,1.26,.21,1.14); block('chair',x,.86,1.32,1.24,1.06,.19);
+    for(const dx of [-.64,.64]) block('ink',x+dx,1.04,.80,.09,.14,.68);
+    if (occupied && i===1) {
+      b.add('pot',cyl(.36,.24,.46,8),{p:[x+1.65,1.56,-1.25]});
+      for (const [off,rot] of [[-.16,.56],[.15,-.42],[0,-.04]]) b.add('leaf',sphere(.41,6,5),{p:[x+1.65+off,2.13,-1.27],r:[.1,0,rot],s:[.48,1.52,.52]});
+    } else {
+      block('paper',x+1.57,1.33,-.86,.69,.13,.77);
+      block('pot',x-1.32,1.33,-.77,.28,.38,.29);
+    }
+  }
+  return b.build({felt:plastic(feltColor,.96),trim:plastic(0xd6c7a4,.64),oak:plastic(0xddb484,.67),ink:MAT.dark,bin:plastic(0x909a93,.85),chair:plastic(0x334957,.86),blue:glow(0x79c5c0,.65),sand:glow(0xffc57a,.55),pot:plastic(0xc8724d,.73),leaf:plastic(0x638e5c,.89),paper:MAT.white});
+}
+
+/** A single long conference table under a pendant, with high-backed directors' chairs. */
+export function boardTable() {
+  const b = new ModelBuilder(), block=(m,x,y,z,w,h,d)=>b.add(m,new THREE.BoxGeometry(w,h,d),{p:[x,y+h/2,z]});
+  block('walnut',0,1.36,0,13.2,.36,2.65);
+  for (const x of [-4.5,4.5]) block('brass',x,.04,0,.6,1.32,1.6);
+  for (const x of [-5,-2.5,0,2.5,5]) for (const sign of [-1,1]) {
+    block('ink',x,.05,sign*2.1,.24,.7,.24); block('leather',x,.73,sign*2.1,1.30,.27,1.22);
+    block('leather',x,.97,sign*2.58,1.29,1.61,.22);
+  }
+  for (const x of [-4.5,-1.6,1.6,4.5]) { block('paper',x,1.72,.65,.83,.05,.53); block('brass',x+.65,1.72,.65,.25,.35,.25); }
+  for (const x of [-3.6,3.6]) block('ink',x,4.66,0,.055,1.78,.055);
+  block('brass',0,4.40,0,9.7,.26,.84);block('light',0,4.37,0,9.55,.04,.65);
+  return b.build({walnut:plastic(0x86513c,.48),brass:plastic(0xcfaa60,.34,.55),ink:MAT.dark,leather:plastic(0x2c4c46,.65),paper:MAT.white,light:glow(0xffdc9c,1.2)});
+}
+
 /** A short stair flight to nowhere: five steps and a stop. */
 export function stairFlight(steps = 5, w = 2.6) {
   const b = new ModelBuilder();

@@ -94,6 +94,12 @@
 
   /* tracks: two across, a cup per two rows */
   .cards.tracks { grid-template-columns: repeat(2, 1fr); gap: calc(var(--u) * 1.6); }
+  .cards.tracks.many {
+    --track-name: calc(var(--u) * 2.3);
+    --track-title-height: 2.2em;
+    --track-photo-min: calc(var(--u) * 10);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .track-thumb { height: calc(var(--u) * 13); }
   .card.track h2 { font-size: calc(var(--u) * 2.4); }
   .screen-tracks .menu-head p { min-height: 2.6em; }

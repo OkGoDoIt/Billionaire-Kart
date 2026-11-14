@@ -5,6 +5,7 @@ import { Input, describePadBind, padFamily } from '../core/input.js';
 import { keyName, keyboardBindings } from '../core/keyboard.js';
 import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
+import { handleInstallAction } from '../ui/install.js';
 import { Wipe } from '../ui/wipe.js';
 import { Showroom } from '../render/showroom.js';
 import { RaceSession, MAX_FRAME_TIME } from './session.js';
@@ -63,6 +64,7 @@ export class App {
   onMenu(action, device) {
     if (action === 'mute') { this.audio?.toggleMute?.(); return; }
     if (action === 'fullscreen') { this.fullscreen(!document.fullscreenElement); return; }
+    if (handleInstallAction(action)) return true;
     if (this.menus.visible) return this.menus.handle(action, device);
     const s = this.session; if (!s || this.attract) return;
     if (action === 'pause' || (action === 'back' && device.startsWith('kb'))) { if (s.phase !== 'intro' && s.race.state !== 'done') this.pause(); else s.skipIntro(); }
@@ -79,6 +81,15 @@ export class App {
     if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
     this.audio?.setVolumes?.(S.music, S.sfx);
     this.shake = S.shake;
+    const session = this.session;
+    if (session) {
+      for (const cam of session.view.cams) cam.shakeScale = S.shake === false ? 0 : 1;
+      for (const kart of session.race.players) {
+        const touch = !!session.touch && kart.playerIndex === 0;
+        kart.autoTrick = touch || S.autoTrick;
+        kart.assist.steer = session.config.mode !== 'timetrial' && (touch || S.smartSteer) ? 1 : 0;
+      }
+    }
   }
 
   /** Enter or leave full screen. Must be called from a user gesture. */
@@ -197,7 +208,13 @@ export class App {
   /** Called by the session when the flyover ends. */
   onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
 
-  restartRace() { this.menus.close(); this._race(this.lastConfig, this.lastCupLine); }
+  restartRace() {
+    const config = this.lastConfig;
+    if (!config) return;
+    const { autoTrick, smartSteer } = this.save.settings;
+    const players = config.players.map(player => ({ ...player, autoTrick, smartSteer }));
+    this._race({ ...config, players }, this.lastCupLine);
+  }
   /* Run the finished cup again from race 1: same cup, class, level, racer picks, and rival grid; the
      standings start empty. The recorded result in the save is untouched — a better run replaces it. */
   restartCup() { const g = this.gp; if (g) this.startCup(g.cup, g.grid); }

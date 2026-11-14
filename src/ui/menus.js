@@ -212,14 +212,27 @@ export class Menus {
 
   /* ---------- how many players, and who holds what ---------- */
   s_players() {
-    const A = this.app, touchOnly = matchMedia('(pointer: coarse)').matches && !A.input.pads().length;
+    const A = this.app;
     const pick = n => {
       A.flow.players = n;
       if (n === 1) { A.flow.devices = ['any']; this.open('racers', { player: 0 }); } else this.open('join', { n });
     };
-    const el = h('div', {}, this.header('How many players?', touchOnly ? 'Connect controllers to race together on one screen.' : 'Up to four on one screen.'),
-      h('div', { class: 'cards four' }, [1, 2, 3, 4].map(n => h('button', { class: 'card pcount', 'data-f': true, 'data-default': n === 1, disabled: touchOnly && n > 1, onclick: () => pick(n) }, h('div', { class: 'pcount-n' }, String(n)), h('div', { class: 'pcount-l' }, n === 1 ? 'Player' : 'Players')))));
-    return { el };
+    const cards = [1, 2, 3, 4].map(n => h('button', { class: 'card pcount', 'data-f': true, 'data-default': n === 1, onclick: () => pick(n) }, h('div', { class: 'pcount-n' }, String(n)), h('div', { class: 'pcount-l' }, n === 1 ? 'Player' : 'Players')));
+    const head = this.header('How many players?', 'Up to four on one screen.');
+    const hint = head.querySelector('p');
+    const el = h('div', {}, head, h('div', { class: 'cards four' }, cards));
+    // Update in place when a pad connects, including while a disabled card has focus.
+    const refresh = () => {
+      const touchOnly = matchMedia('(pointer: coarse)').matches && !A.input.pads().length;
+      cards.forEach((c, i) => { if (i > 0) c.disabled = touchOnly; });
+      if (hint) hint.textContent = touchOnly ? 'Connect controllers to race together on one screen.' : 'Up to four on one screen.';
+      if (this.focusEl?.disabled) this.focus(cards[0], false);
+    };
+    const prevPads = A.input.onPads;
+    const onPads = () => { prevPads?.(); refresh(); };
+    A.input.onPads = onPads;
+    refresh();
+    return { el, onClose: () => { if (A.input.onPads === onPads) A.input.onPads = prevPads; } };
   }
 
   s_join({ n }) {

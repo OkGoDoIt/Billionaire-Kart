@@ -120,8 +120,46 @@ const BLURB = {
 };
 
 /* ---------- the steps overlay ---------- */
+/* The sheet is a modal, not a picture over a live menu (#274): while it is up it
+   owns keyboard and controller focus. Opening remembers the control that
+   opened it and moves focus to the sheet's close action; Tab and Shift+Tab
+   cycle inside the sheet; Esc closes only this sheet; closing hands focus
+   back to the opener, so the menu underneath keeps its place. Controller
+   back/confirm reach the same close action through app.js (onMenu). */
 let overlay = null;
-function closeSteps() { overlay?.remove(); overlay = null; }
+let opener = null;
+let ringed = null;
+/** The menus show focus with a .focus ring, not the browser's outline; the sheet does the same. */
+function ringFocus(elm) {
+  if (ringed === elm) return;
+  ringed?.classList.remove('focus'); ringed = elm;
+  elm?.classList.add('focus');
+}
+function closeSteps() {
+  if (!overlay) return;
+  overlay.remove(); overlay = null; ringFocus(null);
+  const back = opener; opener = null;
+  if (back?.isConnected) back.focus({ preventScroll: true });
+}
+function moveFocus(backwards) {
+  const controls = [...overlay.querySelectorAll('button')];
+  const i = controls.indexOf(document.activeElement);
+  const next = (i + (backwards ? -1 : 1) + controls.length) % controls.length;
+  controls[next].focus({ preventScroll: true });
+}
+
+/** The modal owns menu input until dismissed, including stick movement and Start. */
+export function handleInstallAction(action) {
+  if (!overlay) return false;
+  if (action === 'back' || action === 'confirm' || action === 'pause') closeSteps();
+  else if (action === 'up' || action === 'left') moveFocus(true);
+  else if (action === 'down' || action === 'right') moveFocus(false);
+  return true;
+}
+function onSheetKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSteps(); }
+  else if (e.key === 'Tab') { e.preventDefault(); moveFocus(e.shiftKey); }
+}
 export function openInstall() {
   const kind = installOffer();
   if (!kind) return;
@@ -131,17 +169,23 @@ export function openInstall() {
 }
 function openSteps(kind) {
   closeSteps();
+  opener = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
   const steps = el('ol', { class: 'install-steps' }, stepsFor(kind).map(([head, body], i) =>
     el('li', {}, el('b', {}, el('i', {}, String(i + 1)), head), el('span', { html: body }))));
+  const closeBtn = el('button', { class: 'install-x', 'aria-label': 'Close', onclick: closeSteps, html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>' });
   overlay = el('div', { class: 'install-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Add Billionaire Kart to your Home Screen' },
     el('div', { class: 'install-sheet' },
-      el('button', { class: 'install-x', 'aria-label': 'Close', onclick: closeSteps, html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>' }),
+      closeBtn,
       el('h2', {}, 'Add to Home Screen'),
       el('p', { class: 'install-blurb' }, BLURB[kind]),
       steps,
       el('button', { class: 'btn go install-gotit', onclick: closeSteps }, 'Got it')));
   overlay.addEventListener('pointerdown', e => { if (e.target === overlay) closeSteps(); });
+  overlay.addEventListener('keydown', onSheetKey);
+  overlay.addEventListener('focusin', e => ringFocus(e.target.closest('button')));
   document.body.appendChild(overlay);
+  ringFocus(closeBtn);
+  closeBtn.focus({ preventScroll: true });
 }
 async function promptInstall() {
   const e = deferredPrompt; if (!e) return;

@@ -25,6 +25,7 @@ const MEMORIAL = { x: AXIS + 35, z: 12 };                                     //
 const LEGS = [{ z: 147, xa: -165, ya: 26.5, xb: -125, yb: 27 }, { z: 98, xa: -165, ya: 23, xb: -90, yb: 17.2 }, { z: 49, xa: -145, ya: 9.4, xb: -90, yb: 13.6 }, { z: 0, xa: -145, ya: 5.8, xb: -75, yb: 1.2 }];
 const legY = (k, x) => { const L = LEGS[k], t = Math.min(1, Math.max(0, (x - L.xa) / (L.xb - L.xa))); return L.ya + (L.yb - L.ya) * t; };
 export const TERRACES = [{ z: 122.5, x0: -146, x1: -126 }, { z: 73.5, x0: -168, x1: -114 }, { z: 24.5, x0: -126, x1: -86 }];   // walls: upper leg to the north
+const clotureWidths = new WeakMap(); // Track objects are reused when the same course restarts.
 export const CLOTURE = { x0: -114, x1: -72 };   // hairpin two's infield and the gap in the middle wall: fenced until the final lap
 const terraceY = (x, z) => {
   for (let k = 0; k < 3; k++) {
@@ -664,12 +665,14 @@ function filibuster(ctx, sc, { taken }) {
   // A zero-radius scenery collider still catches the kart's wheel envelope. Use the actual
   // drivable boundary at the barricades, then restore the authored infield width on opening.
   const first = track.indexAtCp(29.6), last = track.indexAtCp(36.45);
-  const openWidths = track.outerL.slice(first, last + 1);
+  let openWidths = clotureWidths.get(track);
+  if (!openWidths) { openWidths = track.outerL.slice(first, last + 1); clotureWidths.set(track, openWidths); }
   const setGate = open => {
     if (open) track.outerL.set(openWidths, first);
     else for (let i = first; i <= last; i++) track.outerL[i] = Math.min(2.25, openWidths[i - first]);
   };
   setGate(false);
+  for (const [x, z] of [[-110, 86], [-100, 74], [-110, 60]]) taken.push([x, z, 11]);
   // Follow the actual graded hillside. The flared stone treads bend from the top straight
   // through the opening and back onto the lower leg, so the exit is visible from the crest.
   const spine = new THREE.CatmullRomCurve3([

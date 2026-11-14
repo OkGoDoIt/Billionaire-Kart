@@ -19,6 +19,9 @@ import * as P from '../models/props.js';
 import * as M from '../models/props-davos.js';
 import * as S from '../models/props-silicon-valley.js';   // the sign kit: canvas atlas, baker, text fitting
 
+// The ribbon gates on the climb mark three optional racing lines. A clean
+// transfer between alternating edges earns the speed for the summit bend.
+const SLALOM = [{ at: 16.6, lat: 4.4 }, { at: 17.45, lat: -4.4 }, { at: 18.35, lat: 4.4 }];
 const lerp = (a, b, t) => a + (b - a) * t;
 
 /* The alpenglow the sky shifts toward, lap by lap (gfx.shiftSky): lap one is golden
@@ -133,18 +136,21 @@ export default {
   ],
   boosts: [
     { at: 0.55, lat: 0, w: 5 },
-    { at: 9.3, lat: 0, w: 5 },                                            // out of Switchback One
-    { at: 14.3, lat: 0, w: 5 },                                           // out of Switchback Two
-    { at: 21.2, lat: 0, w: 9, len: 10 },                                  // the top of the in-run: feed the jump
+    { at: 9.3, lat: 3.8, w: 5 },                                            // out of Switchback One
+    { at: 14.3, lat: -3.8, w: 5 },                                           // out of Switchback Two
+    { at: SLALOM[2].at, lat: SLALOM[2].lat, w: 4.8, len: 9 },
+    { at: 21.2, lat: 1.6, w: 12, len: 10 },                                  // the top of the in-run: feed the jump
     { at: 26.8, lat: 0, w: 5 },
   ],
-  itemRows: [{ at: 1.4 }, { at: 3.6 }, { at: 15.2 }, { at: 18.4 }, { at: 26.1 }, { at: 29.0 }],
+  itemRows: [{ at: 1.4 }, { at: 15.2 }, { at: 26.1 }, { at: 29.0 }],
   coins: [
     { from: 0.15, to: 0.8, n: 3, lat: 4 },
     { from: 2.5, to: 3.2, n: 5, lat: [5, -3] },
     { from: 5.6, to: 8.4, n: 5, lat: 4 },                                 // Switchback One, inside line
     { from: 10.6, to: 13.4, n: 5, lat: -4 },                              // Switchback Two, inside line
-    { from: 17.0, to: 18.0, n: 4, lat: -3 },
+    ...SLALOM.slice(1).map((gate, index) => ({
+      from: SLALOM[index].at, to: gate.at - 0.12, n: 3, lat: [SLALOM[index].lat, gate.lat],
+    })),
     ...[[22.3, 5.5], [22.65, 12], [22.95, 15], [23.3, 12], [23.65, 4.5]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: -2, air })),   // the flight off the table
     ...[[22.4, 10], [22.75, 17], [23.1, 20], [23.45, 15]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 6.2, air })),             // the big-air line
     { from: 26.6, to: 27.4, n: 4, lat: -3 },
@@ -351,6 +357,19 @@ function dress(ctx) {
 
   /* ================= the high traverse and the summit ================= */
   roadSign(19.4, -1, 14, 'YOU ARE NOW ABOVE IT ALL', { bg: NAVY, fg: '#ffffff', kicker: 'ELEVATION 70 M · NET WORTH: YES', kfg: '#f2c94c', size: 118 }, { w: 11, h: 3, legs: 2.6 });
+  for (const { at, lat } of SLALOM) {
+    const side = Math.sign(lat), p = sc.beside(at, side, 2.8);
+    put(M.slalomFlag(side > 0 ? 0xda342e : 0x115abb, side), p.x, p.z,
+      { y: p.y, yaw: p.along + Math.PI, scale: 1.35, cast: false });
+    take(p.x, p.z, 3.2);
+  }
+  const bellSpot = sc.beside(17.48, 1, 19);
+  const bell = M.raceBell();
+  faceDriver(bellSpot, 65);
+  sc.place(bell, bellSpot.x, bellSpot.z, { y: bellSpot.y, yaw: bellSpot.yaw, scale: 1.55 });
+  take(bellSpot.x, bellSpot.z, 11);
+  const swing = bell.userData.swing;
+  anim.push((dt, time) => { swing.rotation.z = 0.24 * Math.sin(time * 2.6); });
   // the gondola: from the town up to a station below the summit, cabins that actually move
   {
     const stops = [[66, 134], [76, 180], [86, 226], [94, 268], [99, 296]];
@@ -421,7 +440,22 @@ function dress(ctx) {
     // the big-air kicker's own sign
     const k0 = sc.beside(21.4, 1, 1.2);
     put(M.signFrame(5.5, 2, 2.6, frameMat(0xe23b3b)), k0.x, k0.z, { yaw: k0.along + Math.PI, y: k0.roadY });
-    atlas.place(board('BIG AIR →', { bg: '#e23b3b', fg: '#ffffff', size: 140, lines: 1 }, 512, 186), local({ ...k0, yaw: k0.along + Math.PI }, 0, 0.09, k0.roadY + 2.6 + 1), k0.along + Math.PI, 5.5, 2);
+    atlas.place(board('BIG AIR', { bg: '#e23b3b', fg: '#ffffff', size: 140, lines: 1 }, 512, 186), local({ ...k0, yaw: k0.along + Math.PI }, 0, 0.09, k0.roadY + 2.6 + 1), k0.along + Math.PI, 5.5, 2);
+    // Three snowy delegates hold up their scores beyond the outrun. The
+    // last judge is bought; the final placard is a cheque. Read from midair.
+    for (const [x, z, score, bg] of [[-27, 149, '9.8', NAVY], [-12, 139, '9.9', NAVY], [4, 139, '$10M', RED]]) {
+      const y = sc.y(x, z);
+      if (!clear(x, z, 3)) continue;
+      const yaw = Math.atan2(-x, 232 - z);
+      const podium = M.snowman(8);
+      put(podium, x, z, { yaw, y: y - 0.12, scale: 2.9 });
+      const paddle = { x, z, yaw };
+      const [px, , pz] = local(paddle, 4.3, 0.15, 0);
+      put(M.signFrame(9, 4.8, 6.2, frameMat(0x81563b)), px, pz, { yaw, y });
+      atlas.place(board(score, { bg, fg: '#ffffff', border: GOLD, size: 156, lines: 1 }, 450, 240),
+        local({ x: px, z: pz, yaw }, 0, 0.09, y + 8.6), yaw, 9, 4.8);
+      take(x, z, 8);
+    }
     // the landing hill: the K-line, distance boards, flags down both sides, a judges' tower
     for (const [at, txt] of [[22.55, '90 M'], [22.9, '120 M'], [23.25, 'K 140']]) {
       for (const side of [1, -1]) { const p = sc.beside(at, side, 3); atlas.place(board(txt, { bg: '#ffffff', fg: '#e23b3b', border: '#e23b3b', size: 130, lines: 1 }, 384, 160), local(p, 0, 0.1, p.y + 1.1), p.yaw, 3.6, 1.5); }
@@ -433,9 +467,26 @@ function dress(ctx) {
       put(M.watchtower({ h: 12 }), jt.x, jt.z, { yaw: jt.yaw, y: jt.y - 0.2 }); take(jt.x, jt.z, 6);
       atlas.place(board('JUDGES', { bg: NAVY, fg: '#ffffff', kicker: 'SCORING ON NET WORTH', kfg: '#f2c94c', size: 120 }, 512, 200), local(jt, 0, 2.6, jt.y + 9.6), jt.yaw, 5, 1.95);
     }
+    // Blue timing stripes fan across the slope. They follow the banking
+    // and grade, so a driver looking down in flight can place the touchdown.
+    for (const [at, color] of [[22.6, 0x2583c9], [22.95, 0x2583c9], [23.3, 0xd63e39], [23.65, 0x2583c9]]) {
+      const s = track.sAtCp(at), verts = [];
+      for (const [ds, lat] of [[-0.48, -8.6], [0.48, 8.6], [-0.48, 8.6], [-0.48, -8.6], [0.48, -8.6], [0.48, 8.6]]) {
+        const v = track.pointAt(s + ds, lat, EV, 0.055);
+        verts.push(v.x, v.y, v.z);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3)); geo.computeVertexNormals();
+      const stripe = new THREE.Mesh(geo, frameMat(color));
+      group.add(stripe); bake.add(stripe, false);
+    }
     // the outrun stadium: stands both sides, the panel stage straight ahead
     for (const [at, side] of [[24.3, 1], [24.3, -1], [24.85, 1]]) { const p = sc.beside(at, side, 4); putStand(side > 0 ? stand2 : stand, p, 0.9); }
   }
+  // Start and outrun grandstands share one instanced crowd. Leave aisles
+  // open and thin the far seats so phones can afford the whole stadium.
+  sc.instances(partsOf(P.spectator()), seats.filter((_, i) => i % 3 === 0),
+    { tints: COATS, scale: [1.06, 1.34], cast: false });
   let screenSign = null;
   {
     const sx = 6, sz = 112, sy = sc.y(sx, sz);

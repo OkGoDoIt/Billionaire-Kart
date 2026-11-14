@@ -286,6 +286,11 @@ export class AIDriver {
     const need = Math.abs(kMax) * sp;                                        // yaw rate needed for the corner ahead
     let throttle = 1, brake = 0, drift = false;
 
+    // At some tight entries the inside line is already an apex. Hopping
+    // further inward there carries the kart into the rail before it can unwind.
+    const cp = tr.cp[hit.i];
+    const skipInsideDrift = tr.def.driftEntries?.some(entry =>
+      cp >= entry.from && cp < entry.to && hit.lat * entry.side > entry.inside);
     if (k.drifting) {
       // steer the drift to hold the line: into the corner tightens, out widens
       drift = true;
@@ -295,14 +300,14 @@ export class AIDriver {
       if (remaining < 3 && k.driftTier >= 1) drift = false;                    // corner done, cash in the turbo
       else if (remaining < -10) drift = false;                                // overshot the corner
       else if (k.driftTier >= (plan?.wantTier || 1) + 1) drift = false;       // plenty charged
-      else if (offLine) drift = false;
+      else if (offLine || skipInsideDrift) drift = false;
       if (!drift) this.driftPlan = null;
     } else if (this.driftPlan) {
       // button is down and we are mid-hop: keep holding until the drift catches
       const plan = this.driftPlan; plan.wait = (plan.wait || 0) + dt;
       drift = true; steer = plan.steer;
-      if (plan.wait > 0.7 || k.hitT > 0) { this.driftPlan = null; drift = false; }
-    } else if (k.grounded && sp > k.top * 0.62 && k.hitT <= 0 && !k.surface.offroad && !(this.cutPlan && loopDelta(k.s, this.cutPlan.s0, tr.length) < 70)) {   // no mini-turbo into a shortcut
+      if (plan.wait > 0.7 || k.hitT > 0 || skipInsideDrift) { this.driftPlan = null; drift = false; }
+    } else if (!skipInsideDrift && k.grounded && sp > k.top * 0.62 && k.hitT <= 0 && !k.surface.offroad && !(this.cutPlan && loopDelta(k.s, this.cutPlan.s0, tr.length) < 70)) {   // no mini-turbo into a shortcut
       // find a corner we are about to enter
       for (const c of tr.corners) {
         const d = loopDelta(k.s, c.i0 * tr.ds, tr.length);

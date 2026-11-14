@@ -43,6 +43,11 @@ export default {
   name: 'International Waters',
   tagline: 'No jurisdiction. No speed limit.',
   laps: 3,
+  driftEntries: [
+    { from: 7.3, to: 9.4, side: -1, inside: 3.5 },
+    { from: 13, to: 15.5, side: -1, inside: 3.5 },
+    { from: 40.6, to: 42.6, side: 1, inside: 4 },
+  ],
   width: 18,
   sky: 'day',
   skyOverrides: { zenith: 0x0d5bd6, horizon: 0x9fdcff, sunDir: [0.42, 0.6, 0.52], fogNear: 320, fogFar: 1500, sunIntensity: 3.5, cloudCover: 0.36 },
@@ -130,7 +135,7 @@ export default {
     { at: 18.25, len: 10, lift: 2.4 },            // the quay ramp, onto SOVEREIGN IMMUNITY
     { at: 25.5, len: 10, lift: 2.6 },             // off her bow helipad, over the channel
     { at: 31.47, len: 10, lift: 2.4 },            // off FAIR & BALANCED
-    { at: 37.46, len: 10, lift: 2.4 },            // off HOSTILE TAKEOVER, home to the causeway
+    { at: 37.46, len: 10, lift: 1.65 },            // off HOSTILE TAKEOVER, home to the causeway
   ],
   gaps: [{ from: 18.96, to: 21.46 }, { from: 25.98, to: 27.95 }, { from: 31.99, to: 34.17 }, { from: 38.01, to: 39.53 }],
   boosts: [

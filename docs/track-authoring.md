@@ -46,6 +46,7 @@ export default {
   sides:   [ { from, to, side: 'L'|'R' (omit for both), edge: 'open'|'wall'|'void', shoulder, outer } ],
   zones:   [ { from, to, surface: 'dirt', skin: 'dirt' } ],   // surface = physics, skin = how the road looks
   tunnels: [ { from, to, through: true } ],            // arched shell; through:true lets a hill sit on top
+  driftEntries: [{ from: 3.5, to: 4.8, side: 1, inside: 4 }], // optional: rivals already over 4 m inside take this apex without a hop or drift (+1 left, -1 right)
   bridges: [ { from, to } ],                           // deck, pillars; terrain is not pulled up to it
   gaps:    [ { from, to } ],                           // missing road: must be jumped
   ramps:   [ { at, len: 9, lift: 2.1, lat: 0, w: 6 } ],   // omit w for full width; trick-enabled

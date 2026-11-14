@@ -110,6 +110,9 @@ export default {
   name: 'WeWork Memorial',
   tagline: 'A facilities tour of a dead coworking empire.',
   laps: 3,
+  driftEntries: [
+    { from: 57.6, to: 61.2, side: 1, inside: 4 },
+  ],
   width: 19,
   autoBank: 0,                         // flat office floors meet the room slabs at every edge
   sky: 'studio',                       // indoor backstop only — the building is the enclosure

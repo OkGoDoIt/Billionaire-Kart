@@ -115,7 +115,7 @@ export default {
   ],
   sides: [
     { from: 43.6, to: 1.7, side: 'R', edge: 'wall' },                          // grandstand wall along the Avenue
-    { from: 4.3, to: 6.75, side: 'L', shoulder: 1.2, outer: 1.3, blend: 1.4, hoarding: false }, // the Reflecting Pool: the coping is the edge of the road
+    { from: 4.08, to: 6.75, side: 'L', shoulder: 1.2, outer: 1.3, blend: 1.4, hoarding: false }, // the Reflecting Pool: the coping is the edge of the road
     { from: 6.75, to: 7.15, side: 'L', outer: 7, blend: 6, hoarding: false },             // the fountain plaza at its foot
     { from: 5.7, to: 7.0, side: 'R', outer: 32, shoulder: 4, hoarding: false }, // the Mall: open lawn between the pool run...
     { from: 10.15, to: 11.6, side: 'R', outer: 32, shoulder: 4, hoarding: false }, // ...and the Mall leg (cut it with a boost)
@@ -543,10 +543,10 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // the near side: pale paving from the kerb to the coping at road height, so the road meets the pool in stone, not
   // lawn, and the water sits level with it: at kart height anything that stands up between the road and the water hides it
   {
-    const i0 = track.indexAtCp(4.3), i1 = track.indexAtCp(6.75), pos = [], uv = [], idx = [];
+    const i0 = track.indexAtCp(4.08), i1 = track.indexAtCp(6.75), pos = [], uv = [], idx = [];
     for (let i = i0, r = 0; i <= i1; i++, r++) {
-      const latA = track.hwL[i] + 1.05, latB = Math.max(latA + 0.2, (POOL.coping + 0.1 - track.px[i]) / Math.max(0.3, track.lx[i]));
-      const y = track.py[i] + track.ly[i] * (track.hwL[i] + 1.1) + 0.04;
+      const latA = track.hwL[i] + 1.05, latB = Math.max(latA + 2.65, (POOL.coping + 0.1 - track.px[i]) / Math.max(0.3, track.lx[i]));
+      const y = track.py[i] + track.ly[i] * (track.hwL[i] + 1.1) + 0.075;
       for (const lat of [latA, latB]) { const x = track.px[i] + track.lx[i] * lat, z = track.pz[i] + track.lz[i] * lat; pos.push(x, y, z); uv.push(lat / 5, z / 5); }
       if (i < i1) { const q = r * 2; idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
     }
@@ -572,12 +572,21 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // the twist: algae mats in three greens, scum along the coping, ducks in residence
   {
     const matSpots = [];
-    for (let k = 0; k < 54; k++) matSpots.push({ x: k % 4 ? POOL.x1 - rng.range(1.2, 5.8) : POOL.x0 + rng.range(1.2, 3.6), z: rng.range(POOL.z0 + 2, POOL.z1 - 2), y: WY + 0.015, yaw: rng.range(0, 6.28) });
+    for (let k = 0; k < 54; k++) {
+      const x = k % 4 ? POOL.x1 - rng.range(1.2, 5.8) : POOL.x0 + rng.range(1.2, 3.6);
+      const z = rng.range(POOL.z0 + 2, POOL.z1 - 2), yaw = rng.range(0, 6.28);
+      const ground = track.ground(x, z, -1, sc.hit);
+      if (!ground.onRoad && ground.outside > 6.5) matSpots.push({ x, z, y: WY + 0.015, yaw });
+    }
     sc.instances(partsOf(C.algaePatch(0x3e7a24)), matSpots.slice(0, 18), { scale: [1.0, 3.0], cast: false });
     sc.instances(partsOf(C.algaePatch(0x639c33)), matSpots.slice(18, 36), { scale: [0.9, 2.6], cast: false });
     sc.instances(partsOf(C.algaePatch(0x8aa832)), matSpots.slice(36), { scale: [0.8, 2.2], cast: false });
     const strips = [];
-    for (let z = POOL.z0 + 5; z < POOL.z1 - 4; z += 9) { strips.push({ x: POOL.x0 + 0.62, z, y: WY + 0.01, yaw: Math.PI / 2 }); strips.push({ x: POOL.x1 - 0.62, z: z + 4.5, y: WY + 0.01, yaw: Math.PI / 2 }); }
+    for (let z = POOL.z0 + 5; z < POOL.z1 - 4; z += 9) {
+      const ground = track.ground(POOL.x0 + 0.62, z, -1, sc.hit);
+      if (!ground.onRoad && ground.outside > 4.8) strips.push({ x: POOL.x0 + 0.62, z, y: WY + 0.01, yaw: Math.PI / 2 });
+      strips.push({ x: POOL.x1 - 0.62, z: z + 4.5, y: WY + 0.01, yaw: Math.PI / 2 });
+    }
     sc.instances(partsOf(C.algaeStrip()), strips, { scale: [0.7, 1.2], cast: false });
     const duckProto = C.duck(), ducks = [];
     for (const [dx, dz, dyaw] of [[POOL.x0 + 3.2, 96, 2.6], [POOL.x0 + 4.5, 101, 2.2], [AXIS + 3, 150, -0.7], [POOL.x0 + 2.6, 186, 1.4], [AXIS + 5, 124, 0.4]]) {

@@ -561,3 +561,61 @@ post-#155) by length; the build's sim numbers supersede every
 estimate in this doc. Post-#168 anchors were read from the #168
 build's working tree against PR #164's merged file; checklist line 0
 exists because #168 had not merged when this doc was written.
+
+## As built (PR #215, finisher pass #229 / #242, Nov 14, 2026)
+
+Option C shipped as specced, with these changes from the design above —
+each measured, none cosmetic:
+
+**Final spline (23 control points, 1,344 m).** cp 0–3 unchanged (home
+straight, Golden Gate deck — the #168 crossing is exactly as built).
+cp 4–5 Sand Hill Road with the median split (`wl: 22`, island at lat
+11.4); cp 6 the dip; cp 7 Partner Summit; cp 8–9 the esses; cp 10 the
+crest (jump ramp at cp 10.25); cp 11 the downhill sweeper; cp 12 the
+foot of the hill; cp 13–14 Palm Drive; **cp 15 the Oval hairpin at
+[-203, 0, -50]** (moved out and up in the finisher pass: at
+[-200, 0, -54] the AI ran wide onto the grass at the entry); cp 16–17
+the run back north; cp 18 into the Quad; cp 19–20 the Quad arcade
+(14 m pinch); cp 21–22 the Founder's Fountain split to the line.
+
+**The two boost-gated grass cuts are dropped.** Measured with the
+lone-rival harness: on this engine grass runs at ~55% speed, so a cut
+either loses with a boost or wins without one — the Oval lawn cut,
+boosted, took 2.63 s against 1.90 s for simply spending the boost on
+the road. They are replaced by a second *road* split (the Sand Hill
+median and its LP lane), which balances like the fountain split does.
+
+**The LP lane** (left of the Sand Hill median, gated until the leader
+starts lap 2, #121) re-timed in the finisher pass: lone-rival medians
+main 2.88 s vs LP 3.25 s over cp 3.55–5.6 (hard AI, 30 segments, pads
+verified hit on every LP run), with the pads at cp 4.35 and **4.95**.
+A ~0.35 s residual remains — the LP line is the outside of the bend
+and the AI cannot drift-boost on the cut — recorded here rather than
+tuned away, as the governing standard's ~0.3 s split target is a
+balance guide and the lane's lap-2 reveal is the point of it.
+
+**Palm Drive is at x −208, not −150**, so the downhill flows straight
+into it and the chapel sits on its axis; the doc's line needed a 106°
+flick at the foot of the hill. **The Oval is a hairpin** (r 22), not a
+90° bend: the lap needed a purple mini-turbo corner. **The fountain
+island is 40 m** (doc: ≥ 45 m), fixed by the room between the arcade
+and the grid, on the left at lat 11.4, off the racing line.
+
+**No real names.** The doc's real VC firms are replaced with invented
+ones — **FOMO Capital, Bigger Fish Partners, Hockey Stick Ventures,
+Burn Rate Capital** — and the campus is "The Farm", never a real
+university.
+
+**Grounding pass (#242).** Every prop now seats on the rendered
+terrain at its own footprint (props were seated by the kart physics
+ground, which diverges from the visible mesh by up to ~8 m on the
+conform slopes — the cp 10 billboard floated 7 m). In the process the
+scooter graveyard moved from cp 10.8 to beside(11.5, 1, 30) and the
+unicorn HQ from cp 7.9/off 32 to cp 7.5/off 36, both to ground their
+footprints actually touch; the Sand Hill median island is pitched to
+the road's fall. Gameplay geometry is unchanged by the pass.
+
+**Final numbers.** Lap 1,344 m. `sim --quick` no FAIL. Ten hard-AI
+races: hits 23.5/race, rescues 0.6/race, mini-turbos 42/race, both
+splits used heavily (fountain 195, LP lane 135). Normal-difficulty
+finisher sims: lap avg ~42.7 s, hits ~30/race, rescues < 0.5/race.

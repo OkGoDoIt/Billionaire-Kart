@@ -79,6 +79,23 @@ export class App {
     if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
     this.audio?.setVolumes?.(S.music, S.sfx);
     this.shake = S.shake;
+    // A race already running was built with the old racing preferences: push the new
+    // ones onto its human karts and cameras, with the same rules session.js builds
+    // them by, so an Options change made in pause is honored on resume (#272).
+    const s = this.session;
+    if (s) {
+      for (const c of s.view.cams) c.shakeScale = S.shake === false ? 0 : 1;
+      const tt = s.config.mode === 'timetrial';
+      for (const k of s.race.players) {
+        k.autoTrick = !!(S.autoTrick || this.input.touch.active);
+        k.assist = { steer: !tt && S.smartSteer ? 1 : 0 };
+      }
+      // touch play keeps its forced assists, exactly as at session construction
+      if (s.touch && s.race.players.length) {
+        s.race.players[0].autoTrick = true;
+        if (!tt) s.race.players[0].assist = { steer: 1 };
+      }
+    }
   }
 
   /** Enter or leave full screen. Must be called from a user gesture. */
@@ -197,7 +214,10 @@ export class App {
   /** Called by the session when the flyover ends. */
   onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
 
-  restartRace() { this.menus.close(); this._race(this.lastConfig, this.lastCupLine); }
+  /* The stored config's player entries were built with the settings of their time:
+     rebuild them from the current settings so a restart honors Options changes
+     made since the race started, like a fresh start does (#272). */
+  restartRace() { this.menus.close(); if (this.lastConfig) this.lastConfig.players = this._players(); this._race(this.lastConfig, this.lastCupLine); }
   /* Run the finished cup again from race 1: same cup, class, level, racer picks, and rival grid; the
      standings start empty. The recorded result in the save is untouched — a better run replaces it. */
   restartCup() { const g = this.gp; if (g) this.startCup(g.cup, g.grid); }

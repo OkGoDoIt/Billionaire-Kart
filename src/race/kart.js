@@ -121,7 +121,7 @@ export class Kart {
     this.lastSafeI = 0; this.safeT = 0; this.rescueT = 0; this.wrongWayT = 0; this.stuckT = 0;
     this.lapTimes = []; this.lapStart = 0; this.bestLap = Infinity;
     this.surface = SURFACES.road; this.wallT = 9; this.prevDrift = false; this.prevItem = false;
-    this.startCharge = 0; this.startBurn = false; this.time = 0;
+    this.startCharge = 0; this.startArmed = false; this.time = 0;
     this.streak = 0; this.absorbs = this.sp?.absorb || 0; this.sputterT = 0; this.sputterNext = this.sp?.sputter ? this.sp.sputter.every[1] : 0;
     this.stats = { hitsGiven: 0, hitsTaken: 0, drifts: 0, boosts: 0, coins: 0, items: 0, topSpeed: 0, overtakes: 0, airtime: 0 };
     this.events.length = 0;
@@ -332,21 +332,25 @@ export class Kart {
 
     // ----- throttle / brake
     if (!airborne) {
-      // The brake can trim a boost into a corner. The boost timer keeps running.
-      if (boosting && !brake) {
-        vf = approach(vf, topBoost, T.boostAccel * dt);
-      } else if (throttle > 0 && !brake) {
+      // Both analog pedals can be down. A squeeze reduces the drive force while
+      // the service brake acts independently; brake alone can reverse from rest.
+      const drive = 1 - brake;
+      if (boosting) {
+        // Half travel cuts boost thrust completely so a firm corner brake has its full bite.
+        vf = approach(vf, topBoost, T.boostAccel * Math.max(0, 1 - 2 * brake) * dt);
+      } else if (throttle * drive > 0) {
         if (vf < top) {
           const r = clamp(vf / top, 0, 1);
-          vf += this.accel * throttle * (1 - r * r * this.accelFall) * (vf < 0 ? 2.2 : 1) * dt;
+          vf += this.accel * throttle * drive * (1 - r * r * this.accelFall) * (vf < 0 ? 2.2 : 1) * dt;
           if (vf > top) vf = top;
         } else vf = approach(vf, top, (offroad ? T.offroadDecel : T.boostFade) * dt);
-      } else if (brake > 0) {
-        if (vf > 0.6) vf = Math.max(0, vf - T.brake * brake * dt);
-        else vf = approach(vf, -top * T.reverse, this.accel * 0.8 * dt);
-      } else {
+      } else if (!brake) {
         vf = approach(vf, 0, T.coast * dt);
         if (vf > top) vf = approach(vf, top, T.offroadDecel * dt);
+      }
+      if (brake > 0) {
+        if (vf > 0.6 || throttle > 0) vf = approach(vf, 0, T.brake * brake * dt);
+        else vf = approach(vf, -top * T.reverse * brake, this.accel * 0.8 * brake * dt);
       }
       // gentle gravity along slopes
       vf -= this.pitch * 5.2 * dt;
@@ -604,11 +608,17 @@ export class Kart {
   /** During the countdown: hold accelerate at the right moment for a rocket start. */
   _startRev(dt, input) {
     const c = this.race.countdown; // seconds until GO (positive during the countdown)
-    if (input.throttle > 0.5) {
+    this.revving = input.throttle > 0.5;
+    if (!this.revving) {
+      // Confirm and gas can share a button. Require a fresh countdown press to
+      // attempt a rocket start; holding through the menu gives a normal launch.
+      this.startArmed = true;
+      this.startCharge = 0;
+      this.startPressAt = null;
+    } else if (this.startArmed) {
       if (this.startCharge === 0) this.startPressAt = c;
       this.startCharge += dt;
-    } else { this.startCharge = 0; this.startPressAt = null; }
-    this.revving = input.throttle > 0.5;
+    }
   }
   /** Called by the race at GO. */
   launch() {

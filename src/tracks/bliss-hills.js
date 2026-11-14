@@ -109,17 +109,17 @@ export default {
   ],
   boosts: [
     { at: 8.35, lat: 0, w: 5 },                                    // one before each crest
-    { at: 11.1, lat: 0, w: 5 },
-    { at: 14.2, lat: 0, w: 5 },
+    { at: 11.1, lat: 3, w: 5 },
+    { at: 14.2, lat: -3, w: 5 },
     { at: 22.15, lat: -4.5, w: 5 },                                // ramp landing
   ],
   itemRows: [{ at: 1.6 }, { at: 7.4 }, { at: 23.0 }, { at: 27.3, n: 3 }],
   coins: [
     { from: 0.25, to: 0.6, n: 4, lat: -3 },
-    { from: 3.6, to: 4.6, n: 4, lat: [5, -5] },
+    { from: 3.6, to: 4.6, n: 4, lat: [-4, -3] },
     { from: 9.15, to: 9.75, n: 3, lat: 0, air: 2.0 },              // a line floating over each crest
-    { from: 12.15, to: 12.75, n: 3, lat: 0, air: 2.0 },
-    { from: 15.15, to: 15.75, n: 3, lat: 0, air: 2.0 },
+    { from: 12.15, to: 12.75, n: 3, lat: 3, air: 2.0 },
+    { from: 15.15, to: 15.75, n: 3, lat: -3, air: 2.0 },
     { from: 18.2, to: 19.8, n: 5, lat: [-5, -6] },
     { from: 21.75, to: 22.0, n: 2, lat: -4.5, air: 3 },
     { from: 28.2, to: 30.2, n: 5, lat: [-4, 4] },
@@ -129,9 +129,9 @@ export default {
   shortcuts: [{ name: 'meadow', from: 22.2, to: 27.9, path: [[-30, 166], [-16, 151], [-13, 132], [-19, 112]] }],
   obstacles: [
     // error dialogs drifting across the road
-    { kind: 'patrol', model: 'dialog', at: 4.3, lats: [1.5, 6.5], speed: 4, effect: 'spin', radius: 1.7 },
-    { kind: 'patrol', model: 'dialog', at: 22.7, lats: [-1.5, -6.5], speed: 4.5, effect: 'spin', radius: 1.7 },
-    { kind: 'patrol', model: 'dialog', at: 27.0, lats: [1.5, 6.5], speed: 5, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 4.3, lats: [2.5, 6.5], speed: 4, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 22.7, lats: [-2.5, -6.5], speed: 4.5, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 27.0, lats: [2.5, 6.5], speed: 5, effect: 'spin', radius: 1.7 },
     // hay bales scattered over the meadow shortcut
     { kind: 'static', model: 'bale', at: 22.2, lat: 18, effect: 'bump', radius: 1.6 },
     { kind: 'static', model: 'bale', at: 22.75, lat: 25, effect: 'bump', radius: 1.6 },

@@ -57,10 +57,11 @@ function buildPath() {
   arc('C2 exit', 48, -8, [62.14, -22.14], [48, -28], 0.99, 22, 13.5);  // r20, far feature ramp @ 8.0% + inside (L) apron wl 13.5 (#237 step 3)
   line('touchdown', 35.7, -28, 0, 22, 7);
   line('L3 mid', 0, -28, 0, 22, 18);
-  line('C3 entry', -46, -28, 0, 23, 20, 12.4);
-  arc('C3 exit', -46, -12, [-57.31, -23.31], [-62, -12], 0, 21, 12.4);   // r16
-  line('C4 entry', -62, 0, 0, 15, 6);
+  line('C3 entry', -46, -28, 0, 23, 20, 15);
+  arc('C3 exit', -46, -12, [-57.31, -23.31], [-62, -12], 0, 21, 15);   // r16
+  line('C4 entry', -62, 0, 0, 15, 6, 10);
   arc('L5 entry', -44, 0, [-56.73, 12.73], [-44, 18], 0, 15);    // C4 r18
+  pts[AT['C4 entry'] + 1].wl = 10; // carry the apron past the office elbow
   line('L5 mid', -4, 18, 0, 15, 20);
   // Through the kitchen under the lounge, then around the *outside* of the
   // mezzanine descent. These two lanes used to meet at the foot of the ramp.
@@ -86,7 +87,7 @@ function buildPath() {
   arc('L13 entry', 80.64, 38, [72.99, 56.48], [80.64, 58], 6, 19, 11);  // second half of the balcony S, radius 20
   line('L14 entry', 92, 58, 6, 14, 20);                             // Stair B throat (w 13→14, #237 step 3)
   line('L-B entry', 122, 58, 3, 18, 10, 11);  // fire stair upper flight, 10%
-  landing('L15 entry', 126, 32, 1, 11.8, 3, 17, 10);        // final fire-stair landing
+  landing('L15 entry', 126, 32, 1, 11.8, 3, 17, 11.4);        // final fire-stair landing
   line('L16 entry', 92, 32, 0, 16.5, 10, 10.5);  // fire stair lower flight, 10%
   line('L17 entry', 72, 32, 0, 13, 20);                             // atrium return (w 12→13, #237 step 3)
   line('L17 mid', 0, 32, 0, 13, 36);
@@ -97,6 +98,8 @@ function buildPath() {
   function apron(first, last, side, halfWidth) {
     for (let i = AT[first]; i <= AT[last]; i++) pts[i][side] = halfWidth;
   }
+  // Open the inside before braking for the square fire-door landing.
+  pts[AT['L-B entry'] - 1].wl = pts[AT['L-B entry']].wl = 11.4;
   apron('C1 exit', 'C2 entry', 'wl', 13);
   apron('L7 entry', 'L-A entry', 'wl', 15);
   apron('L8 entry', 'C7 entry', 'wl', 18);
@@ -574,13 +577,14 @@ function dressSectors(ctx, H) {
   putSign(['GROWTH (HOCKEY STICK)'], 11, 2.4, 0, 6, 1.55, 180, { bg: '#274b63', fg: '#ffe9a8' });
   // The main carpet is the aisle between two banks. Local +Z is the open side.
   for (const side of [-1,1]) {
-    const rowZ = side < 0 ? -42.3 : -13.3;
     for (const [j,x] of [-36,-23.6,-11.2,1.2,13.6,26].entries()) {
+      // Pull the last three inside desks back from the widened turning apron.
+      const rowZ = side < 0 ? -42.3 : (x < 0 ? -10.3 : -13.3);
       const pod = W.workPods((j + (side === 1 ? 1 : 0)) % 3 ? 0x426f71 : 0xa96351, j % 3 !== 0);
       bakePut(pod, x, 0, rowZ, side < 0 ? 0 : 180);
     }
   }
-  bakePlace(W.deskUnit(), -52, -10.5, { yaw: Math.PI, y: 0 });
+  bakePlace(W.deskUnit(), -46, -7, { yaw: Math.PI, y: 0 });
   bakePlace(W.deskUnit(), 30, -10.5, { yaw: Math.PI, y: 0 });
   bakePlace(W.paperStack(), 62, -45, { yaw: .7, y: 0 });
   bakePlace(W.paperStack(), -72, -44, { yaw: 2.1, y: 0 });

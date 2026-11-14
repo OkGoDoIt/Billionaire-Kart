@@ -31,6 +31,14 @@ else try { browser = await chromium.launch({ channel: 'chrome', headless: true, 
 catch { browser = await chromium.launch(swiftshader); }
 const mobile = !!opt.mobile, CI = !!process.env.CI;
 const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1280, height: 720 }, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
+// The mobile flow exercises a phone driven only by touch. Local Chrome can deliver
+// the host controller's connection event even when the polled device list is empty.
+if (mobile) await ctx.addInitScript(() => {
+  Object.defineProperty(navigator, 'getGamepads', { value: () => [] });
+  const ignoreHostPad = event => event.stopImmediatePropagation();
+  addEventListener('gamepadconnected', ignoreHostPad, true);
+  addEventListener('gamepaddisconnected', ignoreHostPad, true);
+});
 const page = await ctx.newPage();
 /* The title tap enters full screen on touch devices, and headless Chromium on Linux refuses to resize a
    full-screen window, so leave full screen before turning the phone. */

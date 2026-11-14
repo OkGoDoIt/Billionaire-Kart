@@ -33,17 +33,17 @@ const PATH = [
     { p: [20, 0, -108] },                        // 0 start/finish on the portal straight, flat and bank-free
     { p: [140, -0.6, -108] },                    // 1 the dive begins, dead level across the grid first
     { p: [198, -2.4, -96], bank: -6 },           // 2 Portal Bend: the dive's first pitch, bank catches the kart
-    { p: [226, -4.2, -52] },                     // 3 the chicane, right kink: first half of the S-bend
-    { p: [208, -5.2, -8] },                      // 4 the chicane, left kink: the dive bottoms out at the Machine
-    { p: [230, -5.9, 40] },                      // 5 settle right at running depth
-    { p: [190, -6, 84], bank: -7 },              // 6 Boring Bend: 90 degrees onto the north wall at full depth
+    { p: [226, -4.2, -52], wr: 8.5, wl: 7.5 },   // 3 the chicane, right kink: first half of the S-bend (wr apron: the pursuit chord clips this inside wall — wall-map 9/race before)
+    { p: [208, -5.2, -8], wl: 9 },               // 4 the chicane, left kink: the dive bottoms out at the Machine (wl apron, same reason)
+    { p: [230, -5.9, 40], wr: 8 },               // 5 settle right at running depth (wr apron)
+    { p: [190, -6, 84], bank: -7, wr: 7.5 },     // 6 Boring Bend: 90 degrees onto the north wall at full depth (wr apron tail: the settle's grind runs to cp ~5.5)
     { p: [118, -5.8, 105] },                     // 7 the deep run: the longest level sector in the game
     { p: [-60, -5.2, 110] },                     // 8 the deep run continues; the climb quietly begins
     { p: [-156, -3.8, 102], bank: -5 },          // 9 the climb, hairpin approach
     { p: [-198, -2.2, 56] },                     // 10 the west climb: the bore's high shoulder
     { p: [-206, -0.8, 8] },                      // 11 the west climb, deep in the hill
-    { p: [-186, 0.4, -42] },                     // 12 the Ring Hairpin, entry: the corner tightens hard
-    { p: [-168, 1.6, -84], bank: -5 },           // 13 the Ring Hairpin, exit onto the crown (ring at the apex, cp ~12.6)
+    { p: [-186, 0.4, -42], w: 16 },              // 12 the Ring Hairpin, entry: the corner tightens hard (w:16 — the ring sector stays wide so the loop ring fits)
+    { p: [-168, 1.6, -84], bank: -5, w: 16 },    // 13 the Ring Hairpin, exit onto the crown (ring at the apex, cp ~12.6)
     { p: [-106, 2.2, -104], bank: -5 },          // 14 the crown: +2.2 m, shallowest cover, closest to daylight
     { p: [-30, 0.3, -108] },                     // 15 the settle: dead level again by the portal straight
   ];
@@ -53,8 +53,8 @@ export default {
   name: 'Boring Tunnel GP',
   tagline: 'One bore. No shortcut. Still digging.',
   laps: 3,
-  width: 19,
-  tunnelHeight: 10,                 // a big bore: room for the ring and the fans
+  width: 13,
+  tunnelHeight: 7,                  // a single-lane bore (#234 item 2): the walls close in; the ring sector keeps w:16
   sky: 'golden',                    // the portal mouths get the golden hour (design doc: mk8-desert)
   offroad: 'sand',
   defaults: { edge: 'open', shoulder: 3, outer: 10 },
@@ -103,12 +103,12 @@ export default {
     { from: 13.75, to: 14.2, n: 4, lat: 0, air: 2.2 },  // over the crown jump
   ],
   obstacles: [
-    { kind: 'patrol', model: 'bot', at: 6.9, lats: [-8, -3.5], speed: 4, effect: 'spin' },   // maintenance bot sweeping the deep run's left half
-    { kind: 'patrol', model: 'bot', at: 8.8, lats: [8, 3.5], speed: 3.5, effect: 'spin' },   // and one working the climb
-    { kind: 'orbit', model: 'drone', at: 15.6, lat: -7, orbit: 3, speed: 6, effect: 'spin' }, // survey drone worrying the home straight
-    { kind: 'static', model: 'crate', at: 9.6, lat: -6.5, effect: 'bump' },                  // dig crates on the climb
-    { kind: 'static', model: 'barrel', at: 5.6, lat: 6.5, effect: 'bump' },                  // a barrel at the chicane's settle
-    { kind: 'static', model: 'crate', at: 12.9, lat: 6, effect: 'bump' },                    // crates on the crown approach
+    { kind: 'patrol', model: 'bot', at: 6.9, lats: [-4.5, -3.4], speed: 4, effect: 'spin' },   // maintenance bot working the deep run's left wall band (centre sweeps caused 6 hits/race at cp7)
+    { kind: 'patrol', model: 'bot', at: 8.8, lats: [4.5, 3.4], speed: 3.5, effect: 'spin' },   // and one working the climb's right wall band
+    { kind: 'orbit', model: 'drone', at: 15.6, lat: -4.6, orbit: 0.6, speed: 6, effect: 'spin' }, // survey drone worrying the home straight's left edge (mid-road orbit caused 13 hits/race at cp15.5)
+    { kind: 'static', model: 'crate', at: 9.6, lat: -4.5, effect: 'bump' },                  // dig crates on the climb
+    { kind: 'static', model: 'barrel', at: 5.6, lat: 4.5, effect: 'bump' },                  // a barrel at the chicane's settle
+    { kind: 'static', model: 'crate', at: 12.9, lat: 4.5, effect: 'bump' },                    // crates on the crown approach
   ],
   terrain: {
     // water sits below the bore's -6 m floor: the road runs UNDER this level for
@@ -212,15 +212,19 @@ export default {
       }
     });
 
-    // the dig gantry straddling the road just past the Machine
+    // the dig gantry straddling the road just past the Machine (span/beam
+    // shrunk for the 7 m bore: legs bed into the shell base, as they did at 24)
     const gp = atPos(4.75, 0);
     const gTex = signTex('MIND THE MACHINE', { w: 1600, h: 200, size: 150, bg: '#f7b500', fg: '#1a1d29' });
-    sc.place(T.digGantry(gTex, { span: 24 }), gp.x, gp.z, { yaw: gp.yaw + Math.PI, y: gp.y });
+    sc.place(T.digGantry(gTex, { span: 14.5, beamY: 5.9 }), gp.x, gp.z, { yaw: gp.yaw + Math.PI, y: gp.y });
 
-    // the loop-the-loop ring at the hairpin apex: visual only, drive through it mid-drift
+    // the loop-the-loop ring at the hairpin apex: visual only, drive through it mid-drift.
+    // Sunk 2.5 m for the 7 m bore (#234 item 2): the 18.3 m ring keeps its size, its top
+    // tucks under the shell apex (6.95 < 7) and its sides meet the road right at the
+    // w:16 sector's edges, so the whole road threads the ring.
     const rp = atPos(12.6, 0);
     const ringTex = signTex('LOOP-THE-LOOP', { w: 1024, h: 240, size: 175 });
-    sc.place(T.loopRing(ringTex), rp.x, rp.z, { yaw: rp.yaw, y: rp.y });
+    sc.place(T.loopRing(ringTex), rp.x, rp.z, { yaw: rp.yaw, y: rp.y - 2.5 });
 
     // ceiling fans on the dive, on the deep run, and on the crown settle;
     // the deep-run fan is the big vent fan, half again as large
@@ -235,7 +239,8 @@ export default {
 
     // tripod work lights down both walls: the mid-distance structure in every tunnel view
     for (const [at, side] of [[2.2, 1], [3.7, -1], [5.3, 1], [7.3, -1], [9.4, 1], [11.3, -1], [12.9, 1], [13.9, -1]]) {
-      const p = atPos(at, side * 8.85);
+      const ci = track.indexAtCp(at), hw = (side > 0 ? track.hwL[ci] : track.hwR[ci]);
+      const p = atPos(at, side * (hw - 0.3));
       sc.place(T.workLight(), p.x, p.z, { yaw: faceCentre(p, side), y: p.y });
     }
 

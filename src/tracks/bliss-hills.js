@@ -726,14 +726,15 @@ function restartSky({ THREE, gfx, group, view, anim }) {
   canvas.width = 1024; canvas.height = 512;
   const g = canvas.getContext('2d');
   g.fillStyle = '#093da9'; g.fillRect(0, 0, 1024, 512);
+  // A texture tile covers 72° horizontally and 180° vertically. Match glyph scale in the two directions.
   const ink = '#eff8ff', font = 'Arial, sans-serif';
-  g.fillStyle = ink; g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = '40px Arial';
-  g.fillText(':(', 42, 210);
-  S.fitText(g, 'YOUR WORLD RAN INTO A PROBLEM', 299, 202, 400, 19, font, ink, { lines: 1 });
-  S.fitText(g, 'AND NEEDS TO RESTART.', 250, 225, 305, 19, font, ink, { lines: 1 });
-  // Repeat one readable message every 60 degrees. The negative repeat faces the lettering inward.
+  g.translate(0, 232); g.scale(1, 0.2);
+  g.fillStyle = ink; g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = '120px Arial';
+  g.fillText(':(', 40, -8);
+  S.fitText(g, 'YOUR WORLD RAN INTO A PROBLEM', 543, -28, 780, 57, font, ink, { lines: 1 });
+  S.fitText(g, 'AND NEEDS TO RESTART.', 543, 27, 780, 54, font, ink, { lines: 1 });
   const map = new THREE.CanvasTexture(canvas);
-  map.colorSpace = THREE.SRGBColorSpace; map.wrapS = THREE.RepeatWrapping; map.repeat.x = -6;
+  map.colorSpace = THREE.SRGBColorSpace; map.wrapS = THREE.RepeatWrapping; map.repeat.x = -5;
   const shell = new THREE.Mesh(new THREE.SphereGeometry(1500, 48, 24), new THREE.MeshBasicMaterial({
     map, transparent: true, opacity: 0, fog: false, depthWrite: false, side: THREE.BackSide, toneMapped: false,
   }));

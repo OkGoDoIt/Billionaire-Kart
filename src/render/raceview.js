@@ -290,6 +290,7 @@ export class RaceView {
     this._ghost();
     for (const { o, m } of this.obstacles) {
       m.position.set(o.x, o.y + (o.model === 'drone' ? Math.sin(this.time * 3 + o.id) * 0.15 : 0), o.z); m.rotation.y = o.yaw || 0;
+      m.visible = !o.hidden;
       if (m.userData.setActive) m.userData.setActive(o.active, o.warn, this.time);
       if (o.kind === 'timed' && o.active && o.model === 'flame' && this.fx.count(30, dt)) this.fx.flame(o.x + (Math.random() - 0.5), o.y + 0.5, o.z + (Math.random() - 0.5), 0, 9 + Math.random() * 5, 0, [1, 0.6, 0.2], 1.2, 0.4);
     }

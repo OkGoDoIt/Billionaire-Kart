@@ -123,6 +123,8 @@ export class Race {
   /** Track obstacles: patrols, orbiters, and timed hazards, all on fixed schedules. */
   _obstacles(dt) {
     const tr = this.track, P = this._op || (this._op = { x: 0, y: 0, z: 0 });
+    // fromLap: an obstacle that only appears from the leader's lap n on (negative counts from the end: -1 is the final lap)
+    let lead = 0; if (this._lapGated ?? (this._lapGated = this.obstacles.some(o => o.fromLap))) { lead = 1; for (const k of this.karts) lead = Math.max(lead, Math.min(k.lap, this.laps)); }
     for (const o of this.obstacles) {
       o.t += dt;
       let s = o.a.s, lat = o.a.lat;
@@ -134,6 +136,7 @@ export class Race {
       } else if (o.kind === 'orbit') {
         const a = o.t * o.speed / Math.max(1, o.orbit); s = o.a.s + Math.cos(a) * o.orbit; lat = o.a.lat + Math.sin(a) * o.orbit; o.yaw = tr.yawAt(s) - a;
       } else if (o.kind === 'timed') { o.active = ((o.t / o.period) % 1) < o.duty; o.warn = !o.active && ((o.t / o.period) % 1) > 1 - 0.18; }
+      if (o.fromLap) { o.hidden = lead < (o.fromLap < 0 ? this.laps + 1 + o.fromLap : o.fromLap); if (o.hidden) { o.active = false; o.warn = false; } }
       tr.pointAt(s, lat, P, o.lift); o.x = P.x; o.y = P.y; o.z = P.z;
       // off the road, stand on the real ground rather than the road plane extended sideways
       const i = Math.floor(((s % tr.length) + tr.length) % tr.length / tr.ds) % tr.N;

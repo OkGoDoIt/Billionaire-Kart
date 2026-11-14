@@ -463,6 +463,38 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
   };
   const button = (g, x, y, w, h, text) => { g.fillStyle = '#ffffff'; g.fillRect(x, y, w, h); g.strokeStyle = '#12142b'; g.lineWidth = Math.max(3, h * 0.06); g.strokeRect(x, y, w, h); fitText(g, text, x + w / 2, y + h / 2, w * 0.85, h * 0.6, SANS, '#12142b', { lines: 1 }); };
 
+  // The start menu doubles as the bridge beam. Its clock counts race laps.
+  {
+    const i = track.indexAtCp(0.9), p = sc.beside(0.9, 1, -track.hwL[i]);
+    p.yaw = p.along + Math.PI;
+    const W = track.hwL[i] + track.hwR[i] + 6, H = 3.2, y = p.roadY + 8.6;
+    for (const u of [-W / 2, W / 2]) {
+      const [x, , z] = local(p, u, 0, 0), foot = sc.y(x, z) - 0.35;
+      const post = S.post(y + H / 2 - foot, 0.56, 0x2757aa);
+      sc.place(post, x, z, { y: foot }); bake.add(post);
+    }
+    let lap = 1;
+    const tex = canvasTex(768, 96, (g, w, h) => {
+      const gloss = (x, width, light, mid, dark) => {
+        const gr = g.createLinearGradient(0, 0, 0, h);
+        for (const [at, color] of [[0, light], [0.14, mid], [0.55, mid], [1, dark]]) gr.addColorStop(at, color);
+        g.fillStyle = gr; g.fillRect(x, 0, width, h);
+      };
+      gloss(0, w, '#92c5ff', '#174fc5', '#123782');
+      g.save(); g.beginPath(); g.roundRect(-24, 1, 242, h - 2, 22); g.clip();
+      gloss(0, 220, '#b3f983', '#328522', '#104813'); g.restore();
+      fitText(g, 'start', 108, 49, 168, 78, XP, '#ffffff', { lines: 1 });
+      gloss(505, 263, '#8cedff', '#167cb9', '#0b4e83');
+      fitText(g, `LAP ${lap}/${view.race.laps}`, 634, 49, 236, 62, XP, '#ffffff', { lines: 1 });
+    });
+    const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+    for (const side of [1, -1]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
+      m.position.set(...local(p, 0, 0.1 * side, y)); m.rotation.y = p.yaw + (side < 0 ? Math.PI : 0); group.add(m);
+    }
+    anim.push(() => { if (view.showLap && lap !== view.showLap) { lap = view.showLap; tex.redraw(); } });
+  }
+
   // Alternate targets across the climb, angled toward the approach so the art has a silhouette at speed.
   const iconMaterials = ['folder', 'document'].map(name => {
     const map = new THREE.TextureLoader().load(`assets/tracks/bliss-hills/icon-${name}.webp`);

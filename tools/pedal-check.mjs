@@ -38,7 +38,8 @@ for (const cc of [50, 100, 150, 200]) {
 }
 
 const timed = (press, racer) => drive(150, r => ({ throttle: +(!r.frozen || r.countdown < press) }), racer).events;
-assert.ok(timed(3.2).has('burnout'), 'deliberately revving early still stalls');
+assert.ok(!timed(3.2).has('burnout'), 'holding gas before the first light starts normally');
+assert.ok(timed(2.95).has('burnout'), 'revving deliberately on the first light still stalls');
 assert.ok(timed(1).has('rocketStart'));
 const elon = RACERS.find(r => r.id === 'elon'), zuck = RACERS.find(r => r.id === 'zuck');
 assert.ok(timed(2.4, elon).has('rocketStart'));

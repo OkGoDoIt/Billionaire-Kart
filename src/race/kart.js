@@ -641,14 +641,15 @@ export class Kart {
   launch() {
     const at = this.startPressAt;
     if (at != null && this.startCharge > 0) {
-      // pressed after the "2" lights (about 2.0s to go) and held: rocket. Too early: stall.
+      // A press before the first visible light is an ordinary standing start.
+      // Pressed after the "2" lights (about 2.0s to go) and held: rocket. Too early: stall.
       const sp = this.sp;   // special: a wider window and a longer launch, with a worse stall past it
       if (at <= (sp.startWindow || START_TIMING.window) && at >= START_TIMING.floor) {
         const quality = at <= START_TIMING.perfect ? 1 : 0.7;
         this.boost('start', TUNE.start.t * quality * (sp.startBoost || 1), TUNE.start.mul);
         this.vx = Math.sin(this.yaw) * 9; this.vz = Math.cos(this.yaw) * 9;
         this.emit('rocketStart', quality);
-      } else if (at > (sp.burnoutAt || START_TIMING.burnoutAt)) { this.hitKind = 'burnout'; this.hitDur = this.hitT = sp.burnoutT || 0.9; this.emit('burnout'); }
+      } else if (at <= 3 && at > (sp.burnoutAt || START_TIMING.burnoutAt)) { this.hitKind = 'burnout'; this.hitDur = this.hitT = sp.burnoutT || 0.9; this.emit('burnout'); }
     }
     this.startCharge = 0; this.startPressAt = null; this.revving = false;
   }

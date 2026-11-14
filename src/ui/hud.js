@@ -164,6 +164,10 @@ export class Hud {
       case 'incoming': this.warn(e.data.type); break;
       case 'itemReady': this.pop(this.$.item); break;
       case 'miniTurbo': break;
+      case 'hit':
+        if (e.data.kind === 'zap') this.banner(ITEMS.crash.hit, 'bad small', 1500, 2, true);
+        break;
+      case 'burnout': this.banner('ENGINE STALLED!', 'bad small', 1000, 2, true); break;
       case 'rocketStart': this.banner(e.data >= 1 ? 'ROCKET START!' : 'NICE START!', 'good', 1100, 2, true); break;
       case 'trickLand': this.banner('TRICK!', 'good small', 700); break;
       case 'draft': this.banner('SLIPSTREAM!', 'good small', 800); break;

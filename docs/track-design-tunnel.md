@@ -145,7 +145,7 @@ own tunnel at the Boring Machine.
 
 The checklist superseded two verdicts above, and the doc's own audit named
 where it would happen: the gated cut went into the infield inside the
-S-bend, dug by the Machine. What shipped:
+S-bend, dug by the Machine. Track features follow.
 
 - **One lane:** width 19 → 13, tunnelHeight 10 → 7 (the ring sector keeps
   w:16 and the ring itself is sunk 2.5 m so it threads the smaller bore).
@@ -156,14 +156,6 @@ S-bend, dug by the Machine. What shipped:
   grid, a pyramid hotel and a half-built tower; at cp 6.4–7.6 the bore
   daylights into the Loop Station (glass canopy, platforms, a queue of
   parked AUTOPILOT-ISH robotaxis) under a painted boomtown backdrop.
-- **The Machine at hero scale:** no longer chewing the wall — it stands at
-  the end of a dead-end side bore off cp 4.3, an 11 m lit cutter face the
-  road skims past.
-- **The shortcut exists now — on the final lap only.** The whole inside of
-  the S-bend is one junction cavern (the tube opens along it). Its floor is
-  wet cement (speed 0.2, via the lake hook with a never-water level) until
-  `race.lakeLap >= race.laps`, when it sets to fast cement (0.92), the
-  SHORTCUT COMING SOON barrier tips flat, and rivals take "The
-  Breakthrough". Two narrow junction gaps were tried first and failed sim
-  (wall grinds + stuck-rescues against the parallel walled segment); the
-  single cavern is what made it clean: rescues 0.0 at normal and hard.
+- **The Machine** occupies the outside of the dig hall. Its 13 m cutter faces the incoming line while the road turns beneath the conveyor. Five arms carry banks of roller teeth. Dust comes off the lower rim so the rotation stays visible.
+- **The Breakthrough** runs straight through the chicane under the hall’s vaulted roof. The first two laps have an amber warning and wet cement. When the leading kart starts the final lap, the barrier falls, the overhead sign changes, and the edges turn green. The concrete sets from 0.2 to 0.92 speed. Six paired solo hard-driver runs through the fork saved 0.33–0.51 s on the express route.
+- **Loop Station** has continuous platforms, a glass canopy, two departures displays, and a station clock that runs backwards. The departing robotaxi noses into the lane, leaving room for the boost on the other side. Twin pressure mains and a bank of ventilation fans guide the climb to the ring.

@@ -89,6 +89,8 @@ const MENU_KEYS = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', 
 export class Input {
   constructor() {
     this.keys = new Set(); this.steerKb = { kb: 0, kb1: 0, kb2: 0 };
+    this.motorPulses = new Map();
+    this.rumbleFocused = true;
     this.assign = ['any'];                 // device per local player; 'any' merges everything (solo play)
     this.padBinds = defaultPadBindings();   // gamepad bindings; the app replaces these from the save
     this.padSteer = 'both';                 // steering source: 'both' | 'stick' | 'dpad'
@@ -111,7 +113,11 @@ export class Input {
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
     addEventListener('gamepadconnected', e => { this.lastDevice = 'pad' + e.gamepad.index; this.onPads?.(); });
-    addEventListener('gamepaddisconnected', () => this.onPads?.());
+    addEventListener('gamepaddisconnected', e => { this._endPulse(e.gamepad.index); this.onPads?.(); });
+    addEventListener('blur', () => { this.rumbleFocused = false; this.stopRumble(); });
+    addEventListener('focus', () => { this.rumbleFocused = true; });
+    addEventListener('pagehide', () => this.stopRumble());
+    globalThis.document?.addEventListener('visibilitychange', () => { if (document.hidden) this.stopRumble(); });
   }
 
   /** Adopt bindings + steering source from the save (sanitized on the way in). */
@@ -204,13 +210,43 @@ export class Input {
     }
   }
 
-  /** Controller rumble for a player (no-op where unsupported). */
+  _endPulse(index) {
+    const pulse = this.motorPulses.get(index);
+    if (!pulse) return;
+    clearTimeout(pulse.timer);
+    this.motorPulses.delete(index);
+    // Some drivers retain their last motor values until explicitly cleared.
+    const { actuator } = pulse;
+    const zero = () => actuator.playEffect('dual-rumble', { duration: 0, strongMagnitude: 0, weakMagnitude: 0 });
+    try {
+      if (actuator.reset) Promise.resolve(actuator.reset()).catch(() => {
+        if (!this.motorPulses.has(index)) return zero();
+      }).catch(() => {});
+      else Promise.resolve(zero()).catch(() => {});
+    } catch { /* Disconnected or unsupported. */ }
+  }
+
+  stopRumble(player) {
+    for (const [index, pulse] of this.motorPulses) {
+      if (player == null || pulse.player === player) this._endPulse(index);
+    }
+  }
+
+  /** A new impact replaces this pad's previous deadline, independently of other players. */
   rumble(player, strong = 0.5, weak = 0.5, ms = 150) {
+    if (!this.rumbleFocused || globalThis.document?.hidden) return;
     const dev = this.assign[player];
     const ids = dev === 'any' ? [0, 1, 2, 3] : dev?.startsWith('pad') ? [+dev.slice(3)] : [];
-    for (const i of ids) {
-      const gp = navigator.getGamepads?.()[i];
-      try { gp?.vibrationActuator?.playEffect?.('dual-rumble', { duration: ms, strongMagnitude: clamp(strong, 0, 1), weakMagnitude: clamp(weak, 0, 1) }); } catch { /* unsupported */ }
+    for (const index of ids) {
+      const actuator = navigator.getGamepads?.()[index]?.vibrationActuator;
+      if (!actuator?.playEffect) continue;
+      const previous = this.motorPulses.get(index);
+      if (previous) clearTimeout(previous.timer);
+      const timer = setTimeout(() => this._endPulse(index), ms);
+      this.motorPulses.set(index, { actuator, player, timer });
+      try {
+        Promise.resolve(actuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: clamp(strong, 0, 1), weakMagnitude: clamp(weak, 0, 1) })).catch(() => {});
+      } catch { /* The actuator may have disconnected since the last poll. */ }
     }
     if (dev === 'any' && this.touch.active && navigator.vibrate && strong > 0.5) { try { navigator.vibrate(Math.min(60, ms / 3)); } catch { /* ignore */ } }
   }

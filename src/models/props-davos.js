@@ -110,36 +110,35 @@ export function delegatePass(clearWidth) {
   return b.build({ card: WHITE, ink: NAVY, foil: GOLD, fabric: RED, hem: WHITE });
 }
 
-/** A jet-sized airport baggage sizer, with handles and a four-point lift harness. */
-export function luggageCarrier() {
+/** A hotel conference entrance. The rope closes the red carpet across both doors. */
+export function conferenceEntrance() {
   const b = new ModelBuilder();
-  // An open luggage cradle keeps the fuselage readable even when viewed from beneath.
-  for (const z of [-2.2, 2.2]) b.add('tray', box(16.7, 0.38, 0.8, 0.15, 2), { p: [0, 0.1, z] });
+  // A stone terrace sinks into the ski slope. Put the rear of the pavilion uphill.
+  b.add('stone', box(15, 7.5, 8.2), { p: [0, -3.6, -1.8] });
+  b.add('wood', box(14.4, 6.9, 6), { p: [0, 3.5, -2.9] });
+  b.add('roof', box(15.4, 0.5, 7.4), { p: [0, 7.08, -2.8] });
+  b.add('snow', box(15.6, 0.35, 7.6, 0.12, 2), { p: [0, 7.46, -2.8] });
+  b.add('carpet', box(6.0, 0.12, 2.25), { p: [0, 0.21, 1.17] });
   for (const side of [-1, 1]) {
-    b.add('rim', box(17, 0.6, 0.4, 0.14, 1), { p: [0, 0.55, side * 5.35] });
-    b.add('rim', box(0.4, 0.6, 11, 0.14, 1), { p: [side * 8.3, 0.55, 0] });
-    for (const z of [-4.7, 4.7]) strut(b, 'rim', [side * 7.8, 0.65, z], [0, 8, 0], 0.19);
-  }
-    b.add('tag', box(3.2, 1.6, 0.2, 0.2, 2), { p: [-5.4, 0.05, 5.45], r: [0, 0, 0.17] });
-  for (let i = 0; i < 5; i++) b.add('bar', box(0.11 + 0.05 * (i % 2), 0.93, 0.08), { p: [-5.9 + i * 0.26, 0.03, 5.59], r: [0, 0, 0.17] });
-  const tray = b.build({ tray: NAVY, rim: GOLD, tag: RED, bar: WHITE }), jet = privateJet(24, { accent: 0xbf1736 });
-  jet.rotation.y = Math.PI / 2 - 0.19; jet.scale.setScalar(1.04); jet.position.y = 0.38; tray.add(jet);
-  return tray;
-}
-
-/** Brass stanchions and red velvet ropes for the premium luggage queue. */
-export function velvetQueue() {
-  const b = new ModelBuilder();
-  for (let i = 0; i < 5; i++) {
-    const x = i * 2.6 - 5.2;
-    b.add('brass', cyl(0.14, 0.19, 1.55, 8), { p: [x, 0.78, 0] });
-    b.add('brass', sphere(0.27, 8, 6), { p: [x, 1.62, 0] });
-    if (i < 4) {
-      strut(b, 'velvet', [x, 1.4, 0], [x + 1.3, 0.95, 0], 0.16);
-      strut(b, 'velvet', [x + 1.3, 0.95, 0], [x + 2.6, 1.4, 0], 0.16);
+    b.add('brass', box(2.52, 3.4, 0.24), { p: [side * 1.27, 1.82, 0.21] });
+    b.add('glass', box(2.28, 3.18, 0.15), { p: [side * 1.27, 1.82, 0.36] });
+    b.add('brass', box(0.1, 1.12, 0.22), { p: [side * 0.37, 1.68, 0.52] });
+    b.add('glass', box(2.9, 2.7, 0.25), { p: [side * 4.85, 1.95, 0.21] });
+    b.add('brass', box(0.1, 2.7, 0.2), { p: [side * 4.85, 1.95, 0.37] });
+    b.add('light', box(0.35, 1.6, 0.35, 0.12, 1), { p: [side * 3.1, 2.32, 0.34] });
+    for (const x of [side * 3.12, side * 0.98]) {
+      b.add('brass', cyl(0.32, 0.42, 0.16, 10), { p: [x, 0.31, 2] });
+      b.add('brass', cyl(0.09, 0.14, 1.26, 10), { p: [x, 1, 2] });
+      b.add('brass', sphere(0.19, 10, 6), { p: [x, 1.69, 2] });
     }
   }
-  return b.build({ brass: GOLD, velvet: RED });
+  for (const [x1, x2] of [[-3.12, -0.98], [-0.98, 0.98], [0.98, 3.12]]) {
+    const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(x1, 1.57, 2),
+      new THREE.Vector3((x1 + x2) / 2, 0.62, 2.12), new THREE.Vector3(x2, 1.57, 2));
+    b.add('carpet', new THREE.TubeGeometry(curve, 8, 0.13, 6, false));
+  }
+  return b.build({ stone: STONE, wood: WOOD_D, roof: NAVY, snow: SNOW, glass: GLASS,
+    brass: GOLD, light: WINDOW, carpet: RED });
 }
 
 /** A two-post roadside sign: 'PRIVATE JETS ONLY' and friends. */
@@ -576,12 +575,14 @@ export function snowman(seed = 1) {
 /** A VIP igloo: an ice-block dome, an entrance tunnel, a red carpet, and gold rope posts. Faces +Z. */
 export function igloo() {
   const b = new ModelBuilder();
+  // Each ice hotel sits on a terrace cut into the mountain, including its carpet.
+  b.add('terrace', box(7.4, 3.5, 12.8, 0.16, 1), { p: [0, -1.75, 2.4] });
   b.add('ice', new THREE.SphereGeometry(3.4, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), {});
   b.add('ice', new THREE.CylinderGeometry(1.25, 1.25, 2.6, 14, 1, false, -Math.PI / 2, Math.PI), { p: [0, 0, 3.4], r: [Math.PI / 2, 0, 0], s: [1, 1, 1.15] });
   b.add('dark', box(1.5, 1.4, 0.2, 0.05, 1), { p: [0, 0.7, 4.66] });
   b.add('carpet', box(1.6, 0.06, 4.2, 0.02, 1), { p: [0, 0.03, 6.8] });
   for (const sx of [-1, 1]) for (const k of [0, 1, 2]) b.add('gold', cyl(0.07, 0.09, 1.0, 8), { p: [sx * 1.25, 0.5, 5.4 + k * 1.4] });
-  return b.build({ ice: ICE_BLOCK, dark: BLACK, carpet: RED, gold: GOLD });
+  return b.build({ terrace: STONE, ice: ICE_BLOCK, dark: BLACK, carpet: RED, gold: GOLD });
 }
 
 /** A heli-shuttle: navy body, glass bubble, tail boom, skids. userData.rotor / userData.tail spin. Nose +Z. */

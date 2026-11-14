@@ -382,6 +382,7 @@ body.must-turn .hud, body.must-turn .track-card, body.must-turn .hint-card { vis
 
 /* Keep the replay action and both exits in view alongside all eight standings. */
 @media (orientation: landscape) {
+  .panel.cupres .res-table.final .res-row img { width: calc(var(--u) * 2.9); height: calc(var(--u) * 2.9); }
   .panel.cupres .foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--u) * 0.8); margin-top: calc(var(--u) * 1); }
   .panel.cupres .foot .go { grid-column: 1 / -1; }
   .panel.cupres .foot .btn { min-width: 0; font-size: calc(var(--u) * 1.8); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.2); }

@@ -583,7 +583,7 @@ function dress(ctx) {
     const cs = { x: 84, z: 40, yaw: Math.PI }; cs.y = sc.y(cs.x, cs.z);
     if (clear(cs.x, cs.z, 2)) {
       put(M.signFrame(14, 4, 2.4, frameMat(0x2a4a6b)), cs.x, cs.z, { yaw: cs.yaw, y: cs.y - 0.2 });
-      atlas.place(board('CURLING — STONES SOLD SEPARATELY', { bg: '#e8f3ff', fg: '#1f2a44', kicker: 'ICE CLUB · SINCE 1923', kfg: '#8a2f2a', border: '#2a4a6b', size: 116 }, 1024, 290), local(cs, 0, 0.09, cs.y - 0.2 + 4.4), cs.yaw, 14, 4);
+      atlas.place(board('PUCKS SOLD SEPARATELY', { bg: '#e8f3ff', fg: '#1f2a44', kicker: 'HOLIDAY HOCKEY · EST. 1923', kfg: '#8a2f2a', border: '#2a4a6b', size: 116 }, 1024, 290), local(cs, 0, 0.09, cs.y - 0.2 + 4.4), cs.yaw, 14, 4);
     }
   }
 

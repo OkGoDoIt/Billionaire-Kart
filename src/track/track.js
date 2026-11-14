@@ -182,6 +182,11 @@ export class Track {
     for (const r of def.bridges || []) for (const i of this._range(r.from, r.to)) this.bridge[i] = 1;
     for (const r of def.tunnels || []) for (const i of this._range(r.from, r.to)) { this.tunnel[i] = 1; this.edgeL[i] = EDGE.WALL; this.edgeR[i] = EDGE.WALL; if (r.through) { this.bridge[i] = 1; this.through[i] = 1; } }
     for (const r of def.gaps || []) for (const i of this._range(r.from, r.to)) { this.gap[i] = 1; this.bridge[i] = 1; }
+    // floating decks (opt-in, def.decks): stretches of road that rise and fall with time, like the deck of a moored
+    // yacht. Physics adds deckY() to the road height there; the engine draws nothing on them (road, kerbs, walls,
+    // deck, rails, ramps, pads), so the track can draw the deck in a group it moves by the same offset.
+    this.deckK = null; this.deckTime = 0; this.deckRace = null;
+    if (def.decks?.length) { this.deckK = new Uint8Array(N); def.decks.forEach((d, k) => { for (const i of this._range(d.from, d.to)) { this.deckK[i] = k + 1; this.bridge[i] = 1; } }); }
     this.skin = new Array(N).fill(def.look?.road?.skin || 'asphalt');
     for (const r of def.zones || []) for (const i of this._range(r.from, r.to)) { if (r.surface) this.surf[i] = SURFACES[r.surface]; if (r.skin) this.skin[i] = r.skin; }
     // walls and void edges have no shoulder; inner-corner shoulders are limited by the corner radius
@@ -214,7 +219,7 @@ export class Track {
       const lats = r.lats || Array.from({ length: n }, (_, k) => (n === 1 ? 0 : lerp(-hw, hw, k / (n - 1))) + (r.lat ?? 0));
       return { i, s: i * this.ds, lats };
     });
-    this.obstacleDefs = (def.obstacles || []).map((o, k) => ({ id: k, kind: o.kind || 'patrol', model: o.model || 'barrel', radius: o.radius ?? 1.4, effect: o.effect || 'spin', speed: o.speed ?? 6, period: o.period ?? 4, duty: o.duty ?? 0.5, phase: o.phase ?? 0, orbit: o.orbit ?? 4, a: { s: this.sAtCp(o.at ?? o.from), lat: o.lat ?? (o.lats ? o.lats[0] : 0) }, b: { s: this.sAtCp(o.to ?? o.at ?? o.from), lat: o.lats ? o.lats[1] : (o.lat2 ?? o.lat ?? 0) }, lift: o.lift ?? 0 }));
+    this.obstacleDefs = (def.obstacles || []).map((o, k) => ({ id: k, kind: o.kind || 'patrol', model: o.model || 'barrel', radius: o.radius ?? 1.4, effect: o.effect || 'spin', speed: o.speed ?? 6, period: o.period ?? 4, duty: o.duty ?? 0.5, phase: o.phase ?? 0, orbit: o.orbit ?? 4, a: { s: this.sAtCp(o.at ?? o.from), lat: o.lat ?? (o.lats ? o.lats[0] : 0) }, b: { s: this.sAtCp(o.to ?? o.at ?? o.from), lat: o.lats ? o.lats[1] : (o.lat2 ?? o.lat ?? 0) }, lift: o.lift ?? 0, fromLap: o.fromLap ?? 0 }));
     this.coinSpots = [];
     for (const c of def.coins || []) {
       const i0 = this.indexAtCp(c.from), i1 = this.indexAtCp(c.to ?? c.from);
@@ -232,7 +237,8 @@ export class Track {
     for (let i = 0; i < N; i++) {
       if (this.gap[i] && !this.gap[mod(i - 1, N)]) {                 // first sample of a gap
         let first = i; for (const r of this.ramps) { const d = mod(i - r.i0, N); if (d < Math.round(30 / this.ds)) first = r.i0; }
-        const safe = mod(first - runup, N);
+        // the run-up stops short of an earlier gap (a chain of jumps): respawn on that gap's landing instead of in it
+        let safe = first; for (let k = 1; k <= runup; k++) { const j = mod(first - k, N); if (this.gap[j]) break; safe = j; }
         let j = safe; while (j !== i) { this.respawn[j] = safe; j = (j + 1) % N; }
         j = i; while (this.gap[j]) { this.respawn[j] = safe; j = (j + 1) % N; }
       }
@@ -320,7 +326,7 @@ export class Track {
     this._plane(j, x, z, pb);
     const f = clamp(pa[0] / ds, 0, 1);
     const lat = lerp(pa[1], pb[1], f);
-    const planeY = lerp(pa[2], pb[2], f);
+    const planeY = lerp(pa[2], pb[2], f) + (this.deckK ? this.deckAt(i) : 0);
     const hwL = lerp(this.hwL[i], this.hwL[j], f), hwR = lerp(this.hwR[i], this.hwR[j], f);
     const s = i * ds + f * ds;
 
@@ -362,6 +368,14 @@ export class Track {
     hit.surface = this.water != null && hit.y < this.water - 0.25 ? SURFACES.water : this.offroad;
     return hit;
   }
+
+  /** Vertical offset of floating deck k (0-based) at time t (default: now). Zero off the decks. */
+  deckY(k, t = this.deckTime) {
+    const d = this.def.decks[k];
+    return this.def.deckY ? this.def.deckY(k, t, this.deckRace) : (d.amp ?? 0.8) * Math.sin(t * 2 * Math.PI / (d.period ?? 5) + (d.phase ?? 0));
+  }
+  /** The deck offset under sample i (0 when it is not a floating deck). */
+  deckAt(i) { const k = this.deckK ? this.deckK[i] : 0; return k ? this.deckY(k - 1) : 0; }
 
   /** Height of whatever lies below the road here (terrain, or far below if there is none). */
   _below(x, z) { return this.hasTerrain ? this.terrainHeight(x, z) : -1e4; }

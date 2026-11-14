@@ -24,11 +24,17 @@ const server = http.createServer(async (req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 let browser;
-try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] }); }
-catch { browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] }); }
-const mobile = !!opt.mobile;
+/* On a Linux CI runner there is no GPU and no Chrome channel: go straight to bundled Chromium with software GL. */
+const swiftshader = { headless: true, args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] };
+if (process.env.CI || process.platform === 'linux') browser = await chromium.launch(swiftshader);
+else try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] }); }
+catch { browser = await chromium.launch(swiftshader); }
+const mobile = !!opt.mobile, CI = !!process.env.CI;
 const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1280, height: 720 }, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
 const page = await ctx.newPage();
+/* The title tap enters full screen on touch devices, and headless Chromium on Linux refuses to resize a
+   full-screen window, so leave full screen before turning the phone. */
+const resize = async size => { await page.evaluate(() => document.fullscreenElement && document.exitFullscreen()).catch(() => {}); await page.setViewportSize(size); };
 const errors = [], fails = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 4).map(l => l.trim()).join(' <- ')));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
@@ -67,7 +73,7 @@ const luma = () => page.evaluate(() => new Promise(res => requestAnimationFrame(
 const tapOrKey = async (selector, k) => { if (mobile) { await page.locator(selector).first().tap(); await page.waitForTimeout(350); } else await key(k); };
 
 try {
-  await page.goto(base, { waitUntil: 'load' });
+  await page.goto(base + (CI ? '?q=low' : ''), { waitUntil: 'load' });   // a CI runner renders in software: the lowest tier keeps the race near real time
   await page.waitForFunction('window.BK && BK.app && BK.app.menus.screen', null, { timeout: 30000 });
   await page.waitForTimeout(1800); await expect('title', 'boot'); await shot('01-title');
   if (mobile) await page.locator('.screen-title').tap(); else await key('Enter');
@@ -152,10 +158,10 @@ try {
     await touch('.tc-right', 'pointerdown', 1, vw.width * 0.8, vw.height * 0.6); await page.waitForTimeout(150);
     if (await page.evaluate(`${T}.throttle`) !== 1) fails.push('touch: re-gripping the pedal does not keep the throttle');
     // an upright phone pauses the race and asks for a turn; back on its side, Resume returns
-    await page.setViewportSize({ width: vw.height, height: vw.width }); await page.waitForTimeout(700); await expect('pause', 'phone turned upright mid-race');
+    await resize({ width: vw.height, height: vw.width }); await page.waitForTimeout(700); await expect('pause', 'phone turned upright mid-race');
     if (!(await page.evaluate("!!document.querySelector('.panel.turn')"))) fails.push('upright phone: the pause panel does not ask for a turn');
     await shot('10c-upright');
-    await page.setViewportSize(vw); await page.waitForTimeout(700);
+    await resize(vw); await page.waitForTimeout(700);
     if (await page.evaluate("!!document.querySelector('.panel.turn')")) fails.push('phone back on its side: the pause panel still asks for a turn');
     await page.locator('.panel.narrow .btn').first().tap(); await page.waitForTimeout(400);
     if (await screen()) fails.push('pause menu did not close on Resume after turning the phone back');
@@ -175,13 +181,11 @@ try {
   if (await screen()) fails.push('pause menu did not close on Resume');
   // let an AI driver finish a shortened race for us
   await page.evaluate(`(async () => { const { AIDriver } = await import('./src/race/ai.js'); const { makeRng } = await import('./src/core/util.js'); const s = BK.session; s.race.laps = 1; s.autopilots = s.race.players.map(k => new AIDriver(k, 'hard', makeRng(5))); })()`);
-  // a Quick Race ends on the podium now (#92); the full table is one confirm past it
-  await page.waitForFunction('BK.app.menus.screen?.spec.name === "racePodium"', null, { timeout: 120000 });
-  await page.waitForTimeout(1500); await shot('13-podium');
-  if (!(await page.evaluate("!!BK.app.showroom?.podium && BK.app.showroom.slots.length === 3"))) fails.push('quick race podium: the showroom is not showing a three-kart podium');
-  await tapOrKey('.screen-racePodium .btn.go', 'Enter');
-  await page.waitForFunction('BK.app.menus.screen?.spec.name === "results"', null, { timeout: 30000 });
-  await page.waitForTimeout(1200); await shot('13-results');
+  // a Quick Race ends on one final screen (#243): the full table under the podium framing,
+  // with the showroom's three-kart podium behind it
+  await page.waitForFunction('BK.app.menus.screen?.spec.name === "results"', null, { timeout: CI ? 300000 : 120000 });
+  await page.waitForTimeout(1500); await shot('13-results');
+  if (!(await page.evaluate("!!BK.app.showroom?.podium && BK.app.showroom.slots.length === 3"))) fails.push('quick race finish: the showroom is not showing a three-kart podium');
   const res = await page.evaluate('[...document.querySelectorAll(".screen-results .res-row")].map(r => r.textContent.trim().replace(/\\s+/g, " ")).join(" | ")');
   console.log('results:', res);
 
@@ -215,7 +219,7 @@ try {
   if (mobile && !opt.gp) {
     // every menu screen with the phone upright: nothing may spill off the sides, and nothing may be left unrendered
     await page.evaluate('BK.app.quitToMenu()'); await page.waitForFunction('BK.app.menus.screen?.spec.name === "main"', null, { timeout: 15000 });
-    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(800);
+    await resize({ width: 390, height: 844 }); await page.waitForTimeout(800);
     const flow = "BK.app.flow = { mode: 'vs', players: 1, devices: ['any'], racers: ['zuck'], cc: 100, level: 'normal' };";
     for (const [name, open] of [['main', "BK.app.menus.reset('main')"], ['players', "BK.app.menus.open('players')"], ['racers', "BK.app.flow.racers = []; BK.app.menus.open('racers', { player: 0 })"], ['setup', "BK.app.menus.open('setup')"], ['cups', "BK.app.menus.open('cups')"], ['tracks', "BK.app.menus.open('tracks')"], ['options', "BK.app.menus.open('options')"], ['howto', "BK.app.menus.open('howto')"], ['items', "BK.app.menus.open('items')"], ['records', "BK.app.menus.open('records')"]]) {
       await page.evaluate(`${flow} BK.app.menus.reset('main'); ${open}`); await page.waitForTimeout(600);

@@ -107,7 +107,7 @@ export default {
   boosts: [
     { at: 0.55, lat: 0, w: 5 },
     { at: 2.45, lat: 0, w: 5 },
-    { at: 4.35, lat: 17.4, w: 4.5 }, { at: 4.8, lat: 17.4, w: 4.5 }, // Sand Hill: the LP lane's reward, two pads
+    { at: 4.35, lat: 17.4, w: 4.5 }, { at: 4.95, lat: 17.4, w: 4.5 }, // Sand Hill: the LP lane's reward, two pads (second pad 4.8 -> 4.95, #215 item 4 re-time)
     { at: 6.2, lat: -4, w: 4.5 },
     { at: 16.3, lat: 3, w: 4.5 },                        // the Oval: a pad on the outside line round the hairpin (lat 5 -> 3, #215 item 1)
     { at: 21.55, lat: 17.4, w: 4.5 },                    // the fountain's inside lane: narrow, walled, and quick

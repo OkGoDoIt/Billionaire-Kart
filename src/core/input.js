@@ -103,7 +103,7 @@ export class Input {
       if (e.repeat) { if (MENU_KEYS[e.code] && ['up', 'down', 'left', 'right'].includes(MENU_KEYS[e.code])) this._menu(MENU_KEYS[e.code], 'kb'); return; }
       this.keys.add(e.code); this.lastDevice = 'kb'; this.kbUsed = true; this.onAnyInput?.();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && !(e.target instanceof HTMLInputElement)) e.preventDefault();
-      if (MENU_KEYS[e.code]) this._menu(MENU_KEYS[e.code], this._kbDeviceFor(e.code));
+      if (MENU_KEYS[e.code] && this._menu(MENU_KEYS[e.code], this._kbDeviceFor(e.code))) e.preventDefault();
       if (e.code === 'KeyR') this._menu('reset', 'kb');
       if (e.code === 'KeyM') this._menu('mute', 'kb');
       if (e.code === 'KeyF' && e.altKey || e.code === 'F11') this._menu('fullscreen', 'kb');
@@ -118,7 +118,7 @@ export class Input {
   setPadBindings(raw, steer) { this.padBinds = sanitizePadBindings(raw); if (PAD_STEER_SOURCES.some(([id]) => id === steer)) this.padSteer = steer; }
 
   _kbDeviceFor(code) { for (const d of ['kb1', 'kb2']) for (const k in KEYS[d]) if (KEYS[d][k].includes(code)) return d; return 'kb'; }
-  _menu(action, device) { this.onMenu?.(action, device); }
+  _menu(action, device) { return this.onMenu?.(action, device); }
 
   /** Connected gamepads as device ids. */
   pads() { const out = []; const gp = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < Math.min(4, gp.length); i++) if (gp[i] && gp[i].connected) out.push('pad' + i); return out; }

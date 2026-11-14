@@ -60,6 +60,10 @@ export class Menus {
   constructor(app) {
     this.app = app; this.layer = h('div', { class: 'menu-layer' }); app.ui.appendChild(this.layer);
     this.stack = []; this.screen = null; this.focusEl = null;
+    this.layer.addEventListener('focusin', e => {
+      const target = e.target.closest('[data-f], button');
+      if (target && this.screen?.el.contains(target)) this.focus(target, false);
+    });
     this.layer.addEventListener('pointermove', e => { const t = e.target.closest?.('[data-f]'); if (t && t !== this.focusEl && e.pointerType === 'mouse' && !t.hasAttribute('data-nohover')) this.focus(t, false); });
     // screens that frame the 3D scene (racer select, podium) re-measure when the layout changes
     const relayout = () => requestAnimationFrame(() => this.screen?.onLayout?.());
@@ -98,7 +102,7 @@ export class Menus {
     def.spec = spec; def.el.classList.add('menu-screen', 'screen-' + spec.name);
     this.layer.appendChild(def.el); this.screen = def; this.focusEl = null;
     this._scrollHint(def);
-    const first = def.el.querySelector('[data-f][data-default]') || def.el.querySelector('[data-f]');
+    const first = def.el.querySelector('[data-f][data-default]') || def.el.querySelector('[data-f]:not(.back):not(:disabled)') || def.el.querySelector('.back');
     if (first) this.focus(first, false);
     def.onOpen?.(); def.onLayout?.();
     this.app.showroom?.setShown(!!def.stage);   // the turntable karts appear only on screens that place them
@@ -119,7 +123,7 @@ export class Menus {
   focus(el, sound = true) {
     if (this.focusEl === el) return;
     this.focusEl?.classList.remove('focus'); this.focusEl = el;
-    if (el) { el.classList.add('focus'); el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); el.dispatchEvent(new CustomEvent('menufocus')); if (sound) this.app.audio?.ui('move'); }
+    if (el) { el.focus({ preventScroll: true }); el.classList.add('focus'); el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); el.dispatchEvent(new CustomEvent('menufocus')); if (sound) this.app.audio?.ui('move'); }
   }
   /** Input from keyboard or controller. */
   handle(action, device) {
@@ -135,7 +139,7 @@ export class Menus {
     if (!all.length) return;
     if (!this.focusEl || !all.includes(this.focusEl)) return this.focus(all[0]);
     // value controls respond to left/right themselves
-    if ((dir === 'left' || dir === 'right') && this.focusEl.dataset.adjust) { this.focusEl.dispatchEvent(new CustomEvent('adjust', { detail: dir === 'right' ? 1 : -1 })); return; }
+    if ((dir === 'left' || dir === 'right') && this.focusEl.hasAttribute('data-adjust') && getComputedStyle(this.focusEl.parentElement).display !== 'grid') { this.focusEl.dispatchEvent(new CustomEvent('adjust', { detail: dir === 'right' ? 1 : -1 })); return; }
     const r = this.focusEl.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0, dy = dir === 'up' ? -1 : dir === 'down' ? 1 : 0;
     let best = null, bs = Infinity;
@@ -152,7 +156,7 @@ export class Menus {
   btn(label, onClick, { cls = '', def = false, sub = null, icon = null } = {}) {
     return h('button', { class: 'btn ' + cls, 'data-f': true, 'data-default': def, onclick: () => onClick() }, icon && h('span', { class: 'btn-ico' }, icon), h('span', { class: 'btn-label' }, label), sub && h('span', { class: 'btn-sub' }, sub));
   }
-  header(title, sub) { return h('header', { class: 'menu-head' }, h('button', { class: 'back', 'aria-label': 'Back', onclick: () => this.back(), html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4.5 7.5 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>' }), h('div', {}, h('h1', {}, title), sub && h('p', {}, sub))); }
+  header(title, sub) { return h('header', { class: 'menu-head' }, h('button', { class: 'back', 'data-f': true, 'aria-label': 'Back', onclick: () => this.back(), html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4.5 7.5 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>' }), h('div', {}, h('h1', {}, title), sub && h('p', {}, sub))); }
 
   /* ---------- title ---------- */
   s_title() {
@@ -409,14 +413,13 @@ export class Menus {
     const stepper = (label, key, fmt, step = 0.1, min = 0, max = 1) => {
       const val = h('b', {}, fmt(S[key]));
       const set = d => { S[key] = Math.round(Math.min(max, Math.max(min, S[key] + d * step)) * 100) / 100; val.textContent = fmt(S[key]); A.save.write(); A.applySettings(); A.audio?.ui('move'); };
-      const row = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true }, h('span', {}, label), h('div', { class: 'opt-ctl' }, h('button', { onclick: () => set(-1), tabindex: -1 }, '−'), val, h('button', { onclick: () => set(1), tabindex: -1 }, '+')));
-      row.addEventListener('adjust', e => set(e.detail)); row.onclick = e => { if (e.target === row) set(1); };
-      return row;
+      const change = (d, symbol) => h('button', { 'data-f': true, 'aria-label': `${d < 0 ? 'Decrease' : 'Increase'} ${label.toLowerCase()}`, onclick: () => set(d) }, symbol);
+      return h('div', { class: 'opt volume' }, h('span', {}, label), h('div', { class: 'opt-ctl' }, change(-1, '−'), val, change(1, '+')));
     };
     const cycle = (label, key, options) => {
       const val = h('b', {}, options.find(o => o[0] === S[key])?.[1] || '');
       const set = d => { const i = options.findIndex(o => o[0] === S[key]); const n = options[(i + d + options.length) % options.length]; S[key] = n[0]; val.textContent = n[1]; A.save.write(); A.applySettings(); A.audio?.ui('move'); };
-      const row = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: () => set(1) }, h('span', {}, label), h('div', { class: 'opt-ctl' }, val));
+      const row = h('button', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: () => set(1) }, h('span', {}, label), h('div', { class: 'opt-ctl' }, val));
       row.addEventListener('adjust', e => set(e.detail)); return row;
     };
     const onoff = [[true, 'On'], [false, 'Off']], touch = matchMedia('(pointer: coarse)').matches;   // touch settings only where there is a touch screen
@@ -426,19 +429,17 @@ export class Menus {
     const fullScreenRow = () => {
       const val = h('b', {}, document.fullscreenElement ? 'On' : 'Off');
       const set = () => { A.fullscreen(!document.fullscreenElement); A.audio?.ui('move'); };
-      const row = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: set }, h('span', {}, 'Full screen'), h('div', { class: 'opt-ctl' }, val));
-      row.addEventListener('adjust', set);
+      const row = h('button', { class: 'opt', 'data-f': true, onclick: set }, h('span', {}, 'Full screen'), h('div', { class: 'opt-ctl' }, val));
       const sync = () => { val.textContent = document.fullscreenElement ? 'On' : 'Off'; };
       document.addEventListener('fullscreenchange', sync); fsOff = () => document.removeEventListener('fullscreenchange', sync);
       return row;
     };
     // the controller mapping lives on its own screen (below); this row is the door
-    const padRow = () => h('div', { class: 'opt', 'data-f': true, onclick: () => this.open('pad') }, h('span', {}, 'Controller'), h('div', { class: 'opt-ctl' }, h('b', {}, 'Buttons…')));
+    const padRow = () => h('button', { class: 'opt', 'data-f': true, onclick: () => this.open('pad') }, h('span', {}, 'Controller'), h('div', { class: 'opt-ctl' }, h('b', {}, 'Buttons…')));
     // installing is a row too, wherever the browser allows it; the label says what tapping does here
     const installRow = () => {
       const spec = installButton(); if (!spec) return null;
-      const row = h('div', { class: 'opt', 'data-f': true, 'data-adjust': true, onclick: () => { spec.act(); A.audio?.ui('move'); } }, h('span', {}, 'Install app'), h('div', { class: 'opt-ctl' }, h('b', {}, spec.label === 'Install app' ? 'Install' : 'Guide')));
-      row.addEventListener('adjust', () => { spec.act(); A.audio?.ui('move'); });
+      const row = h('button', { class: 'opt', 'data-f': true, onclick: () => { spec.act(); A.audio?.ui('move'); } }, h('span', {}, 'Install app'), h('div', { class: 'opt-ctl' }, h('b', {}, spec.label === 'Install app' ? 'Install' : 'Guide')));
       return row;
     };
     const el = h('div', {}, this.header('Options'), h('div', { class: 'panel options' },
@@ -521,7 +522,7 @@ export class Menus {
     };
     const list = h('div', { class: 'pad-rows' }, PAD_ACTIONS.map(a => {
       const name = h('span', { class: 'bind-name' });
-      const el = h('div', { class: 'pad-row', 'data-f': true, onclick: () => { if (capturing === a.id) endCapture('Tap an action, then press the button for it.'); else if (!capturing) startCapture(a.id); } },
+      const el = h('button', { class: 'pad-row', 'data-f': true, onclick: () => { if (capturing === a.id) endCapture('Tap an action, then press the button for it.'); else if (!capturing) startCapture(a.id); } },
         h('span', { class: 'pad-label' }, a.label), name);
       rows.set(a.id, { el, name });
       return el;

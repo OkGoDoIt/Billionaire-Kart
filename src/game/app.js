@@ -60,7 +60,7 @@ export class App {
   onMenu(action, device) {
     if (action === 'mute') { this.audio?.toggleMute?.(); return; }
     if (action === 'fullscreen') { this.fullscreen(!document.fullscreenElement); return; }
-    if (this.menus.visible) { this.menus.handle(action, device); return; }
+    if (this.menus.visible) return this.menus.handle(action, device);
     const s = this.session; if (!s || this.attract) return;
     if (action === 'pause' || (action === 'back' && device.startsWith('kb'))) { if (s.phase !== 'intro' && s.race.state !== 'done') this.pause(); else s.skipIntro(); }
     else if (action === 'confirm' && s.phase === 'intro') s.skipIntro();

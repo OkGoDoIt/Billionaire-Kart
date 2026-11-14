@@ -121,7 +121,7 @@ export default {
     // crabs scuttle across the beach, each covering only part of the road
     { kind: 'patrol', model: 'crab', at: 2.2, lats: [2, 7.5], speed: 3.5, effect: 'spin', radius: 1.2 },
     { kind: 'patrol', model: 'crab', at: 2.85, lats: [-7.5, -2.5], speed: 4, effect: 'spin', radius: 1.2 },
-    { kind: 'patrol', model: 'crab', at: 4.55, lats: [-7.5, -3.5], speed: 3, effect: 'spin', radius: 1.2 },
+    { kind: 'patrol', model: 'crab', at: 4.55, lats: [4.8, 7.8], speed: 3, effect: 'spin', radius: 1.2 },
     // tiki torches flare in turn at the pier gate
     { kind: 'timed', model: 'flame', at: 5.45, lat: 6, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.3 },
     { kind: 'timed', model: 'flame', at: 5.5, lat: -6, period: 3, duty: 0.45, phase: 1.5, effect: 'spin', radius: 1.3 },

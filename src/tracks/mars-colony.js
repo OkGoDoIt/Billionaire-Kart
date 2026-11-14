@@ -264,13 +264,13 @@ function dress(ctx) {
   };
   const RUST_HEX = '#c1440e', INK = '#1f1418', CREAM = '#f2efe6';
   // The samples made it to the depot. The shipping label is still waiting for a ride home.
-  const pickup = sc.beside(23.1, -1, 8);
+  const pickup = sc.beside(23.45, -1, 5.8);
   const approach = track.indexAtCp(22.58);
   const depot = M.sampleDepot();
   const depotYaw = Math.atan2(track.px[approach] - pickup.x, track.pz[approach] - pickup.z);
   sc.place(depot, pickup.x, pickup.z, { y: pickup.y, yaw: depotYaw });
   depot.updateMatrixWorld(true);
-  const tagCenter = depot.localToWorld(new THREE.Vector3(2.55, 4.55, 0.22)).toArray();
+  const tagCenter = depot.localToWorld(new THREE.Vector3(-2.55, 4.55, 0.22)).toArray();
   bake.add(depot); take(pickup.x, pickup.z, 7.5);
   const postage = ['LABEL CREATED', 'AWAITING PICKUP', 'STILL AWAITING PICKUP'];
   let pickupStamp = 0;

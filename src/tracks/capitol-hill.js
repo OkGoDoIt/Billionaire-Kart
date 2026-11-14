@@ -123,7 +123,7 @@ export default {
     { from: 22.0, to: 22.35, edge: 'wall' },
     { from: 23.0, to: 29.0, side: 'R', outer: 2.2 },                            // hairpins one and three: the infields hold their set pieces
     { from: 37.0, to: 43.0, side: 'R', outer: 2.2 },
-    { from: 29.6, to: 36.45, side: 'L', outer: 16.5, hoarding: false },         // hairpin two's infield and the cloture steps: open ground,
+    { from: 29.48, to: 36.6, side: 'L', outer: 18.5, hoarding: false },         // hairpin two's infield and the cloture steps: open ground,
                                                                                  // fenced off (decorate) until the final lap
   ],
   ramps: [
@@ -156,17 +156,17 @@ export default {
   ],
   // rivals cut the Mall too, on the lane between the topiary and the protest signs (see docs/track-authoring.md)
   shortcuts: [
-    { name: 'the Mall', from: 5.9, to: 11.2, path: [[149, 178], [136, 188], [100, 191], [88, 182]] },
+    { name: 'the Mall', from: 5.82, to: 11.15, path: [[148, 178], [134, 191], [117, 196], [101, 194], [88, 182]] },
     // the final lap only: cloture is invoked, the barricade folds away, and the steps cut out hairpin two
-    { name: 'cloture', from: 29.66, to: 36.4, path: [[-108, 86], [-100, 78], [-99.5, 73.5], [-102, 65], [-109, 59]], skill: 0.4, chance: 1.4, when: race => clotureOpen(race) },
+    { name: 'cloture', from: 29.48, to: 36.6, path: [[-114, 92], [-104, 85], [-99.5, 76], [-100, 69], [-107, 60], [-119, 53]], skill: 0.4, chance: 1.4, when: race => clotureOpen(race) },
   ],
   obstacles: [
     // the motorcade crawls across the road
     { kind: 'patrol', model: 'motorcade', at: 1.35, lats: [-9, -5], speed: 3.5, effect: 'spin', radius: 2.0 },
-    { kind: 'patrol', model: 'motorcade', at: 6.15, lats: [-9, -5], speed: 3, effect: 'spin', radius: 2.0 },
+    { kind: 'patrol', model: 'motorcade', at: 7.37, lats: [8.6, 7.1], speed: 2.5, effect: 'bump', radius: 1.7 },
     // lobbyist drones circling the Climb
-    { kind: 'orbit', model: 'drone', at: 14.4, lat: -5, orbit: 3, speed: 5, effect: 'spin', lift: 0.6 },
-    { kind: 'orbit', model: 'drone', at: 18.7, lat: 5.5, orbit: 2.5, speed: 4.5, effect: 'spin', lift: 0.6 },
+    { kind: 'orbit', model: 'drone', at: 14.4, lat: -7, orbit: 1.8, speed: 5, effect: 'spin', lift: 0.6 },
+    { kind: 'orbit', model: 'drone', at: 18.7, lat: 7, orbit: 1.7, speed: 4.5, effect: 'spin', lift: 0.6 },
     // red tape at the hairpins
     { kind: 'static', model: 'redtape', at: 26.0, lat: -1.0, effect: 'bump', radius: 1.4 },
     { kind: 'static', model: 'redtape', at: 35.6, lat: -6.4, effect: 'bump', radius: 1.4 },
@@ -242,7 +242,7 @@ export default {
     // start/finish gantry
     const g0 = sc.beside(0, 1, -track.hwL[0]);
     const gantry = P.gantry(track.hwL[0] + track.hwR[0] + 1.5, 'CAPITOL HILL CLIMB', { color: 0xf2efe6, color2: 0xd4af37 });
-    sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY });
+    sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY, cast: false });
     view.startLights = gantry.userData.lights;
 
     // the capitol: its central hall straddles the red-carpet tunnel
@@ -251,7 +251,7 @@ export default {
       const cx = (track.px[i0] + track.px[i1]) / 2, cz = (track.pz[i0] + track.pz[i1]) / 2;
       const len = Math.hypot(track.px[i1] - track.px[i0], track.pz[i1] - track.pz[i0]);
       const cap = C.capitol({ len: len + 0.4, half: 20 });
-      sc.place(cap, cx, cz, { yaw: Math.atan2(track.px[i1] - track.px[i0], track.pz[i1] - track.pz[i0]), y: track.py[i0] });
+      sc.place(cap, cx, cz, { cast: false, yaw: Math.atan2(track.px[i1] - track.px[i0], track.pz[i1] - track.pz[i0]), y: track.py[i0] });
       taken.push([cx, cz, 30], [cx + (track.px[i1] - cx) * 0.7, cz, 26], [cx - (track.px[i1] - cx) * 0.7, cz, 26]);
     }
 
@@ -318,13 +318,13 @@ export default {
 
     // memorial halls round the district, and the fountain on the lawn
     const halls = [[114, 306, Math.PI], [-20, -72, 0]].map(([x, z, yaw]) => ({ x, z, yaw, y: sc.y(x, z) - 0.3 }));
-    sc.instances(partsOf(C.memorialHall({ w: 34, d: 22, h: 9 })), halls, {});
+    sc.instances(partsOf(C.memorialHall({ w: 34, d: 22, h: 9 })), halls, { cast: false });
     halls.forEach(p => taken.push([p.x, p.z, 23]));
     const temples = [[22, 205], [-95, 225]].map(([x, z]) => ({ x, z, yaw: 0, y: sc.y(x, z) - 0.4 }));
-    sc.instances(partsOf(C.roundTemple({ r: 7.5, h: 8 })), temples, {});
+    sc.instances(partsOf(C.roundTemple({ r: 7.5, h: 8 })), temples, { cast: false });
     temples.forEach(p => taken.push([p.x, p.z, 14]));
     const fnt = C.fountain({ r: 7 }), FX = -8, FZ = 50;
-    sc.place(fnt, FX, FZ, { y: sc.y(FX, FZ) - 0.2 }); taken.push([FX, FZ, 11]);
+    sc.place(fnt, FX, FZ, { cast: false, y: sc.y(FX, FZ) - 0.2 }); taken.push([FX, FZ, 11]);
     const jet = fnt.userData.jet.clone().add(fnt.position);
     anim.push((dt, time) => {
       C.FLAG_TIME.value = time;
@@ -368,7 +368,7 @@ export default {
     sc.instances(lamp, lamps, { cast: false });
 
     // the Mall: protest signs and clipped topiary to thread between on the shortcut (solid)
-    const mallSpots = [[104, 176], [130, 182], [114, 198], [100, 212], [134, 208], [138, 160]];
+    const mallSpots = [[104, 174], [125, 178], [113, 208], [99, 212], [135, 211], [138, 157]];
     const signSpots = [], topiSpots = [];
     mallSpots.forEach(([x, z], k) => { const spot = { x, z, y: sc.y(x, z), yaw: Math.atan2(150 - x, 178 - z) + rng.range(-0.22, 0.22) }; (k % 3 === 2 ? topiSpots : signSpots).push(spot); });
     const signA = partsOf(C.signCluster(3)), signB = partsOf(C.signCluster(8));
@@ -393,9 +393,9 @@ export default {
     const blocksBoard = (x, z) => sightlines.some(([bx, bz, ax, az]) => segDist(x, z, ax, az, bx, bz) < 7.4);
     const cherries = cherrySpots.filter(p => ok(p.x, p.z, 1.5) && !blocksBoard(p.x, p.z)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
     const chA = partsOf(C.cherryTree(1, { h: 6.5 })), chB = partsOf(C.cherryTree(4, { h: 7.2, pinkA: 0xf9c7da, pinkB: 0xf2a2c2 })), chC = partsOf(C.cherryTree(7, { h: 5.8, pinkA: 0xf4a6c4, pinkB: 0xe57aa6 }));
-    sc.instances(chA, cherries.filter((_, i) => i % 3 === 0), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
-    sc.instances(chB, cherries.filter((_, i) => i % 3 === 1), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
-    sc.instances(chC, cherries.filter((_, i) => i % 3 === 2), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
+    sc.instances(chA, cherries.filter((_, i) => i % 3 === 0), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04, cast: false });
+    sc.instances(chB, cherries.filter((_, i) => i % 3 === 1), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04, cast: false });
+    sc.instances(chC, cherries.filter((_, i) => i % 3 === 2), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04, cast: false });
 
     // hedges and flower beds: formal gardens on the lawns and round the capitol
     const hedgeSpots = [];
@@ -415,7 +415,7 @@ export default {
     const woods = sc.scatter({ count: 440, min: 13, max: 230, maxSlope: 0.8, minGap: 5.5, where: (x, z) => !formal(x, z) && !blocksBoard(x, z) && ok(x, z, 1.5) });
     const oakA = partsOf(P.roundTree(1, { h: 8, leafA: 0x4f9e3f, leafB: 0x6fbf4a })), oakB = partsOf(P.roundTree(2, { h: 9.5, leafA: 0x3f8f3a, leafB: 0x5cae45 })), oakC = partsOf(P.roundTree(3, { h: 7, leafA: 0x6bb84a, leafB: 0x8fcc5a }));
     for (const near of [true, false]) {                                  // distant trees skip the shadow pass
-      const set = woods.filter(p => (p.dist < 60) === near), o = { yaw: 'random', tilt: 0.04, cast: near };
+      const set = woods.filter(p => (p.dist < 60) === near), o = { yaw: 'random', tilt: 0.04, cast: false };
       sc.instances(oakA, set.filter((_, i) => i % 3 === 0), { ...o, scale: [0.85, 1.5] });
       sc.instances(oakB, set.filter((_, i) => i % 3 === 1), { ...o, scale: [0.85, 1.6] });
       sc.instances(oakC, set.filter((_, i) => i % 3 === 2), { ...o, scale: [0.85, 1.4] });
@@ -483,9 +483,11 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
           float swell = sin(poolPoint.z * 1.52 + poolPoint.x * .43 + waterTime * 1.12)
                       + .45 * sin(poolPoint.z * 3.55 - poolPoint.x * .75 - waterTime * 1.45);
           float banks = smoothstep(.25, .49, abs(across - .5));
-          vec3 water = mix(vec3(.085, .34, .35), vec3(.065, .245, .175), banks * .65);
-          float ripple = smoothstep(.99, 1.32, swell) * (.25 + .75 * pow(sin(poolPoint.x * .83 + poolPoint.z * .12), 2.0));
-          water += ripple * vec3(.16, .17, .13);
+          vec3 water = mix(vec3(.10, .22, .15), vec3(.073, .16, .085), banks * .65);
+          float ripple = smoothstep(1.09, 1.37, swell) * (.25 + .75 * pow(sin(poolPoint.x * .83 + poolPoint.z * .12), 2.0));
+          float depthFresnel = pow(1.0 - clamp(-eyeRay.y, 0.0, 1.0), 9.0);
+          water = mix(water, vec3(.23, .28, .24), depthFresnel * .57);
+          water += ripple * vec3(.065, .085, .09);
           vec3 ray = vec3(eyeRay.x + .002 * swell, -eyeRay.y + .0024 * swell, eyeRay.z);
           float distanceToMonument = (${OBELISK.z.toFixed(1)} - poolPoint.z) / max(.001, ray.z);
           vec3 atMonument = poolPoint + distanceToMonument * ray;
@@ -565,7 +567,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
     sc.instances(partsOf(C.algaeStrip()), strips, { scale: [0.7, 1.2], cast: false });
     const duckProto = C.duck(), ducks = [];
     for (const [dx, dz, dyaw] of [[POOL.x0 + 3.2, 96, 2.6], [POOL.x0 + 4.5, 101, 2.2], [AXIS + 3, 150, -0.7], [POOL.x0 + 2.6, 186, 1.4], [AXIS + 5, 124, 0.4]]) {
-      const d = duckProto.clone(); sc.place(d, dx, dz, { yaw: dyaw, y: WY - 0.05, scale: 1.25 }); ducks.push(d);
+      const d = duckProto.clone(); sc.place(d, dx, dz, { yaw: dyaw, y: WY - 0.05, scale: 1.25, cast: false }); ducks.push(d);
     }
     anim.push((dt, time) => ducks.forEach((d, n) => { d.position.y = WY - 0.05 + Math.sin(time * 0.9 + n * 2.1) * 0.05; d.rotation.z = Math.sin(time * 0.7 + n * 1.7) * 0.05; d.position.x += Math.sin(time * 0.15 + n) * dt * 0.15; }));
     // at the closest pass, on the far walk, angled to the karts coming down the run
@@ -601,7 +603,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // the fountain plaza at the foot of the pool, on the axis, between the water and the monument
   {
     const FX = AXIS, FZ = POOL.z1 + 24, fnt = C.fountain({ r: 9 });
-    sc.place(fnt, FX, FZ, { y: Y - 0.25 }); taken.push([FX, FZ, 13]);
+    sc.place(fnt, FX, FZ, { cast: false, y: Y - 0.25 }); taken.push([FX, FZ, 13]);
     const jet = fnt.userData.jet.clone().multiplyScalar(1).add(fnt.position);
     const ring = []; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; ring.push([FX + Math.cos(a) * 6.5, FZ + Math.sin(a) * 6.5]); }
     anim.push(dt => {
@@ -674,11 +676,11 @@ function filibuster(ctx, sc, { taken }) {
 
   // the cloture fence: barricades just off the inside edge from the middle leg round hairpin two and back along the
   // leg below, with a sign over the steps. They are solid until the race leader starts the final lap, then fold away.
-  const fence = sc.along({ from: 29.66, to: 36.42, side: 1, offset: 2.4, spacing: 1.1 }).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.05, yaw: p.yaw + Math.PI / 2 }));
+  const fence = sc.along({ from: 29.48, to: 36.6, side: 1, offset: 2.4, spacing: 1.1 }).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.05, yaw: p.yaw + Math.PI / 2 }));
   const fenceMeshes = sc.instances(partsOf(C.barricade()), fence, { cast: false, scale: 1.2 });
   // A zero-radius scenery collider still catches the kart's wheel envelope. Use the actual
   // drivable boundary at the barricades, then restore the authored infield width on opening.
-  const first = track.indexAtCp(29.6), last = track.indexAtCp(36.45);
+  const first = track.indexAtCp(29.48), last = track.indexAtCp(36.6);
   let openWidths = clotureWidths.get(track);
   if (!openWidths) { openWidths = track.outerL.slice(first, last + 1); clotureWidths.set(track, openWidths); }
   const setGate = open => {

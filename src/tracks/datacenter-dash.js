@@ -321,10 +321,51 @@ class Quads {
   }
 }
 
+/** Untextured metal, paint, and lamps share a draw. A palette texel stores the
+ * original linear color, roughness, metalness, and emitted light; the standard
+ * material still lights every surface. Mapped art and transparent glass keep
+ * their own materials and UVs. One palette is shared by the campus and boats. */
+function hardwarePalette(THREE) {
+  const entries = new Map(), batches = new Map();
+  const width = 256;
+  const makeTable = () => {
+    const map = new THREE.DataTexture(new Float32Array(width * 4), width, 1, THREE.RGBAFormat, THREE.FloatType);
+    map.needsUpdate = true;
+    return map;
+  };
+  const diffuse = makeTable(), finish = makeTable(), light = makeTable();
+  return (material, geometry) => {
+    if (material.type !== 'MeshStandardMaterial' || material.map || material.emissiveMap ||
+        material.transparent || material.vertexColors || material.alphaTest || material.polygonOffset) return material;
+    let slot = entries.get(material);
+    if (slot === undefined) {
+      slot = entries.size;
+      if (slot >= width) return material;
+      entries.set(material, slot);
+      const c = material.color, e = material.emissive, power = material.emissiveIntensity;
+      diffuse.image.data.set([c.r, c.g, c.b, 1], slot * 4);
+      finish.image.data.set([1, material.roughness, material.metalness, 1], slot * 4);
+      light.image.data.set([e.r * power, e.g * power, e.b * power, 1], slot * 4);
+    }
+    const uv = geometry.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (slot + 0.5) / width, 0.5);
+    const key = material.envMapIntensity + '/' + material.side;
+    if (!batches.has(key)) batches.set(key, new THREE.MeshStandardMaterial({
+      map: diffuse, roughnessMap: finish, metalnessMap: finish, roughness: 1, metalness: 1,
+      emissive: 0xffffff, emissiveMap: light, side: material.side, envMapIntensity: material.envMapIntensity,
+    }));
+    return batches.get(key);
+  };
+}
+
 /** Merges static props into one mesh per material (and per shadow casting), so the whole course costs a few draw calls. */
-function makeBaker(THREE, group, shadows) {
+function makeBaker(THREE, group, shadows, palette) {
   const buckets = new Map();
-  const push = (mat, g, cast) => { let b = buckets.get(mat); if (!b) buckets.set(mat, b = [[], []]); b[cast && !mat.transparent ? 0 : 1].push(g); };
+  const push = (mat, g, cast) => {
+    const shared = palette(mat, g);
+    if (!buckets.has(shared)) buckets.set(shared, [[], []]);
+    buckets.get(shared)[cast && !mat.transparent ? 0 : 1].push(g);
+  };
   const norm = (geo, matrix) => {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     for (const n of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(n)) g.deleteAttribute(n);
@@ -505,7 +546,8 @@ function rackKit(THREE) {
 function decorate(ctx) {
   const { THREE, track, anim, view } = ctx, sc = new Scenery(ctx), rng = sc.rng;
   const hit = makeGroundHit(), W = track.water;
-  const bake = makeBaker(THREE, ctx.group, sc.shadows), atlas = makeAtlas(THREE, ctx.group);
+  const palette = hardwarePalette(THREE);
+  const bake = makeBaker(THREE, ctx.group, sc.shadows, palette), atlas = makeAtlas(THREE, ctx.group);
   const near = (x, z, p, r) => (x - p.x) ** 2 + (z - p.z) ** 2 < r * r;
   /** True when (x,z) is beyond where a kart can drive, by margin m. */
   const clear = (x, z, m = 1.5) => {
@@ -521,7 +563,7 @@ function decorate(ctx) {
   /** Samples from cp a to cp b every `step` metres, including tunnels and bridges (sc.along skips those). */
   const samples = (a, b, step) => { const i0 = track.indexAtCp(a), n = ((track.indexAtCp(b) - i0) + track.N) % track.N, k = Math.max(1, Math.round(step / track.ds)), out = []; for (let r = 0; r <= n; r += k) out.push((i0 + r) % track.N); return out; };
   const inHallBox = (x, z, m = 0) => x > HB.x0 - m && x < HB.x1 + m && z > HB.z0 - m && z < HB.z1 + m;
-  const ctxs = { THREE, track, ctx, sc, rng, bake, atlas, clear, at, samples, view, anim, rackSys: rackKit(THREE) };
+  const ctxs = { THREE, track, ctx, sc, rng, bake, atlas, palette, clear, at, samples, view, anim, rackSys: rackKit(THREE) };
   const campus = campusHalls(ctxs);   // first, so the dressing below can keep out of it
 
   // ---- start/finish: gantry, a hall either side of the main drag, grandstands on the south side ----
@@ -1589,7 +1631,7 @@ function edgePods({ THREE, sc, rng, rackSys, atlas }) {
 
 /* ---------- the dam and the reservoir ---------- */
 const DAM = { x0: -86, x1: 54, zUp: -343, zDn: -333, top: 12.2, bottom: -9 };
-function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
+function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, palette, view }) {
   const group = ctx.group, bottom = DAM.bottom;
 
   /* the dam: a straight wall across the south end of the lake, a walkway on top, a sheer stained face toward the water */
@@ -1778,7 +1820,11 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, view }) {
   const nameMat = new THREE.MeshStandardMaterial({ map: nameTex, roughness: 0.5 });
   boats.forEach((b, k) => {
     const [, hull, stripe] = NAMES[k % NAMES.length], v1 = 1 - (k * 100 + 8) / 512, v0 = 1 - (k * 100 + 92) / 512;
-    b.obj = D.boat({ hull, stripe, nameMat, nameUV: [0.02, v0, 0.98, v1] }); b.obj.position.set(b.x, LAKE.full, b.z); b.obj.rotation.y = b.yaw; group.add(b.obj);
+    b.obj = new THREE.Group();
+    const boatBake = makeBaker(THREE, b.obj, sc.shadows, palette);
+    boatBake.add(D.boat({ hull, stripe, nameMat, nameUV: [0.02, v0, 0.98, v1] }));
+    boatBake.flush();
+    b.obj.position.set(b.x, LAKE.full, b.z); b.obj.rotation.y = b.yaw; group.add(b.obj);
   });
   // NO SWIMMING on the land side of the east shore, facing the drivers coming up it
   {

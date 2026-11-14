@@ -75,6 +75,11 @@
 .hud-rank.pop { animation: hud-pop 0.34s cubic-bezier(.2,1.7,.4,1); }
 .hud-rank.up { animation: hud-rank-up 0.5s cubic-bezier(.2,1.7,.4,1); }
 .hud-rank.down { animation: hud-rank-down 0.42s ease-out; }
+/* A small pane needs room for the rank to grow. Keep the ordinal on the same baseline
+   when a pass lands, and expand inward from the corner. */
+.hud-compact .hud-rank { transform-origin: right bottom; bottom: calc(var(--edge) + var(--safe-b)); }
+.hud-compact .hud-rank.up { animation-name: hud-small-rank-up; }
+@keyframes hud-small-rank-up { 0%, 100% { transform: scale(1); } 35% { transform: scale(1.24); filter: brightness(1.5) drop-shadow(0 0 calc(var(--u) * 2.4) rgba(110, 255, 190, .95)); } }
 .hud-rank.done { filter: drop-shadow(0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.35)) drop-shadow(0 0 calc(var(--u) * 2.4) currentColor); }
 
 /* timer, top-right; minimap below it */

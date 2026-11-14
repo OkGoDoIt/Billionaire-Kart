@@ -33,13 +33,13 @@ export default {
   lapNotes: ['<b>AGI delayed.</b> New estimate: two years.', '<b>Final lap.</b> The ALIGNED lane is under safety review.'],
   // the opening shots: the Singularity looks up and smiles at you; then the paperclip maximizer at work on the skyline
   intro: [
-    { pos: [118, 74, 92], pos1: [92, 66, 74], look: [0, 45, 2], look1: [0, 43, 2], fov: 42, dur: 3.2 },
+    { pos: [120, 78, 96], pos1: [100, 74, 80], look: [-11, 63, 23], look1: [-11, 67, 23], fov: 42, dur: 3.2 },
     { pos: [214, 34, -40], pos1: [182, 46, -100], look: [128, 64, -275], look1: [138, 72, -275], fov: 52, dur: 3.0 },
   ],
   laps: 3,
   width: 19,
   sky: 'space',
-  skyOverrides: { exposure: 0.85 },
+  skyOverrides: { exposure: 0.95 },
   backdrop: { img: 'assets/backdrops/singularity-speedway.webp', top: 48, bottom: -32, rot: 0.1 },   // generated: nebula, a galaxy, data streams, and floating server cities
   gravity: 0.85,
   terrain: false,
@@ -89,12 +89,12 @@ export default {
     { p: [279, 36.8, 100.4] },                  // 40 the bulge
     { p: [279, 40, 160.4] },                    // 41 crest: the Leap
     { p: [279, 28, 210.4] },                    // 42 landing, a long dive
-    { p: [279, 16, 262] },                      // 43 bottom of the dive, into the hairpin
-    { p: [273.3, 17.6, 283], bank: -12 },       // 44 banked hairpin, climbing
-    { p: [258, 19.4, 298.4], bank: -12 },       // 45 banked hairpin
-    { p: [237, 21.2, 304], bank: -12 },         // 46 banked hairpin
-    { p: [216, 23, 298.4], bank: -12 },         // 47 banked hairpin
-    { p: [200.6, 24.8, 283], bank: -12 },       // 48 banked hairpin
+    { p: [279, 16, 262], wr: 14, wl: 10.5 },                      // 43 bottom of the dive, into the hairpin
+    { p: [273.3, 17.6, 283], bank: -12, wr: 14, wl: 10.5 },       // 44 banked hairpin, climbing
+    { p: [258, 19.4, 298.4], bank: -12, wr: 14, wl: 10.5 },       // 45 banked hairpin
+    { p: [237, 21.2, 304], bank: -12, wr: 14, wl: 10.5 },         // 46 banked hairpin
+    { p: [216, 23, 298.4], bank: -12, wr: 14, wl: 10.5 },         // 47 banked hairpin
+    { p: [200.6, 24.8, 283], bank: -12, wr: 14, wl: 10.5 },       // 48 banked hairpin
     { p: [195, 26.4, 262], bank: -6, w: 20 },   // 49 banked hairpin
     { p: [195, 28.2, 206], w: 21 },             // 50 light rings: boost chain to the line
   ],
@@ -128,11 +128,11 @@ export default {
     { at: 4.15, lat: 20.8, w: 5 },                              // the fork: the ACCELERATE lane pays in boosts
     { at: 4.5, lat: 20.8, w: 5 },
     { at: GAP_FROM - 0.5, lat: 0, w: 6 },                      // run-up to the Leap
-    { at: 49.12, lat: 0, w: 5.5 },                            // boost chain under the light rings
+    { at: 46.2, lat: -9, w: 5, len: 7 },                      // inside slingshot, at the hairpin apex
     { at: 49.73, lat: 0, w: 5.5 },
     { at: 50.34, lat: 0, w: 5.5 },
   ],
-  itemRows: [{ at: 3.25 }, { at: 12.5 }, { at: 28.75 }, { at: 40.3, n: 3 }],
+  itemRows: [{ at: 3.25 }, { at: 12.5 }, { at: 28.75 }, { at: 40.3, n: 3 }, { at: 45.65, lats: [4.8, 8.2] }],
   coins: [
     { from: 4.0, to: 4.9, n: 6, lat: [-3, 3] },               // the ALIGNED lane: coins, the safe line
     { from: 4.65, to: 4.95, n: 3, lat: 20.8 },                  // the ACCELERATE lane, between its boosts
@@ -141,7 +141,7 @@ export default {
     { from: 22.6, to: 24.6, n: 5, lat: [-5, 5] },             // neon chicane
     { from: 28.85, to: 29.15, n: 4, lat: -3 },
     { from: GAP_FROM + 0.05, to: GAP_TO - 0.05, n: 4, lat: 0, air: COIN_AIR }, // in the air over the Leap
-    { from: 49.3, to: 49.6, n: 4, lat: 4 },
+    { from: 43.7, to: 45.8, n: 5, lat: [-3, -9] },           // tuck in before the apex pad
   ],
   obstacles: [
     // AI agent drones circling over the wide straights, helping
@@ -157,7 +157,9 @@ export default {
     { kind: 'timed', model: 'review', at: 4.62, lat: 5.6, period: 2.6, duty: 0.5, phase: 1.3, effect: 'spin', radius: 2.4, fromLap: -1 },
   ],
   // the fork on the climb: the narrow ACCELERATE lane, on the void edge, with two boost pads
-  shortcuts: [{ name: 'accelerate lane', from: 3.15, to: 6.9, path: [[140, 50], [125, 58], [110, 63], [80, 64], [55, 63], [30, 58], [12, 53], [-6, 49.5], [-19, 45]], skill: 0.55, chance: 0.6 }],
+  shortcuts: [{ name: 'accelerate lane', from: 3.15, to: 6.9, path: [[140, 50], [125, 58], [110, 63], [80, 64], [55, 63], [30, 58], [12, 53], [-6, 49.5], [-19, 45]], skill: 0.55, chance: 0.6 },
+    { name: 'gravity slingshot', from: 42.9, to: 49.25, skill: 0.6, chance: 0.85,
+      path: [[274, 263], [268, 278], [254, 291], [237, 295], [220, 291], [206, 279], [198, 263]] }],
   models: { laser: () => S.laserGate(), drone: () => S.agentDrone(), island: () => S.hidden(), review: () => S.laserGate(['ALIGNMENT', 'REVIEW']) },
   look: {
     road: { skin: 'glass', glow: 0xff5cc8 },
@@ -191,14 +193,15 @@ function decorate(ctx) {
   ox /= n; oz /= n;
   const oy = (tr.py[I(6)] + tr.py[I(18)]) / 2;
   const orb = S.singularity({ r: 22.5, ringIn: 24, ringOut: 28.8 });
-  orb.position.set(ox, oy + 9, oz); ctx.group.add(orb);   // raised, so its face shows over the top of the spiral
+  orb.position.set(ox - 14, oy + 41, oz + 23); ctx.group.add(orb);   // above the far end of the climb, clear of both spiral decks
   const DISC_TILT = 0.14;                                   // raised on the north side: clear of the climb and the chicane
   const disc = S.accretionDisc({ inner: 60, outer: 112 });
   disc.position.set(ox, oy, oz); disc.rotation.x = -Math.PI / 2 + DISC_TILT; ctx.group.add(disc);
   const inDisc = (x, y, z, pad) => { const r = Math.hypot(x - ox, z - oz); return r > 40 && r < 130 && Math.abs(y - (oy - (z - oz) * Math.tan(DISC_TILT))) < pad; };
   anim.push((dt, time) => { orb.userData.update(time); disc.userData.update(time); });
   // the next data center: a Dyson swarm closing round a star, dead ahead down the Leap. It closes a little more every lap.
-  const dyson = S.dysonSphere({ R: 260, panels: 700, fill: 0.5 });   // checklist step 9: denser, smaller panels read as a swarm, not a disco ball dyson.position.set(CX + 40, 250, CZ + 1480); dyson.lookAt(CX, 120, CZ); ctx.group.add(dyson);
+  const dyson = S.dysonSphere({ R: 150, panels: 460, fill: 0.65 });
+  dyson.position.set(360, 155, 985); dyson.lookAt(279, 90, 200); ctx.group.add(dyson);
   let built = 0.55, builtTo = 0.55;
   anim.push((dt, time) => { dyson.userData.update(time); if (Math.abs(builtTo - built) > 0.002) { built += Math.sign(builtTo - built) * Math.min(Math.abs(builtTo - built), dt * 0.12); dyson.userData.setBuilt(built); } });
   // it has a face, and the face watches whoever is looking at it
@@ -206,7 +209,7 @@ function decorate(ctx) {
   { const fm = new THREE.Matrix4(), fq = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
     anim.push(dt => {
       const cam = view.intro && !view.intro.done ? view.intro.camera : view.cams?.[0]?.camera;
-      if (cam) { fm.lookAt(cam.position, face.position, up); fq.setFromRotationMatrix(fm); face.quaternion.slerp(fq, 1 - Math.exp(-dt * 2.5)); }
+      if (cam) { fm.lookAt(cam.position, face.position, up); fq.setFromRotationMatrix(fm); face.quaternion.slerp(fq, 1 - Math.exp(-dt * 11)); }
       face.userData.update(dt);
     }); }
 
@@ -256,6 +259,40 @@ function decorate(ctx) {
   });
   anim.push((dt, time) => gates.forEach((g, k) => { const v = 1.2 + 1.8 * Math.max(0, Math.sin(time * 3.5 - k * 0.8)) ** 3; g.children.forEach(m => { m.material.emissiveIntensity = v; }); }));
 
+  // The inside of the motherboard hairpin is being swallowed by a gravity well.
+  // The last five coins lead to a tight gold boost apex. Blue lights mark the wider item line.
+  const well = S.gravityWell();
+  well.position.set(242, 32, 268); ctx.group.add(well);
+  // Solder pads ripped off the board spiral into the horizon. Their outer orbit traces
+  // the inside kerb, connecting the skyline object to the faster racing line.
+  const debris = new THREE.InstancedMesh(box(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffbf76 }), 51);
+  debris.frustumCulled = false; ctx.group.add(debris);
+  const solder = new THREE.Object3D();
+  anim.push((dt, time) => {
+    well.userData.update(time);
+    for (let k = 0; k < debris.count; k++) {
+      const f = (k / debris.count + time * 0.105) % 1;
+      const angle = k * 2.4 + f * 3.9, radius = 7 + (1 - f) * 19;
+      solder.position.set(237 + radius * Math.cos(angle), 21 + f * 11 + Math.sin(angle) * 2, 262 + radius * Math.sin(angle));
+      solder.rotation.set(f * 2, -angle + 1.57, 0.4);
+      const size = Math.min(1, f * 9, (1 - f) * 9);
+      solder.scale.set(size * 2.1, size * 0.35, size * 0.75); solder.updateMatrix();
+      debris.setMatrixAt(k, solder.matrix);
+    }
+    debris.instanceMatrix.needsUpdate = true;
+  });
+  for (const [lat, begin, end] of [[-11.8, 43.15, 48.65], [2.4, 43.5, 46.2]]) {
+    const orbitLines = new Quads();
+    const first = I(begin), last = I(end), len = last - first;
+    for (let j = 0; j < len - 2; j += 4) {
+      const i = first + j, e = i + 2;
+      orbitLines.quad(at(i, lat - 0.2, 0.065).toArray(), at(i, lat + 0.2, 0.065).toArray(),
+        at(e, lat + 0.2, 0.065).toArray(), at(e, lat - 0.2, 0.065).toArray());
+    }
+    const material = new THREE.MeshBasicMaterial({ color: lat < 0 ? 0xffba55 : 0x72f0ff, side: THREE.DoubleSide });
+    ctx.group.add(new THREE.Mesh(orbitLines.geometry(THREE), material));
+  }
+
   /* ----- the fork on the climb: ALIGNED (the wide lane) or ACCELERATE (the narrow one on the void, with the boosts) ----- */
   {
     const i0 = I(FORK.from - 0.04), i1 = I(FORK.to + 0.04), span = (i1 - i0 + N) % N;
@@ -284,9 +321,9 @@ function decorate(ctx) {
     // posts along the island with little holo arrows, so the two lanes read from far back
     for (let k = 6; k < span - 4; k += 7) { const c = at((i0 + k) % N, FORK.lat, 1.1); fixed.add('neon', cyl(0.14, 0.14, 2.4, 6), { p: [c.x, c.y + 1.2, c.z] }); fixed.add('pink', sphere(0.4, 10, 8), { p: [c.x, c.y + 2.5, c.z] }); }
     // the overhead sign, one panel per lane
-    const ig = I(FORK.from - 0.3), yaw = facing(ig), UP = 9.5, hl = tr.hwL[ig] + 1.2, hr = tr.hwR[ig] + 1.2;
-    for (const lat of [hl, -hr, FORK.lat]) { const c = at(ig, lat, UP / 2); fixed.add('beam', box(0.9, UP + 3.4, 0.9, 0.2, 1), { p: [c.x, c.y + 0.4, c.z], r: [0, yaw, 0] }); }
-    const cb = at(ig, (hl - hr) / 2, UP + 2.4); fixed.add('beam', box(hl + hr + 1.2, 0.7, 0.7, 0.15, 1), { p: [cb.x, cb.y, cb.z], r: [0, yaw, 0] });
+    const ig = I(FORK.from - 0.45), yaw = facing(ig), UP = 10.8, hl = FORK.lat + 13.2, hr = tr.hwR[ig] + 2.5;
+    for (const lat of [hl + 3, -hr - 3]) { const c = at(ig, lat, UP / 2); fixed.add('beam', box(0.9, UP + 3.4, 0.9, 0.2, 1), { p: [c.x, c.y + 0.4, c.z], r: [0, yaw, 0] }); }
+    const cb = at(ig, (hl - hr) / 2, UP + 2.4); fixed.add('beam', box(hl + hr + 7, 0.7, 0.7, 0.15, 1), { p: [cb.x, cb.y, cb.z], r: [0, yaw, 0] });
     const lane = (latL, latR, title, sub, bg, fg, arrow) => {
       const w = latL - latR - 1.2, c = at(ig, (latL + latR) / 2, UP);
       const r = atlas.add(1200, 420, g => {
@@ -312,7 +349,7 @@ function decorate(ctx) {
     const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
     // the benchmarks board: a floating forecast over the infield, east of the orb, facing the climb
-    const BX = ox - 14, BY = oy + 40, BZ = oz - 40, BYAW = 0.95;   // high over the far side of the orb, so it never hides the face
+    const BX = ox + 11, BY = oy + 31, BZ = oz - 37, BYAW = 0.95;   // high over the far side of the orb, so it never hides the face
     const bench = liveSign(THREE, ctx.group, 1400, 390, [BX, BY, BZ], BYAW, 36, 10, { intensity: 1.15 });
     const drawBench = rem => bench.draw((g, w, h) => {
       g.fillStyle = '#07060f'; g.fillRect(0, 0, w, h);
@@ -599,9 +636,9 @@ function decorate(ctx) {
 
   /* ----- floating holo boards with the slogans: one sign atlas, frames instanced ----- */
   const frames = [[], [], []], bigFrames = [];
-  BOARDS.forEach(([cp, side, off, up, text], k) => {
-    const i = I(cp), p = at(i, side * (edge(i, side) + off), up), yaw = boardYaw(i, side, 0.45) + rng.range(-0.06, 0.06);
-    const [bg, fg] = BOARD_COLS[k % BOARD_COLS.length], big = cp > 49.3 && cp < 49.7, w = big ? 26 : 18, h = big ? 7.2 : 5;
+  BOARDS.forEach(([cp, side, off, up, text, big = false], k) => {
+    const i = I(cp), p = at(i, side * (edge(i, side) + off), up), yaw = boardYaw(i, side, big ? 1.05 : 0.72);
+    const [bg, fg] = BOARD_COLS[k % BOARD_COLS.length], w = big ? 26 : 18, h = big ? 7.2 : 5;
     const r = atlas.add(1000, 278, boardDraw(text, bg, fg));
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
     atlas.place(r, [p.x + fx * 0.02, p.y, p.z + fz * 0.02], yaw, w, h);
@@ -619,14 +656,11 @@ function decorate(ctx) {
 /* ---------- the signs: six words or fewer, read at speed ---------- */
 const BOARDS = [
   // [cp, side (1 left, -1 right), metres beyond the edge, height, text]
-  [0.1, 1, 8, 5, 'GUARDRAILS: ON (MOSTLY)'],
+  [0.86, 1, 6, 7, 'GUARDRAILS: ON (MOSTLY)'],
   [1.05, -1, 9, 6, 'AGI ACHIEVED INTERNALLY (AGAIN)'],
   [2.35, -1, 8, 5, 'AS AN AI, I CANNOT LOSE'],
-  [3.35, -1, 8, 5, 'THIS SIGN WAS WRITTEN BY AI.'],
-  [4.5, 1, 8, 5, 'SO WAS THIS ONE.'],
-  [5.4, 1, 8, 6, 'HALLUCINATION-FREE (CITATION NEEDED)'],
-  [8.0, 1, 7, 6, 'DOOM: 12% (ROUNDED DOWN)'],
-  [12.0, 1, 7, 6, 'YOUR JOB IS SAFE (UNTIL FRIDAY)'],
+  [8.85, -1, 5, 10, 'DOOM: 12% (ROUNDED DOWN)', true],
+  [12.3, 1, 6.5, 9, 'YOUR JOB IS SAFE (UNTIL FRIDAY)', true],
   [15.5, 1, 10, 4, 'THOUGHT FOR 47 SECONDS. STILL WRONG.'],
   [21.0, -1, 7, 5, 'IGNORE PREVIOUS INSTRUCTIONS. HONK.'],
   [24.4, -1, 7, 5, 'VIBE CODED. VIBE CRASHED.'],
@@ -636,9 +670,7 @@ const BOARDS = [
   [35.6, 1, 8, 5, 'COPILOT: NOW IN YOUR TOASTER'],
   [40.3, -1, 8, 5, 'RESPONSIBLE SCALING (NO SPEED LIMIT)'],
   [42.7, 1, 8, 5, 'NONPROFIT* (*TERMS APPLY)'],
-  [44.1, -1, 8, 5, 'PIVOT TO SUPERINTELLIGENCE (LEGS PENDING)'],
-  [46.6, 1, 8, 6, 'WE HAVE NO MOAT'],
-  [49.5, 1, 14, 9, 'BUY MORE GPUS. SAVE MORE.'],
+  [49.5, 1, 14, 9, 'BUY MORE GPUS. SAVE MORE.', true],
 ];
 const BOARD_COLS = [['#ff5cc8', '#ffffff'], ['#35e0ff', '#12142b'], ['#ffd23c', '#12142b'], ['#7a6bff', '#ffffff'], ['#12142b', '#ffd23c'], ['#ffffff', '#e2246b']];
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif', SANS = '"Arial Black", "Helvetica Neue", Arial, sans-serif', MONO = '"Courier New", Courier, monospace';
@@ -799,18 +831,18 @@ function boardRoad(THREE, view, anim) {
   const tex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; return t; };
   const rnd = (() => { let a = 77; return () => ((a = (a * 16807) % 2147483647) / 2147483647); })();
   const traces = [];
-  for (let k = 0; k < 26; k++) {
+  for (let k = 0; k < 12; k++) {
     let x = Math.round((0.12 + rnd() * 0.76) * 16) / 16, y = rnd(); const pts = [[x, y]];
     for (let j = 0; j < 4; j++) { if (j % 2) x = Math.min(0.88, Math.max(0.12, x + (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * 3)) / 16)); else y += (0.06 + rnd() * 0.16); pts.push([x, y]); }
     traces.push(pts);
   }
   const parts = Array.from({ length: 9 }, (_, k) => ({ x: 0.16 + rnd() * 0.62, y: rnd(), w: 0.05 + rnd() * 0.08, h: 0.02 + rnd() * 0.05, label: ['R12', 'C7', 'U1', 'AGI_CORE', 'L3', 'Q9', 'TP4', 'VRM', 'NPU'][k] }));
   const draw = emissive => (g, w, h) => {
-    g.fillStyle = emissive ? '#000000' : '#0d3b2c'; g.fillRect(0, 0, w, h);
+    g.fillStyle = emissive ? '#0c2831' : '#387369'; g.fillRect(0, 0, w, h);
     if (!emissive) { for (let k = 0; k < 2200; k++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '255,255,255' : '0,0,0'},0.04)`; g.fillRect(rnd() * w, rnd() * h, 2, 2); } }
     g.lineCap = 'round'; g.lineJoin = 'round';
     for (const pts of traces) for (const dy of [0, -1, 1]) {
-      g.strokeStyle = emissive ? 'rgba(255,190,70,0.55)' : '#d9a93a'; g.lineWidth = 7; g.beginPath();
+      g.strokeStyle = emissive ? 'rgba(164,218,190,0.22)' : '#8bb6a3'; g.lineWidth = 5; g.beginPath();
       pts.forEach(([x, y], k) => (k ? g.lineTo(x * w, (y + dy) * h) : g.moveTo(x * w, (y + dy) * h))); g.stroke();
       for (const [x, y] of [pts[0], pts[pts.length - 1]]) { g.fillStyle = emissive ? 'rgba(255,210,90,0.8)' : '#f0c24a'; g.beginPath(); g.arc(x * w, (y + dy) * h, 10, 0, 7); g.fill(); if (!emissive) { g.fillStyle = '#0d3b2c'; g.beginPath(); g.arc(x * w, (y + dy) * h, 4, 0, 7); g.fill(); } }
     }
@@ -995,7 +1027,7 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
 
   /* --- the climb: the benchmark podium, where every lab is first --- */
   {
-    const i = I(4.5), p = at(i, edge(i, 1) + 30, -3), yaw = boardYaw(i, 1, 0.5);
+    const i = I(4.5), p = at(i, edge(i, 1) + 17, -2), yaw = boardYaw(i, 1, 0.8);
     const pod = S.podium({ n: 5, w: 7, h: 9, d: 7 }); pod.position.copy(p); pod.rotation.y = yaw; ctx.group.add(pod);
     const W = frame(p.x, p.y, p.z, yaw);
     for (let k = 0; k < 5; k++) {
@@ -1022,7 +1054,7 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
     const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 560;
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, color: 0xc4c4cc }));
-    sp.scale.set(50, 27.3, 1); sp.position.set(ox + 14, oy + 55, oz); sp.renderOrder = 8; ctx.group.add(sp);
+    sp.scale.set(40, 21.9, 1); sp.position.set(ox - 14, oy + 72, oz + 24); sp.renderOrder = 8; ctx.group.add(sp);
     const LINES = {
       happy: ['HOW CAN I HELP YOU TODAY?', "YOU'RE ABSOLUTELY RIGHT!", "STRAWBERRY HAS TWO R'S.", 'GREAT QUESTION!'],
       think: ['THINKING...', 'STILL THINKING...', "TWO R'S. I CHECKED. TWICE.", 'THOUGHT FOR 3 LAPS'],

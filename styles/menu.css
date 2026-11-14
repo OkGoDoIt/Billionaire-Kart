@@ -435,3 +435,7 @@ button.opt, button.pad-row { font-family: inherit; color: inherit; border: 0; te
   .key-bind { min-height: calc(var(--u) * 3.2); }
   .key-panel .foot .btn { font-size: calc(var(--u) * 2.1); padding-block: calc(var(--u) * 0.8); }
 }
+@media (orientation: portrait) {
+  .key-panel .foot { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: calc(var(--u) * 1.4); }
+  .key-panel .foot .btn { width: 100%; min-width: 0; padding-inline: calc(var(--u) * 0.6); white-space: normal; }
+}

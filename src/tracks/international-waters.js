@@ -92,9 +92,9 @@ export default {
     { p: [129, 8, 2.4], w: 14 },       // 37
     { p: [150, 8, 3.3], w: 14 },       // 38 her bow
     { p: [152, 8, 3.4], w: 14 },       // 39 (over the water)
-    { p: [178, 4.4, 5.5] },            // 40 back on the causeway: the landing barge
-    { p: [214, 3.8, -6] },             // 41
-    { p: [228, 3.0, -50] },            // 42 the East Turn
+    { p: [178, 4.4, 5.5], w: 21 },            // 40 back on the causeway: the landing barge
+    { p: [214, 3.8, -6], w: 22 },             // 41
+    { p: [236, 3.0, -50], w: 21 },            // 42 the East Turn
     { p: [206, 2.2, -95] },            // 43 customs
     { p: [150, 1.4, -113] },           // 44
     { p: [100, 0.8, -112] },           // 45
@@ -112,7 +112,9 @@ export default {
     // the seastead corridor and the customs lane
     { from: 12.75, to: 13.3, edge: 'wall' },
     { from: 42.8, to: 43.25, edge: 'wall' },
-    { from: 39.53, to: 40.5, edge: 'wall' },     // the landing barge's rails
+    { from: 8.35, to: 12.4, edge: 'wall', hoarding: false },
+    { from: 14.1, to: 17.15, edge: 'wall', hoarding: false },
+    { from: 39.53, to: 42.6, edge: 'wall', hoarding: false },     // the landing barge's rails
     // aboard: bulwarks and saloon walls either side of every deck
     ...YACHTS.map(y => ({ from: y.from, to: y.to, edge: 'wall' })),
   ],
@@ -138,6 +140,7 @@ export default {
     { at: 17.5, lat: 0, w: 6 },                // up the quay ramp
     { at: 24.75, lat: 0, w: 9 },               // SOVEREIGN IMMUNITY's foredeck: carry speed over the channel
     { at: 30.95, lat: 0, w: 8 },               // FAIR & BALANCED's foredeck
+    { at: 37.0, lat: 0, w: 8 },               // bank speed for the landing barge
     { at: 39.75, lat: 0, w: 6 },               // the landing
   ],
   itemRows: [{ at: 1.3 }, { at: 7.3 }, { at: 12.2 }, { at: 16.4 }, { at: 41.4, n: 4 }],

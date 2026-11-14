@@ -619,3 +619,52 @@ the road's fall. Gameplay geometry is unchanged by the pass.
 races: hits 23.5/race, rescues 0.6/race, mini-turbos 42/race, both
 splits used heavily (fountain 195, LP lane 135). Normal-difficulty
 finisher sims: lap avg ~42.7 s, hits ~30/race, rescues < 0.5/race.
+
+### Peninsula Run re-sequence (PR #215 Phase B, Nov 14, 2026)
+
+The owner's approved re-sequence (#135, Nov 14) is built. The lap was
+rotated by four control points (new cp N = old cp N+4, a pure re-index —
+same spline, verified sample-for-sample), so the lap now reads as the
+Peninsula Run: **Sand Hill Road is the start/finish**, Stanford (Palm
+Drive / the Oval / the Quad) is the middle, and the **Golden Gate deck
+is the late-lap climax** — approach climb raised (cp20 y 0→1.5, cp21
+y 4.5→6) and a short air-crest ramp on the exit sweeper (22.32, lift
+1.2; a first attempt at 22.55/lift 1.8 flew karts ~57 m over the line
+into the fork entry and was cut down).
+
+**The split moved to Sand Hill.** The median + LP lane + its lap-2
+gate and the fountain split are retired. In their place, the **VC
+fork**: a landscaped office island (glass slab, "TERM SHEET TOWERS",
+firm monument plates, collision posts at lat 13.5, z 46–72) splits the
+start/finish straight (wl 27). Inside: the due-diligence cone gauntlet
+(a cone row on the island's edge), a coin line, one boost pad. Outside:
+clean, with the item row at the line. The fountain island remains as
+off-road plaza dressing behind its bollard ring. Lone-rival audit
+(lone hard kart, segment line → cp 2.3, 18 laps): **inside median
+3.50 s, outside 3.47 s — Δ +0.03 s**, zero bumps. The audit trail is in
+the PR: the inside started at +2.53 s (the cut follower brakes for path
+curvature and bumped twice a lap); the pad and a smooth constant-lat
+arc closed most of it; the residual wedge mode — a kart overshooting
+the entry at ~44 m/s onto a cone placed on its natural arc — was traced
+and removed by moving the gauntlet to the island edge. Item 4's LP-lane
+residual (+0.35 s) is superseded by this measurement.
+
+**The cuts, honestly.** The meadow cut is formalized (boost-gated,
+cp 1.85→2.95 across the climb's meadow, feeder pad at 1.55).
+Lone-rival audit (segment cp 1.45→3.7): **unboosted 6.73 s vs road
+5.58 (loses 1.15 s — §2.2 band met); AI single-boost 5.82 vs 5.85
+(break-even — §2.2's boosted band NOT met on AI timing**: the AI will
+not chain boosts, and the road's drift-boost line is strong; a player
+chaining boost3/golden gains — boosted grass speed traces at
+43.5 m/s). **Cut 1 (downhill) is not formalized**: a full chord scan
+of the descent finds no line saving more than 5% of the road distance
+(the §2.2 "≈60% of road distance" described a layout that was never
+built), so a gated cut there could only lose and would teach the AI a
+losing line. Its corridor is instead opened as grass shoulder (crest
+wall trimmed to 5.6–6.4, feeder pad at 6.52). Both deviations are the
+owner's to overrule; the measurements stand either way.
+
+**Final numbers (Peninsula Run build).** Lap 1,344 m. `sim --quick`
+no FAIL. Normal 6 races: lap avg 43.1 s, hits 33.3, rescues 0.3/race,
+spread 9.9 s, fork 65×, meadow cut 26×. Hard 10 races (fork build):
+rescues 0.0–0.1/race, lap avg 41.3 s, spread 6.9 s.

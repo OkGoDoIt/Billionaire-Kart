@@ -363,7 +363,7 @@ export function arcadeBay() {
   b.add('trim', bx(W + 0.02, 0.22, 0.86), { p: [0, 4.75, 0.04] });                       // string course
   b.add('trim', bx(0.5, 0.5, 0.9), { p: [-W / 2 + 0.25, 0.25, 0.05] });                  // pier plinths
   b.add('trim', bx(0.5, 0.5, 0.9), { p: [W / 2 - 0.25, 0.25, 0.05] });
-  b.add('shade', bx(W, 0.2, 4.0), { p: [0, 0.1, -2.2] });                                // gallery floor
+  b.add('shade', bx(W, 1.65, 4.0), { p: [0, -0.625, -2.2] });                                // gallery floor
   b.add('shade', bx(W, 6.0, 0.4), { p: [0, 3.0, -4.2] });                                // back wall, in shadow
   b.add('dark', bx(1.5, 2.6, 0.1), { p: [0, 1.3, -3.95] });                              // a door at the back of the gallery
   b.add('shade', bx(W, 0.3, 4.4), { p: [0, 6.05, -2.1] });                               // gallery ceiling
@@ -375,7 +375,7 @@ export function arcadeBay() {
 /** A great arch over the road: span metres clear, ~17 m tall, 3 m deep, centred on x = 0; the road runs along Z through it.
     userData.signY: the height of the inscription panel's centre on either face. */
 export function quadArch(span = 14) {
-  const b = new ModelBuilder(), W = span + 7, H = 18.2, sy = 6.2;
+  const b = new ModelBuilder(), W = span + 7, sy = 6.2, H = Math.max(18.2, sy + span / 2 + 3.5);
   b.add('stone', archWall(W, H, span, sy, 3.0), {});
   for (const s of [-1, 1]) {
     b.add('trim', bx(1.0, H - 0.6, 3.5), { p: [s * (span / 2 + 0.6), (H - 0.6) / 2, 0] });     // pilasters either side of the opening

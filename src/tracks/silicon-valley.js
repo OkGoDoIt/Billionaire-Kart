@@ -897,21 +897,24 @@ function campus({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken,
     const s0 = track.sAtCp(14.72), s1 = track.sAtCp(16.12), P2 = new THREE.Vector3(), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
     const students = [];
     for (let s = s0; s < s1; s += 4.05) {
-      const i = Math.floor(s / track.ds) % track.N, yaw = track.yawAt(s);
+      const i = Math.floor(s / track.ds) % track.N;
+      // The chase camera swings wide as the kart turns into and out of the Quad.
+      const endDistance = Math.min(s - s0, s1 - s);
+      const setback = 4.8 + 6.2 * Math.max(0, 1 - endDistance / 21);
       for (const side of [1, -1]) {
         const hw = side > 0 ? track.hwL[i] : track.hwR[i];
-        track.pointAt(s, side * (hw + 0.75), P2);
+        track.pointAt(s, side * (hw + setback), P2);
         const fyaw = Math.atan2(-side * track.lx[i], -side * track.lz[i]);
-        Q.setFromAxisAngle(Y, fyaw); M.compose(new THREE.Vector3(P2.x, track.py[i] - 0.05, P2.z), Q, ONE); mats.push(M.clone());
-        if (rng() < 0.45) { const d = 1.6 + rng() * 1.6; students.push({ x: P2.x - Math.sin(fyaw) * d, z: P2.z - Math.cos(fyaw) * d, y: track.py[i] + 0.2, yaw: fyaw + rng.range(-0.6, 0.6) }); }
+        const ground = track.terrainHeight(P2.x, P2.z) - 0.12;
+        Q.setFromAxisAngle(Y, fyaw); M.compose(new THREE.Vector3(P2.x, ground, P2.z), Q, ONE); mats.push(M.clone());
+        if (rng() < 0.45) { const d = 1.6 + rng() * 1.6; students.push({ x: P2.x - Math.sin(fyaw) * d, z: P2.z - Math.cos(fyaw) * d, y: ground + 0.2, yaw: fyaw + rng.range(-0.6, 0.6) }); }
       }
-      void yaw;
     }
     bake.copies(bay, mats);
     sc.instances(partsOf(P.spectator()), students, { scale: [1.9, 2.2], tints: [0x9d1c20, 0xffffff, 0x1f2a44, 0xffc928, 0x9d1c20], cast: false });
     const arches = [[14.95, 'THE QUAD', 'NOW ACCEPTING DROPOUTS'], [15.86, 'YOU ARE NOW LEAVING ACADEMIA', 'GOOD LUCK OUT THERE']];
     for (const [cp, text, kicker] of arches) {
-      const c = at(cp), span = track.hwL[c.i] + track.hwR[c.i] + 0.6, arch = S.quadArch(span);
+      const c = at(cp), span = track.hwL[c.i] + track.hwR[c.i] + 5.5, arch = S.quadArch(span);
       // planted on the lower foot in the rendered terrain: the cambered road left one foot
       // of each arch hovering (#242)
       const gy = Math.min(...[-(span / 2 + 0.6), span / 2 + 0.6, -(span / 2 + 3.4), span / 2 + 3.4].map(u => { const [x, , z] = local(c, u, 0, 0); return track.terrainHeight(x, z); })) - 0.05;

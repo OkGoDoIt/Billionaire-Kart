@@ -315,6 +315,15 @@ export default {
     {
       const i = track.indexAtCp(8.05), p = sc.beside(8.05, 1, -track.hwL[i]);
       sc.place(B.paperclipArch({ span: track.hwL[i] + track.hwR[i] + 12, h: 12 }), p.x, p.z, { yaw: p.along, y: p.roadY - 0.2 });
+      const cursor = B.waitCursor();
+      cursor.position.set(p.x, p.roadY + 30, p.z); ctx.group.add(cursor);
+      const label = atlas.mesh(board('NOT RESPONDING', { bg: '#082e8c', fg: '#ffffff', font: S.SANS, lines: 1, size: 72 }, 512, 90), 15.2, 2.7);
+      label.position.set(p.x, p.roadY + 20.5, p.z); label.rotation.y = p.along + Math.PI; ctx.group.add(label);
+      cursor.visible = label.visible = false;
+      anim.push((dt, time) => {
+        cursor.visible = label.visible = view.showLap >= 2;
+        if (cursor.visible) { cursor.rotation.y = p.along + time * 0.6; cursor.rotation.z = Math.sin(time * 0.9) * 0.12; }
+      });
     }
 
     // wind turbines along the southern ridge, turning slowly

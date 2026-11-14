@@ -303,3 +303,19 @@ export function mine() {
   b.add('flag', prism(0.9, 0.7, 0.06), { p: [0.55, y + 2.4, -0.2], r: [0, 0, -Math.PI / 2] });
   return b.build({ mine: plastic(0x16171c, 0.45, 0.3), shine: plastic(0xffffff, 0.4), flagpole: MAT.dark, flag: paint(0xe5352b, { rough: 0.4 }) });
 }
+
+/** An amber desktop wait cursor over the paperclip. Open glass leaves the falling sand visible. */
+export function waitCursor() {
+  const b = new ModelBuilder();
+  for (const s of [-1, 1]) {
+    b.add('case', box(10.8, 1.35, 6.2, 0.55, 2), { p: [0, s * 7.3, 0] });
+    b.add('edge', box(9.8, 0.4, 5.5, 0.15, 1), { p: [0, s * 6.6, 0] });
+    for (const z of [-1.9, 1.9]) {
+      b.add('edge', tube([[s * 4.1, 6.4, z], [s * 3.4, 3.6, z], [s * 0.45, 0, z * 0.3], [s * 3.4, -3.6, z], [s * 4.1, -6.4, z]], 0.28, 24, 8));
+    }
+  }
+  b.add('sand', cyl(3.6, 0.16, 5.2, 20), { p: [0, 3.2, 0], s: [1, 1, 0.65] });
+  b.add('sand', cyl(0.18, 3.9, 3.4, 20), { p: [0, -4.9, 0], s: [1, 1, 0.65] });
+  b.add('sand', cyl(0.14, 0.14, 4, 8), { p: [0, -1.4, 0] });
+  return b.build({ case: plastic(0x142952), edge: plastic(0x91e4ff), sand: glow(0xffb526, 0.32) });
+}

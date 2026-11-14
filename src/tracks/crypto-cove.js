@@ -28,6 +28,17 @@ const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.0
 const SAND = [lin(0xf2), lin(0xdf), lin(0xae)];   // look.terrain.sand in linear light
 const ADS = ['HAVE FUN STAYING POOR', 'NUMBER GO UP', 'HODL', 'NOT FINANCIAL ADVICE', 'TRUST ME BRO CAPITAL', 'WITHDRAWALS PAUSED', 'FULLY BACKED (BY VIBES)', 'GAS FEES APPLY', 'FUNDS ARE SAFU', 'BUY THE DIP', 'AUDITED BY MY COUSIN', 'FEW UNDERSTAND', 'WEN LAMBO', 'THIS IS GOOD FOR BITCOIN'];
 
+// The inside chord of the S on the beach. The shelf is soft sand between both kerbs.
+const SAND_CUT = [[173, 99], [175, 113], [178, 129], [182, 145], [188, 162]];
+function nearSandCut(x, z) {
+  if (x < 163 || x > 198 || z < 89 || z > 172) return false;
+  return SAND_CUT.slice(1).some(([bx, bz], i) => {
+    const [ax, az] = SAND_CUT[i], dx = bx - ax, dz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+    return Math.hypot(x - ax - dx * t, z - az - dz * t) < 9;
+  });
+}
+
 function coastDistance(x, z) {         // signed distance to the coast, positive on land
   let d = Infinity, inside = false;
   for (let i = 0, j = COAST.length - 1; i < COAST.length; j = i++) {
@@ -80,6 +91,7 @@ export default {
     { from: 3.4, to: 4.6, side: 'R', outer: 34, shoulder: 5 },         // cut the beach corner across the sand (needs a boost)
     { from: 5.6, to: 9.75, edge: 'void' },                           // pier: nothing at the edge but the sea
   ],
+  shortcuts: [{ name: 'sand cut', from: 3.35, to: 4.65, path: SAND_CUT, boost: true, skill: 0.35 }],
   zones: [{ from: 1.9, to: 5.6, surface: 'dirt' }],
   bridges: [{ from: 5.6, to: 9.75 }],
   gaps: [{ from: 9.2, to: 9.37 }],
@@ -95,7 +107,8 @@ export default {
   coins: [
     { from: 0.2, to: 0.5, n: 4, lat: -4.5 },
     { from: 2.4, to: 2.9, n: 5, lat: [-5, 4] },
-    { from: 3.75, to: 4.25, n: 4, lat: [-11, -15] },   // the sand cut
+    { from: 3.72, to: 3.94, n: 3, lat: [-17, -26] },
+    { from: 4.03, to: 4.38, n: 4, lat: [-26, -13] },   // the sand cut
     { from: 7.2, to: 7.8, n: 5, lat: [-4, 4] },
     { from: 9.22, to: 9.35, n: 3, lat: 0, air: 2.8 },
     { from: 12.2, to: 12.8, n: 5, lat: [-4, 5] },
@@ -164,7 +177,7 @@ function decorate(ctx) {
   const W = track.water;
   const far = (x, z, list, r) => list.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > r * r);
   const keepOut = [{ x: CLUB.x, z: CLUB.z, r: 17 }, { x: LIGHT.x, z: LIGHT.z, r: 14 }, { x: RUG.x, z: RUG.z, r: 28 }, { x: BULL.x, z: BULL.z, r: 34 }, { x: -170, z: -62, r: 14 }, { x: TOWER.x, z: TOWER.z, r: 8 }];
-  const clear = (x, z) => keepOut.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > o.r * o.r);
+  const clear = (x, z) => !nearSandCut(x, z) && keepOut.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > o.r * o.r);
 
   // start/finish gantry and grandstands on the land side of the promenade
   const g0 = sc.beside(0, 1, -track.hwL[0]);
@@ -188,6 +201,35 @@ function decorate(ctx) {
   skin(ctx, 5.6, 9.06, plankTexture(), 5.5);
   skin(ctx, 9.37, 9.75, plankTexture(), 5.5);
   skin(ctx, 1.9, 5.6, sandTexture(), 14, true);
+
+  // Sailcloth pennants mark the soft-sand line. Twin tyre grooves lead across it even
+  // after a racer ahead collects the coins. Sample actual ground as the chord leaves the kerb.
+  {
+    const hit = makeGroundHit(), xyz = [], faces = [];
+    const marks = new ModelBuilder();
+    for (let j = 1; j < SAND_CUT.length; j++) {
+      const [ax, az] = SAND_CUT[j - 1], [bx, bz] = SAND_CUT[j];
+      const len = Math.hypot(bx - ax, bz - az), nx = (bz - az) / len, nz = (ax - bx) / len;
+      for (const side of [-1, 1]) {
+        for (let k = 0; k < 8; k++) {
+          const start = xyz.length / 3;
+          for (const t of [k / 8, (k + 1) / 8]) for (const w of [0.9, 1.32]) {
+            const x = ax + (bx - ax) * t + side * nx * w, z = az + (bz - az) * t + side * nz * w;
+            xyz.push(x, track.ground(x, z, -1, hit).y + 0.065, z);
+          }
+          faces.push(start, start + 1, start + 2, start + 1, start + 3, start + 2);
+        }
+      }
+      const x = ax - nx * 4, z = az - nz * 4, y = track.ground(x, z, -1, hit).y;
+      marks.add('mast', cyl(0.09, 0.13, 3.1, 6), { p: [x, y + 1.5, z] });
+      const sail = new THREE.BufferGeometry();
+      sail.setAttribute('position', new THREE.Float32BufferAttribute([x,y+3.1,z, x,y+1.8,z, x-1.65,y+2.64,z+0.12], 3));
+      sail.computeVertexNormals(); const flag = new THREE.Mesh(sail, new THREE.MeshBasicMaterial({color: 0xff9a18, side: THREE.DoubleSide})); ctx.group.add(flag);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(xyz, 3)); g.setIndex(faces);
+    ctx.group.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xbd9b6b, side: THREE.DoubleSide })));
+    ctx.group.add(marks.build({ mast: plastic(0x543c32) }));
+  }
 
   // the lighthouse on its knoll, sweeping the bay
   const lh = C.lighthouse({ H: 30 });

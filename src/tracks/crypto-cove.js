@@ -204,7 +204,8 @@ function decorate(ctx) {
   };
   sc.along({ from: 18.3, to: 0.95, side: 1, offset: 6.5, spacing: 36 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
-  const jk = jokes(ctx, sc, { standSpots, seats, gantryAt: g0 });
+  const listing = sc.beside(11.3, 1, 9);
+  const jk = jokes(ctx, sc, { standSpots, seats, gantryAt: g0, listing });
   // The animated lip uses the same rising and crashing colors as the exchange.
   const ramp = view.trackMesh.userData.mats.ramp.uniforms;
   ramp.uA.value.setHex(0x135c42); ramp.uB.value.setHex(0x77ffac);
@@ -300,7 +301,7 @@ function decorate(ctx) {
     ...sc.along({ from: 16.6, to: 17.6, side: 1, offset: 13, spacing: 11 }),
   ].filter(p => clear(p.x, p.z) && p.y > W + 0.6);
   const sand = sc.scatter({ count: 120, min: 14, max: 90, maxSlope: 0.35, minGap: 7, where: (x, z, h) => h > W + 0.8 && h < 4.5 && coastDistance(x, z) < 45 && clear(x, z) });
-  const palms = [...rows, ...sand];
+  const palms = [...rows, ...sand].filter(p => Math.hypot(p.x - listing.x, p.z - listing.z) > 13);
   sc.instances(palmA, palms.filter((_, i) => i % 3 === 0), { scale: [0.9, 1.3], yaw: 'random' });
   sc.instances(palmB, palms.filter((_, i) => i % 3 === 1), { scale: [0.9, 1.3], yaw: 'random' });
   sc.instances(palmC, palms.filter((_, i) => i % 3 === 2), { scale: [0.85, 1.2], yaw: 'random' });
@@ -500,7 +501,7 @@ const BOARDS = [
 ];
 const CROWD = ['WAGMI', 'HODL', 'WEN LAMBO', 'GM', 'FEW UNDERSTAND', 'TO THE MOON', 'LFG', 'BUY MY BAGS', 'NGMI', 'SELL? NEVER'];
 
-function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
+function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
   const { THREE, track, anim, view } = ctx, rng = sc.rng, W = track.water, group = ctx.group;
   const bake = C.makeBaker(group, sc.shadows), atlas = C.makeAtlas(group), F = C.SIGN_FONT, SANS = C.SANS, signDraw = C.signDraw, fitText = C.fitText;
   const hit = makeGroundHit();
@@ -636,6 +637,32 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
   // The 200cc chart dive lands past CP10. Keep the finish marquee beyond the
   // touchdown so both the kart and the trailing camera pass beneath it on the road.
   marquee(10.46, 'BOUGHT THE DIP', '#98ffbd', 9.8, 21);
+  // The listing ceremony promises exactly what the memecoin delivers: one inflatable dog.
+  listing.yaw = yawTo(listing, roadPt(10.73));
+  const plinth = new ModelBuilder();
+  plinth.add('stage', box(12.1, 3.8, 5.0, 0.2), { p: [0, 0.4, 0] });
+  plinth.add('brass', box(12.3, 0.2, 5.2), { p: [0, 2.34, 0] });
+  // Empty slatted utility crate alongside the balloon, open at the top.
+  for (const z of [-1, 1]) {
+    for (const y of [2.78, 3.43]) plinth.add('wood', box(3.1, 0.45, 0.13), { p: [3.8, y, z] });
+    for (const x of [2.35, 5.25]) plinth.add('wood', box(0.22, 1.6, 0.22), { p: [x, 3.22, z] });
+  }
+  for (const x of [2.35, 5.25]) for (const y of [2.78, 3.43]) {
+    plinth.add('wood', box(0.15, 0.45, 2), { p: [x, y, 0] });
+  }
+  // The hand crank at the side of the exchange's mechanical sign.
+  plinth.add('brass', cyl(0.17, 0.17, 0.8, 8), { p: [6.4, 1, 0], r: [0, 0, Math.PI / 2] });
+  plinth.add('brass', box(0.16, 1, 0.2), { p: [6.76, 1.45, 0] });
+  plinth.add('wood', cyl(0.18, 0.18, 0.6, 8), { p: [6.98, 1.9, 0], r: [0, 0, Math.PI / 2] });
+  const stage = plinth.build({ stage: plastic(0x123744), brass: paint(0xe6aa38), wood: plastic(0xa16b43) });
+  stage.position.set(listing.x, listing.y, listing.z); stage.rotation.y = listing.yaw; bake.add(stage);
+  const value = atlas.add(960, 144, signDraw('FUNDAMENTALS: ONE DOG', { bg: '#123744', fg: '#fff1cb', size: 120, lines: 1, pad: 0.025 }));
+  atlas.place(value, toWorld(listing, [0, 1.25, 2.52]), listing.yaw, 11.8, 1.75);
+  const utility = atlas.add(384, 96, signDraw('UTILITY', { bg: '#f4d5a2', fg: '#42291e', size: 76, lines: 1 }));
+  atlas.place(utility, toWorld(listing, [3.8, 3.38, 1.14]), listing.yaw, 2.7, 0.68);
+  const dog = C.listingBalloon();
+  dog.position.fromArray(toWorld(listing, [-1.55, 2.48, 0]));
+  dog.rotation.y = listing.yaw - 0.15; group.add(dog);
   // The plunge indicator sits beside the gap, facing the approaching driver. Its
   // silhouette, the free water below, and the green landing hoop read in a single view.
   {
@@ -938,6 +965,8 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
         if (key !== T.shown) { T.shown = key; drawTicker(state, price); }
       }
     }
+    const inflation = view.finalLap ? 0.4 : view.showLap >= 2 ? 0.7 : 1;
+    dog.scale.y = inflation;
     // the bull sweeps its lasers across the sky over the start
     bull.userData.beams.forEach((b, k) => { b.rotation.y = Math.sin(time * 0.55 + k * 0.3) * 0.32 + (k ? -0.04 : 0.04); b.rotation.x = -0.24 + Math.sin(time * 0.8) * 0.06; });
     // #121: the lasers stutter and dim on lap 2, and go out with the bull market on the last

@@ -28,7 +28,6 @@ const CLIPPY = { x: 55, z: 60, yaw: Math.atan2(-105, -50), H: 44 };
 /* Billboards: [cp, side, metres beyond the road edge, text, background, ink]. */
 const BOARDS = [
   [1.3, 1, 30, '640K OUGHT TO BE ENOUGH', '#1a1d29', '#37ff6a'],
-  [4.9, -1, 24, 'ABORT, RETRY, FAIL?', '#0a4fd6', '#ffffff'],
   [7.6, -1, 20, 'INSERT DISK 2 OF 47', '#ffd23c', '#1a1d29'],
   [10.4, 1, 22, 'YOU HAVE (1) NEW VIRUS', '#e5352b', '#ffffff'],
   [13.4, -1, 20, 'BEST VIEWED AT 800X600', '#ffffff', '#0a4fd6'],
@@ -47,7 +46,7 @@ export default {
   id: 'bliss-hills',
   name: 'Bliss Hills',
   tagline: 'It is now safe to turn off your kart.',
-  lapNotes: ['<b>Lap 2.</b> Updates are ready. Restarting in 10 seconds.', '<b>Final lap.</b> Installing update 3 of 214. Do not turn off your kart.'],
+  lapNotes: ['<b>Lap 2.</b> Updates are ready. Restarting in 10 seconds.', '<b>Final lap.</b> Your world ran into a problem and needs to restart.'],
   laps: 3,
   width: 18,
   sky: 'day',
@@ -110,17 +109,17 @@ export default {
   ],
   boosts: [
     { at: 8.35, lat: 0, w: 5 },                                    // one before each crest
-    { at: 11.1, lat: 0, w: 5 },
-    { at: 14.2, lat: 0, w: 5 },
+    { at: 11.1, lat: 3, w: 5 },
+    { at: 14.2, lat: -3, w: 5 },
     { at: 22.15, lat: -4.5, w: 5 },                                // ramp landing
   ],
   itemRows: [{ at: 1.6 }, { at: 7.4 }, { at: 23.0 }, { at: 27.3, n: 3 }],
   coins: [
     { from: 0.25, to: 0.6, n: 4, lat: -3 },
-    { from: 3.6, to: 4.6, n: 4, lat: [5, -5] },
+    { from: 3.6, to: 4.6, n: 4, lat: [-4, -3] },
     { from: 9.15, to: 9.75, n: 3, lat: 0, air: 2.0 },              // a line floating over each crest
-    { from: 12.15, to: 12.75, n: 3, lat: 0, air: 2.0 },
-    { from: 15.15, to: 15.75, n: 3, lat: 0, air: 2.0 },
+    { from: 12.15, to: 12.75, n: 3, lat: 3, air: 2.0 },
+    { from: 15.15, to: 15.75, n: 3, lat: -3, air: 2.0 },
     { from: 18.2, to: 19.8, n: 5, lat: [-5, -6] },
     { from: 21.75, to: 22.0, n: 2, lat: -4.5, air: 3 },
     { from: 28.2, to: 30.2, n: 5, lat: [-4, 4] },
@@ -130,9 +129,9 @@ export default {
   shortcuts: [{ name: 'meadow', from: 22.2, to: 27.9, path: [[-30, 166], [-16, 151], [-13, 132], [-19, 112]] }],
   obstacles: [
     // error dialogs drifting across the road
-    { kind: 'patrol', model: 'dialog', at: 4.3, lats: [1.5, 6.5], speed: 4, effect: 'spin', radius: 1.7 },
-    { kind: 'patrol', model: 'dialog', at: 22.7, lats: [-1.5, -6.5], speed: 4.5, effect: 'spin', radius: 1.7 },
-    { kind: 'patrol', model: 'dialog', at: 27.0, lats: [1.5, 6.5], speed: 5, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 4.3, lats: [2.5, 6.5], speed: 4, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 22.7, lats: [-2.5, -6.5], speed: 4.5, effect: 'spin', radius: 1.7 },
+    { kind: 'patrol', model: 'dialog', at: 27.0, lats: [2.5, 6.5], speed: 5, effect: 'spin', radius: 1.7 },
     // hay bales scattered over the meadow shortcut
     { kind: 'static', model: 'bale', at: 22.2, lat: 18, effect: 'bump', radius: 1.6 },
     { kind: 'static', model: 'bale', at: 22.75, lat: 25, effect: 'bump', radius: 1.6 },
@@ -315,6 +314,18 @@ export default {
     {
       const i = track.indexAtCp(8.05), p = sc.beside(8.05, 1, -track.hwL[i]);
       sc.place(B.paperclipArch({ span: track.hwL[i] + track.hwR[i] + 12, h: 12 }), p.x, p.z, { yaw: p.along, y: p.roadY - 0.2 });
+      const cursor = B.waitCursor();
+      // Set it just behind the arch so the top stays in the chase camera as the kart crests the hill.
+      const crest = track.indexAtCp(9.15);
+      cursor.scale.setScalar(0.72);
+      cursor.position.set(track.px[crest], p.roadY + 14.8, track.pz[crest]); ctx.group.add(cursor);
+      const label = atlas.mesh(board('NOT RESPONDING', { bg: '#082e8c', fg: '#ffffff', font: S.SANS, lines: 1, size: 72 }, 512, 90), 14.5, 2.3);
+      label.position.set(p.x, p.roadY + 8.4, p.z); label.rotation.y = p.along + Math.PI; ctx.group.add(label);
+      cursor.visible = label.visible = false;
+      anim.push((dt, time) => {
+        cursor.visible = label.visible = view.showLap >= 2;
+        if (cursor.visible) { cursor.rotation.y = p.along + time * 0.6; cursor.rotation.z = Math.sin(time * 0.9) * 0.12; }
+      });
     }
 
     // wind turbines along the southern ridge, turning slowly
@@ -339,7 +350,7 @@ export default {
       const x = -150, z = 150; sc.place(fh2, x, z, { yaw: 1.2, scale: 0.85, y: sc.y(x, z) - 0.2 }); taken.push([x, z, 16]);
     }
 
-    gags({ THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, free, local, board, anim });
+    gags({ THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, free, local, board, anim, view });
 
     // oversized beige computers as roadside boulders, in clusters
     const mons = [], towers = [];
@@ -431,11 +442,12 @@ export default {
     anim.push((dt, time) => { balloons.forEach((b, i) => { b.position.y += Math.sin(time * 0.4 + i * 1.7) * dt * 0.8; b.position.x += Math.sin(time * 0.05 + i) * dt * 0.6; b.rotation.y += dt * 0.05; }); });
     bake.flush();
     atlas.flush();
+    restartSky(ctx);
   },
 };
 
 /* ---------- the gags ---------- */
-function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, board, anim }) {
+function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, board, anim, view }) {
   const { FONT, SANS, fitText } = S;
   const facing = (p, x, z) => Math.atan2(x - p.x, z - p.z);
   const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.redraw = () => { draw(c.getContext('2d'), w, h); t.needsUpdate = true; }; if (document.fonts?.ready) document.fonts.ready.then(t.redraw); return t; };
@@ -453,6 +465,62 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
     body(g, 0, tb, w, h - tb);
   };
   const button = (g, x, y, w, h, text) => { g.fillStyle = '#ffffff'; g.fillRect(x, y, w, h); g.strokeStyle = '#12142b'; g.lineWidth = Math.max(3, h * 0.06); g.strokeRect(x, y, w, h); fitText(g, text, x + w / 2, y + h / 2, w * 0.85, h * 0.6, SANS, '#12142b', { lines: 1 }); };
+
+  // The start menu doubles as the bridge beam. Its clock counts race laps.
+  {
+    const i = track.indexAtCp(0.9), p = sc.beside(0.9, 1, -track.hwL[i]);
+    p.yaw = p.along + Math.PI;
+    const W = track.hwL[i] + track.hwR[i] + 6, H = 3.2, y = p.roadY + 8.6;
+    for (const u of [-W / 2, W / 2]) {
+      const [x, , z] = local(p, u, 0, 0), foot = sc.y(x, z) - 0.35;
+      const post = S.post(y + H / 2 - foot, 0.56, 0x2757aa);
+      sc.place(post, x, z, { y: foot }); bake.add(post);
+    }
+    let lap = 1;
+    const tex = canvasTex(768, 96, (g, w, h) => {
+      const gloss = (x, width, light, mid, dark) => {
+        const gr = g.createLinearGradient(0, 0, 0, h);
+        for (const [at, color] of [[0, light], [0.14, mid], [0.55, mid], [1, dark]]) gr.addColorStop(at, color);
+        g.fillStyle = gr; g.fillRect(x, 0, width, h);
+      };
+      gloss(0, w, '#92c5ff', '#174fc5', '#123782');
+      g.save(); g.beginPath(); g.roundRect(-24, 1, 242, h - 2, 22); g.clip();
+      gloss(0, 220, '#b3f983', '#328522', '#104813'); g.restore();
+      fitText(g, 'start', 108, 49, 168, 78, XP, '#ffffff', { lines: 1 });
+      gloss(505, 263, '#8cedff', '#167cb9', '#0b4e83');
+      fitText(g, `LAP ${lap}/${view.race.laps}`, 634, 49, 236, 62, XP, '#ffffff', { lines: 1 });
+    });
+    const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+    for (const side of [1, -1]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
+      m.position.set(...local(p, 0, 0.1 * side, y)); m.rotation.y = p.yaw + (side < 0 ? Math.PI : 0); group.add(m);
+    }
+    anim.push(() => { if (view.showLap && lap !== view.showLap) { lap = view.showLap; tex.redraw(); } });
+  }
+
+  // Alternate targets across the climb, angled toward the approach so the art has a silhouette at speed.
+  const iconMaterials = ['folder', 'document'].map(name => {
+    const map = new THREE.TextureLoader().load(`assets/tracks/bliss-hills/icon-${name}.webp`);
+    map.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshStandardMaterial({ map, alphaTest: 0.4, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.22 });
+  });
+  const icons = [
+    [2.65, -1, 0, 'NEW FOLDER (37)'], [3.5, 1, 1, 'MY DOCUMENTS'], [4.1, -1, 1, 'FINAL_v2_REAL'],
+    [4.7, 1, 0, 'TAXES 2003'], [5.24, -1, 0, 'DO NOT OPEN'], [5.8, 1, 0, 'NEW FOLDER (38)'], [6.42, -1, 1, 'README.TXT'],
+  ];
+  for (const [cp, side, image, label] of icons) {
+    const p = sc.beside(cp, side, 8);
+    if (!free(p.x, p.z)) continue;
+    const before = track.indexAtCp(cp - 0.75);
+    p.yaw = facing(p, track.px[before], track.pz[before]);
+    const h = Math.max(p.y + 0.4, p.roadY + 0.8), size = image ? 9.8 : 11;
+    const icon = new THREE.Mesh(new THREE.PlaneGeometry(size, size), iconMaterials[image]);
+    icon.rotation.y = p.yaw; icon.position.set(p.x, h + 2.15 + size / 2, p.z); group.add(icon); bake.add(icon, false);
+    const plate = board(label, { bg: '#225bbb', fg: '#ffffff', border: '#b5d7ff', font: XP, lines: 1, size: 64 }, 384, 80);
+    atlas.place(plate, local(p, 0, 0, h + 1.2), p.yaw, 11, 2.3);
+    atlas.place(board('', { bg: '#19498c' }, 64, 24), local(p, 0, -0.08, h + 1.2), p.yaw + Math.PI, 11, 2.3);
+    taken.push([p.x, p.z, 8]);
+  }
 
   // ---- the centerpiece: Clippy, offering help to the whole grid ----
   {
@@ -526,22 +594,30 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
 
   // ---- the back straight: an update progress bar the size of a building ----
   {
-    const p = spot(22.9, -1, 26), W = 34, H = 15, y = p.y + 9;
-    legs(p, W, 9 + H * 0.5);
-    const st = { pct: 3 };
+    const i = track.indexAtCp(22.9), p = sc.beside(22.9, 1, -track.hwL[i]);
+    p.yaw = p.along + Math.PI;
+    const W = 29, H = 9, y = p.roadY + 10;
+    for (const u of [-W / 2, W / 2]) {
+      const [x, , z] = local(p, u, -0.4, 0), ground = sc.y(x, z) - 0.5;
+      const post = S.post(y + H - ground, 0.48, 0x4772b2);
+      sc.place(post, x, z, { y: ground }); bake.add(post);
+    }
+    const updates = [[3, 'TIME REMAINING: 4 YEARS'], [58, 'TIME REMAINING: 7 MINUTES'], [100, 'RESTARTING...']];
+    let state = 0;
     const tex = canvasTex(1024, 452, xpWindow('INSTALLING UPDATES', (g, x0, y0, w, h) => {
-      fitText(g, `UPDATE ${st.pct}%`, w / 2, y0 + h * 0.2, w * 0.9, 110, SANS, '#12142b', { lines: 1 });
+      fitText(g, `UPDATE ${updates[state][0]}%`, w / 2, y0 + h * 0.2, w * 0.9, 110, SANS, '#12142b', { lines: 1 });
       fitText(g, 'DO NOT TURN OFF YOUR KART', w / 2, y0 + h * 0.45, w * 0.9, 70, SANS, '#e5352b', { lines: 1 });
       const bx = w * 0.07, by = y0 + h * 0.62, bw = w * 0.86, bh = h * 0.2;
       g.fillStyle = '#ffffff'; g.fillRect(bx, by, bw, bh); g.strokeStyle = '#7a7a7a'; g.lineWidth = 6; g.strokeRect(bx, by, bw, bh);
-      g.fillStyle = '#37c34a'; const n = Math.max(1, Math.round(st.pct / 3)); for (let k = 0; k < n; k++) g.fillRect(bx + 10 + k * 34, by + 10, 26, bh - 20);
-      fitText(g, 'TIME REMAINING: 4 YEARS', w / 2, y0 + h * 0.92, w * 0.9, 40, SANS, '#12142b', { lines: 1 });
+      g.fillStyle = '#37c34a'; const step = (bw - 16) / 25, n = Math.max(1, Math.round(updates[state][0] / 4)); for (let k = 0; k < n; k++) g.fillRect(bx + 8 + k * step, by + 6, step - 5, bh - 12);
+      fitText(g, updates[state][1], w / 2, y0 + h * 0.92, w * 0.9, 40, SANS, '#12142b', { lines: 1 });
     }));
     const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6 });
     for (const s of [1, -1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat); m.position.set(...local(p, 0, s > 0 ? 0.05 : -0.35, y + H / 2)); m.rotation.y = p.yaw + (s > 0 ? 0 : Math.PI); group.add(m); }
-    const seq = [1, 2, 3, 3, 2, 3, 1, 2, 3, 3]; let last = -1;
-    anim.push((dt, time) => { const k = Math.floor(time / 2.5) % seq.length; if (k !== last) { last = k; st.pct = seq[k]; tex.redraw(); } });
-    taken.push([p.x, p.z, 22]);
+    anim.push(() => {
+      const next = view.finalLap ? 2 : view.showLap >= 2 ? 1 : 0;
+      if (next !== state) { state = next; tex.redraw(); }
+    });
   }
 
   // ---- the meadow: the shortcut is a minefield ----
@@ -549,6 +625,59 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
     const p = spot(22.05, -1, 16); legs(p, 16, 9);
     atlas.place(board('SHORTCUT CONTAINS MINES (PROBABLY)', { bg: '#c0c0c0', fg: '#12142b', size: 120, kicker: 'MINESWEEPER', kfg: '#e5352b', border: '#7a7a7a', font: SANS }, 768, 300), local(p, 0, 0, p.y + 9.5), p.yaw, 16, 6.25);
     taken.push([p.x, p.z, 10]);
+  }
+
+  // The cleared squares themselves describe the shortcut. Conform each one to the meadow and swale.
+  // The square border and printed number share a texture; the kart still feels grass underneath.
+  {
+    const path = [[-48, 174], ...track.def.shortcuts[0].path, [-30, 95]];
+    const marks = ['1', '2', '1', '3'];
+    const tex = canvasTex(512, 128, (g) => {
+      for (const [i, n] of marks.entries()) {
+        const x = i * 128;
+        g.fillStyle = '#52635e'; g.fillRect(x, 0, 128, 128);
+        g.fillStyle = '#d3dcce'; g.fillRect(x + 4, 4, 118, 118);
+        g.fillStyle = '#abb8ac'; g.fillRect(x + 8, 8, 114, 114);
+        fitText(g, n, x + 64, 64, 90, 92, XP, ['#153fac', '#1d6c38', '#153fac', '#ab3628'][i], { lines: 1 });
+      }
+    });
+    const pos = [], uv = [];
+    for (let j = 1; j < path.length; j++) {
+      const [x0, z0] = path[j - 1], [x1, z1] = path[j];
+      const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 5.5));
+      const tx = (x1 - x0) / len, tz = (z1 - z0) / len;
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n, cx = x0 + (x1 - x0) * t, cz = z0 + (z1 - z0) * t;
+        if (track.roadDistance(cx, cz) < 3.5) continue;
+        const type = (j + k) % marks.length;
+        for (const [u, v] of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]]) {
+          const along = (v - 0.5) * (len / n - 0.6), across = (u - 0.5) * 5.1;
+          const x = cx + tx * along + tz * across, z = cz + tz * along - tx * across;
+          pos.push(x, sc.y(x, z) + 0.09, z);
+          uv.push((type + 0.01 + 0.98 * u) / 4, v);
+        }
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    group.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 })));
+  }
+
+  // A growing pipes screensaver on the outside of the lake S. Three colors trace distinct runs.
+  {
+    const p = sc.beside(29.8, -1, 16);
+    const paths = [
+      [[-16,-2,0],[-16,11,0],[-5,11,0],[-5,17,0],[6,17,0],[6,3,0]],
+      [[-11,-2,4],[-11,7,4],[1,7,4],[1,21,4],[13,21,4],[13,13,4],[17,13,4]],
+      [[-19,-2,-4],[-19,18,-4],[-12,18,-4],[-12,25,-4],[10,25,-4],[10,10,-4],[19,10,-4]],
+    ];
+    const pipes = paths.map((path, i) => {
+      const mesh = B.screensaverPipe(path, [0x0ecebf, 0xff9d15, 0xec3989][i]);
+      sc.place(mesh, p.x, p.z, { yaw: p.along + Math.PI / 2, y: p.y }); return mesh;
+    });
+    taken.push([p.x, p.z, 18]);
+    anim.push(() => { pipes.forEach((pipe, i) => { pipe.visible = (view.showLap || 1) >= i + 1; }); });
   }
 
   // ---- the finish: the solitaire win cascade, bouncing along the pit grandstands ----
@@ -592,4 +721,38 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
       for (const m of meshes) m.instanceMatrix.needsUpdate = true;
     });
   }
+}
+
+// The painted cloud dome is fixed. Fade a crash screen over it while keeping the road and hills in front.
+function restartSky({ THREE, gfx, group, view, anim }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = 512;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#093da9'; g.fillRect(0, 0, 1024, 512);
+  // A texture tile covers 72° horizontally and 180° vertically. Match glyph scale in the two directions.
+  const ink = '#eff8ff', font = 'Arial, sans-serif';
+  g.translate(0, 232); g.scale(1, 0.2);
+  g.fillStyle = ink; g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = '120px Arial';
+  g.fillText(':(', 40, -8);
+  S.fitText(g, 'YOUR WORLD RAN INTO A PROBLEM', 543, -28, 780, 57, font, ink, { lines: 1 });
+  S.fitText(g, 'AND NEEDS TO RESTART.', 543, 27, 780, 54, font, ink, { lines: 1 });
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace; map.wrapS = THREE.RepeatWrapping; map.repeat.x = -5;
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(1500, 48, 24), new THREE.MeshBasicMaterial({
+    map, transparent: true, opacity: 0, fog: false, depthWrite: false, side: THREE.BackSide, toneMapped: false,
+  }));
+  shell.renderOrder = -1; shell.visible = false; group.add(shell);
+  shell.onBeforeRender = (_renderer, _scene, camera) => {
+    shell.position.copy(camera.position); shell.updateMatrixWorld();
+  };
+  shell.frustumCulled = false;
+  const lighting = { fog: 0x2a5fd0, fogNear: 300, fogFar: 1400, sunLight: 0xcfe0ff, hemiSky: 0x7fa8ff };
+  let fade = 0;
+  anim.push(dt => {
+    if (!view.finalLap || (view.intro && !view.intro.done) || fade >= 1) return;
+    fade = Math.min(1, fade + dt / 4);
+    const t = smoothstep(0, 1, fade);
+    shell.visible = true; shell.material.opacity = t * 0.91;
+    gfx.shiftSky(lighting, t);
+  });
 }

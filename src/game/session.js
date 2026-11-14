@@ -11,6 +11,9 @@ import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { makeRng } from '../core/util.js';
 
 export const STEP = 1 / 60;
+// Keep a slow foreground race in real time down to 4 fps. Bound catch-up after
+// long interruptions, when replaying the last input for seconds would be unfair.
+export const MAX_FRAME_TIME = 0.25;
 const SLOW_MO = 1.1;   // seconds of real time the finish slow motion takes to ease back to full speed
 
 export class RaceSession {
@@ -114,6 +117,7 @@ export class RaceSession {
   }
 
   frame(dt) {
+    const frameTime = dt;
     const { race, view, app } = this;
     if (this.paused) { app.gfx.render(0); return; }
     if (this.phase === 'intro') {
@@ -121,9 +125,9 @@ export class RaceSession {
     } else {
       const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
       // hit pause: the world holds still for a few frames when a hit lands, so it feels heavy
-      if (this.hitStopT > 0) { this.hitStopT -= dt; dt = 0; }
+      if (this.hitStopT > 0) { const hold = Math.min(this.hitStopT, dt); this.hitStopT -= hold; dt -= hold; }
       if (this.slowT > 0) { this.slowT -= dt; const f = 1 - Math.max(0, this.slowT) / SLOW_MO; dt *= 0.3 + 0.7 * f * f; }
-      this.acc = Math.max(0, Math.min(this.acc + dt, STEP * 5));   // never in debt: a race that owes time would sit frozen until it had paid it back (#103)
+      this.acc = Math.max(0, this.acc + Math.min(dt, MAX_FRAME_TIME));   // never in debt: a race that owes time would sit frozen until it had paid it back (#103)
       while (this.acc >= STEP) {
         view.snapshot();
         let inp = inputs;
@@ -142,7 +146,7 @@ export class RaceSession {
     view.update(dt, this.acc / STEP);
     app.afterUpdate?.(this);
     app.audio?.frame(dt, race, view);
-    app.gfx.render(dt);
+    app.gfx.render(dt, frameTime);
   }
 
   setPaused(p) { if (p) this.app.input.stopRumble(); this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }

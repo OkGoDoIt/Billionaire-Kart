@@ -7,7 +7,7 @@ import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
 import { Wipe } from '../ui/wipe.js';
 import { Showroom } from '../render/showroom.js';
-import { RaceSession } from './session.js';
+import { RaceSession, MAX_FRAME_TIME } from './session.js';
 import { AudioEngine } from '../audio/audio.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { RACERS, RACER_BY_ID } from '../content/racers.js';
@@ -50,7 +50,7 @@ export class App {
     const frame = now => {
       // Clamped both ways. The frame clock can step backwards (a GPU process restart, a tab frozen and restored, and the
       // very first frame, whose timestamp can predate `last`); a negative step would put the simulation in debt (#103).
-      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;
+      const dt = Math.max(0, Math.min(MAX_FRAME_TIME, (now - last) / 1000)); last = now;
       this.inputs = this.input.poll(dt);
       if (this.session) this.session.frame(dt);
       else if (this.showroom) { this.showroom.update(dt); this.gfx.render(dt); }

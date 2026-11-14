@@ -14,7 +14,6 @@ const buzz = ms => { if (navigator.vibrate) { try { navigator.vibrate(ms); } cat
 const TAP_MS = 230, TAP_MOVE = 12;      // a tap is shorter and stiller than this
 const BRAKE_PULL = 26;                  // px the right thumb must drop to brake
 const FLICK_UP = 44, FLICK_MS = 260;    // px upward within this long fires the item
-const FLICK_AGAIN = 0.4;                // seconds before the same thumb can flick a second item
 const GAS_GRACE = 0.22;                 // seconds the throttle holds after the thumb lifts, so re-gripping does not stall the kart
 const DRIFT_AT = 0.72, DRIFT_HOLD = 0.16, DRIFT_KEEP = 0.12;
 
@@ -63,11 +62,11 @@ export class TouchControls {
     $.left.addEventListener('pointerup', endSteer); $.left.addEventListener('pointercancel', endSteer);
 
     // ---- right thumb: the pedal
-    let pid = null, py = 0, hist = [], flickAt = -1e9;
+    let pid = null, py = 0, hist = [], flicked = false;
     const placePedal = (x, y) => { const r = $.right.getBoundingClientRect(); $.pedal.style.left = clamp(x - r.left, 50, r.width - 50) + 'px'; $.pedal.style.top = clamp(y - r.top, 60, r.height - 50) + 'px'; };
     const setBrake = on => { if (on === this.braking) return; this.braking = on; $.pedal.classList.toggle('braking', on); $.footLabel.textContent = on ? 'BRAKE' : 'GO'; if (on) buzz(30); };
     $.right.addEventListener('pointerdown', e => {
-      if (pid != null) return; pid = e.pointerId; py = e.clientY; hist = [{ t: performance.now(), y: py }]; flickAt = -1e9;
+      if (pid != null) return; pid = e.pointerId; py = e.clientY; hist = [{ t: performance.now(), y: py }]; flicked = false;
       try { $.right.setPointerCapture(pid); } catch { /* pointer already gone */ }
       this.pedal = true; setBrake(false); placePedal(e.clientX, e.clientY); $.right.classList.add('on'); buzz(8); e.preventDefault();
     });
@@ -76,10 +75,8 @@ export class TouchControls {
       const dy = e.clientY - py, now = performance.now();
       setBrake(dy > BRAKE_PULL);
       $.foot.style.transform = `translate(-50%, calc(-50% + ${clamp(dy, -FLICK_UP, BRAKE_PULL * 1.6)}px))`;
-      // a flick is judged from recent upward motion that started at or above the touch point, so letting off the brake never fires the item
-      if (dy > BRAKE_PULL * 0.6) hist = [];
-      else { hist = hist.filter(s => now - s.t < FLICK_MS); hist.push({ t: now, y: e.clientY }); }
-      if (now - flickAt > FLICK_AGAIN * 1000 && hist.length && hist[0].y - e.clientY >= FLICK_UP) { flickAt = now; hist = []; this.useItem(); $.pedal.classList.add('flick'); setTimeout(() => $.pedal.classList.remove('flick'), 220); }
+      hist = hist.filter(s => now - s.t < FLICK_MS); hist.push({ t: now, y: e.clientY });
+      if (!flicked && hist[0].y - e.clientY >= FLICK_UP) { flicked = true; this.useItem(); $.pedal.classList.add('flick'); setTimeout(() => $.pedal.classList.remove('flick'), 220); }
       if (dy < -FLICK_UP * 1.5) py = e.clientY + FLICK_UP * 1.5;   // the pedal follows a thumb that drifts up the screen, so braking stays one short pull away
     });
     const endPedal = e => {
@@ -100,7 +97,7 @@ export class TouchControls {
   sync(dt = 0) {
     const k = this.kart, t = this.t, $ = this.$, race = k.race, tilt = this.input.tilt;
     // pedal
-    if (this.pedal && !this.braking) this.gasT = GAS_GRACE; else if (this.braking) this.gasT = 0; else this.gasT -= dt;   // braking is not a lift: no gas leaks out after it
+    if (this.pedal && !this.braking) this.gasT = GAS_GRACE; else this.gasT -= dt;
     t.brake = this.braking ? 1 : 0;
     t.throttle = this.braking ? 0 : (this.pedal || this.gasT > 0 || (this.autoGo && race && !race.frozen)) ? 1 : 0;
     // item: a short press, so the race sees one clean use per tap

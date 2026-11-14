@@ -6,7 +6,7 @@
    Two things are let through on purpose: signs drawn one letter at a time, and tickers far wider than their canvas.
    Usage: node tools/text-check.mjs [--out dir] [--track id]      exits 1 if anything is flagged */
 import http from 'node:http';
-import { readFile, mkdir, readdir } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -39,7 +39,7 @@ const init = () => {
     return orig.apply(this, arguments);
   };
 };
-const all = (await readdir(join(root, 'src/tracks'))).filter(f => f.endsWith('.js') && !f.startsWith('_')).map(f => f.slice(0, -3)).sort();   // every track file, so a new track is checked without editing this list
+const all = ['silicon-valley', 'bliss-hills', 'crypto-cove', 'datacenter-dash', 'capitol-hill', 'burning-circuit', 'mars-colony', 'singularity-speedway'];
 const tracks = opt.track ? [opt.track] : all;
 let total = 0;
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' }); await ctx.addInitScript(init);

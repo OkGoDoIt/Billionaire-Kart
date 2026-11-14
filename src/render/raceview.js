@@ -5,7 +5,6 @@ import { buildTrackMesh, trackUniforms } from '../track/trackmesh.js';
 import { KartView } from './kartview.js';
 import { ChaseCam, IntroCam, TvCam } from './chasecam.js';
 import { Particles, rgbOf } from './particles.js';
-import { releaseCanvases } from './canvasmem.js';
 import { buildItemBox, buildItemModel, coinGeometry, coinMaterial } from '../models/items.js';
 import { OBSTACLE_MODELS } from '../models/props.js';
 import { buildKart } from '../models/kart.js';
@@ -19,6 +18,12 @@ const CONFETTI = [[1, 0.82, 0.24], [1, 0.3, 0.43], [0.22, 0.71, 1], [0.18, 0.9, 
 const ITEM_FX = {};
 for (const [id, hex] of Object.entries({ boost: 0xff8c3a, boost3: 0xff8c3a, golden: 0xffd23e, leak: 0x37e0e0, subpoena: 0xffe9a8, subpoena3: 0xffe9a8, tweet: 0x4da3ff, antitrust: 0x3a6bff, pinkslip: 0xff5d7a, star: 0xffe14d, crash: 0xc9a7ff, pr: 0xffc44d, smear: 0xb46bff, insider: 0x9fe8ff, bailout: 0xffa03c, dividend: 0xffd23e })) ITEM_FX[id] = { rgb: rgbOf(hex) };
 for (const id of ['subpoena', 'subpoena3', 'tweet', 'antitrust', 'pinkslip']) if (ITEM_FX[id]) ITEM_FX[id].muzzle = true;
+/** Drift tier colours (blue, orange, purple), shared with the sparks in kartview. */
+const TIER_FX = [[0.25, 0.65, 1], [1, 0.55, 0.1], [0.95, 0.3, 1]];
+/** How hard each kind of hit lands, 0..1: shake, horizon knock, burst size, and the red rim all scale with it. */
+const HIT_SEV = { zap: 0.45, spin: 0.6, squash: 0.7, tumble: 1 };
+/** Camera punch per boost kind (mini-turbos punch by tier on release instead). */
+const BOOST_PUNCH = { mushroom: 0.85, pad: 0.7, start: 0.9, trick: 0.5, draft: 0.45 };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3(), _e = new THREE.Euler();
 
 export class RaceView {
@@ -123,28 +128,56 @@ export class RaceView {
     const race = this.race, fx = this.fx;
     for (const k of race.karts) {
       if (!k.events.length) continue;
-      const v = this.viewOf.get(k), cam = this.cams.find(c => c.kart === k);
+      const v = this.viewOf.get(k), cam = this.spectate ? null : this.cams.find(c => c.kart === k);   // the attract mode's TV cameras take no kicks
       for (const e of k.events) {
         v.onEvent(e);
         const p = v.pos;
         switch (e.type) {
-          case 'hit': fx.burst(p.x, p.y + 1, p.z, 26, [1, 0.9, 0.3], 9, 0.4, 0.7); fx.puff(p.x, p.y + 0.3, p.z, 8, [0.9, 0.9, 0.9], 4, 1.4, 0.7, 0.5); cam?.addShake(0.9); break;
-          case 'land': if (e.data > 7) fx.puff(p.x, p.y + 0.1, p.z, 6, k.surface.dust ? rgbOf(k.surface.dust) : [0.85, 0.85, 0.88], 4, 1.1, 0.5, 0.35); cam?.addShake(clamp(e.data / 40, 0, 0.5)); break;
+          case 'hit': { // weight scales with what landed: a tumble is the big one, a zap the smallest
+            const sev = HIT_SEV[e.data.kind] ?? 0.6;
+            fx.burst(p.x, p.y + 1, p.z, 18 + sev * 22, [1, 0.9, 0.3], 7 + sev * 6, 0.4, 0.7); fx.puff(p.x, p.y + 0.3, p.z, 6 + sev * 8, [0.9, 0.9, 0.9], 4, 1.4, 0.7, 0.5);
+            fx.ring(p.x, p.y + 0.25, p.z, 18, [1, 1, 1], 7 + sev * 5, 0.45, 0.3);
+            if (cam) { cam.impact(sev, e.data.from && e.data.from !== k ? Math.sign((e.data.from.x - k.x) * Math.cos(k.yaw) - (e.data.from.z - k.z) * Math.sin(k.yaw)) : 0); this._edge(cam, [1, 0.22, 0.28], 0.45 + sev * 0.35); }
+            break; }
+          case 'land': { // a big landing slams down: a ring of dust along the ground and the camera sinks with the kart
+            const dust = k.surface.dust ? rgbOf(k.surface.dust) : [0.85, 0.85, 0.88];
+            if (e.data > 7) { fx.puff(p.x, p.y + 0.1, p.z, 6, dust, 4, 1.1, 0.5, 0.35); this._dustRing(p, dust, clamp((e.data - 7) / 10, 0.3, 1)); }
+            if (cam) { cam.addShake(clamp((e.data - 6) / 30, 0, 0.5)); if (e.data > 7) cam.dip(clamp((e.data - 6) * 0.22, 0, 2.6)); }
+            break; }
           case 'wall': fx.burst(p.x, p.y + 0.5, p.z, 14, [1, 0.8, 0.4], 7, 0.22, 0.35, 2); cam?.addShake(clamp(e.data.v / 25, 0.1, 0.7)); break;
           case 'bump': fx.burst(p.x, p.y + 0.6, p.z, 6, [1, 1, 0.8], 5, 0.2, 0.25, 2); cam?.addShake(0.2); break;
-          case 'miniTurbo': fx.ring(p.x, p.y + 0.3, p.z, 16, [[0.25, 0.65, 1], [1, 0.55, 0.1], [0.95, 0.3, 1]][e.data - 1], 9, 0.5, 0.35); break;
-          case 'driftTier': if (e.data > 0) fx.burst(p.x, p.y + 0.3, p.z, 10, [[0.25, 0.65, 1], [1, 0.55, 0.1], [0.95, 0.3, 1]][e.data - 1], 6, 0.3, 0.3, 3); break;
+          case 'miniTurbo': { // the release pops: a ring and a spray off the back in the tier's colour, bigger for each tier
+            const col = TIER_FX[e.data - 1], n = e.data;
+            fx.ring(p.x, p.y + 0.3, p.z, 14 + n * 6, col, 8 + n * 2, 0.45 + n * 0.08, 0.35);
+            fx.ring(p.x, p.y + 0.35, p.z, 10 + n * 4, [1, 1, 1], 5 + n * 2, 0.3, 0.25);
+            const sy = Math.sin(k.yaw), cy = Math.cos(k.yaw);
+            for (let i = 0; i < (8 + n * 8) * fx.density; i++) fx.glint.emit({ x: p.x - sy * 1.1, y: p.y + 0.35, z: p.z - cy * 1.1, vx: -sy * (8 + Math.random() * 10) + (Math.random() - 0.5) * 6, vy: 1 + Math.random() * 4, vz: -cy * (8 + Math.random() * 10) + (Math.random() - 0.5) * 6, color: [1, 1, 1], color2: col, size: 0.22 + n * 0.05, life: 0.3 + Math.random() * 0.2, gravity: 8, drag: 2, alpha: 1.2 });
+            cam?.punch([0.4, 0.65, 0.95][n - 1]);
+            break; }
+          case 'driftTier': if (e.data > 0) { const col = TIER_FX[e.data - 1]; fx.burst(p.x, p.y + 0.3, p.z, 10 + e.data * 6, col, 6 + e.data, 0.3, 0.3, 3); fx.ring(p.x, p.y + 0.3, p.z, 12, col, 4 + e.data, 0.35, 0.22); } break;
           case 'trick': fx.ring(p.x, p.y + 0.5, p.z, 14, [1, 1, 0.6], 7, 0.4, 0.4); break;
           case 'trickLand': fx.burst(p.x, p.y + 0.3, p.z, 18, [0.4, 0.9, 1], 8, 0.3, 0.45); break;
-          case 'rocketStart': fx.puff(p.x, p.y + 0.2, p.z, 14, [1, 1, 1], 7, 1.6, 0.8, 0.6); cam?.addShake(0.4); break;
+          case 'rocketStart': fx.puff(p.x, p.y + 0.2, p.z, 14, [1, 1, 1], 9, 1.1, 0.8, 0.35); cam?.addShake(0.4); break;   // thinner, wider smoke (#222): the kart stays visible through the launch puff
           case 'burnout': fx.puff(p.x, p.y + 0.2, p.z, 18, [0.25, 0.25, 0.28], 3, 1.8, 1.2, 0.7); break;
           case 'coin': fx.burst(p.x, p.y + 1.2, p.z, 8, [1, 0.85, 0.2], 4, 0.25, 0.4, 3); break;
           case 'dropCoins': fx.confetti(p.x, p.y + 1, p.z, 10, [[1, 0.8, 0.15]], 6, p.y); break;
-          case 'itemUse': { const f = ITEM_FX[e.data]; fx.ring(p.x, p.y + 0.6, p.z, 14, f ? f.rgb : [1, 1, 1], 8, 0.4, 0.35); if (f?.muzzle) fx.burst(p.x + Math.sin(k.yaw) * 1.7, p.y + 0.7, p.z + Math.cos(k.yaw) * 1.7, 10, f.rgb, 3, 0.3, 0.25, 1); break; }
+          case 'itemUse': { if (e.data === 'bailout') cam?.punch(1); const f = ITEM_FX[e.data]; fx.ring(p.x, p.y + 0.6, p.z, 14, f ? f.rgb : [1, 1, 1], 8, 0.4, 0.35); if (f?.muzzle) fx.burst(p.x + Math.sin(k.yaw) * 1.7, p.y + 0.7, p.z + Math.cos(k.yaw) * 1.7, 10, f.rgb, 3, 0.3, 0.25, 1); break; }
           case 'shieldBlock': fx.burst(p.x, p.y + 0.6, p.z, 16, [0.6, 1, 0.8], 8, 0.3, 0.4); break;
-          case 'finish': fx.confetti(p.x, p.y + 2, p.z, 90, CONFETTI, 10, p.y); break;
+          case 'finish': {
+            const top = e.data <= 3;
+            fx.confetti(p.x, p.y + 2, p.z, top ? 160 : 90, CONFETTI, top ? 13 : 10, p.y);
+            if (cam) { // the line: a white pop, a gold rim on a podium finish, fireworks over the kart
+              cam.punch(0.8);
+              if (this.views.length === 1) { this.flash = Math.max(this.flash, 0.32); this.gfx.post.flashColor.setRGB(1, 1, 1); }
+              if (top) { this._edge(cam, [1, 0.82, 0.25], 0.6, 0.9); this._fireworks(k, e.data === 1 ? 5 : 3); }
+            }
+            break; }
+          case 'finalLap': if (cam) this._edge(cam, [1, 0.3, 0.45], 0.55, 1.1); break;
           case 'rescue': fx.puff(p.x, p.y, p.z, 10, [1, 1, 1], 3, 1.5, 0.8, 0.5); break;
-          case 'boost': if (e.data === 'mushroom' || e.data === 'start') { fx.ring(p.x, p.y + 0.4, p.z, 14, [1, 0.7, 0.2], 10, 0.5, 0.3); cam?.addShake(0.15); } break;
+          case 'boost': // every boost but a mini-turbo (that one pops on release, above) kicks the camera, harder for stronger boosts
+            if (e.data === 'mushroom' || e.data === 'start' || e.data === 'pad') { fx.ring(p.x, p.y + 0.4, p.z, 14, [1, 0.7, 0.2], 10, 0.5, 0.3); cam?.addShake(0.15); }
+            if (cam && BOOST_PUNCH[e.data]) cam.punch(BOOST_PUNCH[e.data]);
+            break;
         }
         this.onEvent?.('kart', e, k);
       }
@@ -153,12 +186,12 @@ export class RaceView {
     for (const e of race.events) {
       const d = e.data;
       switch (e.type) {
-        case 'boxBreak': { const b = d.box; fx.confetti(b.x, b.y, b.z, 18, CONFETTI, 7, b.y - 1.2); fx.burst(b.x, b.y, b.z, 10, [1, 1, 1], 6, 0.3, 0.35); const o = this.boxes.find(x => x.b === b); if (o) o.pop = 0; break; }
+        case 'boxBreak': { const b = d.box; fx.confetti(b.x, b.y, b.z, 18, CONFETTI, 7, b.y - 1.2); fx.burst(b.x, b.y, b.z, 10, [1, 1, 1], 6, 0.3, 0.35); const o = this.boxes.find(x => x.b === b); if (o) o.pop = 0; if (d.kart?.isPlayer) this.cams.find(c => c.kart === d.kart)?.punch(0.2); break; }
         case 'coinTaken': break;
         case 'explosion': this._explosion(d.x, d.y, d.z, d.r); break;
         case 'shock': fx.ring(d.x, d.y + 0.6, d.z, 40, [1, 0.85, 0.3], 30, 0.9, 0.4); fx.ring(d.x, d.y + 1.2, d.z, 30, [1, 1, 1], 22, 0.6, 0.35); this._shakeNear(d.x, d.z, 0.6, 40); break;
-        case 'count': this._startLights(e.data); break;
-        case 'go': this._startLights(0); break;
+        case 'count': this._startLights(e.data); for (const c of this.cams) if (c.kart?.isPlayer) c.punch(0.15); break;   // a small kick per beat (#222); no timing hint, the rocket start stays secret (#169)
+        case 'go': this._startLights(0); for (const c of this.cams) if (c.kart?.isPlayer) c.punch(0.35); break;
         case 'lightning': this.flash = 1; this.gfx.post.flashColor.setRGB(0.85, 0.9, 1); for (const v of this.karts) if (v.kart !== d.by) fx.burst(v.pos.x, v.pos.y + 1.5, v.pos.z, 14, [0.7, 0.85, 1], 10, 0.4, 0.5); for (const c of this.cams) c.addShake(0.5); break;
         case 'shotGone': case 'hazardGone': { const t = this.things.get(d.id); if (t) { fx.burst(d.x, d.y + 0.4, d.z, 10, [1, 1, 1], 6, 0.25, 0.3); this.root.remove(t); this.things.delete(d.id); } break; }
         case 'shotBounce': fx.burst(d.x, d.y, d.z, 6, [1, 0.9, 0.6], 5, 0.2, 0.25, 1); break;
@@ -167,6 +200,7 @@ export class RaceView {
           fx.ring(v.pos.x, v.pos.y + 0.8, v.pos.z, 18, f ? f.rgb : [1, 1, 1], 9, 0.45, 0.4);
           fx.burst(v.pos.x, v.pos.y + 0.9, v.pos.z, 14, f ? f.rgb : [1, 1, 1], 7, 0.35, 0.4, 3);
           if (d.victim.isPlayer) this.cams.find(c => c.kart === d.victim)?.addShake(0.35);
+          if (d.by?.isPlayer && d.by !== d.victim) this.cams.find(c => c.kart === d.by)?.addShake(0.12);   // the one who threw it feels it connect
           break; }
         case 'robbed': { const v = this.viewOf.get(d.kart); if (v) { fx.burst(v.pos.x, v.pos.y + 1.1, v.pos.z, 12, [1, 0.85, 0.2], 5, 0.3, 0.45, 3); if (d.kart.isPlayer) this.cams.find(c => c.kart === d.kart)?.addShake(0.3); } break; }
         case 'obstacleHit': fx.burst(d.obstacle.x, d.obstacle.y + 1, d.obstacle.z, 14, [1, 0.8, 0.3], 7, 0.3, 0.4); break;
@@ -184,6 +218,22 @@ export class RaceView {
     fx.puff(x, y + 0.5, z, 22, [0.25, 0.24, 0.26], 7, 2.6, 1.4, 0.7);
     fx.ring(x, y + 0.3, z, 36, [1, 0.6, 0.2], r * 2.6, 0.8, 0.45);
     this._shakeNear(x, z, 1.0, 60);
+  }
+  /** Tint the rim of the frame for a moment (single view only: split-screen shares one picture). */
+  _edge(cam, rgb, amount, decay = 2.4) {
+    if (this.views.length !== 1 || this.views[0].cam !== cam) return;
+    this.edge = Math.max(this.edge || 0, amount); this.edgeDecay = decay; this.gfx.post.edgeColor.setRGB(rgb[0], rgb[1], rgb[2]);
+  }
+  /** Dust thrown out along the ground in a ring, for a heavy landing. s: 0..1. */
+  _dustRing(p, rgb, s) {
+    const n = Math.round(8 + s * 10);
+    for (let i = 0; i < n * this.fx.density; i++) { const a = (i / n) * 6.283 + Math.random() * 0.3, v = 4 + s * 5 + Math.random() * 2; this.fx.smoke.emit({ x: p.x + Math.cos(a) * 0.8, y: p.y + 0.15, z: p.z + Math.sin(a) * 0.8, vx: Math.cos(a) * v, vy: 0.6 + Math.random() * 0.8, vz: Math.sin(a) * v, color: rgb, size: 0.55 + s * 0.35, life: 0.45 + s * 0.2, grow: 1.6, drag: 3.2, gravity: -0.6, alpha: 0.32, spin: (Math.random() - 0.5) * 2 }); }
+  }
+  /** Fireworks over a podium finish: a few bursts high ahead of the kart, one after another. */
+  _fireworks(k, n) {
+    // each shell is placed when it bursts, ahead of where the kart is by then (it is still doing 90 mph through the
+    // slow motion), alternating sides so it flanks the FINISH banner instead of hiding behind it
+    for (let i = 0; i < n; i++) (this._pending || (this._pending = [])).push({ at: this.time + 0.15 + i * 0.26, k, a: (i % 2 ? 1 : -1) * (0.38 + i * 0.06), d: 22 + Math.random() * 5, h: 2.5 + Math.random() * 1.5, col: CONFETTI[i % 5] });
   }
   _shakeNear(x, z, amount, range) { for (const c of this.cams) { const d = Math.hypot(c.kart.x - x, c.kart.z - z); if (d < range) c.addShake(amount * (1 - d / range)); } }
 
@@ -265,6 +315,11 @@ export class RaceView {
     const k = this.cams[0]?.kart;
     if (k) gfx.post.blur += ((this.spectate ? 0 : ((k.boostT > 0 || k.bulletT > 0) ? 0.055 : 0) + (k.starT > 0 ? 0.02 : 0)) - gfx.post.blur) * Math.min(1, dt * 6);
     this.flash = Math.max(0, this.flash - dt * 2.6); gfx.post.flash = this.flash * 0.75;
+    this.edge = Math.max(0, (this.edge || 0) - dt * (this.edgeDecay || 2.4)); gfx.post.edge = this.edge;
+    gfx.post.lines += ((this.spectate || !this.cams[0] ? 0 : this.cams[0].lines) - gfx.post.lines) * Math.min(1, dt * 8);
+    if (this._pending?.length) for (let i = this._pending.length - 1; i >= 0; i--) { const f = this._pending[i]; if (this.time < f.at) continue; this._pending.splice(i, 1); f.x = f.k.x + Math.sin(f.k.yaw + f.a) * f.d; f.y = f.k.y + f.h; f.z = f.k.z + Math.cos(f.k.yaw + f.a) * f.d; // a dark smoke puff behind the shell first (#222): the additive sparks are faint against a daylight sky and need something to read against
+      this.fx.smoke.emit({ x: f.x, y: f.y, z: f.z, vx: 0, vy: 0.4, vz: 0, color: [0.25, 0.25, 0.3], size: 2, life: 0.9, grow: 2.2, drag: 1.5, alpha: 0.35, spin: 0.4 });
+      this.fx.burst(f.x, f.y, f.z, 60, f.col, 9, 0.85, 0.9, 1); for (let j = 0; j < 30 * this.fx.density; j++) { const u = Math.random() * 6.283, w = Math.random() * 2 - 1, r = Math.sqrt(1 - w * w), v = 6 + Math.random() * 3; this.fx.glint.emit({ x: f.x, y: f.y, z: f.z, vx: Math.cos(u) * r * v, vy: w * v + 1, vz: Math.sin(u) * r * v, color: [1, 1, 1], color2: f.col, size: 0.8, life: 0.7 + Math.random() * 0.4, gravity: 4, drag: 1.6, alpha: 1.3, spin: 6 }); } }
   }
 
   /** Mirror hazards and projectiles with models. */
@@ -320,9 +375,8 @@ export class RaceView {
     const scene = this.gfx.scene;
     scene.remove(this.root);
     this.root.traverse(o => { if (o.userData?.dispose) o.userData.dispose(); else if (o.isMesh || o.isPoints || o.isSprite) { o.geometry?.dispose?.(); } });
-    releaseCanvases(this.root);   // Safari caps total canvas memory; see canvasmem.js
     this.gfx.setViews([]);
-    this.gfx.post.blur = 0; this.gfx.post.flash = 0; if (this._grade) { Object.assign(this.gfx.post, this._grade); this._grade = null; }
+    this.gfx.post.blur = 0; this.gfx.post.flash = 0; this.gfx.post.lines = 0; this.gfx.post.edge = 0; if (this._grade) { Object.assign(this.gfx.post, this._grade); this._grade = null; }
     this.gfx.sun.castShadow = this.gfx.q.shadow > 0; this.gfx.renderer.shadowMap.enabled = this.gfx.sun.castShadow;
   }
 }

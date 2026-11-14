@@ -55,6 +55,7 @@ export class Race {
 
   /** inputs: array indexed by playerIndex. */
   step(dt, inputs = []) {
+    this.track.deckTime = this.time; this.track.deckRace = this;   // floating decks (def.decks) move on race time
     // countdown
     if (this.frozen) {
       const before = this.countdown;

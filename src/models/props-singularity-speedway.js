@@ -382,9 +382,9 @@ export function lightRing(R = 17, tube = 1, { color = 0xff5cc8, inner = 0xffffff
 }
 
 /* ---------- viewing platforms ---------- */
-/** A floating glowing disc for spectators. Returns { group, seats: [[x,y,z]...] } (seats on top). */
-export function platform({ r = 7, seed = 1 } = {}) {
-  const grp = new THREE.Group(), b = new ModelBuilder(), seats = [], rng = makeRng(seed);
+/** A floating glowing disc for spectators. Its fixed parts are instanced across the four stands. */
+export function platform({ r = 7 } = {}) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
   b.add('deck', cyl(r, r * 0.9, 0.7, 40), { p: [0, -0.35, 0] });
   b.add('under', cyl(r * 0.85, r * 0.3, 2.2, 32), { p: [0, -1.8, 0] });
   b.add('rim', torus(r + 0.05, 0.16, 6, 48), { p: [0, 0.02, 0], r: [Math.PI / 2, 0, 0] });
@@ -392,8 +392,13 @@ export function platform({ r = 7, seed = 1 } = {}) {
   for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; b.add('post', cyl(0.05, 0.05, 1.0, 5), { p: [Math.cos(a) * (r - 0.2), 0.5, Math.sin(a) * (r - 0.2)] }); }
   b.add('core', sphere(0.9, 14, 10), { p: [0, -3.1, 0] });
   grp.add(b.build({ deck: plastic(0x1d2038, 0.4, 0.5), under: plastic(0x2a2d4a, 0.5, 0.5), rim: glow(0x35e0ff, 3), rail: glow(0x7a6bff, 2), post: MAT.dark, core: glow(0xff5cc8, 3.5) }));
+  return grp;
+}
+
+export function platformSeats(r, seed) {
+  const seats = [], rng = makeRng(seed);
   for (let ring = 0; ring < 3; ring++) { const rr = r - 1.2 - ring * 1.5, n = Math.floor((2 * Math.PI * rr) / 1.05); for (let k = 0; k < n; k++) if (rng() < 0.85) { const a = (k / n) * Math.PI * 2 + ring * 0.3; seats.push([Math.cos(a) * rr, 0, Math.sin(a) * rr, -a + Math.PI / 2]); } }
-  return { group: grp, seats };
+  return seats;
 }
 
 /* ---------- holo boards ---------- */
@@ -495,10 +500,12 @@ function plateTex(lines, bg, fg) {
     });
   }, { repeat: false, aniso: 4 }));
 }
-function plate(tex, w, h) {
-  const grp = new THREE.Group(), m = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.6 });
-  for (const s of [1, -1]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); p.rotation.y = s > 0 ? 0 : Math.PI; p.position.z = s * 0.02; grp.add(p); }
-  return grp;
+function plate(tex, w, h, posts = [0]) {
+  const b = new ModelBuilder();
+  for (const x of posts) for (const side of [1, -1]) {
+    b.add('sign', new THREE.PlaneGeometry(w, h), { p: [x, 0, side * 0.02], r: [0, side > 0 ? 0 : Math.PI, 0] });
+  }
+  return b.build({ sign: new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.6 }) }, { cast: false });
 }
 
 /** Two emitter posts about 5 m apart with a beam between them, each post wearing a GUARDRAIL plate; userData.setActive toggles the beam. */
@@ -510,17 +517,18 @@ export function laserGate(label = ['GUARDRAIL', '(BETA)']) {
     b.add('lens', sphere(0.26, 12, 10), { p: [sx * half, 1.15, 0] });
     b.add('ring', torus(0.32, 0.05, 6, 16), { p: [sx * half, 1.5, 0], r: [Math.PI / 2, 0, 0] });
     b.add('post', cyl(0.05, 0.05, 0.5, 6), { p: [sx * half, 1.75, 0] });
-    const pl = plate(plateTex(label, '#ffd23c', '#1a1d29'), 1.7, 0.64); pl.position.set(sx * half, 2.3, 0); grp.add(pl);
   }
+  const signs = plate(plateTex(label, '#ffd23c', '#1a1d29'), 1.7, 0.64, [-half, half]);
+  signs.position.y = 2.3; grp.add(signs);
   grp.add(b.build({ post: MAT.dark, lens: glow(0xff2a6a, 3), ring: glow(0xff5cc8, 2.5) }));
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xff3a7a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
   const coreMat = new THREE.MeshBasicMaterial({ color: 0xffd6e6, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
-  const beam = new THREE.Group();
+  const beams = new ModelBuilder();
   for (const y of [0.55, 1.15]) {
-    const glowM = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, half * 2, 10, 1, true), beamMat); glowM.rotation.z = Math.PI / 2; glowM.position.y = y;
-    const core = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, half * 2, 6, 1, true), coreMat); core.rotation.z = Math.PI / 2; core.position.y = y;
-    beam.add(glowM, core);
+    beams.add('glow', new THREE.CylinderGeometry(0.22, 0.22, half * 2, 10, 1, true), { p: [0, y, 0], r: [0, 0, Math.PI / 2] });
+    beams.add('core', new THREE.CylinderGeometry(0.06, 0.06, half * 2, 6, 1, true), { p: [0, y, 0], r: [0, 0, Math.PI / 2] });
   }
+  const beam = beams.build({ glow: beamMat, core: coreMat }, { cast: false });
   grp.add(beam);
   grp.userData.setActive = (on, warn, t) => {
     beam.visible = on || (warn && Math.sin(t * 30) > 0);

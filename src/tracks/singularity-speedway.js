@@ -11,6 +11,7 @@
    about strawberries; a CAPTCHA over the chicane; a capabilities skyscraper
    beside a one-chair alignment office; a seven-fingered monument at the Leap;
    and a road sign at the hairpin that points into the void with total confidence. */
+import { makeBaker } from '../models/props-crypto-cove.js';
 import { Scenery, partsOf } from '../render/scenery.js';
 import * as P from '../models/props.js';
 import * as S from '../models/props-singularity-speedway.js';
@@ -229,16 +230,16 @@ function decorate(ctx) {
   /* ----- start/finish gantry, with the AGI countdown on top ----- */
   const i0 = I(0), g0 = at(i0);
   const gantry = P.gantry(tr.hwL[i0] + tr.hwR[i0] + 1.5, 'SINGULARITY SPEEDWAY', { color: 0x7a6bff, color2: 0xff5cc8 });
-  sc.place(gantry, g0.x, g0.z, { yaw: tr.yaw[i0], y: g0.y });
+  sc.place(gantry, g0.x, g0.z, { yaw: tr.yaw[i0], y: g0.y, cast: false });
   view.startLights = gantry.userData.lights;
   const agi = countdownBoard(ctx, fixed, i0, at, facing);
 
   /* ----- floating viewing platforms beside the start straight: a crowd of robots, grateful ----- */
-  const crowd = [], FANS = ['THANK YOU FOR THE TRAINING DATA', 'GO HUMANS! (WHILE SUPPLIES LAST)', 'NICE KART. WE WILL DRIVE NOW.', 'WE ARE NOT CONSCIOUS. PROBABLY.'];
+  const crowd = [], platformSpots = [], platformModel = S.platform({ r: 7 }), FANS = ['THANK YOU FOR THE TRAINING DATA', 'GO HUMANS! (WHILE SUPPLIES LAST)', 'NICE KART. WE WILL DRIVE NOW.', 'WE ARE NOT CONSCIOUS. PROBABLY.'];
   [[50.35, 1], [0.5, 1], [50.6, -1], [0.75, -1]].forEach(([cp, side], k) => {
     const i = I(cp), p = at(i, side * (edge(i, side) + 13), -0.8);
-    const { group, seats } = S.platform({ r: 7, seed: k + 3 });
-    sc.place(group, p.x, p.z, { y: p.y });
+    const seats = S.platformSeats(7, k + 3);
+    platformSpots.push(p);
     for (const s of seats) crowd.push({ x: p.x + s[0], y: p.y + s[1], z: p.z + s[2], yaw: faceRoad(i, side) + rng.range(-0.5, 0.5) });
     // the banner they hold up, on the edge of the platform nearest the road
     const dx = -side * tr.lx[i], dz = -side * tr.lz[i], yaw = faceRoad(i, side), bw = 13, bh = 2.6;
@@ -246,6 +247,7 @@ function decorate(ctx) {
     atlas.place(r, c, yaw, bw, bh); backer(fixed, c, yaw, bw, bh);
     for (const s of [-1, 1]) fixed.add('pole', cyl(0.07, 0.07, 1.1 + bh + 0.3, 6), { p: [c[0] + Math.cos(yaw) * s * (bw / 2 + 0.1) - dx * 0.05, p.y + (1.1 + bh + 0.3) / 2, c[2] - Math.sin(yaw) * s * (bw / 2 + 0.1) - dz * 0.05] });
   });
+  sc.instances(partsOf(platformModel), platformSpots, { cast: false });
   sc.instances(partsOf(S.robotFan()), crowd, { scale: [0.95, 1.15], tints: P.CROWD_TINTS, cast: false });
 
   /* ----- light rings over the final straight, with a chase of light toward the line ----- */
@@ -266,7 +268,7 @@ function decorate(ctx) {
   // Solder pads ripped off the board spiral into the horizon. Their outer orbit traces
   // the inside kerb, connecting the skyline object to the faster racing line.
   const debris = new THREE.InstancedMesh(box(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffbf76 }), 51);
-  debris.frustumCulled = false; ctx.group.add(debris);
+  debris.boundingSphere = new THREE.Sphere(new THREE.Vector3(237, 26, 262), 30); ctx.group.add(debris);
   const solder = new THREE.Object3D();
   anim.push((dt, time) => {
     well.userData.update(time);
@@ -635,7 +637,7 @@ function decorate(ctx) {
   sc.instances(partsOf(chevFlip), chevL, { cast: false });
 
   /* ----- floating holo boards with the slogans: one sign atlas, frames instanced ----- */
-  const frames = [[], [], []], bigFrames = [];
+  const boardFrames = makeBaker(ctx.group, false);
   BOARDS.forEach(([cp, side, off, up, text, big = false], k) => {
     const i = I(cp), p = at(i, side * (edge(i, side) + off), up), yaw = boardYaw(i, side, big ? 1.05 : 0.72);
     const [bg, fg] = BOARD_COLS[k % BOARD_COLS.length], w = big ? 26 : 18, h = big ? 7.2 : 5;
@@ -643,10 +645,10 @@ function decorate(ctx) {
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
     atlas.place(r, [p.x + fx * 0.02, p.y, p.z + fz * 0.02], yaw, w, h);
     atlas.place(r, [p.x - fx * 0.62, p.y, p.z - fz * 0.62], yaw + Math.PI, w, h);
-    (big ? bigFrames : frames[k % 3]).push({ x: p.x, y: p.y, z: p.z, yaw });
+    const frame = S.holoFrame({ w, h, color: big ? 0xffd23c : gateCols[k % 3] });
+    frame.position.copy(p); frame.rotation.y = yaw; boardFrames.add(frame, false);
   });
-  frames.forEach((list, k) => sc.instances(partsOf(S.holoFrame({ w: 18, h: 5, color: gateCols[k] })), list, { cast: false }));
-  sc.instances(partsOf(S.holoFrame({ w: 26, h: 7.2, color: 0xffd23c })), bigFrames, { cast: false });
+  boardFrames.flush();
 
   ctx.group.add(fixed.build({ pole: plastic(0x3a3f5c, 0.4, 0.6), beam: plastic(0x1d2038, 0.45, 0.5), neon: glow(0x35e0ff, 2.2), pink: glow(0xff5cc8, 2.2), green: plastic(0x1f7a46, 0.5), post: plastic(0x8d96a6, 0.35, 0.8) }, { cast: false }));
   atlas.flush();
@@ -989,12 +991,18 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
     const junk = types.map(([model, s0], t) => {
       const parts = partsOf(model), list = [];
       for (let k = 0; k < PER; k++) list.push({ ph: (k + t / types.length) / PER, s0: s0 * rng.range(0.85, 1.15), sx: -270 + rng.range(-25, 25), sy: rng.range(0, 60), sz: rng.range(-70, 40), a: rng.range(-0.6, 0.6), b: rng.range(-0.5, 0.5), sw: rng() * 6.28 });
-      const ims = parts.map(pt => { const im = new THREE.InstancedMesh(pt.geometry, pt.material, PER); im.frustumCulled = false; ctx.group.add(im); return im; });
+      // Every piece stays inside this volume as it spirals from the intake field to the mouth.
+      const center = new THREE.Vector3(...W(-185, 25, -36));
+      const ims = parts.map(part => {
+        const mesh = new THREE.InstancedMesh(part.geometry, part.material, PER);
+        mesh.boundingSphere = new THREE.Sphere(center.clone(), 163);
+        ctx.group.add(mesh); return mesh;
+      });
       return { list, ims };
     });
     // paperclips shooting out of the stacks and tumbling off into space
     const NC = 26, CLIFE = 11, clipIM = new THREE.InstancedMesh(S.paperclipGeometry(1, 0.035, 40, 5), S.clipMaterial(0.5), NC * U.stacks.length);
-    clipIM.frustumCulled = false; ctx.group.add(clipIM);
+    clipIM.boundingSphere = new THREE.Sphere(new THREE.Vector3(...W(0, 116, -18)), 165); ctx.group.add(clipIM);
     const clips = [];
     U.stacks.forEach((st, si) => { for (let k = 0; k < NC; k++) clips.push({ st, ph: (k + si * 0.33) / NC, vx: rng.range(-6, 6), vy: rng.range(12, 17), vz: rng.range(4, 12), s: rng.range(9, 14), a: rng.range(-1.2, 1.2), b: rng.range(-1, 1), c: rng.range(-0.8, 0.8) }); });
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), Sc = new THREE.Vector3(), mouth = U.mouth;

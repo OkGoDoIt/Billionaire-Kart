@@ -28,8 +28,8 @@ function bayDist(x, z) {
    between z = 32 and 70 on the climb. Both sit on the left of the main lane at lat 11.4 (rivals on the racing line
    never touch them); posts: control-point params of their collision circles, every 2.5 m. */
 const ISLAND_LAT = 11.4, ISLAND_R = 2.4;
-const xToCp = x => x < -82 ? 19 + (x + 112) / 30 : x < -58 ? 20 + (x + 82) / 24 : x < -18 ? 21 + (x + 58) / 40 : 22 + (x + 18) / 18;
-const zToCp = z => 4 + (z - 24) / 50;                 // Sand Hill: cp 4 is at z = 24, cp 5 at z = 74
+const xToCp = x => x < -82 ? 15 + (x + 112) / 30 : x < -58 ? 16 + (x + 82) / 24 : x < -18 ? 17 + (x + 58) / 40 : 18 + (x + 18) / 18;
+const zToCp = z => (z - 24) / 50;                 // Sand Hill: cp 0 is at z = 24, cp 1 at z = 74
 const FOUNTAIN = { x0: -52, x1: -12, posts: [] }, MEDIAN = { z0: 32, z1: 70, posts: [] };
 for (let x = FOUNTAIN.x0; x <= FOUNTAIN.x1 + 0.01; x += 2.5) FOUNTAIN.posts.push(xToCp(x));
 for (let z = MEDIAN.z0; z <= MEDIAN.z1 + 0.01; z += 2.5) MEDIAN.posts.push(zToCp(z));
@@ -40,14 +40,14 @@ const PIVOT = { x: 125, z: 72, yaw: -2.03, w: 36, h: 36, legs: 16 };
 
 /* Billboards: [cp, side, metres beyond the road edge, text, background, ink]. */
 const BOARDS = [
-  [1.28, -1, 22, 'EVERY RIDE LOSES MONEY. VOLUME!', '#1a1d29', '#ffd23c'],
-  [6.6, -1, 30, 'HIRING: 10X ENGINEER, 0.1X SALARY', '#ffffff', '#1f6bff'],
-  [8.4, 1, 18, 'UNLIMITED PTO (DO NOT TAKE IT)', '#2ee6a6', '#1a1d29'],
-  [9.2, 1, 20, 'A BETTER WORLD (FOR SHAREHOLDERS)', '#7b5cff', '#ffffff'],
-  [10.0, -1, 16, 'RETURN TO OFFICE. OR ELSE.', '#ffd23c', '#1a1d29'],
-  [11.5, -1, 26, 'FREE KOMBUCHA. NO RAISES.', '#ff8a3c', '#1a1d29'],
-  [17.3, 1, 22, 'MOVE FAST. BREAK LAWS.', '#1a1d29', '#ffffff'],
-  [18.1, -1, 30, 'PRE-REVENUE. POST-SHAME.', '#0ea5e9', '#ffffff'],
+  [20.28, -1, 22, 'EVERY RIDE LOSES MONEY. VOLUME!', '#1a1d29', '#ffd23c'],
+  [2.6, -1, 30, 'HIRING: 10X ENGINEER, 0.1X SALARY', '#ffffff', '#1f6bff'],
+  [4.4, 1, 18, 'UNLIMITED PTO (DO NOT TAKE IT)', '#2ee6a6', '#1a1d29'],
+  [5.2, 1, 20, 'A BETTER WORLD (FOR SHAREHOLDERS)', '#7b5cff', '#ffffff'],
+  [6.0, -1, 16, 'RETURN TO OFFICE. OR ELSE.', '#ffd23c', '#1a1d29'],
+  [7.5, -1, 26, 'FREE KOMBUCHA. NO RAISES.', '#ff8a3c', '#1a1d29'],
+  [13.3, 1, 22, 'MOVE FAST. BREAK LAWS.', '#1a1d29', '#ffffff'],
+  [14.1, -1, 30, 'PRE-REVENUE. POST-SHAME.', '#0ea5e9', '#ffffff'],
 ];
 const STANDS = ['SEATS PAID IN EQUITY', 'INTERN SECTION (UNPAID)', "VC BOX: LET'S CIRCLE BACK", 'LAID OFF? FREE SEATS!'];
 const PLACARDS = ['SHIP IT!', 'IS IT AGI YET?', "MOM, I'M A UNICORN", 'WHERE IS MY EQUITY', 'PIVOT!', '996 OR BUST', 'NO REVENUE, NO PROBLEM', 'I FUNDED THIS'];
@@ -66,60 +66,64 @@ export default {
   backdrop: { img: 'assets/backdrops/silicon-valley.webp', top: 27, bottom: -9, rot: 0.14 },
   offroad: 'grass',
   defaults: { edge: 'open', shoulder: 3.5, outer: 11 },
+  /* Peninsula Run layout (#135, owner-approved Nov 14): Sand Hill Road is the start/finish
+     sector, Stanford (Palm Drive, the Oval, the Quad) is the middle, and the Golden Gate
+     deck crossing is the late-lap climax. The loop is the pilot v2 loop rotated so the
+     line sits on Sand Hill: new cp N = old cp (N + 4) mod 23. */
   path: [
-    { p: [0, 0, 0] },            // 0 start/finish, heading +x
-    { p: [95, 0, 0] },           // 1
-    { p: [162, 4.5, -40], w: 19 },// 2 the bridge approach: swings south off the shore, climbing onto the deck
-    { p: [246, 8, -26], w: 19 }, // 3 far shore: the Golden Gate deck ends in a big sweeper (turn one now)
-    { p: [245, 6.6, 24], wl: 22 },// 4 Sand Hill Road: the landscaped median splits it (the LP lane on the left)
-    { p: [241, 5.2, 74], wl: 22 },// 5
-    { p: [236, 4.5, 116] },      // 6 the dip at the foot of the climb
-    { p: [168, 13, 178] },       // 7 Partner Summit: the climb's crest
-    { p: [84, 12.5, 150], w: 15 },// 8 esses at the top
-    { p: [22, 15.5, 196], w: 15 },// 9
-    { p: [-62, 15, 214] },       // 10 crest
-    { p: [-140, 8.5, 180], w: 19 },// 11 downhill sweeper
-    { p: [-198, 2.5, 116] },     // 12 the foot of the hill, sweeping onto Palm Drive
-    { p: [-208, 0.4, 56], w: 18 },// 13 Palm Drive
-    { p: [-208, 0, -22], w: 18 },// 14 the end of Palm Drive: the chapel dead ahead
-    { p: [-203, 0, -50] },       // 15 the Oval hairpin, round the lawn (moved out/up #215 item 1: AI ran wide onto the grass at the entry)
-    { p: [-174, 0, -68] },       // 16
-    { p: [-148, 0, -56] },       // 17
-    { p: [-138, 0, -24] },       // 18 back north, and left into the Quad
-    { p: [-112, 0, 0], w: 14 },  // 19 the Quad arcade: 14 m between the arches
-    { p: [-82, 0, 0], w: 14 },   // 20
-    { p: [-58, 0, 0], wl: 22 },  // 21 the Founder's Fountain splits the road (island on the left)
-    { p: [-18, 0, 0], wl: 22 },  // 22
+    { p: [245, 6.6, 24], wl: 22 },// 0 start/finish on Sand Hill Road: the VC row, the median split (the LP lane on the left)
+    { p: [241, 5.2, 74], wl: 22 },// 1
+    { p: [236, 4.5, 116] },      // 2 the dip at the foot of the climb
+    { p: [168, 13, 178] },       // 3 Partner Summit: the climb's crest
+    { p: [84, 12.5, 150], w: 15 },// 4 esses at the top
+    { p: [22, 15.5, 196], w: 15 },// 5
+    { p: [-62, 15, 214] },       // 6 crest
+    { p: [-140, 8.5, 180], w: 19 },// 7 downhill sweeper
+    { p: [-198, 2.5, 116] },     // 8 the foot of the hill, sweeping onto Palm Drive
+    { p: [-208, 0.4, 56], w: 18 },// 9 Palm Drive
+    { p: [-208, 0, -22], w: 18 },// 10 the end of Palm Drive: the chapel dead ahead
+    { p: [-203, 0, -50] },       // 11 the Oval hairpin, round the lawn (moved out/up #215 item 1: AI ran wide onto the grass at the entry)
+    { p: [-174, 0, -68] },       // 12
+    { p: [-148, 0, -56] },       // 13
+    { p: [-138, 0, -24] },       // 14 back north, and left into the Quad
+    { p: [-112, 0, 0], w: 14 },  // 15 the Quad arcade: 14 m between the arches
+    { p: [-82, 0, 0], w: 14 },   // 16
+    { p: [-58, 0, 0], wl: 22 },  // 17 the Founder's Fountain splits the road (island on the left)
+    { p: [-18, 0, 0], wl: 22 },  // 18
+    { p: [0, 0, 0] },            // 19 the old line: the run east to the bridge
+    { p: [95, 0, 0] },           // 20
+    { p: [162, 4.5, -40], w: 19 },// 21 the bridge approach: swings south off the shore, climbing onto the deck
+    { p: [246, 8, -26], w: 19 }, // 22 far shore: the Golden Gate deck ends in a big sweeper back to the line
   ],
   sides: [
-    { from: 19.8, to: 1.6, side: 'L', edge: 'wall' },   // pit wall along the grandstand side (the fountain's inside lane runs along it)
-    { from: 18.95, to: 19.8, edge: 'wall', wallHeight: 1.1 }, // the Quad arcade: walls right under the arches
-    { from: 9.6, to: 10.9, edge: 'wall' },               // crest and jump are fenced in
-    { from: 12.45, to: 14.4, shoulder: 1.6, outer: 3.2 }, // Palm Drive: the palms stand close, behind a low wall
-    { from: 1.45, to: 3.12, edge: 'wall', wallHeight: 0.85 }, // the bridge guardrails: low enough to see the bay over
+    { from: 15.8, to: 20.6, side: 'L', edge: 'wall' },   // pit wall along the grandstand side (the fountain's inside lane runs along it)
+    { from: 14.95, to: 15.8, edge: 'wall', wallHeight: 1.1 }, // the Quad arcade: walls right under the arches
+    { from: 5.6, to: 6.9, edge: 'wall' },               // crest and jump are fenced in
+    { from: 8.45, to: 10.4, shoulder: 1.6, outer: 3.2 }, // Palm Drive: the palms stand close, behind a low wall
+    { from: 20.45, to: 22.12, edge: 'wall', wallHeight: 0.85 }, // the bridge guardrails: low enough to see the bay over
   ],
   bridges: [
-    { from: 1.45, to: 3.12 },                            // the Golden Gate span: terrain/water stay below the deck
+    { from: 20.45, to: 22.12 },                            // the Golden Gate span: terrain/water stay below the deck
   ],
   ramps: [
-    { at: 10.25, len: 9, lift: 2.1 },
+    { at: 6.25, len: 9, lift: 2.1 },
   ],
   boosts: [
-    { at: 0.55, lat: 0, w: 5 },
-    { at: 2.45, lat: 0, w: 5 },
-    { at: 4.35, lat: 17.4, w: 4.5 }, { at: 4.95, lat: 17.4, w: 4.5 }, // Sand Hill: the LP lane's reward, two pads (second pad 4.8 -> 4.95, #215 item 4 re-time)
-    { at: 6.2, lat: -4, w: 4.5 },
-    { at: 16.3, lat: 3, w: 4.5 },                        // the Oval: a pad on the outside line round the hairpin (lat 5 -> 3, #215 item 1)
-    { at: 21.55, lat: 17.4, w: 4.5 },                    // the fountain's inside lane: narrow, walled, and quick
+    { at: 19.55, lat: 0, w: 5 },
+    { at: 22.45, lat: 0, w: 5 },
+    { at: 0.35, lat: 17.4, w: 4.5 }, { at: 0.95, lat: 17.4, w: 4.5 }, // Sand Hill: the LP lane's reward, two pads (the second re-timed in #215 item 4)
+    { at: 2.2, lat: -4, w: 4.5 },
+    { at: 12.3, lat: 3, w: 4.5 },                        // the Oval: a pad on the outside line round the hairpin (lat 5 -> 3, #215 item 1)
+    { at: 17.55, lat: 17.4, w: 4.5 },                    // the fountain's inside lane: narrow, walled, and quick
   ],
-  itemRows: [{ at: 1.5 }, { at: 7.6 }, { at: 11.6 }, { at: 13.35 }, { at: 21.25, n: 3 }],
+  itemRows: [{ at: 20.5 }, { at: 3.6 }, { at: 7.6 }, { at: 9.35 }, { at: 17.25, n: 3 }],
   coins: [
-    { from: 0.2, to: 0.5, n: 4, lat: 4.5 }, { from: 2.15, to: 2.85, n: 5, lat: 0 },
-    { from: 4.15, to: 4.85, n: 5, lat: [-3, 3] },        // Sand Hill's main lane
-    { from: 8.2, to: 8.9, n: 5, lat: [-4, 4] }, { from: 10.34, to: 10.5, n: 3, lat: 0, air: 2.6 },
-    { from: 12.6, to: 13.1, n: 4, lat: -4 },
-    { from: 15.3, to: 16.7, n: 6, lat: -5 },             // the Oval: coins on the inside line
-    { from: 21.15, to: 22.05, n: 6, lat: 17.4 },         // the fountain's inside lane
+    { from: 19.2, to: 19.5, n: 4, lat: 4.5 }, { from: 21.15, to: 21.85, n: 5, lat: 0 },
+    { from: 0.15, to: 0.85, n: 5, lat: [-3, 3] },        // Sand Hill's main lane
+    { from: 4.2, to: 4.9, n: 5, lat: [-4, 4] }, { from: 6.34, to: 6.5, n: 3, lat: 0, air: 2.6 },
+    { from: 8.6, to: 9.1, n: 4, lat: -4 },
+    { from: 11.3, to: 12.7, n: 6, lat: -5 },             // the Oval: coins on the inside line
+    { from: 17.15, to: 18.05, n: 6, lat: 17.4 },         // the fountain's inside lane
   ],
   // Two islands split the road, each a row of round static obstacles off the main lane (lat 11.4, so rivals on the
   // racing line never touch them; the same collision in the browser and the simulator), drawn in decorate().
@@ -128,8 +132,8 @@ export default {
   models: { hidden: () => S.nothing() },
   shortcuts: [
     // the LP lane opens on lap 2 (#121): until then the gate across it is shut
-    { name: 'the LP lane', from: 3.55, to: 5.6, path: [[250, 4], [258, 20], [261.5, 42], [258, 72]], skill: 0.3, when: race => leaderLap(race) >= 2 },
-    { name: 'fountain', from: 19.8, to: 0.4, path: [[-76, -8], [-62, -16.5], [-12, -17.4]], skill: 0.3 },
+    { name: 'the LP lane', from: 22.55, to: 1.6, path: [[250, 4], [258, 20], [261.5, 42], [258, 72]], skill: 0.3, when: race => leaderLap(race) >= 2 },
+    { name: 'fountain', from: 15.8, to: 19.4, path: [[-76, -8], [-62, -16.5], [-12, -17.4]], skill: 0.3 },
   ],
   terrain: {
     cell: 3, margin: 150, blend: 30, water: -1.4,
@@ -209,8 +213,8 @@ export default {
         atlas.place(board(text, { bg: ['#ffffff', '#ff4d6d', '#38b6ff', '#2ee6a6'][(k + j) % 4], fg: '#1a1d29', size: 110, border: '#1a1d29' }, 384, 224), local(p, u + rng.range(-1.5, 1.5), 0.4, gy + 3.9), p.yaw + rng.range(-0.15, 0.15), 3.0, 1.75);
       });
     };
-    sc.along({ from: 20.25, to: 1.3, side: 1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
-    sc.along({ from: 20.4, to: 0.9, side: -1, offset: 17, spacing: 34, phase: 12 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
+    sc.along({ from: 16.25, to: 20.3, side: 1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
+    sc.along({ from: 16.4, to: 19.9, side: -1, offset: 17, spacing: 34, phase: 12 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
     const crowd = sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
     const crowdFull = crowd.map(m => m.count);
     // the correction (#121): on the final lap the layoffs land and the grandstands empty out
@@ -287,12 +291,12 @@ export default {
     sc.instances(oakB, oakSpots.filter((_, i) => i % 3 === 1), { scale: [0.8, 1.6], yaw: 'random', tilt: 0.04, sink: 0.25 });
     sc.instances(oakC, oakSpots.filter((_, i) => i % 3 === 2), { scale: [0.8, 1.4], yaw: 'random', tilt: 0.04, sink: 0.25 });
     const cyp = partsOf(P.cypress(1, { h: 12 }));
-    sc.instances(cyp, [...sc.along({ from: 11.2, to: 12.3, side: -1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 7.3, to: 9.4, side: 1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 7.3, to: 9.4, side: -1, offset: 14.5, spacing: 9 })], { scale: [0.85, 1.2] });
+    sc.instances(cyp, [...sc.along({ from: 7.2, to: 8.3, side: -1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 3.3, to: 5.4, side: 1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 3.3, to: 5.4, side: -1, offset: 14.5, spacing: 9 })], { scale: [0.85, 1.2] });
     const palmA = partsOf(P.palm(1, { h: 10 })), palmB = partsOf(P.palm(5, { h: 8.5 }));
     // palms line the shores and the climb; sc.along skips bridge samples, so none land on the deck
-    const palmSpots = [...sc.along({ from: 1.35, to: 3.6, side: -1, offset: 14, spacing: 12 }), ...sc.along({ from: 5.6, to: 6.9, side: -1, offset: 14, spacing: 12 }), ...sc.along({ from: 3.15, to: 3.6, side: 1, offset: 14, spacing: 12 }),
+    const palmSpots = [...sc.along({ from: 20.35, to: 22.6, side: -1, offset: 14, spacing: 12 }), ...sc.along({ from: 1.6, to: 2.9, side: -1, offset: 14, spacing: 12 }), ...sc.along({ from: 22.15, to: 22.6, side: 1, offset: 14, spacing: 12 }),
       // Palm Drive: an unbroken avenue, close to the kerb on both sides
-      ...sc.along({ from: 12.55, to: 14.35, side: 1, offset: 4.6, spacing: 9 }), ...sc.along({ from: 12.55, to: 14.35, side: -1, offset: 4.6, spacing: 9, phase: 4.5 })];
+      ...sc.along({ from: 8.55, to: 10.35, side: 1, offset: 4.6, spacing: 9 }), ...sc.along({ from: 8.55, to: 10.35, side: -1, offset: 4.6, spacing: 9, phase: 4.5 })];
     sc.instances(palmA, palmSpots.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.25], yaw: 'random' });
     sc.instances(palmB, palmSpots.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.25], yaw: 'random' });
     // shrubs and rocks close to the action (rendered-terrain seating, as the oaks: #242)
@@ -423,7 +427,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the bridge exit: robotaxis frozen in a ring around one traffic cone ----
   {
-    const i = track.indexAtCp(2.95), c = sc.beside(2.95, 1, 27), l = [track.lx[i], track.lz[i]], R = 9;
+    const i = track.indexAtCp(21.95), c = sc.beside(21.95, 1, 27), l = [track.lx[i], track.lz[i]], R = 9;
     const cars = [];
     // the depot seats on the rendered terrain: the kart ground() runs ~6 m under the mesh on this
     // shoulder, and ground-seated cars were buried in the hillside (#242)
@@ -438,7 +442,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the climb: shipping containers sold as luxury micro-lofts ----
   {
-    const p = sc.beside(6.1, 1, 25); p.yaw += 0.08;
+    const p = sc.beside(2.1, 1, 25); p.yaw += 0.08;
     // seat on the lower front corner in the rendered terrain: the stack backs into the bowl rim,
     // and centre-seating left the front hovering (#242)
     p.y = Math.min(...[[18.4, 1.225], [-18.4, 1.225]].map(([u, v]) => { const [x, , z] = local(p, u, v, 0); return track.terrainHeight(x, z); })) - 0.05;
@@ -451,9 +455,9 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the esses: the unicorn balloon over its HQ, slowly deflating ----
   {
-    // moved a little down the hill and planted on its lowest corner (#242): at cp 7.9 the bowl
-    // rim ran 9 m up the block's front face; at cp 7.5 the same footprint varies by ~1.6 m
-    const p = sc.beside(7.5, 1, 36), hq = P.campusBlock(7, { w: 30, d: 16, floors: 3, accent: 0xff7eb6 });
+    // moved a little down the hill and planted on its lowest corner (#242): at cp 3.9 the bowl
+    // rim ran 9 m up the block's front face; at cp 3.5 the same footprint varies by ~1.6 m
+    const p = sc.beside(3.5, 1, 36), hq = P.campusBlock(7, { w: 30, d: 16, floors: 3, accent: 0xff7eb6 });
     p.y = Math.min(...[[-15.65, 8.65], [15.65, 8.65], [-15.65, -8.65], [15.65, -8.65]].map(([u, v]) => { const [x, , z] = local(p, u, v, 0); return track.terrainHeight(x, z); })) - 0.25 + 0.4;
     sc.place(hq, p.x, p.z, { yaw: p.yaw, y: p.y - 0.4 }); bake.add(hq);
     const roof = p.y - 0.4 + 3 * 3.4 + 0.6;
@@ -490,10 +494,10 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- after the crest: the rental scooter graveyard ----
   {
-    // the heap moved down the hill (#242): at cp 10.8 it was seated by the kart ground() on a
+    // the heap moved down the hill (#242): at cp 6.8 it was seated by the kart ground() on a
     // conform spike ~8 m above the rendered slope, so the whole cone hovered over the grass.
     // Here the rendered rim varies by ~1.5 m, and the cone is planted below its lowest rim point.
-    const p = sc.beside(11.5, 1, 30), H = 11, R = 13, ic = track.indexAtCp(10.25);
+    const p = sc.beside(7.5, 1, 30), H = 11, R = 13, ic = track.indexAtCp(6.25);
     let rimMin = Infinity; for (let a = 0; a < 360; a += 15) rimMin = Math.min(rimMin, track.terrainHeight(p.x + Math.cos(a * Math.PI / 180) * R, p.z + Math.sin(a * Math.PI / 180) * R));
     const base = rimMin - 1.0, surf = (x, z) => { const d = Math.hypot(x - p.x, z - p.z); return d >= R ? -Infinity : base + H * (1 - d / R); };
     const mound = new THREE.Mesh(new THREE.ConeGeometry(R, H, 18, 1, true), new THREE.MeshStandardMaterial({ color: 0x7c6a52, roughness: 0.95 }));
@@ -517,7 +521,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the downhill: the fifteen-minute standup, now in its ninth hour ----
   {
-    const p = sc.beside(12.85, 1, 26), people = [], sleepers = [];
+    const p = sc.beside(8.85, 1, 26), people = [], sleepers = [];
     for (let k = 0; k < 9; k++) {
       const a = (k / 9) * Math.PI * 2, x = p.x + Math.cos(a) * 4.5, z = p.z + Math.sin(a) * 4.5;
       (k === 2 || k === 6 ? sleepers : people).push({ x, z, y: track.terrainHeight(x, z), yaw: Math.atan2(p.x - x, p.z - z) });
@@ -552,10 +556,10 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the final corner: the HQ whose sign can't make up its mind ----
   {
-    const p = sc.beside(18.35, -1, 26), hq = P.campusBlock(2, { w: 36, d: 18, floors: 4, accent: 0x1f6bff });
+    const p = sc.beside(14.35, -1, 26), hq = P.campusBlock(2, { w: 36, d: 18, floors: 4, accent: 0x1f6bff });
     sc.place(hq, p.x, p.z, { yaw: p.yaw, y: p.y - 0.4 }); bake.add(hq);
     const roof = p.y - 0.4 + 4 * 3.4 + 0.6, mast = S.post(4, 0.5); sc.place(mast, p.x, p.z, { y: roof }); bake.add(mast);
-    const ia = track.indexAtCp(17.3), fyaw = facing(p, track.px[ia], track.pz[ia]);   // it faces the karts coming up out of the hairpin
+    const ia = track.indexAtCp(13.3), fyaw = facing(p, track.px[ia], track.pz[ia]);   // it faces the karts coming up out of the hairpin
     const flip = new THREE.Group(); flip.position.set(p.x, roof + 8.5, p.z); flip.rotation.y = fyaw; group.add(flip);
     const fr = atlas.mesh(board("WE'RE HIRING!", { bg: '#16a34a', fg: '#ffffff', size: 150, lines: 1 }, 768, 230), 26, 7.8);
     const bk = atlas.mesh(board("LAYOFFS (WE'RE A FAMILY)", { bg: '#e23b3b', fg: '#ffffff', size: 130 }, 768, 230), 26, 7.8);
@@ -587,7 +591,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the Golden Gate (#168): the lap itself crosses the bay on the deck ----
   {
-    // The road IS the bridge here (bridges 1.45-3.12 in the track data: engine deck, pillars and
+    // The road IS the bridge here (bridges 20.45-22.12 in the track data: engine deck, pillars and
     // guardrails). This block adds what makes it the Golden Gate: two orange tower portals the
     // karts drive through, main cables with suspenders overhead, orange edge girders, concrete
     // anchor blocks on the shores, and the toll gantry at the deck entry. Everything is placed
@@ -602,7 +606,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     const LEG = 11.3, SUS = 10.6;   // tower legs / cable plane, and the suspender + girder line, just outside the guardrail
 
     // the two tower portals: legs from below the waterline to 30 m over the deck, four portal beams
-    const towerAt = [2.08, 2.72];
+    const towerAt = [21.08, 21.72];
     for (const tc of towerAt) {
       const c = at(tc), top = c.y + 30, bot = -4;
       for (const s of [-1, 1]) {
@@ -615,7 +619,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
       taken.push([c.x, c.z, 13]);
     }
     // anchor blocks where the cables come down to the shores
-    for (const ac of [1.47, 3.09]) for (const s of [-1, 1]) {
+    for (const ac of [20.47, 22.09]) for (const s of [-1, 1]) {
       const ap = at(ac, s * LEG), top = ap.y + 0.4;
       put(new THREE.BoxGeometry(6.5, top + 3.5, 5.5), CONC, ap.x, (top - 3.5) / 2, ap.z, ap.yaw);
       taken.push([ap.x, ap.z, 8]);
@@ -623,18 +627,18 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     // the main cables: shore anchor, up over tower A, the long sag across the main span, tower B, down
     const cableY = (cp) => {
       const d = at(cp).y;
-      if (cp < towerAt[0]) { const t = (cp - 1.5) / (towerAt[0] - 1.5); return d + 1.2 + (29.2 - 1.2) * t * t - Math.sin(t * Math.PI) * 1.1; }
-      if (cp > towerAt[1]) { const t = (cp - towerAt[1]) / (3.05 - towerAt[1]); return d + 29.2 + (1.2 - 29.2) * t * t - Math.sin(t * Math.PI) * 1.1; }
+      if (cp < towerAt[0]) { const t = (cp - 20.5) / (towerAt[0] - 20.5); return d + 1.2 + (29.2 - 1.2) * t * t - Math.sin(t * Math.PI) * 1.1; }
+      if (cp > towerAt[1]) { const t = (cp - towerAt[1]) / (22.05 - towerAt[1]); return d + 29.2 + (1.2 - 29.2) * t * t - Math.sin(t * Math.PI) * 1.1; }
       const t = (cp - towerAt[0]) / (towerAt[1] - towerAt[0]);
       return d + 2.4 + (29.2 - 2.4) * (2 * t - 1) ** 2;
     };
     for (const s of [-1, 1]) {
       const pts = [];
-      for (let cp = 1.5; cp <= 3.051; cp += 0.045) { const p = at(cp, s * LEG); pts.push(new THREE.Vector3(p.x, cableY(cp), p.z)); }
+      for (let cp = 20.5; cp <= 22.051; cp += 0.045) { const p = at(cp, s * LEG); pts.push(new THREE.Vector3(p.x, cableY(cp), p.z)); }
       const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 72, 0.34, 6), ORANGE);
       gg.add(tube);
       // suspenders: from the cable down to the girder line, every ~6 m of deck
-      for (let cp = 1.56; cp <= 3.02; cp += 0.07) {
+      for (let cp = 20.56; cp <= 22.02; cp += 0.07) {
         const topP = at(cp, s * LEG), botP = at(cp, s * SUS), cy = cableY(cp), by = botP.y + 0.1;
         if (cy - by < 1.6) continue;
         put(new THREE.BoxGeometry(0.16, cy - by, 0.16), ORANGE, botP.x + (topP.x - botP.x) / 2, (cy + by) / 2, botP.z + (topP.z - botP.z) / 2, botP.yaw);
@@ -642,8 +646,8 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     }
     // orange edge girders riding just under the deck edge, the whole span
     for (const s of [-1, 1]) {
-      let prev = at(1.46, s * SUS);
-      for (let cp = 1.5; cp <= 3.121; cp += 0.04) {
+      let prev = at(20.46, s * SUS);
+      for (let cp = 20.5; cp <= 22.121; cp += 0.04) {
         const p = at(cp, s * SUS), mx = (prev.x + p.x) / 2, mz = (prev.z + p.z) / 2;
         const len = Math.hypot(p.x - prev.x, p.z - prev.z) + 0.5;
         put(new THREE.BoxGeometry(0.35, 1.3, len), ORANGE, mx, (prev.y + p.y) / 2 - 0.82, mz, Math.atan2(p.x - prev.x, p.z - prev.z));
@@ -654,9 +658,9 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     // the toll gantry at the deck entry: two orange posts and the fascia sign, with a back-to-back
     // twin like every other board on the track so the text never mirrors from behind
     {
-      const gi = track.indexAtCp(1.52), gp0 = at(1.52);
+      const gi = track.indexAtCp(20.52), gp0 = at(20.52);
       for (const s of [-1, 1]) {
-        const pp = at(1.52, s * 10.3), post = S.post(8.6, 0.35, 0xc0362c);
+        const pp = at(20.52, s * 10.3), post = S.post(8.6, 0.35, 0xc0362c);
         sc.place(post, pp.x, pp.z, { y: pp.y - 0.2, yaw: gp0.yaw }); bake.add(post);
       }
       const toll = board('BRIDGE TOLL: YOUR EQUITY', { bg: '#c0362c', fg: '#ffffff', kicker: 'THE GOLDEN GATE', kfg: '#ffd23c', size: 118 }, 1024, 256);
@@ -671,12 +675,12 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the landmarks: a Hoover Tower on the climb meadow, watching the esses ----
   {
-    const tp = sc.beside(6.25, 1, 36);
+    const tp = sc.beside(2.25, 1, 36);
     // planted on the lowest corner of its slab in the rendered terrain: the meadow tilts
     // under the tower and one corner hovered (#242)
     const hy = Math.min(...[[-6.5, 6.5], [6.5, 6.5], [-6.5, -6.5], [6.5, -6.5]].map(([u, v]) => { const [x, , z] = local(tp, u, v, 0); return track.terrainHeight(x, z); })) - 0.2;
     const tw = S.hooverTower({}); sc.place(tw, tp.x, tp.z, { yaw: tp.yaw, y: hy }); bake.add(tw);
-    const sp = sc.beside(6.25, 1, 22);
+    const sp = sc.beside(2.25, 1, 22);
     legs(sp, 15, 8);
     atlas.place(board('HOOVER TOWER', { bg: '#d9c096', fg: '#7a2d1e', kicker: 'THE FARM · PARKING $47', kfg: '#1a1d29', size: 118 }, 768, 300), local(sp, 0, 0, sp.y + 10.5), sp.yaw, 16, 6);
     taken.push([tp.x, tp.z, 15], [sp.x, sp.z, 10]);
@@ -684,7 +688,7 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
 
   // ---- the landmarks: the garage where it all started, outside the chicane ----
   {
-    const p = sc.beside(13.75, 1, 24);
+    const p = sc.beside(9.75, 1, 24);
     // seated on the lowest point of walls and driveway in the rendered terrain (#242)
     const gy = Math.min(...[[-4.75, 3.5], [4.75, 3.5], [-4.75, -3.5], [4.75, -3.5], [0, 11.85]].map(([u, v]) => { const [x, , z] = local(p, u, v, 0); return track.terrainHeight(x, z); })) - 0.05;
     const gr = S.garage(); sc.place(gr, p.x, p.z, { yaw: p.yaw, y: gy }); bake.add(gr);
@@ -721,9 +725,9 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
 
   // ---- Palm Drive: gate pillars, lamp banners, bunting over the road (the palms are planted with the others) ----
   {
-    const g = at(12.62);
+    const g = at(8.62);
     for (const s of [-1, 1]) {
-      const hw = s > 0 ? track.hwL[g.i] : track.hwR[g.i], p = at(12.62, s * (hw + 3.6));
+      const hw = s > 0 ? track.hwL[g.i] : track.hwR[g.i], p = at(8.62, s * (hw + 3.6));
       const pil = S.gatePillar(); sc.place(pil, p.x, p.z, { yaw: g.back, y: track.terrainHeight(p.x, p.z) - 0.2 }); bake.add(pil, false);   // no shadow caster (#215 item 7)
       const pn = pil.userData.panel;
       atlas.place(board('PALM DRIVE', { bg: RED, fg: CREAM, kicker: 'THE FARM', kfg: '#ffc928', size: 120, lines: 2 }, 256, 448), [p.x + Math.sin(g.back) * pn.z, track.terrainHeight(p.x, p.z) - 0.2 + pn.y, p.z + Math.cos(g.back) * pn.z], g.back, pn.w, pn.h);
@@ -735,7 +739,7 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
     let k = 0;
     const tops = [[], []];
     for (const [side, list] of [[1, tops[0]], [-1, tops[1]]]) {
-      for (const p of sc.along({ from: 12.75, to: 14.3, side, offset: 4.4, spacing: 18, phase: side > 0 ? 0 : 9 })) {
+      for (const p of sc.along({ from: 8.75, to: 10.3, side, offset: 4.4, spacing: 18, phase: side > 0 ? 0 : 9 })) {
         const L = lamp.clone(); sc.place(L, p.x, p.z, { yaw: p.yaw - Math.PI / 2 }); bake.add(L, false);
         const f = [Math.sin(p.yaw), Math.cos(p.yaw)], c = [p.x + f[0] * bn.x, p.y + bn.y, p.z + f[1] * bn.x];
         const text = BANNERS[k++ % BANNERS.length], b = board(text, { bg: RED, fg: CREAM, size: 120, lines: 2, border: '#ffc928' }, 256, 576);
@@ -769,7 +773,7 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
     const beds = [];
     for (let k = 0; k < 26; k++) { const a = (k / 26) * Math.PI * 2, r = 9.5 + (k % 2) * 1.6, x = ox + Math.cos(a) * r, z = oz + Math.sin(a) * r * 0.8; beds.push({ x, z, y: track.terrainHeight(x, z), yaw: rng() * 6.28 }); }
     sc.instances(partsOf(P.bush(6, { color: 0x4fae3f, flower: 0xe8273a })), beds, { scale: [1.1, 1.5], cast: false, sink: 0.1 });
-    const sp = at(14.55, -(track.hwR[track.indexAtCp(14.55)] + 6));
+    const sp = at(10.55, -(track.hwR[track.indexAtCp(10.55)] + 6));
     const ss = { x: sp.x, z: sp.z, y: track.terrainHeight(sp.x, sp.z), yaw: sp.back };
     legs(ss, 12, 6.6, 0x7a2d1e);
     atlas.place(board('THE OVAL', { bg: '#1f7a3a', fg: '#ffffff', kicker: 'NO PITCHING ON THE LAWN', kfg: '#ffd23c', size: 120 }, 768, 300), local(ss, 0, 0, ss.y + 7.3), ss.yaw, 13, 5.1);
@@ -779,7 +783,7 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
   // ---- the Quad: an arcade either side, and a great arch over each end ----
   {
     const bay = partsOf(S.arcadeBay()), mats = [];
-    const s0 = track.sAtCp(18.72), s1 = track.sAtCp(20.12), P2 = new THREE.Vector3(), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
+    const s0 = track.sAtCp(14.72), s1 = track.sAtCp(16.12), P2 = new THREE.Vector3(), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
     const students = [];
     for (let s = s0; s < s1; s += 4.05) {
       const i = Math.floor(s / track.ds) % track.N, yaw = track.yawAt(s);
@@ -794,7 +798,7 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
     }
     bake.copies(bay, mats);
     sc.instances(partsOf(P.spectator()), students, { scale: [1.9, 2.2], tints: [0x9d1c20, 0xffffff, 0x1f2a44, 0xffc928, 0x9d1c20], cast: false });
-    const arches = [[18.95, 'THE QUAD', 'NOW ACCEPTING DROPOUTS'], [19.86, 'YOU ARE NOW LEAVING ACADEMIA', 'GOOD LUCK OUT THERE']];
+    const arches = [[14.95, 'THE QUAD', 'NOW ACCEPTING DROPOUTS'], [15.86, 'YOU ARE NOW LEAVING ACADEMIA', 'GOOD LUCK OUT THERE']];
     for (const [cp, text, kicker] of arches) {
       const c = at(cp), span = track.hwL[c.i] + track.hwR[c.i] + 0.6, arch = S.quadArch(span);
       // planted on the lower foot in the rendered terrain: the cambered road left one foot
@@ -902,12 +906,12 @@ function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, boa
 
   // ---- the street sign at the dip, and the firms' boards up the climb ----
   {
-    const p = at(5.78, -(track.hwR[track.indexAtCp(5.78)] + 7)), sp = { x: p.x, z: p.z, y: track.terrainHeight(p.x, p.z), yaw: p.back };
+    const p = at(1.78, -(track.hwR[track.indexAtCp(1.78)] + 7)), sp = { x: p.x, z: p.z, y: track.terrainHeight(p.x, p.z), yaw: p.back };
     legs(sp, 14, 7.5, 0x2b2f36);
     atlas.place(board('SAND HILL RD', { bg: '#0f6b3a', fg: '#ffffff', kicker: 'VENTURE CAPITAL · NEXT 2 MI', kfg: '#ffffff', border: '#ffffff', size: 124 }, 768, 260), local(sp, 0, 0, sp.y + 8.4), sp.yaw, 15, 5.1);
     taken.push([sp.x, sp.z, 10]);
     const frame = P.billboard(null, { w: 15, h: 5, legs: 6 }); frame.remove(frame.children[frame.children.length - 1]);
-    [[6.2, 1, 17, 0], [6.55, -1, 15, 1], [6.95, -1, 14, 2], [7.45, 1, 16, 3]].forEach(([cp, side, off, k]) => {
+    [[2.2, 1, 17, 0], [2.55, -1, 15, 1], [2.95, -1, 14, 2], [3.45, 1, 16, 3]].forEach(([cp, side, off, k]) => {
       const q = sc.beside(cp, side, off), yaw = q.yaw + rng.range(-0.08, 0.08), f = frame.clone();
       // planted on the lower leg in the rendered terrain, like the big boards (#242)
       const gy = Math.min(...[-4.8, 4.8].map(u => { const [x, , z] = local({ ...q, yaw }, u, -0.3, 0); return track.terrainHeight(x, z); })) - 0.05;
@@ -922,7 +926,7 @@ function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, boa
   // ---- the firms' offices: low glass slabs on the lawns east of the climb, sprinklers going ----
   {
     const sprays = [];
-    [[5.25, 40, 3, 0x2ee6a6], [5.85, 44, 1, 0x38b6ff], [6.4, 36, 2, 0xffd23c]].forEach(([cp, off, k, accent], j) => {
+    [[1.25, 40, 3, 0x2ee6a6], [1.85, 44, 1, 0x38b6ff], [2.4, 36, 2, 0xffd23c]].forEach(([cp, off, k, accent], j) => {
       const p = sc.beside(cp, 1, off), hq = P.campusBlock(30 + j, { w: 30, d: 14, floors: 2, accent });
       // planted on the lowest corner of the footprint in the rendered terrain: on the bowl
       // slope the centre-seated slabs hovered a front corner (#242)
@@ -943,7 +947,7 @@ function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, boa
 
   // ---- Partner Summit: the glass meeting pod on the crest, partners inside, the view out the back ----
   {
-    const p = sc.beside(7.05, 1, 15), pod = S.confPod(); sc.place(pod, p.x, p.z, { yaw: p.yaw, y: p.y }); bake.add(pod, false);
+    const p = sc.beside(3.05, 1, 15), pod = S.confPod(); sc.place(pod, p.x, p.z, { yaw: p.yaw, y: p.y }); bake.add(pod, false);
     // a plinth under the pod: it straddles the crest, and its back feet hovered ~1.9 m (#242)
     const pMin = Math.min(...[[-5, 2.6], [5, 2.6], [-5, -2.6], [5, -2.6]].map(([u, v]) => { const [x, , z] = local(p, u, v, 0); return track.terrainHeight(x, z); }));
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(11.6, p.y - pMin + 0.47, 6.6), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.85 }));

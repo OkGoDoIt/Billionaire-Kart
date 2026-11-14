@@ -89,7 +89,7 @@ export default {
   sides: [
     { from: 17.6, to: 1.7, side: 'L', edge: 'wall' },                 // promenade: walled on the land side
     { from: 1.8, to: 5.5, side: 'R', outer: 25, shoulder: 4 },         // beach: run wide onto the sand and into the shallows
-    { from: 3.4, to: 4.6, side: 'R', outer: 34, shoulder: 5 },         // cut the beach corner across the sand (needs a boost)
+    { from: 3.25, to: 4.72, side: 'R', outer: 34, shoulder: 5, hoarding: false },         // cut the beach corner across the sand (needs a boost)
     { from: 5.6, to: 9.75, edge: 'void' },                           // pier: nothing at the edge but the sea
   ],
   shortcuts: [{ name: 'sand cut', from: 3.35, to: 4.65, path: SAND_CUT, boost: true, skill: 0.35 }],
@@ -135,7 +135,11 @@ export default {
     color(x, z, h, slope, over, out) {                       // sandy beaches and seabed around the whole cove
       const d = coastDistance(x, z);
       const t = (1 - smoothstep(30, 56, d)) * (1 - smoothstep(2.5, 6, h)) * (1 - smoothstep(0.6, 1.0, slope)) * (0.85 + fbm(x * 0.05, z * 0.05, 2, 8) * 0.3);
-      for (let k = 0; k < 3; k++) out[k] += (SAND[k] - out[k]) * Math.min(1, t);
+      // Make the shelf a continuous dry beach across its chord. The usual coastline
+      // shading can turn deep brown at its abrupt bank even while the surface is sand.
+      const beach = x > 162 && x < 204 && z > 85 && z < 176 && nearSandCut(x, z);
+      const amount = beach ? 1 : Math.min(1, t);
+      for (let k = 0; k < 3; k++) out[k] += (SAND[k] - out[k]) * amount;
     },
     fn(x, z) {
       const d = coastDistance(x, z);
@@ -161,6 +165,7 @@ export default {
     },
   },
   look: {
+    groundDetail: 0.095,
     road: { base: 0x6a6670, line: 0xffffff, center: 0xffd23c },
     kerb: [0xff6a3d, 0xfff4e0],
     shoulder: 0xe8d3a0,
@@ -242,7 +247,7 @@ function decorate(ctx) {
     const sail = new THREE.BufferGeometry(); sail.setAttribute('position', new THREE.Float32BufferAttribute(sails, 3));
     ctx.group.add(new THREE.Mesh(sail, new THREE.MeshBasicMaterial({ color: 0xff9a18, side: THREE.DoubleSide })));
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(xyz, 3)); g.setIndex(faces);
-    ctx.group.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xbd9b6b, side: THREE.DoubleSide })));
+    ctx.group.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xad926e, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide })));
     ctx.group.add(marks.build({ mast: plastic(0x543c32) }));
   }
 

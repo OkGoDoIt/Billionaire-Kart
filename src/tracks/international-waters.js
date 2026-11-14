@@ -407,12 +407,12 @@ function decorate(ctx) {
     { x: -4, name: 'EXTRADITION DENIED', boot: 'bootGold', L: 96, tiers: 3 },
     { x: -62, name: 'OFFSHORE ACCOUNT', boot: 'bootRed', L: 84, tiers: 2 },
   ];
-  const bowNames = [];
+  const nameGroup = new THREE.Group(), names = W.makeAtlas(nameGroup, 1024);
   for (const m of bows) {
     const zc = -112 - 9 - m.L * 0.41;
     const o = W.marinaYacht(marina, { L: m.L, B: 9.5, D: 7.6, x: m.x, z: zc, yaw: 0, boot: m.boot, tiers: m.tiers });
-    const st = o.station(m.L * 0.3);
-    for (const s of [1, -1]) bowNames.push({ text: m.name, x: m.x + s * (st.w * 1.04 + 0.12), y: WL + st.top - 2.3, z: zc + m.L * 0.3, yaw: s * Math.PI / 2, len: m.L * 0.26 });
+    const tile = names.add(944, 96, W.nameFace(m.name));
+    W.marinaLettering(names, tile, o, m.x, zc);
   }
   {
     const grp = marina.build(W.YACHT_MATS()); grp.position.y = WL; group.add(grp);
@@ -420,7 +420,7 @@ function decorate(ctx) {
     // decks lie over open water and cannot put a shadow on the road.
     grp.traverse(o => { if (o.isMesh) o.castShadow = sc.shadows && o.name === 'hull'; });
     floaters.push({ g: grp, base: WL, ph: 0.6, amp: 0, tideOnly: true });
-    for (const n of bowNames) { const r = atlas.add(1024, 128, W.nameFace(n.text)); atlas.place(r, [n.x, n.y, n.z], n.yaw, n.len, n.len / 8); }
+    names.flush(); grp.add(nameGroup);
   }
 
   /* ----- the sand spit at the hairpin: palms, a beach bar, the tide board ----- */

@@ -522,9 +522,19 @@ function tier(b, { x = 0, z0, z1, y0, y1, w, nose = 0.3, tail = 0.9, glassH = 0.
     { z: z1 - len * 0.08, w: ww * (0.55 + nose * 0.6), h: h * 0.96, y, x, n: 4 },
     { z: z1, w: ww * nose, h: h * 0.9, y: y - h * 0.04, x, n: 3 },
   ];
-  b.add(mat, loft(secs(w, hh, yc), 28, 5));
-  const gs = secs(w + 0.14, hh * glassH, yc + hh * 0.12); gs[0].z += 0.9; gs[0].w = (w + 0.14) * tail * 0.92;
-  b.add('glass', loft(gs, 28, 5));
+  // Use one surface for the window belt and its white surround. Overlapping
+  // lofts previously put two end caps in the same plane at the nose.
+  const ring = 48, skin = loft(secs(w, hh, yc), ring, 5), index = skin.index.array;
+  const sideCount = index.length - ring * 6, glass = [], house = [];
+  for (let i = 0; i < sideCount; i += 6) {
+    const angle = ((i / 6 % ring) + 0.5) * Math.PI * 2 / ring;
+    const y = Math.sign(Math.sin(angle)) * Math.abs(Math.sin(angle)) ** 0.41;
+    const bucket = Math.abs(y - 0.12) <= glassH ? glass : house;
+    for (let k = 0; k < 6; k++) bucket.push(index[i + k]);
+  }
+  for (let i = sideCount; i < index.length; i++) house.push(index[i]);
+  const windows = skin.clone(); windows.setIndex(glass); skin.setIndex(house);
+  b.add(mat, skin); b.add('glass', windows);
 }
 
 /**
@@ -687,13 +697,41 @@ export function marinaYacht(b, { L = 92, B = 9.5, D = 7.6, x = 0, z = 0, yaw = 0
   s.add('house', sphere(1.0, 14, 10), { p: [1.4, mastY + 1.4, -L * 0.1] });
   s.add('house', sphere(0.8, 14, 10), { p: [-1.4, mastY + 1.3, -L * 0.1] });
   s.add('house', cyl(0.25, 0.4, 2.2, 8), { p: [0, mastY + 1.0, -L * 0.1] });
-  for (const sd of [1, -1]) s.add('chrome', tube(range(L * 0.12, L * 0.46, 6).map(zz => { const st = station(zz, o); return [sd * (st.w - 0.35), st.top + 1.0, zz]; }), 0.07, 18, 5));
+  for (const side of [-1, 1]) {
+    const rail = range(L * 0.12, L * 0.46, 10).map(z => {
+      const st = station(z, o), x = side * (st.w - 0.35);
+      s.add('chrome', cyl(0.07, 0.09, 1.02, 6), { p: [x, st.top + 0.5, z] });
+      return [x, st.top + 1, z];
+    });
+    s.add('chrome', tube(rail, 0.09, 22, 6));
+  }
   s.add('pool', box(4.4, 0.5, 5, 0.25, 2), { p: [0, station(L * 0.25, o).top + 0.3, L * 0.25] });
   const grp = s.build({}), M = new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
   grp.traverse(m => { if (m.isMesh) b.add(m.name === 'boot' ? boot : m.name, m.geometry.applyMatrix4(M)); });
-  o.station = zz => station(zz, o);
   return o;
 }
+/** The name follows the changing beam, sheer, and flare on each side of the bow. */
+export function marinaLettering(atlas, tile, hull, x, z) {
+  const { L } = hull;
+  const height = L * 0.024, count = 14;
+  for (const side of [-1, 1]) {
+    const edge = u => {
+      const st = station(L * (0.29 + side * (0.5 - u) * 0.25), hull);
+      return [-height / 2, height / 2].map(dy => {
+        const y = st.top - 4.35 + dy;
+        const [width] = sectionPt(st, uAt(st, y), 0.035);
+        return [x + side * width, y, z + st.z];
+      });
+    };
+    let left = edge(0);
+    for (let i = 1; i <= count; i++) {
+      const right = edge(i / count);
+      atlas.strip(tile, left, right, (i - 1) / count, i / count);
+      left = right;
+    }
+  }
+}
+
 export const YACHT_MATS = () => ({
   hull: WHITE, bottom: paint(0x10233f, { rough: 0.35, clear: 0.5 }), gold: GOLDP, glass: SMOKE, deck: teakMat(),
   cut: WHITE, house: WHITE, chrome: CHROME, pool: new THREE.MeshStandardMaterial({ color: 0x0aa7c6, emissive: 0x29d9f0, emissiveIntensity: 0.7, roughness: 0.1 }),
@@ -840,6 +878,9 @@ export function makeAtlas(group, S = 2048, { emissive = 0.25 } = {}) {
   const api = {
     add(w, h, draw) { const r = alloc(w, h); r.draw = draw; r.p.items.push(r); return r; },
     place(r, c, yaw, w, h) { const { p } = r; p.q.panel(c, yaw, w, h, [r.x / S, 1 - (r.y + r.h) / S, (r.x + r.w) / S, 1 - r.y / S]); },
+    strip(r, left, right, u0, u1) {
+      r.p.q.quad(left[0], right[0], right[1], left[1], [(r.x + r.w * u0) / S, 1 - (r.y + r.h) / S, (r.x + r.w * u1) / S, 1 - r.y / S]);
+    },
     /** Two faces back to back, so the sign reads the right way round from both sides. */
     place2(r, c, yaw, w, h, gap = 0.08) {
       const fx = Math.sin(yaw) * gap, fz = Math.cos(yaw) * gap;

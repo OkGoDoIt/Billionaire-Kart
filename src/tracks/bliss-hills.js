@@ -28,7 +28,6 @@ const CLIPPY = { x: 55, z: 60, yaw: Math.atan2(-105, -50), H: 44 };
 /* Billboards: [cp, side, metres beyond the road edge, text, background, ink]. */
 const BOARDS = [
   [1.3, 1, 30, '640K OUGHT TO BE ENOUGH', '#1a1d29', '#37ff6a'],
-  [4.9, -1, 24, 'ABORT, RETRY, FAIL?', '#0a4fd6', '#ffffff'],
   [7.6, -1, 20, 'INSERT DISK 2 OF 47', '#ffd23c', '#1a1d29'],
   [10.4, 1, 22, 'YOU HAVE (1) NEW VIRUS', '#e5352b', '#ffffff'],
   [13.4, -1, 20, 'BEST VIEWED AT 800X600', '#ffffff', '#0a4fd6'],
@@ -463,6 +462,30 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
     body(g, 0, tb, w, h - tb);
   };
   const button = (g, x, y, w, h, text) => { g.fillStyle = '#ffffff'; g.fillRect(x, y, w, h); g.strokeStyle = '#12142b'; g.lineWidth = Math.max(3, h * 0.06); g.strokeRect(x, y, w, h); fitText(g, text, x + w / 2, y + h / 2, w * 0.85, h * 0.6, SANS, '#12142b', { lines: 1 }); };
+
+  // Alternate targets across the climb, angled toward the approach so the art has a silhouette at speed.
+  const iconMaterials = ['folder', 'document'].map(name => {
+    const map = new THREE.TextureLoader().load(`assets/tracks/bliss-hills/icon-${name}.webp`);
+    map.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshStandardMaterial({ map, alphaTest: 0.4, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.22 });
+  });
+  const icons = [
+    [2.65, -1, 0, 'NEW FOLDER (37)'], [3.5, 1, 1, 'MY DOCUMENTS'], [4.1, -1, 1, 'FINAL_v2_REAL'],
+    [4.7, 1, 0, 'TAXES 2003'], [5.24, -1, 0, 'DO NOT OPEN'], [5.8, 1, 0, 'NEW FOLDER (38)'], [6.42, -1, 1, 'README.TXT'],
+  ];
+  for (const [cp, side, image, label] of icons) {
+    const p = sc.beside(cp, side, 8);
+    if (!free(p.x, p.z)) continue;
+    const before = track.indexAtCp(cp - 0.75);
+    p.yaw = facing(p, track.px[before], track.pz[before]);
+    const h = Math.max(p.y + 0.4, p.roadY + 0.8), size = image ? 9.8 : 11;
+    const icon = new THREE.Mesh(new THREE.PlaneGeometry(size, size), iconMaterials[image]);
+    icon.rotation.y = p.yaw; icon.position.set(p.x, h + 2.15 + size / 2, p.z); group.add(icon); bake.add(icon, false);
+    const plate = board(label, { bg: '#225bbb', fg: '#ffffff', border: '#b5d7ff', font: XP, lines: 1, size: 64 }, 384, 80);
+    atlas.place(plate, local(p, 0, 0, h + 1.2), p.yaw, 11, 2.3);
+    atlas.place(board('', { bg: '#19498c' }, 64, 24), local(p, 0, -0.08, h + 1.2), p.yaw + Math.PI, 11, 2.3);
+    taken.push([p.x, p.z, 8]);
+  }
 
   // ---- the centerpiece: Clippy, offering help to the whole grid ----
   {

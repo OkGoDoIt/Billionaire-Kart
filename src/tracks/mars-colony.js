@@ -9,7 +9,8 @@ import { Scenery, partsOf } from '../render/scenery.js';
 import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
 import * as M from '../models/props-mars-colony.js';
-import * as K from '../models/props-burning-circuit.js';   // the sign kit (atlas, baker, boards) lives there
+import { makeBaker } from '../models/props-international-waters.js';
+import * as K from '../models/props-burning-circuit.js';   // the sign atlas and boards
 import { ModelBuilder, cyl, box, sphere, plastic, glow } from '../models/build.js';
 
 /* The canyon the jump crosses: a winding cut along the east side of the rim road. */
@@ -42,7 +43,7 @@ export default {
   laps: 3,
   width: 18,
   sky: 'mars',
-  skyOverrides: { zenith: 0x7a3d26, horizon: 0xf0ae80, fogNear: 170, fogFar: 1100, sunIntensity: 3.4, hemiGround: 0x7a4030 },
+  skyOverrides: { zenith: 0x703f45, horizon: 0xe4aa90, fogNear: 170, fogFar: 1100, sunIntensity: 3.1, sunLight: 0xffe8d4, hemiSky: 0xc5ceec, hemiGround: 0x784b46 },
   backdrop: { img: 'assets/backdrops/mars-colony.webp', top: 26, bottom: -8, rot: 0.3 },
   gravity: 0.55,
   offroad: 'dust',
@@ -60,9 +61,9 @@ export default {
     { p: [164, 30.5, -280] },          // 9 across the apron, lining up on the rocket
     { p: [169, 30.5, -306], w: 21 },   // 10 through the launch mount, then the drift out
     { p: [216, 31.5, -340], w: 20 },   // 11 ramp and the canyon gap
-    { p: [216, 30, -415], w: 19 },     // 12 landing deck
-    { p: [216, 28.5, -470], w: 19, bank: 4 }, // 13 into the crater bowl
-    { p: [204, 27.5, -498], w: 19, bank: 8 }, // 14
+    { p: [216, 26, -415], wl: 9.5, wr: 16 },     // 12 landing deck
+    { p: [216, 25.5, -470], wl: 9.5, wr: 11, bank: 4 }, // 13 into the crater bowl
+    { p: [204, 25.5, -498], w: 19, bank: 8 }, // 14
     { p: [176, 26.5, -510], w: 19, bank: 9 }, // 15
     { p: [148, 26, -498], w: 19, bank: 8 }, // 16
     { p: [136, 26, -470], w: 19, bank: 4 }, // 17 bowl exit
@@ -88,14 +89,16 @@ export default {
     { from: 7.9, to: 10.55, edge: 'wall' },                    // the launch complex: apron, mount corridor, drift out
     { from: 10.55, to: 10.85, side: 'R', edge: 'void' },       // a short open drop where the rejoin runs along the canyon shoulder
     { from: 10.75, to: 12.6, edge: 'wall' },                   // launch deck and landing deck
+    { from: 21.52, to: 22.63, hoarding: false },             // an unobstructed view into the growing beds
     { from: 23.1, to: 26.15, side: 'L', outer: 36, shoulder: 5, hoarding: false }, // the dust cut across the hairpin's infield (needs a boost)
   ],
   zones: [{ from: 27.6, to: 1.6, skin: 'metal' }, { from: 1.6, to: 3.7, skin: 'metal' }, { from: 7.9, to: 12.6, skin: 'metal' }],
   tunnels: [{ from: 1.75, to: 3.6, through: false }],
   bridges: [{ from: 10.75, to: 12.6 }],
-  gaps: [{ from: 11.14, to: 11.68 }],
+  gaps: [{ from: 11.14, to: 11.60 }],
   ramps: [
-    { at: 11.0, len: 10, lift: 2.4 },
+    { at: 11.0, len: 10, lift: 3.15, lat: 6.2, w: 8.4 },  // precision launch through the upper survey ring
+    { at: 11.0, len: 10, lift: 2.1, lat: -4.1, w: 12.2 }, // wider freight ramp onto the lower landing deck
     { at: 17.75, len: 8, lift: 1.6, lat: -4.5, w: 7 },
     { at: 21.8, len: 8, lift: 0.8, lat: 4, w: 9 },   // the low-gravity hop over the biodome lawn (the right lane has a boost pad instead)
   ],
@@ -103,8 +106,8 @@ export default {
     { at: 0.5, lat: 0, w: 5 },
     { at: 8.55, lat: 0, w: 6 },
     { at: 10.2, lat: 0, w: 6 },
-    { at: 10.65, lat: 0, w: 6 },
-    { at: 12.2, lat: 0, w: 8, len: 12 },
+    { at: 10.76, lat: -4, w: 10, len: 9 },
+    { at: 12.04, lat: -4, w: 7, len: 10 },
     { at: 18.8, lat: -2.5, w: 6 },
     { at: 21.85, lat: -4.5, w: 6 },
   ],
@@ -113,7 +116,7 @@ export default {
     { from: 0.15, to: 0.45, n: 4, lat: 4 },
     { from: 5.3, to: 5.8, n: 5, lat: [5, -4] },
     { from: 8.7, to: 9.9, n: 5, lat: 0 },   // across the apron and through the mount, on the centreline
-    ...[[11.2, 4.5], [11.3, 6.2], [11.4, 7.4], [11.5, 8.1], [11.6, 8]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 0, air })),   // on the arc over the canyon
+    ...[[11.2, 3.9, 4.1], [11.3, 3, 6.4], [11.4, 2.3, 7.6], [11.5, 1.2, 7.7], [11.6, -0.4, 6.4]].map(([at, lat, air]) => ({ from: at, to: at, n: 1, lat, air })),   // on the arc over the canyon
     { from: 14.4, to: 15.8, n: 6, lat: 5 },
     { from: 18.25, to: 18.6, n: 3, lat: -3 },
     ...[[22.0, 1.6], [22.1, 2.6], [22.2, 3.0], [22.3, 2.8], [22.4, 2.0]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 4, air })),   // on the hop's arc
@@ -161,6 +164,9 @@ export default {
       const c = canyonDist(x, z), fade = 1 - smoothstep(0.9, 1.0, c.t);
       const wall = 13 + (fbm(x * 0.05, z * 0.05, 2, 6) - 0.5) * 6, cut = (1 - smoothstep(wall, wall + 13, c.d)) * fade;
       h = h * (1 - cut) + (1 + (fbm(x * 0.04, z * 0.04, 2, 8) - 0.5) * 3) * cut;
+      // Grade the far bank below the catch deck and its piers; the natural mesa is higher than the runway.
+      const runway = (1 - smoothstep(18, 32, Math.abs(x - 216))) * smoothstep(-376, -393, z) * (1 - smoothstep(-449, -464, z));
+      h -= runway * Math.max(0, h - 13);
       // the Dust Bowl inside the west hairpin: a smooth shallow dip, so the cut across it is a drive, not a climb
       const bk = 1 - smoothstep(BOWL.r * 0.55, BOWL.r, Math.hypot(x - BOWL.x, z - BOWL.z));
       h = h * (1 - bk) + (12.2 + (fbm(x * 0.05, z * 0.05, 2, 12) - 0.5) * 1.2) * bk;
@@ -172,7 +178,17 @@ export default {
     // the one green thing on Mars: a lawn under the biodome
     color(x, z, h, slope, over, out) {
       const d = Math.hypot(x - DOME.x, z - DOME.z), k = 1 - smoothstep(DOME.r - 3, DOME.r - 0.5, d);
-      if (k <= 0) return;
+      if (k <= 0) {
+        // Exposed beds in the ravine: pale mineral seams against plum basalt below the landing.
+        if (z < -335 && z > -406 && x > 166 && x < 275 && h < 26) {
+          const seam = smoothstep(0.82, 0.99, Math.cos(h * 1.05 + Math.sin(x * 0.09) + z * 0.045));
+          const depth = 1 - smoothstep(17, 26, h);
+          out[0] += (0.28 + seam * 0.42 - out[0]) * depth;
+          out[1] += (0.12 + seam * 0.29 - out[1]) * depth;
+          out[2] += (0.20 + seam * 0.20 - out[2]) * depth;
+        }
+        return;
+      }
       const n = fbm(x * 0.15, z * 0.15, 2, 17) * 0.12;
       out[0] += (0.3 + n - out[0]) * k; out[1] += (0.58 + n - out[1]) * k; out[2] += (0.2 - out[2]) * k;
     },
@@ -219,7 +235,17 @@ function dress(ctx) {
   take(ROCKET.x, ROCKET.z, 26); take(CRATER.x, CRATER.z, 16); take(DOME.x, DOME.z, DOME.r + 4);
 
   // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
-  const bake = K.makeBaker(ctx.group, sc.shadows), atlas = K.makeAtlas(ctx.group, { glow: 0.5 });
+  // One packed roughness/metalness texture lets painted colony structures share draws
+  // while keeping their own pigment and finish. Textured glass, displays, and lamps stay independent.
+  const palette = M.colonyFinishes(), staticProps = makeBaker(ctx.group, sc.shadows);
+  ctx.group.userData.dispose = palette.dispose;
+  const bake = {
+    add(object, cast = true) {
+      palette.apply(object);
+      staticProps.add(object, cast);
+    },
+  };
+  const atlas = K.makeAtlas(ctx.group, { glow: 0.5 });
   /** Yaw that faces the road at sample i from `side`, turned toward oncoming karts by k. */
   const faceIn = (i, side, k = 0.5) => Math.atan2(-side * track.lx[i] - track.tx[i] * k, -side * track.lz[i] - track.tz[i] * k);
   /** A lettered board on legs at (x, z), facing yaw; up is the panel centre above the ground. */
@@ -247,17 +273,22 @@ function dress(ctx) {
     };
   })();
   /** A painted poster on a board beside the road (poster k of the atlas), with a lettered back. */
-  const poster = (at, side, off, k, back, { w = 15, h = 10, up = 9, turn = 0.45 } = {}) => {
+  const poster = (at, side, off, k, back, { w = 15, h = 10, up = 9, turn = 1.8, roadLevel = false } = {}) => {
     const p = sc.beside(at, side, off), yaw = faceIn(p.i, side, turn), rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
     if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return null;
-    const y0 = sc.y(p.x, p.z), f = K.signFrame(w, h, up, { color: 0x2a2026, legs: 2 }); sc.place(f, p.x, p.z, { yaw, y: y0 }); bake.add(f); take(p.x, p.z, w * 0.55);
+    const ground = sc.y(p.x, p.z), y0 = roadLevel ? Math.max(p.roadY - 1, ground) : ground;
+    const f = K.signFrame(w, h, up + y0 - ground, { color: 0x2a2026, legs: 2 });
+    bake.add(sc.place(f, p.x, p.z, { yaw, y: ground })); take(p.x, p.z, w * 0.55);
     posters.place(k, [p.x + Math.sin(yaw) * 0.03, y0 + up, p.z + Math.cos(yaw) * 0.03], yaw, w, h);
+    // Marquee below the illustration: a one-way race should see both halves of the joke.
+    const strap = atlas.add(1024, 150, K.board(back, { bg: INK, fg: CREAM, size: 96, lines: 1, pad: 0.04 }));
+    atlas.place(strap, [p.x + Math.sin(yaw) * 0.05, y0 + up - h / 2 - w * 0.068, p.z + Math.cos(yaw) * 0.05], yaw, w, w * 0.14);
     const r = atlas.add(768, 512, K.board(back, { bg: INK, fg: CREAM, size: 120, stripe: RUST_HEX }));
     atlas.place(r, [p.x - Math.sin(yaw) * 0.39, y0 + up, p.z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
     return p;
   };
   // spots the gags will stand on, kept clear of the domes, rocks, and solar panels
-  for (const [at, side, off, r] of [[0.55, 1, 9, 13], [4.3, 1, 32, 10], [7.0, 1, 36, 20], [20.6, -1, 22, 16], [19.6, 1, 20, 12], [26.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [9.4, 1, 26, 13], [13.9, -1, 18, 11], [18.4, 1, 18, 11], [21.9, -1, 20, 11], [25.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
+  for (const [at, side, off, r] of [[0.55, 1, 9, 13], [4.3, 1, 32, 10], [7.0, 1, 36, 20], [20.48, -1, 17, 18], [19.6, 1, 20, 12], [26.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [8.32, -1, 10, 13], [5.58, -1, 10.5, 13], [13.9, -1, 18, 11], [18.4, 1, 18, 11], [22.28, -1, 20.5, 11], [25.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
   // ---- start/finish on Main Street: gantry, grandstands, a pale-suited crowd ----
   const g0 = sc.beside(0, 1, -track.hwL[0]);
@@ -359,8 +390,8 @@ function dress(ctx) {
   const domes = domeSpots.filter(([x, z, r]) => clear(x, z, r + 1)).map(([x, z, r]) => { take(x, z, r + 3); return { x, z, r, y: track.terrainHeight(x, z) - 0.2 }; });
   const facing = d => { const i = track.ground(d.x, d.z, -1, hit).i; return Math.atan2(track.px[i] - d.x, track.pz[i] - d.z); };
   const domeS = domes.filter(d => d.r < 10.5), domeL = domes.filter(d => d.r >= 10.5);
-  sc.instances(partsOf(M.habitatDome(9, { seed: 3 })), domeS.map(d => ({ x: d.x, y: d.y, z: d.z, yaw: facing(d), sy: 1 })), { scale: [0.9, 1.1] });
-  sc.instances(partsOf(M.habitatDome(12, { seed: 5, lit: 0xffc890 })), domeL.map(d => ({ x: d.x, y: d.y, z: d.z, yaw: facing(d) })), { scale: [0.95, 1.1] });
+  sc.instances(palette.parts(M.habitatDome(9, { seed: 3 })), domeS.map(d => ({ x: d.x, y: d.y, z: d.z, yaw: facing(d), sy: 1 })), { scale: [0.9, 1.1] });
+  sc.instances(palette.parts(M.habitatDome(12, { seed: 5, lit: 0xffc890 })), domeL.map(d => ({ x: d.x, y: d.y, z: d.z, yaw: facing(d) })), { scale: [0.95, 1.1] });
   const link = (a, b) => {
     const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), len = d - a.r - b.r + 1.5;
     if (len < 4 || len > 60) return;
@@ -377,7 +408,7 @@ function dress(ctx) {
   ghSpots.forEach(([x, z, yaw]) => { take(x, z, 12); bake.add(sc.place(M.greenhouse({ len: 22 }), x, z, { yaw, y: track.terrainHeight(x, z) - 0.2 })); });
   const modSpots = sc.scatter({ count: 10, min: 20, max: 90, maxSlope: 0.25, minGap: 22, where: (x, z) => near(x, z, COLONY, COLONY.r * 0.95) && clear(x, z, 4) && free(x, z, 8) });
   modSpots.forEach(p => take(p.x, p.z, 7));
-  sc.instances(partsOf(M.habModule()), modSpots, { scale: [0.9, 1.15], yaw: 'random' });
+  sc.instances(palette.parts(M.habModule()), modSpots, { scale: [0.9, 1.15], yaw: 'random' });
 
   // ---- the airlock tube: white ribs and a glow strip on the outside of the tunnel shell ----
   {
@@ -408,6 +439,56 @@ function dress(ctx) {
   }
   sc.instances(spireA, spires.filter((_, i) => i % 2 === 0), { scale: [0.8, 1.2], tints: ROCK_TINTS, sink: 0.5 });
   sc.instances(spireB, spires.filter((_, i) => i % 2 === 1), { scale: [0.8, 1.2], tints: ROCK_TINTS, sink: 0.5 });
+
+  // The colony's launch equipment shares a subdued graphite finish. The amber/light pairs,
+  // the split lip height, and the suspended survey target identify the two flight paths.
+  const rampInk = view.trackMesh.userData.mats.ramp.uniforms;
+  rampInk.uA.value.set(0x203643); rampInk.uB.value.set(0x639d9c);
+  rampInk.uGlow.value = 0.06; rampInk.uSpeed.value = 0.7;
+  {
+    const hardware = new ModelBuilder();
+    const place = (mat, geometry, s, lat, h, rotation = [0, 0, 0]) => {
+      const p = track.pointAt(s, lat, {}, h);
+      hardware.add(mat, geometry, { p: [p.x, p.y, p.z], r: [rotation[0], track.yawAt(s) + rotation[1], rotation[2]] });
+    };
+    const ringS = track.sAtCp(11.47), ringR = 5.2, ringY = 8.9, ringLat = 1.7;
+    for (let k = 0; k < 4; k++) {
+      const angle = k * Math.PI / 2 + 0.09;
+      const shell = new THREE.TorusGeometry(ringR, 0.52, 7, 12, Math.PI / 2 - 0.18);
+      const lamp = new THREE.TorusGeometry(ringR, 0.18, 6, 12, Math.PI / 2 - 0.34);
+      place('graphite', shell, ringS, ringLat, ringY, [0, 0, angle]);
+      place('amber', lamp, ringS - 0.47, ringLat, ringY, [0, 0, angle + 0.08]);
+    }
+    for (const side of [-1, 1]) {
+      // Thruster pods keep the survey drone hovering over the ravine.
+      place('graphite', cyl(0.7, 1.05, 1.6, 10), ringS, ringLat + side * ringR, ringY - 0.4);
+      place('signal', cyl(0.7, 0.32, 0.78, 10), ringS, ringLat + side * ringR, ringY - 1.55);
+    }
+    // Vertical piers run down into the chasm. Rows of decreasing height lead the eye inland.
+    for (const [at, mast] of [[11.64, 7], [11.82, 4.8], [12.02, 3.4], [12.28, 2.2]]) {
+      const s = track.sAtCp(at);
+      for (const side of [-1, 1]) {
+        const i = track.indexAtCp(at), lat = side * ((side > 0 ? track.hwL[i] : track.hwR[i]) + 1.2);
+        place('graphite', new THREE.BoxGeometry(1.15, mast + 14, 1.65), s, lat, (mast - 14) / 2);
+        place('cream', new THREE.BoxGeometry(1.3, 1.2, 1.8), s, lat, mast - 1.05);
+        place('signal', new THREE.BoxGeometry(1.45, 0.72, 1.85), s, lat, mast - 0.25);
+      }
+    }
+    for (let m = 0; m < 6; m++) {
+      const s = track.sAtCp(11.64) + m * 2.1;
+      for (const side of [-1, 1]) place('cream', new THREE.BoxGeometry(3.6, 0.06, 0.88), s, side * 6.7, 0.07);
+    }
+    for (const r of track.ramps.slice(0, 2)) {
+      for (const side of [-1, 1]) for (let k = 1; k <= 4; k++) {
+        const t = k / 4, height = r.lift * (0.35 * t + 0.65 * t * t);
+        place(r.lat > 0 ? 'amber' : 'signal', new THREE.BoxGeometry(0.33, 0.16, 1.4),
+          r.s0 + r.len * t - 0.55, r.lat + side * (r.half - 0.45), height + 0.06);
+      }
+    }
+    const equipment = hardware.build({ graphite: plastic(0x23313b, 0.65), cream: plastic(0xffe9ca, 0.65),
+      amber: glow(0xffb84c, 1.4), signal: glow(0x79ffff, 1.6) });
+    bake.add(equipment);
+  }
 
   // ---- the centrepiece: a megarocket on the pad whose story is the race — lap 1 it cannot get off the ground,
   // lap 2 the engines stay lit and go nowhere, and on the final lap it launches and comes apart ----
@@ -640,13 +721,18 @@ function dress(ctx) {
 
   // ---- the solar field: the company store, and a recruitment poster ----
   {
-    const p = sc.beside(20.6, -1, 22);
-    if (clear(p.x, p.z, 8)) {
-      const yaw = faceIn(p.i, -1, 0.35), st = M.companyStore({ w: 18, d: 10 }); sc.place(st, p.x, p.z, { yaw, y: p.y - 0.2 }); bake.add(st); take(p.x, p.z, 15);
+    const p = sc.beside(20.48, -1, 17);
+    if (clear(p.x, p.z, 3)) {
+      const approach = track.indexAtCp(19.9), yaw = Math.atan2(track.px[approach] - p.x, track.pz[approach] - p.z);
+      const st = M.companyStore({ w: 18, d: 10 });
+      bake.add(sc.place(st, p.x, p.z, { yaw, y: p.y - 0.2 })); take(p.x, p.z, 15);
       const fx = Math.sin(yaw), fz = Math.cos(yaw), r = atlas.add(1024, 400, K.board('COMPANY STORE', { bg: '#e9e4d8', fg: RUST_HEX, size: 170, sub: 'PAID IN COMPANY SCRIP ONLY', subFg: INK, subScale: 0.5, lines: 1 }));
-      atlas.place(r, [p.x + fx * 0.34, p.y + 6.7, p.z + fz * 0.34], yaw, 17.4, 6.8);
-      const pr = atlas.add(512, 360, (g, w, h) => { g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); const rows = [['AIR', '40 SCRIP'], ['WATER', '90 SCRIP'], ['RIDE HOME', 'N/A']]; rows.forEach(([a, b2], k) => { K.fitText(g, a, w * 0.3, h * (0.2 + k * 0.3), w * 0.5, 64, K.SANS, '#ffffff', { lines: 1 }); K.fitText(g, b2, w * 0.74, h * (0.2 + k * 0.3), w * 0.44, 64, K.SANS, k === 2 ? '#ff3b30' : '#38ff74', { lines: 1 }); }); });
-      atlas.place(pr, [p.x + fx * 0.36 + Math.cos(yaw) * 5, p.y + 2.4, p.z + fz * 0.36 - Math.sin(yaw) * 5], yaw, 3.4, 2.4);
+      atlas.place(r, [p.x + fx * 0.34, p.y + 7.2, p.z + fz * 0.34], yaw, 17.4, 4.2);
+      const menuX = p.x + Math.cos(yaw) * 14.5, menuZ = p.z - Math.sin(yaw) * 14.5;
+      const menuFrame = K.signFrame(9.9, 7.2, 5, { color: 0x27313a });
+      bake.add(sc.place(menuFrame, menuX, menuZ, { yaw, y: p.y }));
+      const pr = atlas.add(768, 540, (g, w, h) => { g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); const rows = [['AIR', '40 SCRIP'], ['WATER', '90 SCRIP'], ['RIDE HOME', 'N/A']]; rows.forEach(([a, b2], k) => { K.fitText(g, a, w * 0.3, h * (0.2 + k * 0.3), w * 0.5, 104, K.SANS, '#ffffff', { lines: 1 }); K.fitText(g, b2, w * 0.74, h * (0.2 + k * 0.3), w * 0.44, 104, K.SANS, k === 2 ? '#ff3b30' : '#38ff74', { lines: 1 }); }); });
+      atlas.place(pr, [menuX + fx * 0.05, p.y + 5, menuZ + fz * 0.05], yaw, 9.9, 7.2);
     }
     sign(19.6, 1, 20, K.board('NO UNIONS ON MARS', { bg: RUST_HEX, fg: '#ffffff', size: 150, sub: '(NO AIR EITHER)', subFg: '#ffd23c', subScale: 0.75, lines: 1 }), 20, 8, 10, { turn: 0.5 });
   }
@@ -707,7 +793,7 @@ function dress(ctx) {
     const inDome = (x, z, m) => Math.hypot(x - DOME.x, z - DOME.z) < DOME.r - m;
     const ponds = [];
     for (const side of [1, -1]) { const p = sc.beside(22.05, side, 19); if (inDome(p.x, p.z, 9)) ponds.push(p); }
-    const boardsIn = [[21.95, -1, 17], [21.72, 1, 12.5], [22.5, -1, 12.5]].map(([a, sd, o]) => sc.beside(a, sd, o));   // the boards inside keep a clearing
+    const boardsIn = [[22.28, -1, 20.5], [21.72, 1, 12.5], [22.5, -1, 12.5]].map(([a, sd, o]) => sc.beside(a, sd, o));   // the boards inside keep a clearing
     const spots = [];
     for (let gx = -DOME.r; gx <= DOME.r; gx += 6) for (let gz = -DOME.r; gz <= DOME.r; gz += 6) {
       const x = DOME.x + gx + rng.range(-2, 2), z = DOME.z + gz + rng.range(-2, 2);
@@ -727,14 +813,32 @@ function dress(ctx) {
     grow(P.cypress(2, { h: 12, color: 0x2f7d3a }), tall.filter((_, k) => k % 3 === 2), { scale: [0.8, 1.1] });
     grow(P.palm(4, { h: 8 }), low.filter((_, k) => k % 2 === 0), { scale: [0.7, 0.95] });
     grow(P.bush(3, { color: 0x58b548, flower: 0xff7ab0 }), low.filter((_, k) => k % 2 === 1), { scale: [1.3, 1.9], yaw: 'random' });
+    // Stacked nutrient beds grow fruit beside the road. Their hose couplings, white trays,
+    // and alternating banks of plants stay legible in the brief run between the airlocks.
+    const crop = M.nutrientTower();
+    const planted = [];
+    for (const [at, side] of [[21.94, 1], [22.04, 1], [22.15, 1], [22.23, 1], [22.37, -1], [22.45, -1]]) {
+      const p = sc.beside(at, side, 5.6);
+      if (!inDome(p.x, p.z, 5)) continue;
+      planted.push({ x: p.x, y: sc.y(p.x, p.z), z: p.z, yaw: p.along });
+    }
+    grow(crop, planted, { solid: 1.9 });
     if (ponds.length) {
       const pb = new ModelBuilder(), water = new THREE.MeshStandardMaterial({ color: 0x2fa3e6, roughness: 0.08, metalness: 0.3, envMapIntensity: 1.6 });
       for (const p of ponds) { const y = track.terrainHeight(p.x, p.z); pb.add('rim', cyl(7.6, 7.9, 0.6, 28), { p: [p.x, y + 0.2, p.z] }); pb.add('water', cyl(6.9, 6.9, 0.1, 28), { p: [p.x, y + 0.52, p.z] }); pb.add('rim', cyl(0.5, 0.7, 1.2, 10), { p: [p.x, y + 0.9, p.z] }); }
       const g = pb.build({ rim: plastic(0xd9d2c4, 0.8), water }); ctx.group.add(g); bake.add(g);
     }
-    // the fountains keep going until the dust gets in
-    anim.push(dt => {
+    // Irrigation booms mist one bank at a time. The pumps and fountains stop when the storm breaks the seal.
+    anim.push((dt, time) => {
       if (rst.boomed) return;
+      if (planted.length) {
+        const active = planted[Math.floor(time * 0.7) % planted.length];
+        for (let k = 0, n = view.fx.count(15, dt); k < n; k++) {
+          const a = time * 4.2 + k * 2.4;
+          view.fx.dust(active.x, active.y + 5.95, active.z, 3.9 * Math.cos(a), 1.1, 3.9 * Math.sin(a),
+            [0.62, 0.91, 1], 0.34, 0.7, 0.68);
+        }
+      }
       for (const p of ponds) { const y = track.terrainHeight(p.x, p.z) + 1.5; for (let k = 0, n = view.fx.count(30, dt); k < n; k++) view.fx.dust(p.x + rng.range(-0.3, 0.3), y, p.z + rng.range(-0.3, 0.3), rng.range(-1.4, 1.4), 6.5 + rng() * 2.5, rng.range(-1.4, 1.4), [0.78, 0.92, 1], 0.6 + rng() * 0.5, 1.3, 0.65); }
     });
     // what the pilot has achieved so far
@@ -820,7 +924,7 @@ function dress(ctx) {
       if (slope > 0.22 || canyonDist(x, z).d < 34) continue;
       panels.push({ x, y: h, z, yaw });
     }
-    sc.instances(partsOf(M.solarPanel()), panels, {});
+    sc.instances(palette.parts(M.solarPanel()), panels, {});
     panels.forEach(p => take(p.x, p.z, 3.5));
   }
 
@@ -874,14 +978,19 @@ function dress(ctx) {
   sc.instances(spireB, far.filter((_, i) => i % 3 === 2), { scale: [1.0, 1.6], yaw: 'random', tints: ROCK_TINTS, sink: 1 });
 
   // ---- arrow boards on the outside of every real corner ----
+  const arrowRight = P.chevronBoard(0xc1440e), arrowLeft = arrowRight.clone();
+  const leftFace = arrowLeft.children[0];
+  leftFace.geometry = leftFace.geometry.clone();
+  const uv = leftFace.geometry.attributes.uv;
+  for (let k = 0; k < uv.count; k++) uv.setX(k, 1 - uv.getX(k));
   for (const c of track.corners) {
     const side = c.dir > 0 ? -1 : 1, n = Math.max(2, Math.min(5, Math.round(c.len / 15)));
     for (let k = 0; k < n; k++) {
       const i = (c.i0 + Math.round(((k + 0.6) / n) * (c.len / track.ds))) % track.N;
       if (track.tunnel[i] || track.bridge[i]) continue;
       const p = sc.beside(track.cp[i], side, (side > 0 ? track.outerL[i] : track.outerR[i]) + 1.2);
-      const b = P.chevronBoard(0xc1440e); if (c.dir > 0) b.scale.x = -1;
-      sc.place(b, p.x, p.z, { yaw: p.yaw, lift: 0.9 }); if (c.dir > 0) b.scale.x = -1;
+      const b = (c.dir > 0 ? arrowLeft : arrowRight).clone();
+      bake.add(sc.place(b, p.x, p.z, { yaw: p.yaw, lift: 0.9 }));
     }
   }
 
@@ -894,13 +1003,13 @@ function dress(ctx) {
   for (const [at, side, off, text, bg, fg, sub] of BOARDS) sign(at, side, off, K.board(text, { bg, fg, size: 130, sub, subFg: fg, subScale: 0.6 }), 20, 6.6, 10, { turn: 0.45 });
   // the painted posters: the travel poster at the pad, Earth as a holiday spot before the crater, the recruiting
   // poster on the rim road, and the terraforming promise inside the dome
-  poster(8.7, 1, 22, 0, 'NO REFUNDS', { w: 18, h: 12, up: 10 });
+  poster(8.32, -1, 10, 0, 'NO REFUNDS', { w: 17, h: 11.3, up: 10, turn: 2.4, roadLevel: true });
   poster(13.9, -1, 18, 1, 'EARTH: HAD ITS CHANCE');
-  poster(5.6, 1, 36, 2, 'MUST BRING OWN OXYGEN', { w: 21, h: 14, up: 11, turn: 0.5 });
-  poster(21.95, -1, 17, 3, 'WORK FROM DOME: MANDATORY', { w: 13.5, h: 9, up: 7.5 });
+  poster(5.58, -1, 10.5, 2, 'MUST BRING OWN OXYGEN', { w: 18, h: 12, up: 9.5, turn: 2, roadLevel: true });
+  poster(22.28, -1, 20.5, 3, 'WORK FROM DOME: MANDATORY', { w: 14, h: 9.3, up: 8.2, turn: 2.7 });
   posters.flush();
 
-  bake.flush();
+  staticProps.flush();
   atlas.flush();
 }
 

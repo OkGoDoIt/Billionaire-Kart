@@ -13,18 +13,19 @@ import { canvasTex } from '../render/textures.js';
 import { ModelBuilder, cyl, box, plastic, paint } from '../models/build.js';
 
 export const CAPITOL = { x: -85, z: 147, y: 27, ax: 66, az: 34 };   // plateau (half-axes) the capitol stands on
-// #140 round 3: THE Reflecting Pool. A long, narrow basin (18 x 152 m, about 1:8) whose west coping is the
+// #140 round 3: THE Reflecting Pool. A long, narrow basin (27 x 176 m) whose west coping is the
 // edge of the pool run, on one axis with the memorial at its head (north) and the monument at its foot (south)
-export const POOL = { x0: 167.6, x1: 185.6, z0: 62, z1: 214, floor: -0.3, water: 0.6, coping: 166.3 };
+export const POOL = { x0: 165.5, x1: 192.5, z0: 48, z1: 224, floor: -0.3, water: 0.6, coping: 164.2 };
 export const AXIS = (POOL.x0 + POOL.x1) / 2;
-export const OBELISK = { x: AXIS, z: 276, h: 58, w: 7.2 };              // the monument, hero scale, at the foot of the pool's axis
-const MEMORIAL = { x: 189, z: 17 };                                     // the memorial at the head of the pool, dead ahead down the Avenue
+export const OBELISK = { x: AXIS, z: 278, h: 65, w: 8.4 };              // the monument, hero scale, at the foot of the pool's axis
+const MEMORIAL = { x: AXIS + 35, z: 12 };                                     // the memorial at the head of the pool, dead ahead down the Avenue
 
 // The Filibuster's legs (z of the centreline, and the road's height at its two ends) and the terrace lines between
 // them: the hillside steps down in stone-walled terraces, one per leg, so each hairpin drops you a storey.
 const LEGS = [{ z: 147, xa: -165, ya: 26.5, xb: -125, yb: 27 }, { z: 98, xa: -165, ya: 23, xb: -90, yb: 17.2 }, { z: 49, xa: -145, ya: 9.4, xb: -90, yb: 13.6 }, { z: 0, xa: -145, ya: 5.8, xb: -75, yb: 1.2 }];
 const legY = (k, x) => { const L = LEGS[k], t = Math.min(1, Math.max(0, (x - L.xa) / (L.xb - L.xa))); return L.ya + (L.yb - L.ya) * t; };
 export const TERRACES = [{ z: 122.5, x0: -146, x1: -126 }, { z: 73.5, x0: -168, x1: -114 }, { z: 24.5, x0: -126, x1: -86 }];   // walls: upper leg to the north
+const clotureWidths = new WeakMap(); // Track objects are reused when the same course restarts.
 export const CLOTURE = { x0: -114, x1: -72 };   // hairpin two's infield and the gap in the middle wall: fenced until the final lap
 const terraceY = (x, z) => {
   for (let k = 0; k < 3; k++) {
@@ -54,8 +55,11 @@ export default {
   name: 'Capitol Hill Climb',
   tagline: 'Three laps: the only term limit in town.',
   lapNotes: ['<b>Debt ceiling raised.</b> Nobody is surprised.', '<b>Cloture invoked.</b> The steps past hairpin two are open.'],   // shown as laps two and three begin
-  // the opening shot: the revolving door between REGULATOR and INDUSTRY, suits going round
-  intro: [{ pos: [96, 9, 214], pos1: [88, 11, 196], look: [80, 24, 150], look1: [80, 22, 146], fov: 54, dur: 3.2 }],
+  intro: [
+    { pos: [AXIS - 2, 5.8, POOL.z0 - 14], pos1: [AXIS, 4, POOL.z0 + 16],
+      look: [AXIS, 12, POOL.z1 + 24], look1: [AXIS, 11, POOL.z1 + 24], fov: 52, dur: 2.25 },
+    { pos: [96, 9, 214], pos1: [88, 11, 196], look: [80, 24, 150], look1: [80, 22, 146], fov: 54, dur: 2.2 },
+  ],
   laps: 3,
   width: 17,
   sky: 'golden',
@@ -66,10 +70,10 @@ export default {
     { p: [0, 0, 0] },                            // 0 start/finish on the Avenue, heading +x
     { p: [68, 0, 0] },                           // 1
     { p: [106, 0.2, 0], w: 18 },                   // 2 turn one, right
-    { p: [134.3, 0.6, 11.7], w: 18 },              // 3
-    { p: [152, 0.7, 40], w: 18 },                  // 4
-    { p: [156, 0.6, 100] },                        // 5 the Reflecting Pool, pool on the left
-    { p: [156, 0.6, 168] },                        // 6
+    { p: [141, 0.6, 9], w: 18 },              // 3
+    { p: [166.8, 0.7, 38], w: 18 },                  // 4
+    { p: [156, 0.6, 94] },                        // 5 the Reflecting Pool, pool on the left
+    { p: [155, 0.6, 168] },                        // 6
     { p: [151, 0.9, 233], w: 18 },               // 7 round the obelisk, right
     { p: [129.5, 1.3, 263.6], w: 18 },           // 8
     { p: [96.5, 1.8, 263.6], w: 18 },            // 9
@@ -119,7 +123,7 @@ export default {
     { from: 22.0, to: 22.35, edge: 'wall' },
     { from: 23.0, to: 29.0, side: 'R', outer: 2.2 },                            // hairpins one and three: the infields hold their set pieces
     { from: 37.0, to: 43.0, side: 'R', outer: 2.2 },
-    { from: 29.6, to: 36.45, side: 'L', outer: 16.5, hoarding: false },         // hairpin two's infield and the cloture steps: open ground,
+    { from: 29.48, to: 36.6, side: 'L', outer: 18.5, hoarding: false },         // hairpin two's infield and the cloture steps: open ground,
                                                                                  // fenced off (decorate) until the final lap
   ],
   ramps: [
@@ -134,12 +138,13 @@ export default {
   ],
   boosts: [
     { at: 0.45, lat: 0, w: 5 },                    // down the Avenue
+    { at: 5.28, lat: 5.8, w: 3.6 },                  // commit to the narrow stone coping to launch down the Mall
     { at: 11.2, lat: -3, w: 4.5 },                 // up the Mall leg
     { at: 20.9, lat: 0, w: 5 },                    // on the red carpet under the dome
-    { at: 29.35, lat: 3, w: 4.5 },                  // between hairpins one and two: only if you dare
+    { at: 29.35, lat: -3.8, w: 4.5 },                  // between hairpins one and two: only if you dare
     { at: 43.35, lat: 0, w: 5 },                    // out of the Filibuster, onto the Avenue
   ],
-  itemRows: [{ at: 4.6 }, { at: 13.6 }, { at: 21.5 }, { at: 36.85 }, { at: 44.4, n: 3 }],
+  itemRows: [{ at: 6.85 }, { at: 13.6 }, { at: 21.5 }, { at: 36.85 }, { at: 44.4, n: 3 }],
   coins: [
     { from: 0.15, to: 0.6, n: 4, lat: 4 },
     { from: 5.2, to: 6.4, n: 5, lat: [6.5, 7] },            // along the pool edge: one slip and you are in the water
@@ -151,21 +156,21 @@ export default {
   ],
   // rivals cut the Mall too, on the lane between the topiary and the protest signs (see docs/track-authoring.md)
   shortcuts: [
-    { name: 'the Mall', from: 5.9, to: 11.2, path: [[149, 178], [136, 188], [100, 191], [88, 182]] },
+    { name: 'the Mall', from: 5.82, to: 11.15, path: [[148, 178], [134, 191], [117, 196], [101, 194], [88, 182]] },
     // the final lap only: cloture is invoked, the barricade folds away, and the steps cut out hairpin two
-    { name: 'cloture', from: 29.66, to: 36.4, path: [[-101, 85], [-99, 74], [-101, 62]], skill: 0.4, chance: 1.4, when: race => clotureOpen(race) },
+    { name: 'cloture', from: 29.48, to: 36.6, path: [[-114, 92], [-104, 85], [-99.5, 76], [-100, 69], [-107, 60], [-119, 53]], skill: 0.4, chance: 1.4, when: race => clotureOpen(race) },
   ],
   obstacles: [
     // the motorcade crawls across the road
     { kind: 'patrol', model: 'motorcade', at: 1.35, lats: [-9, -5], speed: 3.5, effect: 'spin', radius: 2.0 },
-    { kind: 'patrol', model: 'motorcade', at: 5.7, lats: [9, 5], speed: 3, effect: 'spin', radius: 2.0 },
+    { kind: 'patrol', model: 'motorcade', at: 7.37, lats: [8.6, 7.1], speed: 2.5, effect: 'bump', radius: 1.7 },
     // lobbyist drones circling the Climb
-    { kind: 'orbit', model: 'drone', at: 14.4, lat: -5, orbit: 3, speed: 5, effect: 'spin', lift: 0.6 },
-    { kind: 'orbit', model: 'drone', at: 18.7, lat: 5.5, orbit: 2.5, speed: 4.5, effect: 'spin', lift: 0.6 },
+    { kind: 'orbit', model: 'drone', at: 14.4, lat: -7, orbit: 1.8, speed: 5, effect: 'spin', lift: 0.6 },
+    { kind: 'orbit', model: 'drone', at: 18.7, lat: 7, orbit: 1.7, speed: 4.5, effect: 'spin', lift: 0.6 },
     // red tape at the hairpins
-    { kind: 'static', model: 'redtape', at: 26.0, lat: -1.0, effect: 'bump', radius: 1.4 },
-    { kind: 'static', model: 'redtape', at: 35.6, lat: -6.4, effect: 'bump', radius: 1.4 },
-    { kind: 'static', model: 'redtape', at: 40.0, lat: -1.0, effect: 'bump', radius: 1.4 },
+    { kind: 'static', model: 'redtape', at: 26.0, lat: 7.0, effect: 'bump', radius: 1.1 },
+    { kind: 'static', model: 'redtape', at: 35.6, lat: -7.3, effect: 'bump', radius: 1.1 },
+    { kind: 'static', model: 'redtape', at: 40.0, lat: 7.0, effect: 'bump', radius: 1.1 },
   ],
   terrain: {
     cell: 3, margin: 240, blend: 16, water: -0.95,
@@ -218,6 +223,7 @@ export default {
   /** Dress the course. ctx: { THREE, track, group, gfx, anim, view } */
   decorate(ctx) {
     const { THREE, track, anim, view } = ctx, sc = new Scenery(ctx), rng = sc.rng;
+    const civicStone = C.makeBaker(ctx.group, sc.shadows);
     const ds = doorSite(track), dcx = Math.cos(ds.yaw), dsx = Math.sin(ds.yaw);
     const taken = [[ds.x - dcx * DOOR.span / 2, ds.z + dsx * DOOR.span / 2, 14], [ds.x + dcx * DOOR.span / 2, ds.z - dsx * DOOR.span / 2, 14], [ds.x, ds.z, 12], [STATUE.x, STATUE.z, 15], [LECTERN.x, LECTERN.z, 16], [PERMIT.x, PERMIT.z, 16], [MAZE.x, MAZE.z, 26], [CANNON.x, CANNON.z, 9]];   // footprints of landmarks: [x, z, r]
     const free = (x, z, pad = 0) => !taken.some(([tx, tz, r]) => (tx - x) ** 2 + (tz - z) ** 2 < (r + pad) ** 2);
@@ -237,7 +243,7 @@ export default {
     // start/finish gantry
     const g0 = sc.beside(0, 1, -track.hwL[0]);
     const gantry = P.gantry(track.hwL[0] + track.hwR[0] + 1.5, 'CAPITOL HILL CLIMB', { color: 0xf2efe6, color2: 0xd4af37 });
-    sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY });
+    sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY, cast: false });
     view.startLights = gantry.userData.lights;
 
     // the capitol: its central hall straddles the red-carpet tunnel
@@ -246,7 +252,8 @@ export default {
       const cx = (track.px[i0] + track.px[i1]) / 2, cz = (track.pz[i0] + track.pz[i1]) / 2;
       const len = Math.hypot(track.px[i1] - track.px[i0], track.pz[i1] - track.pz[i0]);
       const cap = C.capitol({ len: len + 0.4, half: 20 });
-      sc.place(cap, cx, cz, { yaw: Math.atan2(track.px[i1] - track.px[i0], track.pz[i1] - track.pz[i0]), y: track.py[i0] });
+      sc.place(cap, cx, cz, { cast: false, yaw: Math.atan2(track.px[i1] - track.px[i0], track.pz[i1] - track.pz[i0]), y: track.py[i0] });
+      civicStone.add(cap, false);
       taken.push([cx, cz, 30], [cx + (track.px[i1] - cx) * 0.7, cz, 26], [cx - (track.px[i1] - cx) * 0.7, cz, 26]);
     }
 
@@ -266,6 +273,7 @@ export default {
       const chand = C.crashedChandelier(); chand.position.set(2.6, 9.0, 1.9); chand.rotation.set(0.4, 0.5, 0.25); site.add(chand);
       const fb = C.fallenBoard(); fb.position.set(-3, 0.55, 10.1); site.add(fb);
       sc.place(site, SX, SZ, { yaw: -0.38, y: SY, scale: 1.25 });
+      civicStone.add(site, false);
       taken.push([SX, SZ, 26]);
       // the wrecking crane, west of the site, its jib reaching over the demolished half
       const wc = C.wreckCrane(), swing = wc.userData.swing;
@@ -304,26 +312,40 @@ export default {
       for (let k = 0; k < 28; k++) { const a = (k / 28) * Math.PI * 2; const x = OBELISK.x + Math.cos(a) * 19, z = OBELISK.z + Math.sin(a) * 19; obeliskRing.push({ x, y: sc.y(x, z) - 0.1, z, yaw: -a }); }
       taken.push([OBELISK.x, OBELISK.z, 22]);
     }
+    civicStone.flush();
     ctx.monument = mon;
-    { const t = artTex(THREE, 'ashlar', 'monument'); t.repeat.set(4, OBELISK.h / 4); mon.traverse(o => { if (o.isMesh && o.material.color?.getHex() === 0xece6d6) { o.material = o.material.clone(); o.material.map = t; o.material.color.setHex(0xfaf6ee); o.material.flatShading = true; } }); }
+    { const t = artTex(THREE, 'ashlar', 'monument'); t.repeat.set(3, OBELISK.h / 6); mon.traverse(o => { if (o.isMesh && o.material.color?.getHex() === 0xece6d6) { o.material = o.material.clone(); o.material.map = t; o.material.color.setHex(0xfaf6ee); o.material.flatShading = true; } }); }
     reflectingPool(ctx, sc, { taken, free, reach });
     filibuster(ctx, sc, { taken });
 
     // memorial halls round the district, and the fountain on the lawn
     const halls = [[114, 306, Math.PI], [-20, -72, 0]].map(([x, z, yaw]) => ({ x, z, yaw, y: sc.y(x, z) - 0.3 }));
-    sc.instances(partsOf(C.memorialHall({ w: 34, d: 22, h: 9 })), halls, {});
+    sc.instances(partsOf(C.memorialHall({ w: 34, d: 22, h: 9 })), halls, { cast: false });
     halls.forEach(p => taken.push([p.x, p.z, 23]));
     const temples = [[22, 205], [-95, 225]].map(([x, z]) => ({ x, z, yaw: 0, y: sc.y(x, z) - 0.4 }));
-    sc.instances(partsOf(C.roundTemple({ r: 7.5, h: 8 })), temples, {});
+    sc.instances(partsOf(C.roundTemple({ r: 7.5, h: 8 })), temples, { cast: false });
     temples.forEach(p => taken.push([p.x, p.z, 14]));
     const fnt = C.fountain({ r: 7 }), FX = -8, FZ = 50;
-    sc.place(fnt, FX, FZ, { y: sc.y(FX, FZ) - 0.2 }); taken.push([FX, FZ, 11]);
+    sc.place(fnt, FX, FZ, { cast: false, y: sc.y(FX, FZ) - 0.2 }); taken.push([FX, FZ, 11]);
     const jet = fnt.userData.jet.clone().add(fnt.position);
     anim.push((dt, time) => {
       C.FLAG_TIME.value = time;
       for (let i = 0; i < view.fx.count(70, dt); i++) {
         const a = rng() * 6.283, s = 1.2 + rng() * 1.6;
         view.fx.spark(jet.x, jet.y - 0.5, jet.z, Math.cos(a) * s, 8 + rng() * 3, Math.sin(a) * s, [0.75, 0.88, 1], 0.32, 1.3);
+      }
+    });
+
+    // The eight-kart field is the costliest view of the Mall. Keep full projected
+    // shadows on human drivers and use the game's contact shadow for the rivals.
+    // Ghost mode restores materials and shadow flags when it ends.
+    const contactShadows = new Map();
+    anim.push(() => {
+      for (const rival of view.karts) {
+        if (rival.kart.isPlayer || contactShadows.get(rival) === rival.ghost) continue;
+        rival.rig.root.traverse(mesh => { if (mesh.isMesh) mesh.castShadow = false; });
+        rival.blob.visible = true;
+        contactShadows.set(rival, rival.ghost);
       }
     });
 
@@ -338,20 +360,20 @@ export default {
     };
     sc.along({ from: 44.15, to: 1.0, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? standsB : standsA, i % 2 ? stand2 : stand, p));
     sc.along({ from: 44.3, to: 0.75, side: 1, offset: 18, spacing: 36, phase: 10 }).forEach((p, i) => putStand(i % 2 ? standsA : standsB, i % 2 ? stand : stand2, p));
-    sc.instances(partsOf(stand.group), standsA, {});
-    sc.instances(partsOf(stand2.group), standsB, {});
+    sc.instances(partsOf(stand.group), standsA, { cast: false });
+    sc.instances(partsOf(stand2.group), standsB, { cast: false });
     sc.instances(partsOf(C.crowdPerson()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
 
     // flagpoles and lamps lining the Avenue
     const flagA = partsOf(C.flagpole({ a: 0xb3122a, b: 0xd4af37 })), flagB = partsOf(C.flagpole({ a: 0x1f3f8a, b: 0xf2efe6 })), flagC = partsOf(C.flagpole({ a: 0xd4af37, b: 0x1f3f8a }));
     const avFlags = sc.along({ from: 43.5, to: 2.0, side: 1, offset: 13.2, spacing: 12 });
-    sc.instances(flagA, avFlags.filter((_, i) => i % 3 === 0), {});
-    sc.instances(flagB, avFlags.filter((_, i) => i % 3 === 1), {});
-    sc.instances(flagC, avFlags.filter((_, i) => i % 3 === 2), {});
-    sc.instances(flagA, obeliskRing.filter((_, k) => k % 2 === 0), {});
-    sc.instances(flagB, obeliskRing.filter((_, k) => k % 2 === 1), {});
+    sc.instances(flagA, avFlags.filter((_, i) => i % 3 === 0), { cast: false });
+    sc.instances(flagB, avFlags.filter((_, i) => i % 3 === 1), { cast: false });
+    sc.instances(flagC, avFlags.filter((_, i) => i % 3 === 2), { cast: false });
+    sc.instances(flagA, obeliskRing.filter((_, k) => k % 2 === 0), { cast: false });
+    sc.instances(flagB, obeliskRing.filter((_, k) => k % 2 === 1), { cast: false });
     const southFlags = sc.along({ from: 43.7, to: 1.6, side: -1, offset: 1.4, spacing: 34, phase: 32 });
-    sc.instances(flagA, southFlags, {});
+    sc.instances(flagA, southFlags, { cast: false });
     const lamp = partsOf(C.streetLamp());
     const lamps = [
       ...sc.along({ from: 43.5, to: 2.0, side: 1, offset: 13.2, spacing: 12, phase: 6 }),
@@ -361,9 +383,9 @@ export default {
     sc.instances(lamp, lamps, { cast: false });
 
     // the Mall: protest signs and clipped topiary to thread between on the shortcut (solid)
-    const mallSpots = [[104, 176], [130, 182], [114, 198], [100, 212], [134, 208], [138, 160]];
+    const mallSpots = [[104, 174], [125, 178], [113, 208], [99, 212], [135, 211], [138, 157]];
     const signSpots = [], topiSpots = [];
-    mallSpots.forEach(([x, z], k) => { const spot = { x, z, y: sc.y(x, z), yaw: rng() * 6.28 }; (k % 3 === 2 ? topiSpots : signSpots).push(spot); });
+    mallSpots.forEach(([x, z], k) => { const spot = { x, z, y: sc.y(x, z), yaw: Math.atan2(150 - x, 178 - z) + rng.range(-0.22, 0.22) }; (k % 3 === 2 ? topiSpots : signSpots).push(spot); });
     const signA = partsOf(C.signCluster(3)), signB = partsOf(C.signCluster(8));
     sc.instances(signA, signSpots.filter((_, k) => k % 2 === 0), { scale: 1.5, solid: 2.6 });
     sc.instances(signB, signSpots.filter((_, k) => k % 2 === 1), { scale: 1.5, solid: 2.6 });
@@ -379,11 +401,16 @@ export default {
       ...sc.along({ from: 10.2, to: 11.6, side: 1, offset: 13.5, spacing: 8, jitter: 1 }),
     ];
     cherrySpots.push(...sc.scatter({ count: 60, min: 14, max: 70, maxSlope: 0.5, minGap: 7, where: (x, z) => (onPlateau(x, z, 1.6) && !onPlateau(x, z, 1.02)) || (x > -60 && x < 100 && z > 20 && z < 95) }));
-    const cherries = cherrySpots.filter(p => ok(p.x, p.z, 1.5)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
+    const sightlines = BOARDS.map(([cp, side, offset]) => {
+      const board = sc.beside(cp, side, offset), i = track.indexAtCp(cp);
+      return [board.x, board.z, track.px[i] - track.tx[i] * 29, track.pz[i] - track.tz[i] * 29];
+    });
+    const blocksBoard = (x, z) => sightlines.some(([bx, bz, ax, az]) => segDist(x, z, ax, az, bx, bz) < 7.4);
+    const cherries = cherrySpots.filter(p => ok(p.x, p.z, 1.5) && !blocksBoard(p.x, p.z)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
     const chA = partsOf(C.cherryTree(1, { h: 6.5 })), chB = partsOf(C.cherryTree(4, { h: 7.2, pinkA: 0xf9c7da, pinkB: 0xf2a2c2 })), chC = partsOf(C.cherryTree(7, { h: 5.8, pinkA: 0xf4a6c4, pinkB: 0xe57aa6 }));
-    sc.instances(chA, cherries.filter((_, i) => i % 3 === 0), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
-    sc.instances(chB, cherries.filter((_, i) => i % 3 === 1), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
-    sc.instances(chC, cherries.filter((_, i) => i % 3 === 2), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04 });
+    sc.instances(chA, cherries.filter((_, i) => i % 3 === 0), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04, cast: false });
+    sc.instances(chB, cherries.filter((_, i) => i % 3 === 1), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04, cast: false });
+    sc.instances(chC, cherries.filter((_, i) => i % 3 === 2), { scale: [0.85, 1.25], yaw: 'random', tilt: 0.04, cast: false });
 
     // hedges and flower beds: formal gardens on the lawns and round the capitol
     const hedgeSpots = [];
@@ -400,15 +427,14 @@ export default {
 
     // woods everywhere outside the formal gardens, oaks dotted over the lawns
     const formal = (x, z) => (Math.abs(z) < 48 && x > -150 && x < 175) || (x > -45 && x < 140 && z > 20 && z < 95) || inMall(x, z) || (x > 150 && x < 245 && z > -20 && z < 312) || onPlateau(x, z, 1.2);
-    const woods = sc.scatter({ count: 440, min: 13, max: 230, maxSlope: 0.8, minGap: 5.5, where: (x, z) => !formal(x, z) && ok(x, z, 1.5) });
+    const woods = sc.scatter({ count: 440, min: 13, max: 230, maxSlope: 0.8, minGap: 5.5, where: (x, z) => !formal(x, z) && !blocksBoard(x, z) && ok(x, z, 1.5) });
     const oakA = partsOf(P.roundTree(1, { h: 8, leafA: 0x4f9e3f, leafB: 0x6fbf4a })), oakB = partsOf(P.roundTree(2, { h: 9.5, leafA: 0x3f8f3a, leafB: 0x5cae45 })), oakC = partsOf(P.roundTree(3, { h: 7, leafA: 0x6bb84a, leafB: 0x8fcc5a }));
-    for (const near of [true, false]) {                                  // distant trees skip the shadow pass
-      const set = woods.filter(p => (p.dist < 60) === near), o = { yaw: 'random', tilt: 0.04, cast: near };
-      sc.instances(oakA, set.filter((_, i) => i % 3 === 0), { ...o, scale: [0.85, 1.5] });
-      sc.instances(oakB, set.filter((_, i) => i % 3 === 1), { ...o, scale: [0.85, 1.6] });
-      sc.instances(oakC, set.filter((_, i) => i % 3 === 2), { ...o, scale: [0.85, 1.4] });
-    }
-    const lawnOaks = sc.scatter({ count: 45, min: 14, max: 140, maxSlope: 0.4, minGap: 16, where: (x, z) => formal(x, z) && !inMall(x, z) && !onPlateau(x, z, 1.2) && ok(x, z, 1.5) });
+    // The district's woods are a backdrop. Each species is one foliage batch.
+    const oakOptions = { yaw: 'random', tilt: 0.04, cast: false };
+    sc.instances(oakA, woods.filter((_, i) => i % 3 === 0), { ...oakOptions, scale: [0.85, 1.5] });
+    sc.instances(oakB, woods.filter((_, i) => i % 3 === 1), { ...oakOptions, scale: [0.85, 1.6] });
+    sc.instances(oakC, woods.filter((_, i) => i % 3 === 2), { ...oakOptions, scale: [0.85, 1.4] });
+    const lawnOaks = sc.scatter({ count: 45, min: 14, max: 140, maxSlope: 0.4, minGap: 16, where: (x, z) => formal(x, z) && !inMall(x, z) && !onPlateau(x, z, 1.2) && !blocksBoard(x, z) && ok(x, z, 1.5) });
     sc.instances(oakB, lawnOaks, { scale: [1.0, 1.5], yaw: 'random', tilt: 0.03 });
     const low = sc.scatter({ count: 170, min: 12.5, max: 60, maxSlope: 0.7, minGap: 2.6, where: (x, z) => ok(x, z, 0.8) && !inMall(x, z) });
     sc.instances(partsOf(P.bush(1, { color: 0x4f9e3f })), low.filter((_, i) => i % 3 === 0), { scale: [0.8, 1.6], yaw: 'random', cast: false });
@@ -454,50 +480,87 @@ export default {
 function reflectingPool(ctx, sc, { taken, free, reach }) {
   const { THREE, track, anim, group } = ctx, rng = sc.rng;
   const Y = 0.62, WY = POOL.water, LEN = POOL.z1 - POOL.z0, ZM = (POOL.z0 + POOL.z1) / 2;
-  // the water: one long sheet, glassy so it carries the sky, murky green underneath
+  // A cheap planar reflection. Reflect the eye ray about the surface and intersect the
+  // silhouette of the actual monument on its axis. It stays anchored when the camera moves.
   {
-    const g = new THREE.PlaneGeometry(POOL.x1 - POOL.x0 + 0.6, LEN + 0.6); g.rotateX(-Math.PI / 2);
-    // a murky green with lighter swirls of algae through it, and only a little of the sky on top
-    // deep teal-green water with pale ripple lines across it (so it reads as water at a glance, not as paving), and
-    // swirls of algae through it
-    const tex = canvasTex(256, 1024, (c, w, h) => {
-      c.fillStyle = '#1f5a4c'; c.fillRect(0, 0, w, h);
-      for (let k = 0; k < 120; k++) { c.fillStyle = `rgba(${70 + (k * 37) % 50},${120 + (k * 53) % 40},${40 + (k * 13) % 20},${0.14 + (k % 4) * 0.05})`; c.beginPath(); c.ellipse((k * 97) % w, (k * 389) % h, 8 + (k * 7) % 26, 16 + (k * 11) % 54, 0, 0, 7); c.fill(); }
-      c.strokeStyle = 'rgba(190,235,220,0.55)'; c.lineCap = 'round';
-      for (let k = 0; k < 90; k++) { const x = (k * 151) % w, y = (k * 233) % h, l = 18 + (k * 13) % 40; c.lineWidth = 2 + (k % 3); c.beginPath(); c.moveTo(x - l / 2, y); c.quadraticCurveTo(x, y - 4, x + l / 2, y); c.stroke(); }
-    });
-    tex.repeat.set(2, 6);
-    const m = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.55, metalness: 0.0, envMapIntensity: 0.12 });   // little sky in it: at kart height a mirror reads as paving
-    const w = new THREE.Mesh(g, m); w.position.set(AXIS, WY, ZM); w.receiveShadow = true; group.add(w);
-    anim.push((dt, time) => { tex.offset.set(Math.sin(time * 0.05) * 0.01, time * 0.004); });
-    // the reflection everyone takes the photo for: the monument, a long pale shimmer down the axis toward it
-    const rt = canvasTex(64, 512, (c, w, h) => {
-      const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,248,232,0)'); gr.addColorStop(0.55, 'rgba(255,248,232,0.35)'); gr.addColorStop(1, 'rgba(255,248,232,0.7)');
-      c.fillStyle = gr; for (let y = 0; y < h; y += 6) { const wv = w * (0.3 + 0.25 * Math.sin(y * 0.21) * Math.sin(y * 0.05)); c.fillRect(w / 2 - wv / 2, y, wv, 4); }
-    }, { repeat: false });
-    const rg = new THREE.PlaneGeometry(4.2, LEN * 0.62); rg.rotateX(-Math.PI / 2);
-    const rm = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ map: rt, transparent: true, depthWrite: false, fog: true }));
-    rm.position.set(AXIS, WY + 0.012, POOL.z1 - LEN * 0.31); rm.renderOrder = 2; group.add(rm);
+    // Clip the near edge to the curved promenade. A full rectangular plane would
+    // intersect the asphalt at equal height as the causeway cuts the corner.
+    const waterPos = [], waterFaces = [], start = track.indexAtCp(4.02), end = track.indexAtCp(6.94);
+    let row = 0;
+    for (let i = start; i <= end; i++) {
+      const lat = track.hwL[i] + 3.6, z = track.pz[i] + track.lz[i] * lat;
+      const edge = Math.max(POOL.x0, track.px[i] + track.lx[i] * lat);
+      const atZ = Math.max(POOL.z0, Math.min(POOL.z1, z));
+      waterPos.push(edge, WY, atZ, POOL.x1, WY, atZ);
+      if (row) { const q = 2 * row; waterFaces.push(q - 2, q, q - 1, q - 1, q, q + 1); }
+      row++;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(waterPos, 3));
+    g.setIndex(waterFaces);
+    const waterTime = { value: 0 };
+    const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    m.onBeforeCompile = shader => {
+      shader.uniforms.waterTime = waterTime;
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 poolPoint;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\npoolPoint = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 poolPoint; uniform float waterTime;')
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          vec3 eyeRay = normalize(poolPoint - cameraPosition);
+          float across = (poolPoint.x - ${POOL.x0}) / ${(POOL.x1 - POOL.x0).toFixed(1)};
+          float swell = sin(poolPoint.z * 1.52 + poolPoint.x * .43 + waterTime * 1.12)
+                      + .45 * sin(poolPoint.z * 3.55 - poolPoint.x * .75 - waterTime * 1.45);
+          float banks = smoothstep(.25, .49, abs(across - .5));
+          vec3 water = mix(vec3(.10, .22, .15), vec3(.073, .16, .085), banks * .65);
+          float ripple = smoothstep(1.09, 1.37, swell) * (.25 + .75 * pow(sin(poolPoint.x * .83 + poolPoint.z * .12), 2.0));
+          float depthFresnel = pow(1.0 - clamp(-eyeRay.y, 0.0, 1.0), 9.0);
+          water = mix(water, vec3(.23, .28, .24), depthFresnel * .57);
+          water += ripple * vec3(.065, .085, .09);
+          vec3 ray = vec3(eyeRay.x + .002 * swell, -eyeRay.y + .0024 * swell, eyeRay.z);
+          float distanceToMonument = (${OBELISK.z.toFixed(1)} - poolPoint.z) / max(.001, ray.z);
+          vec3 atMonument = poolPoint + distanceToMonument * ray;
+          float height = (atMonument.y - ${sc.y(OBELISK.x, OBELISK.z).toFixed(2)}) / ${OBELISK.h.toFixed(1)};
+          float halfWidth = ${(OBELISK.w / 2).toFixed(2)} * mix(1.0, .62, clamp(height, 0.0, 1.0))
+                          * (1.0 - smoothstep(1.04, 1.15, height));
+          float dx = atMonument.x - ${AXIS.toFixed(1)};
+          float shaft = (1.0 - smoothstep(halfWidth - .35, halfWidth + .35, abs(dx)))
+                      * step(0.0, height) * step(height, 1.15) * step(.01, ray.z);
+          water = mix(water, mix(vec3(.51, .46, .30), vec3(.88, .79, .60), smoothstep(-.2, .2, dx)), shaft * .86);
+          diffuseColor.rgb = water;
+        `);
+    };
+    const w = new THREE.Mesh(g, m); group.add(w);
+    anim.push((dt, time) => { waterTime.value = time; });
   }
   // granite coping round the rim (tall enough to wall the water in), and the gravel walk on the far side
   const cop = partsOf(C.coping(8)), copSpots = [];
   for (let z = POOL.z0 - 0.65 + 4; z < POOL.z1 + 0.65; z += 8) for (const x of [POOL.x0 - 0.65, POOL.x1 + 0.65]) copSpots.push({ x, z: Math.min(z, POOL.z1 + 0.65 - 4), y: Y - 0.65 + 0.32 - 0.33, yaw: Math.PI / 2 });
-  for (let x = POOL.x0 - 1.3 + 4; x < POOL.x1 + 1.3; x += 8) for (const z of [POOL.z0 - 0.65, POOL.z1 + 0.65]) copSpots.push({ x: Math.min(x, POOL.x1 + 1.3 - 4), z, y: Y - 0.65 + 0.32 - 0.33, yaw: 0 });
-  sc.instances(cop, copSpots.map(p => ({ ...p, y: Y - 0.18 })), { cast: false });   // a low lip: anything taller hides the water from the karts
+  // The racing line clips the north-west corner. Terminate the granite at the
+  // causeway on both sides instead of drawing masonry across the asphalt.
+  const endBlock = 2.6, endCount = Math.ceil((POOL.x1 - POOL.x0 + 2.6) / endBlock);
+  const endLen = (POOL.x1 - POOL.x0 + 2.6) / endCount;
+  const endSpots = [];
+  for (let j = 0; j < endCount; j++) for (const z of [POOL.z0 - 0.65, POOL.z1 + 0.65]) {
+    const x = POOL.x0 - 1.3 + endLen * (j + 0.5);
+    if (!reach(x, z, 0.25)) endSpots.push({ x, z, y: Y - 0.18, yaw: 0 });
+  }
+  sc.instances(partsOf(C.coping(endLen)), endSpots, { cast: false });
+  sc.instances(cop, copSpots.filter(p => !track.ground(p.x, p.z, -1, sc.hit).onRoad).map(p => ({ ...p, y: Y - 0.18 })), { cast: false });   // a low lip: anything taller hides the water from the karts
   {
     const b = new ModelBuilder(), walkW = 7;
     b.add('walk', box(walkW, 0.3, LEN + 30, 0.05, 1), { p: [POOL.x1 + 1.3 + walkW / 2, Y - 0.12, ZM] });
-    b.add('walk', box(POOL.x1 - POOL.x0 + 2.6 + walkW, 0.3, 12, 0.05, 1), { p: [AXIS + walkW / 2, Y - 0.12, POOL.z0 - 7.3] });   // across the head
+    const eastClipped = POOL.x0 + 14, eastEnd = POOL.x1 + 1.3 + walkW;
+    b.add('walk', box(eastEnd - eastClipped, 0.3, 12, 0.05, 1), { p: [(eastClipped + eastEnd) / 2, Y - 0.12, POOL.z0 - 7.3] });   // across the head
     b.add('edge', box(0.3, 0.34, LEN + 30, 0.05, 1), { p: [POOL.x1 + 1.3 + walkW + 0.15, Y - 0.1, ZM] });
     group.add(b.build({ walk: plastic(0xdcd2bc, 0.95), edge: plastic(0xbfb6a2, 0.8) }));
   }
   // the near side: pale paving from the kerb to the coping at road height, so the road meets the pool in stone, not
   // lawn, and the water sits level with it: at kart height anything that stands up between the road and the water hides it
   {
-    const i0 = track.indexAtCp(4.3), i1 = track.indexAtCp(6.75), pos = [], uv = [], idx = [];
+    const i0 = track.indexAtCp(4.08), i1 = track.indexAtCp(6.75), pos = [], uv = [], idx = [];
     for (let i = i0, r = 0; i <= i1; i++, r++) {
-      const latA = track.hwL[i] + 1.05, latB = Math.max(latA + 0.2, (POOL.coping + 0.1 - track.px[i]) / Math.max(0.3, track.lx[i]));
-      const y = track.py[i] + track.ly[i] * (track.hwL[i] + 1.1) + 0.04;
+      const latA = track.hwL[i] + 1.05, latB = Math.max(latA + 2.65, (POOL.coping + 0.1 - track.px[i]) / Math.max(0.3, track.lx[i]));
+      const y = track.py[i] + track.ly[i] * (track.hwL[i] + 1.1) + 0.075;
       for (const lat of [latA, latB]) { const x = track.px[i] + track.lx[i] * lat, z = track.pz[i] + track.lz[i] * lat; pos.push(x, y, z); uv.push(lat / 5, z / 5); }
       if (i < i1) { const q = r * 2; idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
     }
@@ -510,9 +573,9 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   const elmSpots = [];
   for (let z = POOL.z0 - 8; z <= POOL.z1 + 10; z += 9.5) for (const x of [POOL.x1 + 11.5, POOL.x1 + 19.5]) elmSpots.push({ x: x + rng.range(-0.6, 0.6), z: z + rng.range(-1, 1) });
   for (let z = 52; z <= 230; z += 9.5) { if (z > 172 && z < 204) continue; for (const x of [134, 126]) elmSpots.push({ x: x + rng.range(-0.6, 0.6), z: z + rng.range(-1, 1) }); }
-  const elms = elmSpots.filter(p => free(p.x, p.z) && !reach(p.x, p.z, 0.4)).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.1 }));
-  sc.instances(partsOf(C.elm(3, { h: 15 })), elms.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9 });
-  sc.instances(partsOf(C.elm(8, { h: 16, leafA: 0x467f37, leafB: 0x58983f })), elms.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9 });
+  const elms = elmSpots.filter(p => !(p.x < POOL.x0 && p.z < 92) && free(p.x, p.z) && !reach(p.x, p.z, 0.4)).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.1 }));
+  sc.instances(partsOf(C.elm(3, { h: 15 })), elms.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9, cast: false });
+  sc.instances(partsOf(C.elm(8, { h: 16, leafA: 0x467f37, leafB: 0x58983f })), elms.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9, cast: false });
   // lamps along the far walk
   const lamps = [];
   for (let z = POOL.z0 + 6; z < POOL.z1; z += 19) lamps.push({ x: POOL.x1 + 8.6, z, y: Y - 0.05, yaw: 0 });
@@ -523,27 +586,63 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // the twist: algae mats in three greens, scum along the coping, ducks in residence
   {
     const matSpots = [];
-    for (let k = 0; k < 54; k++) matSpots.push({ x: rng.range(POOL.x0 + 1.5, POOL.x1 - 1.5), z: rng.range(POOL.z0 + 2, POOL.z1 - 2), y: WY + 0.015, yaw: rng.range(0, 6.28) });
+    for (let k = 0; k < 54; k++) {
+      const x = k % 4 ? POOL.x1 - rng.range(1.2, 5.8) : POOL.x0 + rng.range(1.2, 3.6);
+      const z = rng.range(POOL.z0 + 2, POOL.z1 - 2), yaw = rng.range(0, 6.28);
+      const ground = track.ground(x, z, -1, sc.hit);
+      const inBasin = !ground.onRoad && ground.outside > 6.5;
+      matSpots.push({ x, z, y: inBasin ? WY + 0.015 : POOL.floor - 1, yaw });
+    }
     sc.instances(partsOf(C.algaePatch(0x3e7a24)), matSpots.slice(0, 18), { scale: [1.0, 3.0], cast: false });
     sc.instances(partsOf(C.algaePatch(0x639c33)), matSpots.slice(18, 36), { scale: [0.9, 2.6], cast: false });
     sc.instances(partsOf(C.algaePatch(0x8aa832)), matSpots.slice(36), { scale: [0.8, 2.2], cast: false });
     const strips = [];
-    for (let z = POOL.z0 + 5; z < POOL.z1 - 4; z += 9) { strips.push({ x: POOL.x0 + 0.62, z, y: WY + 0.01, yaw: Math.PI / 2 }); strips.push({ x: POOL.x1 - 0.62, z: z + 4.5, y: WY + 0.01, yaw: Math.PI / 2 }); }
+    for (let z = POOL.z0 + 5; z < POOL.z1 - 4; z += 9) {
+      const ground = track.ground(POOL.x0 + 0.62, z, -1, sc.hit);
+      const inBasin = !ground.onRoad && ground.outside > 4.8;
+      strips.push({ x: POOL.x0 + 0.62, z, y: inBasin ? WY + 0.01 : POOL.floor - 1, yaw: Math.PI / 2 });
+      strips.push({ x: POOL.x1 - 0.62, z: z + 4.5, y: WY + 0.01, yaw: Math.PI / 2 });
+    }
     sc.instances(partsOf(C.algaeStrip()), strips, { scale: [0.7, 1.2], cast: false });
     const duckProto = C.duck(), ducks = [];
     for (const [dx, dz, dyaw] of [[POOL.x0 + 3.2, 96, 2.6], [POOL.x0 + 4.5, 101, 2.2], [AXIS + 3, 150, -0.7], [POOL.x0 + 2.6, 186, 1.4], [AXIS + 5, 124, 0.4]]) {
-      const d = duckProto.clone(); sc.place(d, dx, dz, { yaw: dyaw, y: WY - 0.05, scale: 1.25 }); ducks.push(d);
+      const d = duckProto.clone(); sc.place(d, dx, dz, { yaw: dyaw, y: WY - 0.05, scale: 1.25, cast: false }); ducks.push(d);
     }
     anim.push((dt, time) => ducks.forEach((d, n) => { d.position.y = WY - 0.05 + Math.sin(time * 0.9 + n * 2.1) * 0.05; d.rotation.z = Math.sin(time * 0.7 + n * 1.7) * 0.05; d.position.x += Math.sin(time * 0.15 + n) * dt * 0.15; }));
     // at the closest pass, on the far walk, angled to the karts coming down the run
-    sc.place(C.poolSign(), POOL.x1 + 4.6, 118, { yaw: -Math.PI / 2 - 0.55, y: Y - 0.1 });
-    sc.place(C.poolSignSmall(), AXIS + 2, POOL.z0 + 12, { yaw: Math.PI + 0.25, y: POOL.floor });
+    sc.place(C.poolSign(), POOL.x1 + 5.8, 152, { yaw: -Math.PI / 2 - 0.55, y: Y - 0.1 });
+    sc.place(C.poolSignSmall(), POOL.x1 + 2, 97, { yaw: -Math.PI * 0.75, y: Y });
+  }
+
+  // Two inward-curving ranks of wreath-bearing memorial piers frame the plaza and
+  // obelisk. The raised pavilion on each flank leaves a clear central sky gap.
+  {
+    const wings = new ModelBuilder();
+    for (const side of [-1, 1]) {
+      for (let j = 0; j < 7; j++) {
+        const a = 0.28 + j * 0.17;
+        const x = AXIS + side * (13 + 18 * Math.sin(a)), z = POOL.z1 + 14 + 14 * Math.cos(a);
+        if (reach(x, z, 2.1)) continue; // give the outside of the road and its runoff the missing bay
+        const h = j === 6 ? 10.4 : 6.6;
+        wings.add('limestone', new THREE.BoxGeometry(3.0, h, 1.7), { p: [x, Y + h / 2, z], r: [0, side * a, 0] });
+        wings.add('limestone', new THREE.BoxGeometry(3.55, .54, 2.22), { p: [x, Y + h, z], r: [0, side * a, 0] });
+        wings.add('bronze', new THREE.TorusGeometry(.62, .16, 5, 14), {
+          p: [x - Math.sin(side * a) * .97, Y + h - 1.5, z - Math.cos(a) * .97], r: [0, side * a, 0]
+        });
+      }
+      const x = AXIS + side * 19.2, z = POOL.z1 + 29;
+      for (const dx of [-3.2, 3.2]) for (const dz of [-2.1, 2.1])
+        wings.add('limestone', cyl(.87, 1.04, 10.8, 10), { p: [x + dx, Y + 5.4, z + dz] });
+      wings.add('limestone', new THREE.BoxGeometry(9.6, 2.8, 7.4), { p: [x, Y + 11.9, z] });
+      wings.add('bronze', new THREE.BoxGeometry(8.6, .4, 6.6), { p: [x, Y + 13.5, z] });
+    }
+    group.add(wings.build({ limestone: plastic(0xe2dcc5, .8), bronze: plastic(0x52786a, .58) }, { cast: false }));
   }
 
   // the fountain plaza at the foot of the pool, on the axis, between the water and the monument
   {
     const FX = AXIS, FZ = POOL.z1 + 24, fnt = C.fountain({ r: 9 });
-    sc.place(fnt, FX, FZ, { y: Y - 0.25 }); taken.push([FX, FZ, 13]);
+    sc.place(fnt, FX, FZ, { cast: false, y: Y - 0.25 }); taken.push([FX, FZ, 13]);
     const jet = fnt.userData.jet.clone().multiplyScalar(1).add(fnt.position);
     const ring = []; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; ring.push([FX + Math.cos(a) * 6.5, FZ + Math.sin(a) * 6.5]); }
     anim.push(dt => {
@@ -559,7 +658,7 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   // the memorial at the head of the pool, facing down the axis; its name on the attic
   {
     const mem = C.lincolnMemorial(), yaw = Math.atan2(AXIS - MEMORIAL.x, ZM - MEMORIAL.z);
-    sc.place(mem, MEMORIAL.x, MEMORIAL.z, { yaw, y: sc.y(MEMORIAL.x, MEMORIAL.z) - 0.4 });
+    sc.place(mem, MEMORIAL.x, MEMORIAL.z, { yaw, y: sc.y(MEMORIAL.x, MEMORIAL.z) - 0.4, cast: false });
     taken.push([MEMORIAL.x, MEMORIAL.z, 30]);
     const tex = canvasTex(1024, 96, (g, w, h) => { g.fillStyle = '#ede7da'; g.fillRect(0, 0, w, h); C.fitText(g, 'THE LOBBYIST MEMORIAL', w / 2, h * 0.56, w * 0.92, 72, C.SIGN_FONT, '#6f6553', { lines: 1 }); }, { repeat: false });
     const q = new C.Quads(), a = mem.userData.attic, c = Math.cos(yaw), s = Math.sin(yaw), y0 = sc.y(MEMORIAL.x, MEMORIAL.z) - 0.4;
@@ -611,17 +710,57 @@ function filibuster(ctx, sc, { taken }) {
   };
   mk(pos, uv, idx, mat); mk(cpos, null, cidx, capMat);
   sc.instances(partsOf(C.balustrade(4)), balSpots, { cast: false });
-  sc.instances(partsOf(C.flagpole({ a: 0xb3122a, b: 0xf2efe6, h: 7 })), flagSpots, {});
+  sc.instances(partsOf(C.flagpole({ a: 0xb3122a, b: 0xf2efe6, h: 7 })), flagSpots, { cast: false });
   sc.instances(partsOf(C.streetLamp()), lampSpots, { cast: false });
 
   // the cloture fence: barricades just off the inside edge from the middle leg round hairpin two and back along the
   // leg below, with a sign over the steps. They are solid until the race leader starts the final lap, then fold away.
-  const fence = sc.along({ from: 29.66, to: 36.42, side: 1, offset: 2.4, spacing: 1.3 }).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.05, yaw: p.yaw + Math.PI / 2 }));
-  const fenceMeshes = sc.instances(partsOf(C.barricade()), fence, { cast: false });
-  const gate = [];
-  for (const p of fence) { track.addCollider(p.x, p.z, 0.85); track.eachCollider(p.x, p.z, c => { if (c.x === p.x && c.z === p.z) gate.push(c); }); }
+  const fence = sc.along({ from: 29.48, to: 36.6, side: 1, offset: 2.4, spacing: 1.1 }).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.05, yaw: p.yaw + Math.PI / 2 }));
+  const fenceMeshes = sc.instances(partsOf(C.barricade()), fence, { cast: false, scale: 1.2 });
+  // A zero-radius scenery collider still catches the kart's wheel envelope. Use the actual
+  // drivable boundary at the barricades, then restore the authored infield width on opening.
+  const first = track.indexAtCp(29.48), last = track.indexAtCp(36.6);
+  let openWidths = clotureWidths.get(track);
+  if (!openWidths) { openWidths = track.outerL.slice(first, last + 1); clotureWidths.set(track, openWidths); }
+  const setGate = open => {
+    if (open) track.outerL.set(openWidths, first);
+    else for (let i = first; i <= last; i++) track.outerL[i] = Math.min(2.25, openWidths[i - first]);
+  };
+  setGate(false);
+  for (const [x, z] of [[-110, 86], [-100, 74], [-110, 60]]) taken.push([x, z, 11]);
+  // Follow the actual graded hillside. The flared stone treads bend from the top straight
+  // through the opening and back onto the lower leg, so the exit is visible from the crest.
+  const spine = new THREE.CatmullRomCurve3([
+    [-127, 90], [-113, 87], [-104, 81], [-96.5, 73.5], [-100, 66], [-109, 59], [-120, 56],
+  ].map(([x, z]) => new THREE.Vector3(x, 0, z)));
+  const tread = [], treadUv = [], faces = [];
+  for (let j = 0; j <= 72; j++) {
+    const u = j / 72, center = spine.getPointAt(u), tangent = spine.getTangentAt(u);
+    const half = 5.1 + 1.35 * Math.abs(2 * u - 1);
+    for (const side of [-1, 0, 1]) {
+      const x = center.x + tangent.z * half * side, z = center.z - tangent.x * half * side;
+      tread.push(x, sc.y(x, z) + 0.08, z);
+      treadUv.push((side + 1) / 2, u * 24);
+    }
+    if (j < 72) for (let k = 0; k < 2; k++) {
+      const q = j * 3 + k;
+      faces.push(q, q + 1, q + 3, q + 1, q + 4, q + 3);
+    }
+  }
+  const treadGeo = new THREE.BufferGeometry();
+  treadGeo.setAttribute('position', new THREE.Float32BufferAttribute(tread, 3));
+  treadGeo.setAttribute('uv', new THREE.Float32BufferAttribute(treadUv, 2));
+  treadGeo.setIndex(faces); treadGeo.computeVertexNormals();
+  const paving = canvasTex(256, 96, (g, w, h) => {
+    g.fillStyle = '#c8bb9e'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#e8dfc5'; g.fillRect(0, 3, w, 5);
+    g.fillStyle = '#756f65'; g.fillRect(0, 0, w, 3); g.fillRect(w / 2, 0, 1, h);
+    g.fillStyle = '#8f762f'; g.fillRect(6, 0, 3, h); g.fillRect(w - 9, 0, 3, h);
+  });
+  const landing = new THREE.Mesh(treadGeo, new THREE.MeshStandardMaterial({ map: paving, roughness: 0.92, side: THREE.DoubleSide }));
+  landing.receiveShadow = true; group.add(landing);
   // the sign over the steps: FILIBUSTER IN PROGRESS for two laps, CLOTURE INVOKED on the last
-  const SX = (CLOTURE.x0 + CLOTURE.x1) / 2 - 8, SZ = 73.5, SY = legY(1, SX) + 0.2;
+  const SX = -96.5, SZ = 73.5, SY = legY(1, SX) + 0.2;
   const draw = open => (g, w, h) => {
     g.fillStyle = open ? '#16a34a' : '#b3122a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.strokeRect(8, 8, w - 16, h - 16);
     C.fitText(g, open ? 'CLOTURE INVOKED' : 'FILIBUSTER IN PROGRESS', w / 2, h * 0.38, w * 0.86, 120, C.SIGN_FONT, '#ffffff', { lines: 1 });
@@ -630,17 +769,17 @@ function filibuster(ctx, sc, { taken }) {
   const signTex = canvasTex(1024, 256, draw(false), { repeat: false });
   {
     const q = new C.Quads();
-    for (const s of [1, -1]) q.panel([SX, SY + 7.2, SZ + s * 0.06], s > 0 ? 0 : Math.PI, 16, 4, [0, 0, 1, 1]);
+    for (const s of [1, -1]) q.panel([SX, SY + 7.2, SZ + s * 0.06], s > 0 ? 0 : Math.PI, 25, 5, [0, 0, 1, 1]);
     const m = new THREE.Mesh(q.geometry(), new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.6, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 0.25 })); m.matrixAutoUpdate = false; group.add(m);
-    const b = new ModelBuilder(); for (const d of [-7.4, 7.4]) { b.add("p", cyl(0.25, 0.25, 9.4, 8), { p: [SX + d, SY + 4.5, SZ] }); track.addCollider(SX + d, SZ, 0.6); }
+    const b = new ModelBuilder(); for (const d of [-12.2, 12.2]) { b.add("p", cyl(0.25, 0.25, 9.4, 8), { p: [SX + d, SY + 4.5, SZ] }); track.addCollider(SX + d, SZ, 0.6); }
     group.add(b.build({ p: plastic(0x2a2d36, 0.5, 0.3) }));
   }
   let shown = false, drop = 0;
   anim.push(dt => {
     const open = clotureOpen(view.race);
-    if (open !== shown) { shown = open; const g = signTex.image.getContext('2d'); draw(open)(g, signTex.image.width, signTex.image.height); signTex.needsUpdate = true; for (const c of gate) c.r = open ? 0 : 0.85; }
+    if (open !== shown) { shown = open; const g = signTex.image.getContext('2d'); draw(open)(g, signTex.image.width, signTex.image.height); signTex.needsUpdate = true; setGate(open); }
     const target = open ? 1 : 0;
-    if (drop !== target) { drop += Math.sign(target - drop) * Math.min(Math.abs(target - drop), dt * 1.4); for (const m of fenceMeshes) m.position.y = -1.6 * drop; }
+    if (drop !== target) { drop += Math.sign(target - drop) * Math.min(Math.abs(target - drop), dt * 1.4); for (const m of fenceMeshes) m.position.y = -2.4 * drop; }
   });
 }
 
@@ -660,7 +799,7 @@ const BOARDS = [
   [9.8, 1, 24, 'DOES TIKTOK USE WIFI?', '#12142b', '#ffd23c'], [12.9, -1, 22, 'THE INTERNET IS A SERIES OF TUBES', '#ffffff', '#1f3f8a'],
   [14.6, 1, 18, 'THIS HEARING BROUGHT TO YOU BY THE WITNESS', '#f2efe6', '#12142b'], [16.8, -1, 18, 'I YIELD MY TIME TO MY DONORS', '#1f3f8a', '#ffd23c'],
   [24.0, 1, 22, 'INSIDER TRADING: MEMBERS ONLY', '#16a34a', '#ffffff'], [28.0, 1, 16, 'BILL: 4,000 PAGES. READ: 0', '#ffffff', '#12142b'],
-  [31.5, -1, 20, 'PASS IT. READ IT LATER.', '#b3122a', '#ffffff'], [35.0, 1, 16, 'SHUTDOWN SEASON TICKETS ON SALE', '#ffd23c', '#12142b'],
+  [31.5, -1, 20, 'PASS IT. READ IT LATER.', '#b3122a', '#ffffff'], [31.8, -1, 19, 'SHUTDOWN SEASON TICKETS ON SALE', '#ffd23c', '#12142b'],
   [37.5, -1, 22, 'NEW TARIFF? CHECK YOUR NOTIFICATIONS', '#12142b', '#ffffff'], [42.0, 1, 18, 'CAMPAIGN PROMISES RECYCLED HERE', '#16a34a', '#ffffff'],
   [44.3, 1, 26, 'LOBBYISTS: USE SIDE ENTRANCE', '#d4af37', '#12142b'],
 ];
@@ -669,7 +808,7 @@ const MONO = '"Courier New", Courier, monospace';
 
 function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const { THREE, track, anim, view } = ctx, rng = sc.rng, group = ctx.group;
-  const bake = C.makeBaker(group, sc.shadows), atlas = C.makeAtlas(group), F = C.SIGN_FONT, SANS = C.SANS, signDraw = C.signDraw, fitText = C.fitText;
+  const bake = C.makeBaker(group, false), atlas = C.makeAtlas(group), F = C.SIGN_FONT, SANS = C.SANS, signDraw = C.signDraw, fitText = C.fitText;
   const yawTo = (from, to) => Math.atan2(to.x - from.x, to.z - from.z);
   const roadPt = cp => { const i = track.indexAtCp(cp); return { x: track.px[i], y: track.py[i], z: track.pz[i], i }; };
   const toWorld = (o, l) => { const c = Math.cos(o.yaw), s = Math.sin(o.yaw), k = o.scale ?? 1; return [o.x + (l[0] * c + l[2] * s) * k, o.y + l[1] * k, o.z + (-l[0] * s + l[2] * c) * k]; };
@@ -708,7 +847,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const Ms = new THREE.Matrix4(), Qs = new THREE.Quaternion(), Ps = new THREE.Vector3(), Ss = new THREE.Vector3(2.5, 2.5, 2.5), Ys = new THREE.Vector3(0, 1, 0);
 
   /* ---- 2. the Avenue: the congressional portfolio, on a stock ticker you cannot miss ---- */
-  const tickAt = sc.beside(2.0, 1, 40), tickYaw = yawTo(tickAt, { x: -20, z: 0 }), tickY = tickAt.y + 16;
+  const tickAt = sc.beside(2.0, 1, 23), tickYaw = yawTo(tickAt, { x: 45, z: 0 }), tickY = tickAt.y + 13;
   const ticker = C.ledPanel(group, 1024, 300, [{ c: [tickAt.x, tickY, tickAt.z], yaw: tickYaw }], 36, 10.5);
   for (const d of [-12, 12]) pole(tickAt.x + Math.cos(tickYaw) * d - Math.sin(tickYaw) * 0.4, tickAt.z - Math.sin(tickYaw) * d - Math.cos(tickYaw) * 0.4, tickAt.y - 0.5, tickY - 4, 0.45);
   const TAPE = 'BOUGHT DEFENSE STOCK ▲ DAY BEFORE THE VOTE ▲ SOLD EVERYTHING ▲ DAY BEFORE THE CRASH ▲ STOCK ACT? NEVER HEARD OF IT ▲ DISCLOSURE FILED 2 YEARS LATE ▲ ';
@@ -761,7 +900,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const muzzle = new THREE.Vector3(...toWorld({ x: CANNON.x, y: canY, z: CANNON.z, yaw: canYaw, scale: 1.3 }, can.userData.muzzle));
   bake.add(can);
   {
-    const at = toWorld({ x: CANNON.x, y: canY, z: CANNON.z, yaw: canYaw }, [0, 0, -9]), y0 = sc.y(at[0], at[2]);
+    const roadside = sc.beside(12.14, -1, 13), at = [roadside.x, roadside.y, roadside.z], y0 = roadside.y;
     const s = atlas.add(1024, 300, (g, w, h) => { g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.fillStyle = '#d4af37'; g.fillRect(0, h * 0.84, w, h * 0.16); fitText(g, 'K STREET CASH CANNON', w / 2, h * 0.36, w * 0.9, 120, F, '#ffd23c', { lines: 1 }); fitText(g, "IT'S NOT A BRIBE, IT'S SPEECH", w / 2, h * 0.68, w * 0.84, 60, SANS, '#ffffff', { lines: 1 }); });
     const fy = yawTo({ x: at[0], z: at[2] }, roadPt(11.2));
     atlas.place2(s, [at[0], y0 + 7, at[2]], fy, 15, 4.4);

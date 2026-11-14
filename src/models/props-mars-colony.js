@@ -4,6 +4,8 @@
    devils. Each builder returns a THREE.Group on y = 0, facing +Z, made of a few
    merged meshes. Nothing here touches the DOM at import time. */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { partsOf } from '../render/scenery.js';
 import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, loft, plastic, glow, paint, MAT } from './build.js';
 import { canvasTex, fitText } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
@@ -462,4 +464,92 @@ export function geoDome(r = 40, { h = 24, rings = 9, segs = 40, keep = () => tru
   for (const id of new Set([...edges.values()].flat())) b.add('frame', sphere(0.42, 6, 4), { p: at(id) });
   const glass = new THREE.MeshStandardMaterial({ color: tint, roughness: 0.06, metalness: 0.25, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.8 });
   return b.build({ glass, frame: WHITE });
+}
+
+/** Irrigated strawberry tower with three concentric beds and a capped nutrient riser. */
+export function nutrientTower() {
+  const b = new ModelBuilder();
+  b.add('tank', cyl(1.9, 2.05, 0.8, 16), { p: [0, 0.4, 0] });
+  b.add('pipe', cyl(0.24, 0.24, 5.6, 8), { p: [0, 3.1, 0] });
+  for (let tier = 0; tier < 3; tier++) {
+    const r = 2.05 - tier * 0.27, y = 1.25 + tier * 1.65;
+    b.add('tank', cyl(r, r - 0.47, 0.6, 16), { p: [0, y, 0] });
+    for (let k = 0; k < 7; k++) {
+      const a = (k + tier * 0.4) * Math.PI * 2 / 7, x = Math.sin(a) * r, z = Math.cos(a) * r;
+      b.add('leaf', sphere(0.64, 7, 5), { p: [x * 0.82, y + 0.56, z * 0.82], s: [1, 0.54, 1] });
+      b.add('fruit', sphere(0.35, 7, 5), { p: [x, y + 0.12, z], s: [0.85, 1.12, 0.85] });
+    }
+  }
+  b.add('pipe', cyl(0.7, 0.45, 0.34, 8), { p: [0, 5.95, 0] });
+  return b.build({ tank: WHITE, pipe: PANEL, leaf: plastic(0x278a4b, 0.68), fruit: plastic(0xe43840, 0.45) });
+}
+
+
+// Static Mars paint uses the native PBR channels: G = roughness, B = metalness.
+// Geometry and material caches are scoped to this scene because each race owns its buffers.
+export function colonyFinishes() {
+  const materials = new Map(), slots = new Map(), geometryCache = new WeakMap();
+  const pixels = new Uint8Array(256 * 4);
+  const texture = new THREE.DataTexture(pixels, 256, 1);
+  texture.needsUpdate = true;
+  const apply = object => object.traverse(mesh => {
+    if (!mesh.isMesh) return;
+    const mat = mesh.material;
+    if (!mat.isMeshStandardMaterial || mat.transparent || mat.vertexColors || mat.map || mat.emissiveMap ||
+        mat.roughnessMap || mat.metalnessMap || mat.emissive.getHex()) return;
+    const key = [mat.type, mat.side, mat.envMapIntensity, mat.clearcoat, mat.clearcoatRoughness].join('/');
+    let finish = materials.get(key);
+    if (!finish) {
+      finish = mat.clone();
+      finish.color.set(0xffffff); finish.vertexColors = true;
+      finish.roughness = finish.metalness = 1;
+      finish.roughnessMap = finish.metalnessMap = texture;
+      materials.set(key, finish);
+    }
+    const surface = mat.roughness + '/' + mat.metalness;
+    let slot = slots.get(surface);
+    if (slot === undefined) {
+      if (slots.size >= texture.image.width) return;
+      slot = slots.size; slots.set(surface, slot);
+      pixels.set([255, Math.round(mat.roughness * 255), Math.round(mat.metalness * 255), 255], 4 * slot);
+      texture.needsUpdate = true;
+    }
+    let variants = geometryCache.get(mesh.geometry);
+    if (!variants) geometryCache.set(mesh.geometry, variants = new Map());
+    let geometry = variants.get(mat);
+    if (!geometry) {
+      geometry = mesh.geometry.clone();
+      const count = geometry.attributes.position.count, colors = new Float32Array(count * 3), uvs = new Float32Array(count * 2);
+      for (let i = 0; i < count; i++) {
+        mat.color.toArray(colors, i * 3);
+        uvs[i * 2] = (slot + 0.5) / texture.image.width;
+        uvs[i * 2 + 1] = 0.5;
+      }
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+      variants.set(mat, geometry);
+    }
+    mesh.geometry = geometry; mesh.material = finish;
+  });
+  return {
+    apply,
+    dispose() {
+      texture.dispose();
+      for (const material of materials.values()) material.dispose();
+    },
+    parts(object) {
+      apply(object);
+      const groups = new Map();
+      for (const { geometry, material } of partsOf(object)) {
+        if (!groups.has(material)) groups.set(material, []);
+        groups.get(material).push(geometry);
+      }
+      return [...groups].map(([material, geometries]) => {
+        if (geometries.length === 1) return { geometry: geometries[0], material };
+        const geometry = mergeGeometries(geometries);
+        geometries.forEach(g => g.dispose());
+        return { geometry, material };
+      });
+    },
+  };
 }

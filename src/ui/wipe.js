@@ -22,8 +22,6 @@ export class Wipe {
     this.pendingFn = null;         // the swap to run at full cover
     this.waiters = [];             // promise resolvers waiting for the reveal
     this.timers = new Set();
-    this.onSound = null;           // (kind) => void, set by the app: 'cover' as the tiles flip in, 'reveal' as they flip away
-    this.sound = null;
   }
 
   get active() { return this.state !== 'idle'; }
@@ -72,7 +70,7 @@ export class Wipe {
    * requested while the board is flipping away snaps back to covered, swaps,
    * and flips away again. fn never runs twice and never gets dropped.
    */
-  through(fn, { cover = 300, reveal = 340, sound = false } = {}) {
+  through(fn, { cover = 300, reveal = 340 } = {}) {
     if (REDUCED.matches) { try { fn?.(); } catch (e) { console.error(e); } return Promise.resolve(); }
     return new Promise(resolve => {
       this.waiters.push(resolve);
@@ -94,8 +92,6 @@ export class Wipe {
       }
       // idle: a fresh cycle
       const gen = ++this.gen;
-      this.sound = sound ? this.onSound : null;   // scene changes get a whoosh; menu flourishes stay quiet
-      this.sound?.('cover');
       this._build();
       this.el.classList.add('on');
       this.state = 'covering'; this.pendingFn = fn;
@@ -111,7 +107,6 @@ export class Wipe {
     try { fn?.(); } catch (e) { console.error(e); }   // a failed swap must not strand the board
     if (gen !== this.gen) return;                    // the swap itself started a new cycle
     this.state = 'revealing';
-    this.sound?.('reveal');
     this._unsnap();
     this._animate(false, reveal);
     this._later(() => { if (gen === this.gen && this.state === 'revealing') { this._hide(); this.state = 'idle'; this._settle(); } }, reveal + 30);

@@ -37,7 +37,7 @@ catch { browser = await chromium.launch({ headless: true, args: ['--enable-unsaf
 const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: +(opt.dpr || 1), hasTouch: !!opt.mobile, isMobile: !!opt.mobile, serviceWorkers: 'block' });
 const page = await ctx.newPage();
 const errors = [];
-page.on('pageerror', e => errors.push('pageerror: ' + e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 4).map(l => l.trim()).join(' <- ')));
+page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 const url = `http://127.0.0.1:${port}/${String(opt.url === true ? '' : opt.url || '').replace(/^\//, '')}`;
 await page.goto(url, { waitUntil: 'load' });

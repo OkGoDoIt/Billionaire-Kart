@@ -111,11 +111,15 @@ export class IntroCam {
     this.track = track; this.camera = camera; this.t = 0; this.done = false;
     const L = track.length;
     // a track may open with shots of its own: fixed cameras given as { pos, look, pos1?, look1?, fov?, dur }
+    // introOnly tracks (enclosed interiors, e.g. WeWork Memorial #193) skip the generic
+    // flyover shots below: at h 16 / h 9 they would sit above the ceiling and show only tiles.
     this.shots = [
       ...(track.def?.intro || []),
-      { s0: L * 0.42, s1: L * 0.5, lat: 14, h: 16, look: 30, dur: 2.6 },
-      { s0: L * 0.72, s1: L * 0.8, lat: -12, h: 9, look: 26, dur: 2.6 },
-      { s0: L - 70, s1: L - 22, lat: 0, h: 5, look: 18, dur: 2.4 },
+      ...(track.def?.introOnly ? [] : [
+        { s0: L * 0.42, s1: L * 0.5, lat: 14, h: 16, look: 30, dur: 2.6 },
+        { s0: L * 0.72, s1: L * 0.8, lat: -12, h: 9, look: 26, dur: 2.6 },
+        { s0: L - 70, s1: L - 22, lat: 0, h: 5, look: 18, dur: 2.4 },
+      ]),
     ];
     this.total = this.shots.reduce((a, s) => a + s.dur, 0);
   }

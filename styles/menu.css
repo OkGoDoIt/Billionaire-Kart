@@ -99,15 +99,6 @@
 .screen-setup .sub-h { margin-top: calc(var(--u) * 1.6) !important; margin-bottom: calc(var(--u) * 0.8) !important; }
 .screen-setup .chip { padding-top: calc(var(--u) * 0.85); padding-bottom: calc(var(--u) * 0.85); }
 .screen-setup .foot { margin-top: calc(var(--u) * 1.6); }
-/* four engine classes in a row: the columns may shrink under their content (a 1fr column never goes below its widest word,
-   which pushed the fourth card off the right edge), so the card type is sized to what four columns hold */
-@media (orientation: landscape) {
-  .screen-setup .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(var(--u) * 1.6); margin-top: calc(var(--u) * 2.2); }
-  .screen-setup .card.cc { padding: calc(var(--u) * 1.7) calc(var(--u) * 1.2); }
-  .screen-setup .cc-n { font-size: calc(var(--u) * 6); }
-  .screen-setup .cc-l { font-size: calc(var(--u) * 2.05); margin-top: calc(var(--u) * 0.4); }
-  .screen-setup .cc-d { font-size: calc(var(--u) * 1.7); }
-}
 .cup { border-color: var(--cc); min-height: calc(var(--u) * 36); }
 .cup ol { margin: calc(var(--u) * 1.6) 0 0; padding-left: 1.3em; font-weight: 600; font-size: calc(var(--u) * 2.1); line-height: 1.5; }
 .cup li.soon { opacity: 0.45; font-weight: 400; }
@@ -203,21 +194,6 @@
 
 .panel.options { width: min(100%, calc(var(--u) * 80)); display: flex; flex-direction: column; gap: calc(var(--u) * 1); }
 @media (pointer: fine) { .panel.options { gap: calc(var(--u) * 0.7); padding-top: calc(var(--u) * 2); padding-bottom: calc(var(--u) * 2); } .panel.options .opt { padding-top: calc(var(--u) * 0.55); padding-bottom: calc(var(--u) * 0.55); } .panel.options .opt-ctl button { width: calc(var(--u) * 3.8); height: calc(var(--u) * 3.8); font-size: calc(var(--u) * 2.6); } }
-/* with a mouse the ten or eleven rows have to share one 16:9 screen height (the Controller row made it eleven), so the rows are slimmer there;
-   a touch screen keeps its tall rows and scrolls */
-/* a landscape phone: two columns of tall rows, so all of it fits the short screen without scrolling */
-@media (pointer: coarse) and (orientation: landscape) {
-  .panel.options { width: min(100%, calc(var(--u) * 104)); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--u) * 0.8) calc(var(--u) * 1.6); padding-top: calc(var(--u) * 1.6); padding-bottom: calc(var(--u) * 1.6); }
-  .screen-options .menu-head { margin-bottom: calc(var(--u) * 1.2); }
-  .panel.options .opt-ctl b { min-width: 4em; }
-}
-@media (pointer: fine) and (orientation: landscape) {
-  .screen-options { padding-top: calc(var(--u) * 2 + var(--safe-t)); padding-bottom: calc(var(--u) * 2 + var(--safe-b)); }
-  .screen-options .menu-head { margin-bottom: calc(var(--u) * 1.2); }
-  .panel.options { gap: calc(var(--u) * 0.4); padding-top: calc(var(--u) * 1.3); padding-bottom: calc(var(--u) * 1.3); }
-  .panel.options .opt { font-size: calc(var(--u) * 2.1); padding-top: calc(var(--u) * 0.2); padding-bottom: calc(var(--u) * 0.2); }
-  .panel.options .opt-ctl button { width: calc(var(--u) * 3.2); height: calc(var(--u) * 3.2); font-size: calc(var(--u) * 2.3); }
-}
 .opt { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: calc(var(--u) * 2.3); background: rgba(255,255,255,0.08); border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 1) calc(var(--u) * 2); cursor: pointer; }
 .opt-ctl { display: flex; align-items: center; gap: calc(var(--u) * 1.6); }
 .opt-ctl b { min-width: 6.5em; text-align: center; color: var(--gold); }

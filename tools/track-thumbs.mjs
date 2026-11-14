@@ -23,9 +23,7 @@ const server = http.createServer(async (req, res) => {
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
-let browser;   // installed Chrome when there is one, else Playwright's own browser (same as shot.mjs)
-try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] }); }
-catch { browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] }); }
+const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 await mkdir(resolve(ROOT, 'assets/tracks'), { recursive: true });
 for (const id of ids) {
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' })).newPage();

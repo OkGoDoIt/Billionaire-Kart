@@ -171,7 +171,10 @@ export function chatFace(r = 21) {
   const g = cv.getContext('2d'), tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const geo = new THREE.SphereGeometry(r * 1.045, 48, 32, Math.PI / 2 - PHI / 2, PHI, Math.PI / 2 - THETA / 2, THETA);
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false });
-  const mesh = new THREE.Mesh(geo, mat); mesh.renderOrder = 1;
+  // #246: the cap used to draw at renderOrder 1, UNDER the lattice (2), both additive glow shells
+  // (3, 4), the ring (5), jets (6) and halo (7) — the shells' fresnel rims brightened exactly over
+  // the face and washed the ink out at racing distance. It now draws above all of them.
+  const mesh = new THREE.Mesh(geo, mat); mesh.renderOrder = 9;
   const grp = new THREE.Group(); grp.add(mesh);
   // the cap spans PHI x THETA radians; draw in "face units" where the canvas middle is the middle of the face
   const X = u => W / 2 + u * W / 2, Y = v => H / 2 - v * H / 2;   // u, v in -1..1
@@ -179,14 +182,17 @@ export function chatFace(r = 21) {
   let mood = 'happy', shut = false, key = '';
   const paint = () => {
     const k = mood + shut; if (k === key) return; key = k;
-    g.clearRect(0, 0, W, H);
+    // #246: an opaque bright backing plate, not transparent ink floating over the core — the ink
+    // alone lost to the glow shells at 60-110 m on the climb; dark features on a solid plate the
+    // colour of the white-hot core read at racing speed. The ink is thicker for the same reason.
+    g.fillStyle = '#fff8ee'; g.fillRect(0, 0, W, H);
     const ink = '#1b0d3f';
     if (mood === 'evil') {
       // red eyes under angry brows, and a wide grin full of teeth
       for (const s of [-1, 1]) {
         g.fillStyle = ink; g.beginPath(); g.moveTo(X(s * 0.12), Y(0.36)); g.lineTo(X(s * 0.5), Y(0.5)); g.lineTo(X(s * 0.52), Y(0.4)); g.lineTo(X(s * 0.12), Y(0.27)); g.closePath(); g.fill();
-        g.fillStyle = '#ff1a3a'; g.beginPath(); g.ellipse(X(s * 0.3), Y(0.16), 70, shut ? 10 : 58, 0, 0, 7); g.fill();
-        g.fillStyle = '#ffe2e6'; g.beginPath(); g.ellipse(X(s * 0.3), Y(0.16), 22, shut ? 4 : 20, 0, 0, 7); g.fill();
+        g.fillStyle = '#ff1a3a'; g.beginPath(); g.ellipse(X(s * 0.3), Y(0.16), 82, shut ? 12 : 68, 0, 0, 7); g.fill();
+        g.fillStyle = '#ffe2e6'; g.beginPath(); g.ellipse(X(s * 0.3), Y(0.16), 26, shut ? 5 : 24, 0, 0, 7); g.fill();
       }
       g.fillStyle = ink; g.beginPath(); g.moveTo(X(-0.55), Y(-0.22)); g.quadraticCurveTo(X(0), Y(-0.62), X(0.55), Y(-0.22)); g.quadraticCurveTo(X(0), Y(-0.92), X(-0.55), Y(-0.22)); g.fill();
       g.fillStyle = '#ffffff'; for (let k = 0; k < 9; k++) { const u = -0.4 + k * 0.1, t = (u + 0.55) / 1.1, top = -0.22 - 0.8 * t * (1 - t) - 0.01; g.beginPath(); g.moveTo(X(u - 0.045), Y(top)); g.lineTo(X(u + 0.045), Y(top)); g.lineTo(X(u), Y(top - 0.09)); g.fill(); }
@@ -196,10 +202,10 @@ export function chatFace(r = 21) {
     g.fillStyle = ink;
     const ey = mood === 'think' ? 0.38 : 0.3, ex = mood === 'think' ? 0.07 : 0;
     for (const s of [-1, 1]) {
-      if (shut) { g.lineWidth = 30; g.strokeStyle = ink; g.lineCap = 'round'; g.beginPath(); g.arc(X(s * 0.33 + ex), Y(ey) + 30, 64, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
-      else { pill(s * 0.33 + ex, ey, 104, 220); g.fillStyle = '#ffffff'; g.beginPath(); g.arc(X(s * 0.33 + ex) + 20, Y(ey) - 56, 20, 0, 7); g.fill(); g.fillStyle = ink; }
+      if (shut) { g.lineWidth = 42; g.strokeStyle = ink; g.lineCap = 'round'; g.beginPath(); g.arc(X(s * 0.33 + ex), Y(ey) + 30, 64, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
+      else { pill(s * 0.33 + ex, ey, 120, 250); g.fillStyle = '#ffffff'; g.beginPath(); g.arc(X(s * 0.33 + ex) + 22, Y(ey) - 62, 24, 0, 7); g.fill(); g.fillStyle = ink; }
     }
-    g.lineWidth = 40; g.lineCap = 'round'; g.strokeStyle = ink; g.beginPath();
+    g.lineWidth = 54; g.lineCap = 'round'; g.strokeStyle = ink; g.beginPath();
     if (mood === 'think') { g.moveTo(X(-0.16), Y(-0.3)); g.lineTo(X(0.2), Y(-0.26)); }
     else g.arc(X(0), Y(0.12), 250, Math.PI * 0.2, Math.PI * 0.8);
     g.stroke();

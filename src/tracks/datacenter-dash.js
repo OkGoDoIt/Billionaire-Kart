@@ -27,7 +27,11 @@ const HB = { x0: 100.5, x1: 196, z0: -141.3, z1: 20, H: 13, ceil: 10.8, door: 8.
 const ENTRY = { z0: -11.5, z1: 11 }, EXIT = { x0: 160.5, x1: 183.5 };
 /* Campus halls (centre, yaw, length, width, height, accent, company sign). The ground around each is paved. */
 const HALLS = [
-  { x: 30, z: -88, yaw: 0, L: 92, W: 26, H: 15, c: 0x1f6bff, name: 'OMNIMIND', mural: 'LAKE' },
+  // OMNIMIND has no wall mural any more (#246): its LAKE "before picture" hung on the front wall
+  // where the keynote arena blocks every sight line from the drag (probe: lines to y 1.4/7/11.8
+  // cross the arena wall at y 2.0/4.4/6.5, all under its 15 m roof). The picture now hangs inside
+  // the arena itself, on the south wall over the stands — see arena() below. The roof name stays.
+  { x: 30, z: -88, yaw: 0, L: 92, W: 26, H: 15, c: 0x1f6bff, name: 'OMNIMIND' },
   { x: 60, z: -175, yaw: 0, L: 64, W: 24, H: 14, c: 0x16a34a, name: 'THIRSTCOMPUTE', mural: 'WATER: 100% RECYCLED (INTO STEAM)' },
   { x: 55, z: -245, yaw: 0, L: 56, W: 24, H: 13, c: 0xff6a00, name: 'NEURAL ACRES', mural: 'YOUR JOB, NOW AS A SERVICE' },
   { x: 255, z: -55, yaw: Math.PI / 2, L: 84, W: 26, H: 15, c: 0x7b5cff, name: 'HYPERSCALE HOLDINGS', mural: 'OUR CHATBOT SAYS THE LAKE IS FINE' },
@@ -272,7 +276,10 @@ const BOARDS = [
   [6.6, -1, 16, 'YOUR LAKE, NOW IN THE CLOUD', '#1f6bff', '#ffffff'], [16.3, -1, 16, 'CARBON NEUTRAL BY 2099', '#16a34a', '#ffffff'],
   [20.0, 1, 16, 'POWERED BY GAS AND VIBES', '#ffd23c', '#1a1d29'], [23.6, 1, 15, 'ASK US ABOUT OUR LAKE', '#ffffff', '#1f6bff'],
   [25.2, 1, 15, 'NOW TRAINING ON YOU', '#db2777', '#ffffff'], [7.6, 1, 16, 'THIRSTY? SO ARE WE', '#0ea5e9', '#ffffff'],
-  [1.0, 1, 30, 'GPU GO BRRR', '#1a1d29', '#ffd23c'], [17.2, 1, 16, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
+  // #246: GPU GO BRRR used to stand at cp 1.0 off 30 — outside the keynote arena wall while the
+  // road runs inside it (probe: sight line over the 15 m wall reaches y ~28.5 at the panel, the
+  // whole 9-16.5 m band hidden). It now stands on the Hall 9 exit leg, in the open, at cp 4.35
+  [4.35, -1, 14, 'GPU GO BRRR', '#1a1d29', '#ffd23c'], [17.2, 1, 16, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
   [22.9, -1, 16, 'WE ARE OUT OF GPUS', '#ffffff', '#e23b3b'], [26.2, -1, 16, 'SKY STILL MOSTLY BLUE', '#7b5cff', '#ffffff'],
   [10.6, -1, 14, 'LAKEFRONT VIEWS (FOR NOW)', '#0ea5e9', '#ffffff'], [12.0, -1, 14, 'DRINK RESPONSIBLY. WE WILL.', '#ffffff', '#1f6bff'], [13.4, -1, 14, 'SHORTCUT OPENS AT 1%', '#ffd23c', '#1a1d29'],
 ];
@@ -929,7 +936,9 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
     atlas.place(s2, [172, 7.4, -128], 0, 15, 2.34, 0, true);
     for (const [x, z] of [[112, -5], [112, 4.4], [167, -128], [177, -128]]) hang.add('c', cyl(0.03, 0.03, HB.ceil - 8.4, 4), { p: [x, (HB.ceil + 8.4) / 2, z] });
     const s3 = atlas.add(640, 160, signDraw('HOT AISLE: SPICY', { bg: '#ff6a00', fg: '#ffffff', font: SANS, size: 80, lines: 1 }));
-    atlas.place(s3, [HB.x1 - T - 0.05, 6.2, -40], -Math.PI / 2, 9, 2.25);
+    // at z -112 now, beside the hot rack pairs it names (z -76..-100): its old spot at z -40 is
+    // covered by the relocated NOW TRAINING ON YOU mural on this wall (#246)
+    atlas.place(s3, [HB.x1 - T - 0.05, 6.2, -112], -Math.PI / 2, 9, 2.25);
     bake.builder(hang, { c: plastic(0x2c323c, 0.5) }, false);
   }
   /* ---------- round 2: the hall gets involved — status wall, doorway glass, cable gantries, a delivery ---------- */
@@ -1005,11 +1014,16 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
     atlas.place(s, [HB.x0 + 1.55, y0 + 3.9, 0], -Math.PI / 2, 33, 7.1, 0, true);
   }
   const drip = { x: 161.6, y: 5.6, z: -118 };
-  // giant painted jokes on the three plain faces of the building
+  // giant painted jokes on the building's faces — two of them moved inside (#246): NOW TRAINING
+  // stood on the north face, which no road passes at all (probe: no sample north of the face),
+  // and NOW HIRING on the east face, blocked from the only outside sight line by the building's
+  // own corner. Both now hang on the walls the exit descent actually reads: TRAINING down the
+  // inside of the east wall beside the descent, HIRING dead ahead on the south wall inside,
+  // west of the GPU doors. The south-face mural stays — it is the descent's outside counterpart.
   for (const [text, c, yaw, w] of [
-    ['NOW TRAINING ON YOU', [148, 5.8, HB.z1 + 0.36], 0, 88],
+    ['NOW TRAINING ON YOU', [HB.x1 - 0.36, 5.8, -60], -Math.PI / 2, 88],
     ['THIS BUILDING USES MORE WATER THAN YOUR TOWN', [130, 5.8, HB.z0 - 0.36], Math.PI, 54],
-    ['NOW HIRING: 0 HUMANS', [HB.x1 + 0.36, 5.8, -17.5], Math.PI / 2, 64],
+    ['NOW HIRING: 0 HUMANS', [117.5, 5.8, HB.z0 + 0.36], 0, 34],
   ]) { const hgt = 9.2, r = atlas.add(1600, Math.round(clamp(1600 * hgt / w, 160, 900)), muralDraw(text, '#1f6bff')); atlas.place(r, c, yaw, w, hgt); }
   // jokes at eye level along the road, and big banners hung over it, all facing the drivers
   {
@@ -1269,6 +1283,10 @@ const HALL_EXTRAS = {
     // murals: the old campus jokes, now on the arena walls
     { const i = track.indexAtCp(0.35), r = atlas.add(1600, 260, muralDraw('TRAINING ON YOUR DATA (THANKS)', '#ff3dbb')); atlas.place(r, at(i, Wd(i, 1) - 0.2, 11.6), Math.atan2(-track.lx[i], -track.lz[i]), 46, 7.4); }
     { const i = track.indexAtCp(27.6), r = atlas.add(1600, 300, muralDraw('4 JOBS CREATED', '#3dc8ff')); atlas.place(r, at(i, -(Wd(i, -1) - 0.2), 12.4), Math.atan2(track.lx[i], track.lz[i]), 34, 6.2); }
+    // OMNIMIND's lake "before picture", swapped onto this wall (#246): on OMNIMIND's own front wall
+    // the arena hid it from every driver; here the whole start/finish straight reads it over the
+    // south stands, keynote backdrop style, before the lake itself shows what "after" looks like
+    { const i = track.indexAtCp(0.8), r = atlas.add(1600, 200, lakeMural); atlas.place(r, at(i, -(Wd(i, -1) - 0.2), 10.5), Math.atan2(track.lx[i], track.lz[i]), 64, 8); }
     // the wall at the far end carries the hall it leads to: the gallons counter and the name over the door
     const iE = idx[n - 1], ty = Math.atan2(-track.tx[iE], -track.tz[iE]), e = (lat, up, o) => { const p = at(iE, lat, up); return [p[0] - track.tx[iE] * o, p[1], p[2] - track.tz[iE] * o]; };
     ctxs.counterAt = { c: e(0, DOORH + 2.05, 0.5), yaw: ty };

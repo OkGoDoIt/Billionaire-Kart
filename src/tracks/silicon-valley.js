@@ -196,6 +196,13 @@ export default {
     const atlas = S.makeAtlas(ctx.group), bake = S.makeBaker(ctx.group, sc.shadows);
     const taken = [];                                                   // footprints of the gags: [x, z, r]; trees and campus blocks keep out
     const free = (x, z) => !taken.some(([tx, tz, r]) => (tx - x) ** 2 + (tz - z) ** 2 < r * r);
+    // the big boards' sight lines, reserved before anything scatters (#246): the boards used to be
+    // placed last with no keep-out, so the oak scatter and the cypress avenues could — and did —
+    // plant themselves across the panels (UNLIMITED PTO, A BETTER WORLD, FREE KOMBUCHA, BURN RATE
+    // CAPITAL all stood behind trees). The newer tracks reserve gag footprints first; so does this.
+    // boardSpots also collects the firms' board anchors (sandHill pushes them) for the avenue filter.
+    const boardSpots = BOARDS.map(([at, side, off]) => { const p = sc.beside(at, side, off); return [p.x, p.z]; });
+    for (const [x, z] of boardSpots) taken.push([x, z, 14]);
     /** Local frame of a placement: u to its right, v forward (toward the road for things facing it), y up. */
     const local = (p, u, v, y) => [p.x + Math.cos(p.yaw) * u + Math.sin(p.yaw) * v, y, p.z - Math.sin(p.yaw) * u + Math.cos(p.yaw) * v];
     const signs = new Map();
@@ -259,7 +266,7 @@ export default {
     // campusBlock() makes a wall material per call; share one per window texture so the baker merges them
     const wallMats = new Map(), origAdd = bake.add;
     bake.add = (obj, cast = true) => { obj.traverse?.(o => { if (o.isMesh && o.material?.map && !o.material.userData.shared) { const k = o.material.map.uuid; if (!wallMats.has(k)) { o.material.userData.shared = true; wallMats.set(k, o.material); } o.material = wallMats.get(k); } }); origAdd(obj, cast); };
-    const kit = { THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, local, sign, board, legs, anim, view };
+    const kit = { THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, boardSpots, local, sign, board, legs, anim, view };
     gags(kit);
     campus(kit);
     sandHill(kit);
@@ -322,7 +329,12 @@ export default {
     sc.instances(oakB, oakSpots.filter((_, i) => i % 3 === 1), { scale: [0.8, 1.6], yaw: 'random', tilt: 0.04, sink: 0.25 });
     sc.instances(oakC, oakSpots.filter((_, i) => i % 3 === 2), { scale: [0.8, 1.4], yaw: 'random', tilt: 0.04, sink: 0.25 });
     const cyp = partsOf(P.cypress(1, { h: 12 }));
-    sc.instances(cyp, [...sc.along({ from: 7.2, to: 8.3, side: -1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 3.3, to: 5.4, side: 1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 3.3, to: 5.4, side: -1, offset: 14.5, spacing: 9 })], { scale: [0.85, 1.2] });
+    // the avenue keeps out of the boards' sight lines (#246): at offset 14.5 the rows stood directly
+    // in front of the panels at off 16-26, canopy over the whole 6-11 m band — the avenue look stays,
+    // with a sight gap at each board (anchors in boardSpots: the big boards above, the firms' boards
+    // pushed by sandHill, which runs before the trees)
+    const clearOfBoards = (x, z) => !boardSpots.some(([bx, bz]) => (bx - x) ** 2 + (bz - z) ** 2 < 13 * 13);
+    sc.instances(cyp, [...sc.along({ from: 7.2, to: 8.3, side: -1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 3.3, to: 5.4, side: 1, offset: 14.5, spacing: 9 }), ...sc.along({ from: 3.3, to: 5.4, side: -1, offset: 14.5, spacing: 9 })].filter(p => clearOfBoards(p.x, p.z)), { scale: [0.85, 1.2] });
     const palmA = partsOf(P.palm(1, { h: 10 })), palmB = partsOf(P.palm(5, { h: 8.5 }));
     // palms line the shores and the climb; sc.along skips bridge samples, so none land on the deck
     const palmSpots = [...sc.along({ from: 20.35, to: 22.6, side: -1, offset: 14, spacing: 12 }), ...sc.along({ from: 1.6, to: 2.9, side: -1, offset: 14, spacing: 12 }), ...sc.along({ from: 22.15, to: 22.6, side: 1, offset: 14, spacing: 12 }),
@@ -465,7 +477,13 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, local, sign, b
     for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2, x = c.x + Math.cos(a) * R, z = c.z + Math.sin(a) * R; cars.push({ x, z, y: track.terrainHeight(x, z), yaw: Math.atan2(c.x - x, c.z - z) + rng.range(-0.12, 0.12) }); }
     sc.instances(partsOf(S.robotaxi()), cars, { scale: 1.35 });
     const cone = P.cone3d(); sc.place(cone, c.x, c.z, { scale: 2.2, y: track.terrainHeight(c.x, c.z) - 0.1 }); bake.add(cone);
-    const sp = { x: c.x + l[0] * 15, z: c.z + l[1] * 15 }; sp.y = track.terrainHeight(sp.x, sp.z); sp.yaw = facing(sp, 40, -2);
+    // the sign stands on the ROAD side of the ring, facing the karts coming off the bridge (#246):
+    // it used to sit 15 m beyond the depot (51 m from the centreline, panel centre 25 m over the
+    // road) yawed at the far side of the map — probe: its normal pointed away from approaching
+    // drivers at dot -1.00, a blank back for the whole approach. Now ~15 m off the edge, facing the
+    // cp 21.3 road point: dot +1.00/+1.00/+0.99/+0.79 across the approach, the frozen ring behind it
+    const sp = { x: c.x - l[0] * 12, z: c.z - l[1] * 12 }; sp.y = track.terrainHeight(sp.x, sp.z);
+    const ri = track.indexAtCp(21.3); sp.yaw = facing(sp, track.px[ri], track.pz[ri]);
     legs(sp, 16, 9.5);
     atlas.place(board('ALL RIDES DELAYED: 1 CONE', { bg: '#ffffff', fg: '#1a1d29', kicker: 'ROBOTAXI DEPOT', kfg: '#e23b3b', border: '#1a1d29', size: 120 }, 768, 300), local(sp, 0, 0, sp.y + 12.5), sp.yaw, 17, 6.6);
     taken.push([c.x, c.z, 24], [sp.x, sp.z, 12]);
@@ -798,9 +816,17 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
 
   // ---- the Oval: a topiary "$" on the lawn inside the hairpin ----
   {
-    const ox = -173, oz = -30, t = S.topiaryDollar(), oy = track.terrainHeight(ox, oz);
-    sc.place(t, ox, oz, { yaw: Math.atan2(-208 - ox, 25 - oz), y: oy, scale: 1.6 }); bake.add(t);   // 1.25 -> 1.6 (#215 item 3): at 1.25 the $ stayed hidden behind its own bed ring from the racing line
-    track.addCollider(ox, oz, 3.4);
+    // #246 hero read (the owner-named item): the $ moves from (-173,-30) — 23 m past the edge, off
+    // both legs' sight lines, a hedge blob behind its own bed ring — to (-185,-45): probe-verified
+    // 16.6 m from the apex centreline (cp 11.31), ~8 m off the edge, in view for the whole U-turn.
+    // Scale 2.0, on a stone plinth that lifts it out of the lawn's dip (terrain -1.0 vs road y 0),
+    // yawed at the hairpin entry so approaching drivers meet it face-on across the lawn
+    const ox = -185, oz = -45, t = S.topiaryDollar(), oy = track.terrainHeight(ox, oz);
+    const tp = at(10.9), topY = tp.y + 0.5;
+    const plinth = new THREE.Mesh(new THREE.CylinderGeometry(6.8, 7.6, topY - oy + 0.7, 24), new THREE.MeshStandardMaterial({ color: 0x9aa0ab, roughness: 0.9 }));
+    plinth.position.set(ox, (topY + oy - 0.7) / 2, oz); group.add(plinth); bake.add(plinth);
+    sc.place(t, ox, oz, { yaw: Math.atan2(tp.x - ox, tp.z - oz), y: topY - 0.15, scale: 2.0 }); bake.add(t);
+    track.addCollider(ox, oz, 6.5);
     const beds = [];
     for (let k = 0; k < 26; k++) { const a = (k / 26) * Math.PI * 2, r = 9.5 + (k % 2) * 1.6, x = ox + Math.cos(a) * r, z = oz + Math.sin(a) * r * 0.8; beds.push({ x, z, y: track.terrainHeight(x, z), yaw: rng() * 6.28 }); }
     sc.instances(partsOf(P.bush(6, { color: 0x4fae3f, flower: 0xe8273a })), beds, { scale: [1.1, 1.5], cast: false, sink: 0.1 });
@@ -867,7 +893,7 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
 }
 
 /* ---------- Sand Hill Road: the VC office island and the fork, the firms, the summit pod ---------- */
-function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, board, legs, anim, view }) {
+function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, boardSpots, local, board, legs, anim, view }) {
   const PV = new THREE.Vector3();
   const at = (cp, lat = 0) => { const s = track.sAtCp(cp); track.pointAt(s, lat, PV); const yaw = track.yawAt(s); return { x: PV.x, y: PV.y, z: PV.z, yaw, back: yaw + Math.PI, i: track.indexAtCp(cp) }; };
   const FIRMS = [
@@ -933,6 +959,7 @@ function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, boa
       atlas.place(b, [q.x + Math.sin(yaw) * 0.03, gy + 8.5, q.z + Math.cos(yaw) * 0.03], yaw, 15, 5);
       atlas.place(b, [q.x - Math.sin(yaw) * 0.46, gy + 8.5, q.z - Math.cos(yaw) * 0.46], yaw + Math.PI, 15, 5);
       taken.push([q.x, q.z, 9]);
+      boardSpots.push([q.x, q.z]);   // #246: BURN RATE CAPITAL's anchor — the cypress avenue keeps out of its sight line too
     });
   }
 

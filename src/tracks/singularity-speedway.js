@@ -198,7 +198,10 @@ function decorate(ctx) {
   const inDisc = (x, y, z, pad) => { const r = Math.hypot(x - ox, z - oz); return r > 40 && r < 130 && Math.abs(y - (oy - (z - oz) * Math.tan(DISC_TILT))) < pad; };
   anim.push((dt, time) => { orb.userData.update(time); disc.userData.update(time); });
   // the next data center: a Dyson swarm closing round a star, dead ahead down the Leap. It closes a little more every lap.
-  const dyson = S.dysonSphere({ R: 260, panels: 700, fill: 0.5 });   // checklist step 9: denser, smaller panels read as a swarm, not a disco ball dyson.position.set(CX + 40, 250, CZ + 1480); dyson.lookAt(CX, 120, CZ); ctx.group.add(dyson);
+  const dyson = S.dysonSphere({ R: 260, panels: 700, fill: 0.5 });   // checklist step 9: denser, smaller panels read as a swarm, not a disco ball
+  // #246: the position/lookAt/group.add used to sit after that // — commented out, the whole swarm,
+  // its star and the MINIMUM VIABLE COMPUTE band were built and thrown away, never in the scene
+  dyson.position.set(CX + 40, 250, CZ + 1480); dyson.lookAt(CX, 120, CZ); ctx.group.add(dyson);
   let built = 0.55, builtTo = 0.55;
   anim.push((dt, time) => { dyson.userData.update(time); if (Math.abs(builtTo - built) > 0.002) { built += Math.sign(builtTo - built) * Math.min(Math.abs(builtTo - built), dt * 0.12); dyson.userData.setBuilt(built); } });
   // it has a face, and the face watches whoever is looking at it
@@ -601,7 +604,7 @@ function decorate(ctx) {
   const frames = [[], [], []], bigFrames = [];
   BOARDS.forEach(([cp, side, off, up, text], k) => {
     const i = I(cp), p = at(i, side * (edge(i, side) + off), up), yaw = boardYaw(i, side, 0.45) + rng.range(-0.06, 0.06);
-    const [bg, fg] = BOARD_COLS[k % BOARD_COLS.length], big = cp > 49.3 && cp < 49.7, w = big ? 26 : 18, h = big ? 7.2 : 5;
+    const [bg, fg] = BOARD_COLS[k % BOARD_COLS.length], big = BIG_BOARD.has(text), w = big ? 26 : 18, h = big ? 7.2 : 5;
     const r = atlas.add(1000, 278, boardDraw(text, bg, fg));
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
     atlas.place(r, [p.x + fx * 0.02, p.y, p.z + fz * 0.02], yaw, w, h);
@@ -619,15 +622,19 @@ function decorate(ctx) {
 /* ---------- the signs: six words or fewer, read at speed ---------- */
 const BOARDS = [
   // [cp, side (1 left, -1 right), metres beyond the edge, height, text]
-  [0.1, 1, 8, 5, 'GUARDRAILS: ON (MOSTLY)'],
+  // #246: GUARDRAILS sat abreast of the grid (7.5 m past the line), only ever caught at the frame
+  // edge — it now stands 39 m down the start straight, head-on for the launch
+  [0.55, 1, 8, 5, 'GUARDRAILS: ON (MOSTLY)'],
   [1.05, -1, 9, 6, 'AGI ACHIEVED INTERNALLY (AGAIN)'],
   [2.35, -1, 8, 5, 'AS AN AI, I CANNOT LOSE'],
   [3.35, -1, 8, 5, 'THIS SIGN WAS WRITTEN BY AI.'],
   [4.5, 1, 8, 5, 'SO WAS THIS ONE.'],
   [5.4, 1, 8, 6, 'HALLUCINATION-FREE (CITATION NEEDED)'],
-  [8.0, 1, 7, 6, 'DOOM: 12% (ROUNDED DOWN)'],
-  [12.0, 1, 7, 6, 'YOUR JOB IS SAFE (UNTIL FRIDAY)'],
-  [15.5, 1, 10, 4, 'THOUGHT FOR 47 SECONDS. STILL WRONG.'],
+  // #246: DOOM was on the outside of the spiral while the gaze follows the orb on the inside — it
+  // moves to the gaze side, floated clear of the orb's surface, and joins the big frames (below)
+  [8.0, -1, 4, 8, 'DOOM: 12% (ROUNDED DOWN)'],
+  [12.0, 1, 7, 9, 'YOUR JOB IS SAFE (UNTIL FRIDAY)'],
+  [15.5, 1, 10, 9, 'THOUGHT FOR 47 SECONDS. STILL WRONG.'],
   [21.0, -1, 7, 5, 'IGNORE PREVIOUS INSTRUCTIONS. HONK.'],
   [24.4, -1, 7, 5, 'VIBE CODED. VIBE CRASHED.'],
   [27.3, -1, 7, 5, 'TIP: ADD GLUE TO PIZZA'],
@@ -641,6 +648,9 @@ const BOARDS = [
   [49.5, 1, 14, 9, 'BUY MORE GPUS. SAVE MORE.'],
 ];
 const BOARD_COLS = [['#ff5cc8', '#ffffff'], ['#35e0ff', '#12142b'], ['#ffd23c', '#12142b'], ['#7a6bff', '#ffffff'], ['#12142b', '#ffd23c'], ['#ffffff', '#e2246b']];
+// the boards that get the 26 m hero frames: the final-straight board, plus the two the #246 audit
+// found only glimpsed at standard size (DOOM on the spiral, YOUR JOB IS SAFE past it)
+const BIG_BOARD = new Set(['BUY MORE GPUS. SAVE MORE.', 'DOOM: 12% (ROUNDED DOWN)', 'YOUR JOB IS SAFE (UNTIL FRIDAY)']);
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif', SANS = '"Arial Black", "Helvetica Neue", Arial, sans-serif', MONO = '"Courier New", Courier, monospace';
 const boardDraw = (text, bg, fg) => (g, w, h) => {
   g.fillStyle = bg; g.fillRect(0, 0, w, h);

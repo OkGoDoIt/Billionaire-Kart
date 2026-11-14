@@ -6,7 +6,7 @@
    receive them, so this module imports cleanly in Node. */
 import * as THREE from 'three';
 import { canvasTex } from '../render/textures.js';
-import { ModelBuilder, box, sphere, cyl, torus, plastic, paint, glow, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, torus, tube, plastic, paint, glow, MAT } from './build.js';
 
 const YELLOW = 0xf7b500;      // TBM safety yellow
 const SANDSTONE = 0xcfc4ae;   // portal concrete
@@ -570,4 +570,233 @@ export function digGantry(tex, { span = 23, beamY = 8.0 } = {}) {
     grp.add(back);
   }
   return grp;
+}
+
+/** A safety inspector with a very literal stopwatch job. The shell spiral
+ * faces the racing line and the neck and eyes lean toward the broken prototype. */
+export function paceSnail() {
+  const group = new THREE.Group(),
+    b = new ModelBuilder(),
+    eyes = new ModelBuilder();
+  const mint = paint(0x69e8aa),
+    shell = paint(0xf1763e),
+    cream = plastic(0xffefa2),
+    brim = paint(0xffbe16);
+  b.add('foot', sphere(1), { p: [0, 0.48, -0.12], s: [2.85, 0.45, 0.98] });
+  b.add('skin', sphere(1), { p: [0.45, 0.82, 0], s: [2.5, 0.6, 0.85] });
+  b.add('skin', sphere(1), { p: [1.9, 1.52, 0.08], s: [0.77, 1.02, 0.73], r: [0, 0, -0.35] });
+  b.add('skin', sphere(1), { p: [2.19, 2.02, 0.27], s: [0.88, 0.7, 0.81] });
+  b.add('shell', sphere(1, 30, 18), { p: [-0.57, 2, 0.03], s: [1.87, 1.85, 1.12] });
+  const spiral = [];
+  for (let i = 0; i <= 72; i++) {
+    const t = i / 72,
+      angle = 0.9 + t * Math.PI * 3.8,
+      r = 0.13 + t * 1.6;
+    spiral.push([-0.57 + r * Math.cos(angle), 2 + r * Math.sin(angle), 0.04 + 1.12 * Math.sqrt(1 - (r / 1.89) ** 2)]);
+  }
+  b.add('stripe', tube(spiral, 0.115, 72, 8));
+  // The shell doubles as a bolted motor housing; a pair of tiny bogies run under the foot.
+  for (const x of [-1.75, 0.23]) {
+    b.add('smile', cyl(0.36, 0.36, 0.17, 14), { p: [x, 0.33, 0.71], r: [Math.PI / 2, 0, 0] });
+    b.add('stripe', cyl(0.12, 0.12, 0.19, 8), { p: [x, 0.33, 0.74], r: [Math.PI / 2, 0, 0] });
+  }
+  b.add('helmet', sphere(1, 22, 12), { p: [2.07, 2.62, 0.17], s: [0.87, 0.53, 0.78] });
+  b.add('brim', cyl(1, 1, 0.14, 24), { p: [2.12, 2.56, 0.18], s: [1.1, 1, 0.89] });
+  b.add('lamp', box(0.33, 0.28, 0.15, 0.05, 1), { p: [2.02, 2.83, 0.92] });
+  b.add(
+    'smile',
+    tube(
+      [
+        [2.35, 1.9, 0.97],
+        [2.53, 1.85, 0.93],
+        [2.67, 1.93, 0.88]
+      ],
+      0.05,
+      8,
+      5
+    )
+  );
+  for (const [x, z, h] of [
+    [2.37, 0.64, 3.52],
+    [2.84, -0.05, 3.24]
+  ]) {
+    eyes.add(
+      'skin',
+      tube(
+        [
+          [x - 0.13, 2.1, z],
+          [x - 0.02, 2.73, z + 0.03],
+          [x + 0.16, h - 0.16, z + 0.11]
+        ],
+        0.116,
+        11,
+        8
+      )
+    );
+    eyes.add('white', sphere(0.34, 16, 10), { p: [x + 0.16, h, z + 0.11] });
+    eyes.add('pupil', sphere(0.17, 12, 8), { p: [x + 0.24, h - 0.015, z + 0.39] });
+    eyes.add('white', sphere(0.051, 8, 6), { p: [x + 0.27, h + 0.064, z + 0.52] });
+  }
+  group.add(
+    b.build({ foot: plastic(0x289676), skin: mint, shell, stripe: cream, helmet: brim, brim, smile: MAT.dark, lamp: glow(0xffefb8, 1.2) })
+  );
+  const stalks = eyes.build({ skin: mint, white: plastic(0xffffee), pupil: MAT.dark });
+  group.add(stalks);
+  group.userData.stalks = stalks;
+  return group;
+}
+
+/** A cream prototype on axle stands, with its bonnet propped up. */
+export function stalledPrototype() {
+  const b = new ModelBuilder();
+  b.add('body', box(4.65, 1.02, 1.95, 0.3, 2), { p: [0, 0.96, 0] });
+  b.add('glass', box(2.3, 0.9, 1.75, 0.24, 2), { p: [-0.4, 1.74, 0] });
+  b.add('body', box(1.65, 0.12, 1.9, 0.08, 1), { p: [1.65, 1.98, 0], r: [0, 0, -0.89] });
+  for (const x of [-1.5, 1.5])
+    for (const z of [-0.91, 0.91]) {
+      b.add('tire', cyl(0.44, 0.44, 0.22, 14), { p: [x, 0.57, z], r: [Math.PI / 2, 0, 0] });
+      b.add('jack', cyl(0.1, 0.33, 0.44, 4), { p: [x, 0.22, z * 0.72], r: [0, Math.PI / 4, 0] });
+    }
+  b.add('lamp', box(0.12, 0.2, 1.6, 0.04, 1), { p: [2.34, 1.04, 0] });
+  return b.build({ body: paint(0xeae7d2), glass: plastic(0x234754), tire: MAT.dark, jack: paint(0xfa5727), lamp: glow(0xffc155, 1.5) });
+}
+
+/** Single open-sided carriage with exactly four seats, facing local +X. */
+export function fourSeatShuttle() {
+  const b = new ModelBuilder();
+  b.add('body', box(6.0, 0.74, 2.65, 0.28, 2), { p: [0, 0.87, 0] });
+  b.add('roof', box(5.6, 0.24, 2.67, 0.1, 2), { p: [-0.1, 3, 0] });
+  for (const x of [-2.1, 2.0])
+    for (const z of [-1.06, 1.06]) {
+      b.add('frame', cyl(0.07, 0.07, 1.9, 8), { p: [x, 2.03, z] });
+      b.add('tire', cyl(0.47, 0.47, 0.23, 14), { p: [x, 0.5, z * 1.18], r: [Math.PI / 2, 0, 0] });
+    }
+  for (const x of [-1.22, 1.02])
+    for (const z of [-0.59, 0.59]) {
+      b.add('seat', box(0.84, 0.22, 0.83, 0.1, 2), { p: [x, 1.38, z] });
+      b.add('seat', box(0.21, 0.89, 0.85, 0.1, 2), { p: [x - 0.37, 1.82, z], r: [0, 0, 0.1] });
+    }
+  b.add('nose', box(0.95, 0.43, 2.48, 0.17, 2), { p: [2.59, 1.34, 0] });
+  b.add('lamp', box(0.12, 0.19, 1.9, 0.04, 1), { p: [3.0, 1.04, 0] });
+  return b.build({
+    body: paint(0xf1e5b7),
+    roof: paint(0x1e998e),
+    nose: paint(0x1f8f8d),
+    frame: MAT.steel,
+    tire: MAT.dark,
+    seat: paint(0xdc7146),
+    lamp: glow(0x91fff2, 1.4)
+  });
+}
+
+/** A thick, illuminated left arrow fixed above the boarding bay. */
+export function boardingArrow() {
+  const b = new ModelBuilder();
+  b.add('shaft', box(3.9, 0.59, 0.27, 0.09, 1), { p: [0.45, 0, 0] });
+  for (const tilt of [-1, 1]) {
+    b.add('shaft', box(2.4, 0.62, 0.27, 0.08, 1), { p: [-1.13, tilt * 0.62, 0], r: [0, 0, tilt * 0.64] });
+  }
+  b.add('bracket', box(0.16, 2.4, 0.18), { p: [0.95, 1.15, -0.18] });
+  return b.build({ shaft: glow(0xffc024, 1.35), bracket: MAT.steel });
+}
+
+/** A queue the size of the train the passengers expected. All three runs and
+ * their turns share meshes; turned shoulders and luggage distinguish the line. */
+export function boardingQueue() {
+  const b = new ModelBuilder();
+  b.add('deck', box(14, 0.69, 4.45, 0.08, 1), { p: [0, 0.0, 0] });
+  for (let run = 0; run < 3; run++) {
+    const z = (run - 1) * 1.36;
+    for (let i = 0; i < 8; i++) {
+      const x = -5.95 + i * 1.68,
+        yaw = (run % 2 ? -0.9 : 0.94) + (i % 3) * 0.23;
+      const height = 0.89 + (i % 4) * 0.055,
+        coat = ['coral', 'blue', 'green', 'sand'][(i + run) % 4],
+        skin = i % 3 ? 'skin' : 'umber';
+      b.add(coat, box(0.56, 0.67 * height, 0.39, 0.14, 2), { p: [x, 1.33 * height, z], r: [0, yaw, 0] });
+      b.add(skin, sphere(0.235, 10, 8), { p: [x, 1.89 * height, z] });
+      for (const hand of [-1, 1]) {
+        b.add(coat, box(0.17, 0.42, 0.18, 0.07, 1), { p: [x + hand * 0.30, 1.27 * height, z + 0.01], r: [0.18, 0, hand * 0.13] });
+        b.add(skin, sphere(0.095, 8, 6), { p: [x + hand * 0.31, 1.05 * height, z + 0.04] });
+      }
+      b.add('hair', sphere(0.242, 10, 8), { p: [x, 2.01 * height, z - 0.015], s: [1, 0.55, 0.99] });
+      for (const offset of [-0.12, 0.12]) b.add('trousers', box(0.18, 0.64, 0.19, 0.04, 1), { p: [x + offset, 0.7, z] });
+      if (i % 3 === 0) b.add('case', box(0.46, 0.58, 0.32, 0.055, 1), { p: [x + 0.43, 0.65, z] });
+    }
+    for (const end of [-6.4, 0, 6.4]) b.add('rail', cyl(0.045, 0.062, 0.94, 7), { p: [end, 0.82, z + 0.55] });
+    b.add('belt', box(12.8, 0.12, 0.08), { p: [0, 1.22, z + 0.55] });
+    if (run < 2) b.add('belt', box(0.08, 0.12, 1.36), { p: [run ? -6.4 : 6.4, 1.22, z + 1.23] });
+  }
+  return b.build({
+    deck: MAT.concrete,
+    rail: MAT.steel,
+    belt: paint(0xf2af45),
+    skin: plastic(0xe6ad7c),
+    umber: plastic(0x8f624d),
+    hair: MAT.dark,
+    trousers: plastic(0x354859),
+    case: paint(0xa45d3b),
+    coral: paint(0xe07463),
+    blue: paint(0x65bfd7),
+    green: paint(0x75b995),
+    sand: paint(0xf3c577)
+  });
+}
+
+/** A literal flat-pack house: individual courses of bricks, plus a mould,
+ * and a finished sample on the display tray. */
+export function brickShowroom() {
+  const b = new ModelBuilder();
+  b.add('base', box(8.5, 1.5, 4.5, 0.12, 1), { p: [0, 0.75, 0] });
+  b.add('trim', box(8.65, 0.13, 4.62, 0.06, 1), { p: [0, 1.52, 0] });
+  for (let layer = 0; layer < 6; layer++) {
+    const count = 6 - layer;
+    for (let x = 0; x < count; x++)
+      for (let z = 0; z < Math.min(count, 4); z++) {
+        b.add(['clay', 'rust', 'salmon'][(x + 2 * z + layer) % 3], box(0.9, 0.53, 0.72, 0.035, 1), {
+          p: [-0.7 + (x - (count - 1) / 2) * 0.96, 1.88 + layer * 0.57, (z - (Math.min(count, 4) - 1) / 2) * 0.78]
+        });
+      }
+  }
+  b.add('trim', box(1.8, 0.11, 1.3), { p: [2.9, 1.68, 0.5] });
+  for (const z of [-0.04, 0.99]) b.add('steel', box(1.6, 0.27, 0.09), { p: [2.9, 1.88, z] });
+  for (const x of [2.14, 3.66]) b.add('steel', box(0.1, 0.27, 0.98), { p: [x, 1.88, 0.48] });
+  b.add('clay', box(0.81, 0.49, 0.66, 0.04, 1), { p: [2.89, 1.84, -0.81], r: [0, 0.22, 0] });
+  return b.build({
+    base: plastic(0x29353b),
+    trim: paint(0xf6ae44),
+    steel: MAT.steel,
+    clay: paint(0xc77f51),
+    rust: paint(0xad5838),
+    salmon: paint(0xdb9662)
+  });
+}
+
+/** Flag judge on the inside platform, facing the timing lane across the road. */
+export function trialOfficial() {
+  const b = new ModelBuilder();
+  b.add('base', box(1.9, 0.6, 1.6, 0.1, 1), { p: [0, 0.3, 0] });
+  for (const side of [-1, 1]) b.add('uniform', box(0.26, 0.81, 0.32, 0.07, 1), { p: [side * 0.2, 1.01, 0] });
+  b.add('vest', box(0.82, 0.89, 0.54, 0.14, 2), { p: [0, 1.80, 0] });
+  for (const y of [1.58, 1.82]) b.add('light', box(0.82, 0.09, 0.55, 0.04, 1), { p: [0, y, 0] });
+  b.add('skin', sphere(0.33, 15, 10), { p: [0, 2.50, 0.03] });
+  b.add('vest', sphere(0.35, 15, 10), { p: [0, 2.67, 0.01], s: [1.1, 0.64, 1.08] });
+  b.add('skin', tube([[0.32, 1.99, 0], [0.62, 2.12, 0.08], [0.65, 2.46, 0.17]], 0.13, 10, 6));
+  b.add('uniform', cyl(0.047, 0.047, 2.38, 7), { p: [0.61, 3.36, 0.18], r: [0, 0, 0.16] });
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 5; col++) {
+    b.add((row + col) % 2 ? 'uniform' : 'light', box(0.30, 0.28, 0.05, 0, 1),
+      { p: [0.35 - col * 0.296, 4.43 - row * 0.275 + 0.07 * Math.sin(col), 0.18 + 0.055 * Math.sin(col)] });
+  }
+  return b.build({ base: MAT.concrete, uniform: MAT.dark, vest: paint(0xff812b), light: plastic(0xfff4ca), skin: plastic(0xcb946e) });
+}
+
+export function timingLane() {
+  const b = new ModelBuilder();
+  b.add('lane', box(16.5, 0.25, 3.3, 0.1, 1), { p: [0, 0.12, 0] });
+  for (const side of [-1, 1]) b.add('stripe', box(16.4, 0.04, 0.09), { p: [0, 0.26, side * 1.51] });
+  for (let i = 0; i < 8; i++)
+    for (let j = 0; j < 2; j++) {
+      b.add((i + j) % 2 ? 'dark' : 'stripe', box(0.44, 0.04, 0.39), { p: [0.94 + j * 0.44, 0.27, (i - 3.5) * 0.39] });
+    }
+  return b.build({ lane: plastic(0x386172), stripe: plastic(0xffefcd), dark: MAT.dark });
 }

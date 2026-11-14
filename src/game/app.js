@@ -5,6 +5,7 @@ import { Input, describePadBind, padFamily } from '../core/input.js';
 import { keyName, keyboardBindings } from '../core/keyboard.js';
 import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
+import { installStepsOpen, closeInstallSteps } from '../ui/install.js';
 import { Wipe } from '../ui/wipe.js';
 import { Showroom } from '../render/showroom.js';
 import { RaceSession, MAX_FRAME_TIME } from './session.js';
@@ -63,6 +64,10 @@ export class App {
   onMenu(action, device) {
     if (action === 'mute') { this.audio?.toggleMute?.(); return; }
     if (action === 'fullscreen') { this.fullscreen(!document.fullscreenElement); return; }
+    // the install guide sheet is a modal over the menus (#274): while it is up,
+    // back and confirm from keyboard or controller go to its close action, not
+    // to the still-mounted menu underneath
+    if (installStepsOpen() && (action === 'back' || action === 'confirm')) { closeInstallSteps(); return true; }
     if (this.menus.visible) return this.menus.handle(action, device);
     const s = this.session; if (!s || this.attract) return;
     if (action === 'pause' || (action === 'back' && device.startsWith('kb'))) { if (s.phase !== 'intro' && s.race.state !== 'done') this.pause(); else s.skipIntro(); }

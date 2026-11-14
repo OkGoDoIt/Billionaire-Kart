@@ -103,13 +103,10 @@ export default {
     { from: 25.1, to: 25.8, n: 4, lat: 8 },
   ],
   obstacles: [
-    // fire slalom: three gates 7 m wide, phases alternating, the gap swapping sides
+    // Fire jets alternate between the verges, leaving room to steer after an item hit.
     { kind: 'timed', model: 'flame', at: 11.5, lat: -5, period: 3, duty: 0.25, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 11.5, lat: 2, period: 3, duty: 0.25, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 11.85, lat: -2, period: 3, duty: 0.25, phase: 1.5, effect: 'spin', radius: 1.3 },
     { kind: 'timed', model: 'flame', at: 11.85, lat: 5, period: 3, duty: 0.25, phase: 1.5, effect: 'spin', radius: 1.3 },
     { kind: 'timed', model: 'flame', at: 12.2, lat: -5, period: 3, duty: 0.25, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 12.2, lat: 2, period: 3, duty: 0.25, phase: 0, effect: 'spin', radius: 1.3 },
     // art cars crawling out across the Esplanade and the Bowl exit
     { kind: 'patrol', model: 'artcar', at: 1.75, lats: [-8, -3], speed: 3.5, effect: 'spin', radius: 2.0 },
     { kind: 'patrol', model: 'artcar', at: 8.6, lats: [7.5, 1], speed: 3, effect: 'spin', radius: 2.0 },
@@ -117,7 +114,7 @@ export default {
     { kind: 'patrol', model: 'ledbus', at: 15.9, lats: [7.6, 3.4], speed: 1.8, effect: 'spin', radius: 2.1 },
     // dust devils waiting on the outside of the dune corners
     { kind: 'orbit', model: 'dustdevil', at: 14.05, lat: -6.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
-    { kind: 'orbit', model: 'dustdevil', at: 18.72, lat: 6.8, orbit: 2.4, speed: 6, effect: 'spin', radius: 1.6 },
+    { kind: 'orbit', model: 'dustdevil', at: 18.72, lat: -11.2, orbit: 2.4, speed: 6, effect: 'spin', radius: 1.6 },
   ],
   terrain: {
     cell: 3, margin: 170, blend: 30, water: -50,
@@ -372,16 +369,25 @@ export default {
 
     // ---- the burn you cannot miss: real flames climbing the Man, a smoke column, and a sky that catches ----
     {
+      // Each tongue has a rounded foot and a wind-bent, tapering tip. A soft alpha
+      // at the heel lets the timber and the orange body overlap without hard seams.
       const tex = new THREE.CanvasTexture(Object.assign(document.createElement('canvas'), { width: 8, height: 128 }));
-      { const g = tex.image.getContext('2d'), gr = g.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,244,190,1)'); gr.addColorStop(0.25, 'rgba(255,170,40,0.95)'); gr.addColorStop(0.7, 'rgba(240,70,10,0.6)'); gr.addColorStop(1, 'rgba(160,20,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 8, 128); }
-      tex.colorSpace = THREE.SRGBColorSpace;
-      const cone = new THREE.ConeGeometry(1, 1, 10, 4, true); cone.translate(0, 0.5, 0);
-      const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffc775, transparent: true, depthWrite: false, side: THREE.FrontSide, fog: false });
+      const g = tex.image.getContext('2d'), gr = g.createLinearGradient(0, 128, 0, 0);
+      for (const [stop, color] of [[0, 'rgba(255,108,20,0)'], [0.12, '#ff7c12'], [0.32, '#ffcd54'], [0.58, '#ff8d25'], [0.84, '#f64e17'], [1, 'rgba(211,39,9,0.15)']]) gr.addColorStop(stop, color);
+      g.fillStyle = gr; g.fillRect(0, 0, 8, 128); tex.colorSpace = THREE.SRGBColorSpace;
+      const profile = [[0.05, 0], [0.7, 0.09], [1, 0.25], [0.84, 0.48], [0.53, 0.69], [0.27, 0.84], [0.025, 1]];
+      const tongue = new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 12);
+      const pos = tongue.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i); pos.setX(i, pos.getX(i) + y * y * (1.2 - Math.sin(y * 5.6)));
+      }
+      tongue.computeVertexNormals();
+      const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffedc0, transparent: true, depthWrite: false, fog: false });
       // tongues of flame at burn points up the body, plus a crown over the head
       const pts = body.slice().sort((p, q) => p.lvl - q.lvl), N = 16, top = pts[pts.length - 1];
-      const tongues = []; for (let k = 0; k < N; k++) { const p = pts[Math.floor((k + 0.5) / N * pts.length)]; tongues.push({ x: p.x, y: p.y - 1.5, z: p.z, lvl: p.lvl, r: 3.2 + rng() * 2.4, h: 10 + rng() * 8, ph: rng() * 6.28 }); }
-      tongues.push({ x: top.x, y: top.y, z: top.z, lvl: 31, r: 7, h: 30, ph: 1.3 }, { x: top.x, y: top.y - 6, z: top.z, lvl: 28, r: 9, h: 20, ph: 4.1 });
-      const flames = new THREE.InstancedMesh(cone, mat, tongues.length); flames.frustumCulled = false; flames.renderOrder = 6; ctx.group.add(flames);
+      const tongues = []; for (let k = 0; k < N; k++) { const p = pts[Math.floor((k + 0.5) / N * pts.length)]; tongues.push({ x: p.x, y: p.y - 1.5, z: p.z, lvl: p.lvl, r: 1.65 + rng() * 1.55, h: 8.5 + rng() * 7, ph: rng() * 6.28 }); }
+      tongues.push({ x: top.x, y: top.y, z: top.z, lvl: 31, r: 4.2, h: 20, ph: 1.3 }, { x: top.x, y: top.y - 6, z: top.z, lvl: 28, r: 4.9, h: 16, ph: 4.1 });
+      const flames = new THREE.InstancedMesh(tongue, mat, tongues.length); flames.frustumCulled = false; flames.renderOrder = 6; ctx.group.add(flames);
       const soot = new THREE.MeshLambertMaterial({ color: 0x40343d, transparent: true, opacity: 0, depthWrite: false, flatShading: true });
       const column = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), soot, 9);
       column.frustumCulled = false; column.renderOrder = 4; ctx.group.add(column);
@@ -612,7 +618,7 @@ export default {
 
     // ---- the dunes: a superyacht beached on the crest, ice at a price, and a camp that has given up the internet ----
     {
-      const Y = { x: -50, z: -440, yaw: -Math.PI / 2 }, y0 = track.terrainHeight(Y.x, Y.z);
+      const Y = { x: -50, z: -446.5, yaw: -Math.PI / 2 }, y0 = track.terrainHeight(Y.x, Y.z);
       const ends = [[Y.x - 37, Y.z], [Y.x + 37, Y.z], [Y.x, Y.z + 8], [Y.x - 32, Y.z + 7], [Y.x + 32, Y.z + 7]];
       if (ends.every(([x, z]) => clear(x, z, 2))) {
         const yacht = B.superyacht({ L: 58 }); yacht.rotation.order = 'YXZ';

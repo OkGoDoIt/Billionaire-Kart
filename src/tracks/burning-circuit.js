@@ -7,6 +7,7 @@ import { Scenery, partsOf } from '../render/scenery.js';
 import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
 import * as B from '../models/props-burning-circuit.js';
+import { makeBaker } from '../models/props-international-waters.js';
 import { ModelBuilder, cyl, box, plastic, glow } from '../models/build.js';
 
 const FIGURE = { x: 170, z: -46 };
@@ -202,7 +203,7 @@ export default {
     for (const [at, side, off, r] of [[5.6, -1, 26, 14], [4.9, -1, 15, 10], [14.6, -1, 35, 14], [18.1, -1, 34, 10], [20.45, -1, 46, 22], [19.75, -1, 33, 8], [22.85, -1, 13, 14], [23.6, -1, 18, 10], [25.45, -1, 15, 10], [25.15, -1, 15, 9], [26.15, -1, 16, 12], [25.75, -1, 26, 12], [2.3, -1, 19, 12], [7.2, -1, 20, 12], [10.7, -1, 19, 12], [21.2, 1, 37, 12], [24.6, -1, 19, 12], [14.35, -1, 39, 12], [19.85, -1, 38, 12], [21.0, -1, 36, 10]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
     // ---- the sign kit: lettering on a shared atlas, static props baked by material ----
-    const bake = B.makeBaker(ctx.group, sc.shadows), atlas = B.makeAtlas(ctx.group, { glow: 0.4 });
+    const bake = makeBaker(ctx.group, sc.shadows), atlas = B.makeAtlas(ctx.group, { glow: 0.4 });
     /** Small repeated props baked into the shared material buckets (no shadows): far fewer draw calls than instancing each kind. */
     const bakeAll = (proto, list, scale = 1) => { for (const p of list) bake.add(sc.place(proto.clone(), p.x, p.z, { yaw: p.yaw || 0, y: p.y, scale }), false); };
     /** Yaw that faces the road at sample i from `side`, turned toward oncoming karts by k. */
@@ -560,7 +561,7 @@ export default {
     const domeS = domeSpots.filter(d => !d.big), domeL = domeSpots.filter(d => d.big);
     sc.instances(partsOf(B.dome(3.6)), domeS, { scale: [0.85, 1.2], sink: 0.1 });
     sc.instances(partsOf(B.dome(6.5, { door: 0xff7ad0 })), domeL, { scale: [0.9, 1.25], sink: 0.2 });
-    sc.instances(partsOf(B.lightTower({ h: 14 })), towers, { cast: false });
+    bakeAll(B.lightTower({ h: 14 }), towers);
 
     // ---- the luxury camp: big domes, silver trailers in rows, palms in planters ----
     const luxDomes = [[30, -128, 10], [34, -178, 8], [28, -226, 11.5], [48, -262, 7]];
@@ -570,7 +571,7 @@ export default {
     const luxYurts = [], acs = [];
     for (let k = 0; k < 10; k++) { const x = 46.5, z = -112 - k * 16.5; if (clear(x, z, 5) && !luxDomes.some(([dx2, dz2, r]) => near(x, z, { x: dx2, z: dz2 }, r + 5)) && Math.abs(z + 200) > 8) { luxYurts.push({ x, z, y: sc.y(x, z), yaw: Math.PI / 2 }); acs.push({ x: x + 5.1, z: z + 1.5, y: sc.y(x + 5.1, z + 1.5), yaw: Math.PI / 2 }); } }
     sc.instances(partsOf(B.yurt()), luxYurts, { scale: 1.7, tints: [0xffffff, 0xf6e7d0], sink: 0.05 });
-    sc.instances(partsOf(B.acUnit()), acs, { cast: false });
+    bakeAll(B.acUnit(), acs);
     {
       const pts = []; for (let z = -106; z > -280; z -= 3.2) { if (Math.abs(z + 200) < 4.5) continue; const x = 55.5; if (clear(x, z, 0.3)) pts.push([x, sc.y(x, z), z]); }
       const runs = []; let run = []; pts.forEach((p, k) => { if (k && Math.abs(p[2] - pts[k - 1][2]) > 4) { runs.push(run); run = []; } run.push(p); }); runs.push(run);
@@ -590,7 +591,7 @@ export default {
     sc.instances(partsOf(B.trailer()), trailers, { tints: [0xff8a3c, 0x46d6ff, 0xff4fa8, 0xffd23c] });
     const palms = [];
     for (let k = 0; k < 12; k++) { const x = 16 + (k % 2) * 22, z = -104 - Math.floor(k / 2) * 30; if (clear(x, z, 3) && !luxDomes.some(([dx2, dz2, r]) => near(x, z, { x: dx2, z: dz2 }, r + 3))) palms.push({ x, z, y: sc.y(x, z), yaw: 0 }); }
-    sc.instances(partsOf(B.planter()), palms, { cast: false });
+    bakeAll(B.planter(), palms);
     sc.instances(partsOf(P.palm(3, { h: 7.5 })), palms.map(p => ({ ...p, y: p.y + 1.1 })), { scale: [0.9, 1.1], yaw: 'random' });
 
     // ---- the jet park beside the fire slalom: a runway, a row of private jets, and the sign ----
@@ -612,7 +613,7 @@ export default {
     // ---- the Bowl's outside: a camp with principles ----
     {
       const p = sc.beside(5.6, -1, 26);
-      if (clear(p.x, p.z, 8)) { sc.place(B.dome(7, { door: 0x7dff6a }), p.x, p.z, { yaw: p.yaw, y: p.y - 0.2 }); take(p.x, p.z, 10); }
+      if (clear(p.x, p.z, 8)) { bake.add(sc.place(B.dome(7, { door: 0x7dff6a }), p.x, p.z, { yaw: p.yaw, y: p.y - 0.2 })); take(p.x, p.z, 10); }
       sign(4.9, -1, 17, B.board('CONSCIOUS CAPITALISM CAMP', { bg: '#16a34a', fg: '#ffffff', size: 130, sub: 'NO REFUNDS', subFg: '#ffd23c', subScale: 0.75 }), 18, 8, 9.5, { turn: 0.6 });
     }
 
@@ -639,7 +640,7 @@ export default {
       const dishes = sc.along({ from: 20.0, to: 20.9, side: -1, offset: 38, spacing: 8 }).filter(q => clear(q.x, q.z, 3)).map(q => ({ ...q, yaw: q.yaw + Math.PI + rng.range(-0.3, 0.3) }));
       sc.instances(partsOf(B.satDish()), dishes, { scale: [1.2, 1.6], cast: false });
       dishes.forEach(q => take(q.x, q.z, 5));
-      const d = sc.beside(20.45, -1, 52); if (clear(d.x, d.z, 8)) sc.place(B.dome(6, { door: 0x46d6ff }), d.x, d.z, { yaw: d.yaw, y: d.y - 0.3 });
+      const d = sc.beside(20.45, -1, 52); if (clear(d.x, d.z, 8)) bake.add(sc.place(B.dome(6, { door: 0x46d6ff }), d.x, d.z, { yaw: d.yaw, y: d.y - 0.3 }));
       sign(19.85, -1, 38, B.board('DIGITAL DETOX CAMP', { bg: '#ffffff', fg: '#7b5cff', size: 150, border: '#7b5cff' }), 20, 6.5, 11, { turn: 0.6 });
       sign(21.0, -1, 36, B.board('WIFI PASSWORD: NAMASTE123', { bg: '#7b5cff', fg: '#ffffff', size: 120 }), 16, 5.2, 8, { turn: 0.6 });
     }
@@ -763,7 +764,7 @@ export default {
     ].filter(p => clear(p.x, p.z, 0.8) && !reserved(p.x, p.z));
     cubeCols.forEach((c, k) => bakeAll(B.glowCube(c, { h: 4.5 + k * 0.6 }), cubeRows.filter((_, i) => i % 4 === k)));
     const farTowers = sc.scatter({ count: 14, min: 24, max: 120, minGap: 40, maxSlope: 0.2, where: (x, z) => flat(x, z) && !reserved(x, z) && clear(x, z, 3) });
-    sc.instances(partsOf(B.lightTower({ h: 18 })), farTowers, { cast: false });
+    bakeAll(B.lightTower({ h: 18 }), farTowers);
 
     // ---- the dunes and the foothills ----
     const rocks = sc.scatter({ count: 110, min: 45, max: 260, maxSlope: 1.4, minGap: 12, where: (x, z, h) => h > 7 && Math.hypot((x - CENTRE.x) * 0.82, (z - CENTRE.z) * 0.92) > 250 });
@@ -771,14 +772,17 @@ export default {
     const pebbles = sc.scatter({ count: 70, min: 34, max: 120, maxSlope: 0.8, minGap: 6, where: (x, z, h) => h > 4 && clear(x, z, 2) && z > -300 });
     sc.instances(partsOf(P.rock(5, { r: 1.4 })), pebbles, { scale: [0.6, 1.6], yaw: 'random', sink: 0.3, tints: [0xc4a898, 0xb89a8c, 0xd0b4a0], cast: false });
 
-    // arrow boards on the outside of every real corner
+    // The same ink and metal frame appear on every corner. Use one texture and
+    // bake the mirrored placements with their original lighting and cast shadows.
+    const chevron = P.chevronBoard(0xff6a2a);
     for (const c of track.corners) {
       const side = c.dir > 0 ? -1 : 1, n = Math.max(2, Math.min(5, Math.round(c.len / 15)));
       for (let k = 0; k < n; k++) {
         const i = (c.i0 + Math.round(((k + 0.6) / n) * (c.len / track.ds))) % track.N;
         const p = sc.beside(track.cp[i], side, (side > 0 ? track.outerL[i] : track.outerR[i]) + 1.2);
-        const b = P.chevronBoard(0xff6a2a); if (c.dir > 0) b.scale.x = -1;
-        sc.place(b, p.x, p.z, { yaw: p.yaw, lift: 0.9 }); if (c.dir > 0) b.scale.x = -1;
+        const b = sc.place(chevron.clone(), p.x, p.z, { yaw: p.yaw, lift: 0.9 });
+        if (c.dir > 0) b.scale.x = -1;
+        bake.add(b);
       }
     }
 

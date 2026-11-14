@@ -63,6 +63,82 @@ export function boringMachine() {
   return grp;
 }
 
+/** The HERO cutter head (#234 item 5): an 11 m face with a ring of work
+ *  lamps around its rim, so it reads lit from the road. The returned group's
+ *  userData.spin is the face (rotate it around Z to spin). */
+export function heroCutter(r = 5.5) {
+  const grp = new THREE.Group(), b = new ModelBuilder();
+  b.add('disc', cyl(r, r, 0.9, 36), { p: [0, 0, 0], r: [Math.PI / 2, 0, 0] });
+  b.add('hub', cyl(0.9, 1.7, 1.3, 18), { p: [0, 0, 0.75], r: [Math.PI / 2, 0, 0] });
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    b.add('tooth', box(1.1, 1.3, 0.8, 0.08, 1), { p: [Math.cos(a) * r * 0.88, Math.sin(a) * r * 0.88, 0.42] });
+  }
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + 0.26;
+    b.add('spoke', box(0.8, r * 0.66, 0.55, 0.08, 1), { p: [Math.cos(a) * r * 0.46, Math.sin(a) * r * 0.46, 0.44], r: [0, 0, a + Math.PI / 2] });
+  }
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2 + 0.31;
+    b.add('lamp', sphere(0.3, 8), { p: [Math.cos(a) * r * 0.99, Math.sin(a) * r * 0.99, 0.35] });
+  }
+  const face = b.build({
+    disc: paint(0x9aa0a6, { rough: 0.42, metal: 0.35 }),
+    hub: paint(YELLOW, { rough: 0.4, metal: 0.3 }),
+    tooth: paint(YELLOW, { rough: 0.45, metal: 0.3 }),
+    spoke: MAT.dark,
+    lamp: glow(0xffd9a0, 2.6),
+  });
+  grp.add(face);
+  grp.userData.spin = face;
+  return grp;
+}
+
+/** The dead-end side bore (#234 item 5): a cylindrical chamber the road
+ *  skims past, with the hero cutter standing at its end. Local space: the
+ *  mouth is at the origin, the chamber extends toward -Z, floor at y = 0.
+ *  Place it at the tube wall with the road-facing yaw (faceCentre). */
+export function tbmChamber() {
+  const grp = new THREE.Group();
+  const concrete = paint(0x596069, { rough: 0.96 });
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, 16.5, 20, 1, true), new THREE.MeshStandardMaterial({ color: 0x596069, roughness: 0.96, side: THREE.DoubleSide }));
+  shell.rotation.x = Math.PI / 2;
+  shell.position.set(0, 5.0, -8.25);
+  grp.add(shell);
+  const end = new THREE.Mesh(new THREE.CircleGeometry(6.6, 20), concrete);
+  end.position.set(0, 5.0, -16.5);
+  grp.add(end);
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(13.2, 0.25, 16.9), paint(0x43484e, { rough: 0.97 }));
+  floor.position.set(0, -0.12, -8.3);
+  grp.add(floor);
+  // cheek walls closing the crescents between the chamber and the tube wall
+  for (const s of [1, -1]) {
+    const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.4, 8.5, 8), concrete);
+    cheek.position.set(s * 6.45, 3.4, -3.4);
+    grp.add(cheek);
+  }
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.32, 8, 24), MAT.steel);
+  rim.position.set(0, 5.0, -0.2);
+  grp.add(rim);
+  // the machine itself: neck into the end wall, hero face toward the road
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 3.4, 3.2, 16), paint(YELLOW, { rough: 0.5, metal: 0.3 }));
+  neck.rotation.x = Math.PI / 2;
+  neck.position.set(0, 5.5, -15.2);
+  grp.add(neck);
+  const face = heroCutter(5.5);
+  face.position.set(0, 5.5, -13.4);
+  grp.add(face);
+  grp.userData.spin = face.userData.spin;
+  // work lights inside, aimed back at the face
+  for (const s of [1, -1]) {
+    const wl = workLight();
+    wl.position.set(s * 4.6, 0, -7.5);
+    wl.rotation.y = Math.PI + s * 0.35;
+    grp.add(wl);
+  }
+  return grp;
+}
+
 /** A lone cutter head, for the dig site outside the portal. */
 export function spareCutter(r = 2.3) { return cutterFace(r); }
 
@@ -269,11 +345,11 @@ export function portalPylon({ h = 13 } = {}) {
  *  look — an emissive strip ring every ~6 m whose colour runs
  *  hsl(fract(s/120 - time*0.25)) so a rainbow wave travels the bore.
  *  One merged concrete geometry + one merged strip geometry = 2 draw calls.
- *  `windows` lets later work open the arc on one side (station, shortcut
- *  junctions): entries { r0, r1, k0, k1 } in sample/arc-index space clamp the
- *  arc of every ring in [r0, r1] to [k0, k1] (k runs 0..ARC from the R wall
- *  over the crown to the L wall). Portals are skipped near window mouths,
- *  so a window gets no floating arch slice. */
+ *  `windows` lets later work open the arc on one side (the TBM chamber,
+ *  the shortcut junctions): entries { r0, r1, k0, k1 } in sample/arc-index
+ *  space clamp the arc of every ring in [r0, r1] to [k0, k1] (k runs 0..ARC
+ *  from the L wall base over the crown to the R wall base). Portals are
+ *  skipped near window mouths, so a window gets no floating arch slice. */
 export function boreTube(track, uTime, windows = []) {
   const { N, ds, px, py, pz, lx, ly, lz, ux, uy, uz, hwL, hwR } = track;
   const H = track.def.tunnelHeight ?? 7, ARC = 12, STEP = 2;

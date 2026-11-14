@@ -16,10 +16,13 @@ import * as T from '../models/props-boring-tunnel.js';
 import { canvasTex, fitText } from '../render/textures.js';
 
 /** Where the bore tube's arc opens instead of closing over the road
- *  (#234 items 4+6). k runs 0..12 from the R wall (lat −) over the crown to
- *  the L wall (lat +). The station (item 4) drops the L-side lower arc; the
- *  shortcut junctions (item 6) drop the R-side lower arc, leaving a header. */
-const TUBE_WINDOWS = [];
+ *  (#234 items 5+6). k runs 0..12 from the L wall base (lat +) over the crown
+ *  to the R wall base (lat −): keeping [k0, k1] drops the arc outside it.
+ *  Item 5's TBM chamber keeps k 5..12 (the L lower arc is the chamber
+ *  mouth); item 6's shortcut junctions keep k 0..7 (R-side mouths). */
+const TUBE_WINDOWS = [
+  { from: 4.17, to: 4.43, k0: 5, k1: 12 },   // the Boring Machine's chamber mouth (item 5)
+];
 
 const SIGN_FONT = '"Luckiest Guy", "Arial Black", sans-serif';
 /** A worksite sign texture: fitted text (never squashed, via fitText), drawn
@@ -66,11 +69,13 @@ export default {
   offroad: 'sand',
   defaults: { edge: 'open', shoulder: 3, outer: 10 },
   // the opening shot: from the road at the chicane, looking down the dive's
-  // last pitch at the Boring Machine — the lit bore converging on the
-  // spinning cutter face at the bottom (machine sits at cp ~4.4)
+  // last pitch into the Boring Machine's chamber — the lit bore converging
+  // on the 11 m cutter face at the bottom (face centre ~(233, -0.4, -4.5);
+  // re-aimed in #234 item 5: the old framing centred the road at cp 4.05
+  // and the machine sat hidden behind the kink, out of frame)
   intro: [{
-    pos: [214, 2.0, -38], look: [214, -4.0, 8],
-    pos1: [215, 0.8, -26], look1: [214, -4.0, 8],
+    pos: [216.8, -2.6, -33.2], look: [233.0, -0.4, -4.5],
+    pos1: [212.9, -3.2, -24.9], look1: [233.0, -0.4, -4.5],
     fov: 55, dur: 3.4,
   }],
   lapNotes: [
@@ -278,19 +283,26 @@ export default {
     ctx.group.add(T.boreTube(track, uTime, TUBE_WINDOWS.map(w => ({ ...w, r0: track.indexAtCp(w.from), r1: track.indexAtCp(w.to) }))));
     anim.push((dt, time) => { uTime.value = time; });
 
-    // THE BORING MACHINE, chewing the left wall at the bottom of the dive:
-    // scaled up so the cutter face fills the view as you exit the chicane
-    const mp = atPos(4.4, 8.6);
-    const machine = T.boringMachine();
-    machine.scale.setScalar(1.32);
-    sc.place(machine, mp.x, mp.z, { yaw: faceCentre(mp, 1), y: mp.y });
-    const dustP = atPos(4.45, 6.2, 3.4);
+    // THE BORING MACHINE at hero scale (#234 item 5): a dead-end side bore
+    // off the chicane's bottom, its 11 m cutter face lit and spinning at the
+    // end of the chamber, the road skimming the mouth (tube window k 5..12).
+    // The old wall-chewing machine is gone — this replaces it.
+    const mp = atPos(4.3, 9.2);
+    const chamber = T.tbmChamber();
+    sc.place(chamber, mp.x, mp.z, { yaw: faceCentre(mp, 1), y: mp.y });
+    const faceP = atPos(4.3, 21.5, 5.0);
+    const dustP = atPos(4.32, 12.5, 2.2);
     anim.push((dt) => {
-      machine.userData.spin.rotation.z -= dt * 1.4;
+      chamber.userData.spin.rotation.z -= dt * 1.1;
       const n = view.fx.count(26, dt);
       for (let k = 0; k < n; k++) {
         view.fx.dust(dustP.x + rng.range(-1.6, 1.6), dustP.y + rng.range(-1.4, 1.4), dustP.z + rng.range(-1.6, 1.6),
           rng.range(-1.2, 1.2), rng.range(0.4, 1.8), rng.range(-1.2, 1.2), [0.62, 0.55, 0.45], 2.4 + rng() * 2.4, 1.6, 0.5);
+      }
+      const s = view.fx.count(7, dt);
+      for (let k = 0; k < s; k++) {
+        view.fx.dust(faceP.x + rng.range(-3.4, 3.4), faceP.y + rng.range(-3.4, 3.4), faceP.z + rng.range(-1, 1),
+          rng.range(-0.6, 0.6), rng.range(-2.4, -0.8), rng.range(-0.6, 0.6), [1.0, 0.62, 0.2], 0.55 + rng() * 0.5, 0.5, 0.9);
       }
     });
 

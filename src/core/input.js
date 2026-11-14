@@ -1,16 +1,11 @@
 /* Input: keyboard (one or two players), up to four gamepads with rumble, touch,
    and tilt. Produces one driving state per local player plus menu navigation. */
 import { clamp } from './util.js';
+import { keyboardBindings } from './keyboard.js';
 
 const blank = () => ({ steer: 0, throttle: 0, brake: 0, drift: false, item: false, itemBack: false, rear: false });
 
-/* Keyboard layouts. 'kb' is the solo layout (everything), kb1/kb2 share one keyboard. */
-const KEYS = {
-  kb: { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], gas: ['ArrowUp', 'KeyW'], brake: ['ArrowDown', 'KeyS'], drift: ['Space', 'ShiftLeft', 'ShiftRight', 'KeyJ'], item: ['KeyE', 'Enter', 'KeyK', 'KeyF', 'ControlLeft'], rear: ['KeyQ', 'KeyC'] },
-  kb1: { left: ['KeyA'], right: ['KeyD'], gas: ['KeyW'], brake: ['KeyS'], drift: ['ShiftLeft', 'Space'], item: ['KeyE', 'KeyF'], rear: ['KeyQ'] },
-  kb2: { left: ['ArrowLeft'], right: ['ArrowRight'], gas: ['ArrowUp'], brake: ['ArrowDown'], drift: ['ShiftRight', 'Slash'], item: ['Enter', 'Period'], rear: ['Comma'] },
-};
-export const DEVICE_LABEL = { kb: 'Keyboard', kb1: 'Keyboard (WASD)', kb2: 'Keyboard (arrows)', touch: 'Touch', pad0: 'Controller 1', pad1: 'Controller 2', pad2: 'Controller 3', pad3: 'Controller 4' };
+export const DEVICE_LABEL = { kb: 'Keyboard', kb1: 'Keyboard P1', kb2: 'Keyboard P2', touch: 'Touch', pad0: 'Controller 1', pad1: 'Controller 2', pad2: 'Controller 3', pad3: 'Controller 4' };
 
 /* ---------- gamepad bindings ----------
    One mapping for every connected pad (per-player maps are out of scope).
@@ -88,6 +83,7 @@ const MENU_KEYS = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', 
 
 export class Input {
   constructor() {
+    this.keyBinds = keyboardBindings(); this.captureKey = null; this.suppressed = new Set();
     this.keys = new Set(); this.steerKb = { kb: 0, kb1: 0, kb2: 0 };
     this.assign = ['any'];                 // device per local player; 'any' merges everything (solo play)
     this.padBinds = defaultPadBindings();   // gamepad bindings; the app replaces these from the save
@@ -100,16 +96,30 @@ export class Input {
     this.states = [blank(), blank(), blank(), blank()];
 
     addEventListener('keydown', e => {
-      if (e.repeat) { if (MENU_KEYS[e.code] && ['up', 'down', 'left', 'right'].includes(MENU_KEYS[e.code])) this._menu(MENU_KEYS[e.code], 'kb'); return; }
+      if (this.captureKey || this.suppressed.has(e.code)) {
+        e.preventDefault();
+        this.keys.delete(e.code);
+        if (this.captureKey && !e.repeat && !this.suppressed.has(e.code)) {
+          this.suppressed.add(e.code); this.captureKey(e.code);
+        }
+        return;
+      }
+      if (e.repeat) {
+        const action = MENU_KEYS[e.code];
+        if (action === 'confirm') e.preventDefault();
+        if (['up', 'down', 'left', 'right'].includes(action) && this._menu(action, 'kb')) e.preventDefault();
+        return;
+      }
       this.keys.add(e.code); this.lastDevice = 'kb'; this.kbUsed = true; this.onAnyInput?.();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && !(e.target instanceof HTMLInputElement)) e.preventDefault();
-      if (MENU_KEYS[e.code]) this._menu(MENU_KEYS[e.code], this._kbDeviceFor(e.code));
+      if (this.onJoinKey?.(this._kbDeviceFor(e.code))) { e.preventDefault(); return; }
+      if (MENU_KEYS[e.code] && this._menu(MENU_KEYS[e.code], this._kbDeviceFor(e.code))) e.preventDefault();
       if (e.code === 'KeyR') this._menu('reset', 'kb');
       if (e.code === 'KeyM') this._menu('mute', 'kb');
       if (e.code === 'KeyF' && e.altKey || e.code === 'F11') this._menu('fullscreen', 'kb');
     });
-    addEventListener('keyup', e => this.keys.delete(e.code));
-    addEventListener('blur', () => this.keys.clear());
+    addEventListener('keyup', e => { this.keys.delete(e.code); this.suppressed.delete(e.code); });
+    addEventListener('blur', () => { this.keys.clear(); this.suppressed.clear(); });
     addEventListener('gamepadconnected', e => { this.lastDevice = 'pad' + e.gamepad.index; this.onPads?.(); });
     addEventListener('gamepaddisconnected', () => this.onPads?.());
   }
@@ -117,15 +127,15 @@ export class Input {
   /** Adopt bindings + steering source from the save (sanitized on the way in). */
   setPadBindings(raw, steer) { this.padBinds = sanitizePadBindings(raw); if (PAD_STEER_SOURCES.some(([id]) => id === steer)) this.padSteer = steer; }
 
-  _kbDeviceFor(code) { for (const d of ['kb1', 'kb2']) for (const k in KEYS[d]) if (KEYS[d][k].includes(code)) return d; return 'kb'; }
-  _menu(action, device) { this.onMenu?.(action, device); }
+  _kbDeviceFor(code) { for (const d of ['kb1', 'kb2']) for (const keys of Object.values(this.keyBinds[d])) if (keys.includes(code)) return d; return 'kb'; }
+  _menu(action, device) { return this.onMenu?.(action, device); }
 
   /** Connected gamepads as device ids. */
   pads() { const out = []; const gp = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < Math.min(4, gp.length); i++) if (gp[i] && gp[i].connected) out.push('pad' + i); return out; }
   devices() { return ['kb1', 'kb2', ...this.pads()]; }
 
   _kb(layout, dt, out) {
-    const K = KEYS[layout], down = list => list.some(c => this.keys.has(c));
+    const K = this.keyBinds[layout], down = list => list.some(c => this.keys.has(c));
     const target = (down(K.right) ? 1 : 0) - (down(K.left) ? 1 : 0);
     // keys are digital: ease toward full lock so taps make small corrections
     const cur = this.steerKb[layout], rate = target === 0 ? 9 : Math.sign(target) !== Math.sign(cur) && cur !== 0 ? 14 : 5.5;

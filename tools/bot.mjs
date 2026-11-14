@@ -117,7 +117,7 @@ try {
     if (clash) fails.push(`first-race hint ${clash}`);
   }
   await page.waitForFunction('!BK.race.frozen', null, { timeout: 15000 });
-  if (!mobile) { await page.keyboard.down('KeyW'); await page.waitForTimeout(2500); await shot('10-driving'); await page.keyboard.down('KeyD'); await page.keyboard.down('Space'); await page.waitForTimeout(1300); await shot('11-drifting'); await page.keyboard.up('Space'); await page.keyboard.up('KeyD'); await page.keyboard.up('KeyW'); }
+  if (!mobile) { await page.keyboard.down('KeyW'); await page.waitForTimeout(2500); await shot('10-driving'); await page.keyboard.down('KeyD'); await page.keyboard.down('ShiftLeft'); await page.waitForTimeout(1300); await shot('11-drifting'); await page.keyboard.up('ShiftLeft'); await page.keyboard.up('KeyD'); await page.keyboard.up('KeyW'); }
   else {
     // touch: the right half is the pedal and the left half steers; nothing moves until the pedal is held
     const touch = (sel, type, id, x, y) => page.dispatchEvent(sel, type, { pointerId: id, pointerType: 'touch', isPrimary: id === 1, clientX: x, clientY: y, bubbles: true, cancelable: true });

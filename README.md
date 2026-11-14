@@ -17,7 +17,7 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 ## What is in it
 
 - **Twelve tracks in three cups**, each with its own signature moment, soundtrack, and hazards.
-- **Grand Prix, Quick Race, and Time Trial** (with a ghost of your best run), three engine classes, and three levels of rivals.
+- **Grand Prix, Quick Race, and Time Trial** (with a ghost of your best run in the same engine class), three engine classes, and three levels of rivals.
 - **One to four players** on one screen.
 - **Sixteen racers** with their own stats, signature karts, and things to say when they hit you, and a special of their own that changes how they drive.
 - **Sixteen items**, weighted by position. Leaders get defense; the back of the pack gets the comeback kit.
@@ -46,13 +46,17 @@ Every racer drives a kart of their own: a steel wedge, a rocket with a parcel st
 |---|---|---|---|
 | Steer | A D or ← → | Left stick | Slide your left thumb |
 | Accelerate | W or ↑ | A or right trigger | Hold the right side |
-| Drift and hop | Space | Right bumper or X | Steer hard over; straighten up to boost |
-| Use item | E or Enter | Left bumper or Y | Tap the left side, or flick your right thumb up |
+| Drift and hop | Either Shift or Z | Right bumper or X | Steer hard over; straighten up to boost |
+| Use item | Space, E, Enter, or X | Left bumper or Y | Tap the left side, or flick your right thumb up |
 | Brake and reverse | S or ↓ | B or left trigger | Pull your right thumb down |
-| Look behind | Q | Click the right stick | |
+| Look behind | Q or C | Click the right stick | |
 | Pause | Esc | Start | Pause button |
 
-Two players can share a keyboard: one on W A S D with Space, the other on the arrow keys with Enter. On a phone there are no buttons to find: the left half of the screen steers and the right half is the pedal. Menus work with the phone upright or on its side; races are played on its side. Automatic accelerate and tilt steering are in Options on phones.
+**Sharing a keyboard.** Player 1 drives with WASD, drifts with Left Shift, uses items with Space or E, and looks behind with Q. Player 2 drives with the arrows, drifts with Right Shift or /, uses items with . or Enter, and looks behind with the comma key.
+
+In **Options → Keyboard**, choose Solo, Player 1, or Player 2. Select a key to replace it, or use + to add an alternate. Each layout has its own reset. Esc cancels a change.
+
+On a phone there are no buttons to find: the left half of the screen steers and the right half is the pedal. Menus work with the phone upright or on its side; races are played on its side. Automatic accelerate and tilt steering are in Options on phones.
 
 **Going faster**
 

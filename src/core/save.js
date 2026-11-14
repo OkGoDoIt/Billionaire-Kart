@@ -2,7 +2,7 @@
 const KEY = 'billionaire-kart-v2';
 const DEFAULTS = {
   settings: { music: 0.7, sfx: 0.9, quality: 'auto', shake: true, autoGo: false, tilt: false, autoTrick: false, smartSteer: false, hudMap: true, padBinds: null, padSteer: 'both', pausePortrait: true },   // padBinds null = the shipped controller mapping (src/core/input.js)
-  last: { racer: ['elon', 'sam', 'zuck', 'bezos'], cc: 100, level: 'normal', cup: 'seed', track: 'silicon-valley' },
+  last: { racer: ['elon', 'sam', 'zuck', 'bezos'], cc: 100, trialCc: 100, level: 'normal', cup: 'seed', track: 'silicon-valley' },
   trophies: {},      // `${cupId}:${cc}` -> { rank, points, stars }
   best: {},          // `${trackId}:${cc}` -> { race, lap, racer }
   stats: { races: 0, wins: 0, coins: 0, hitsGiven: 0, hitsTaken: 0 },
@@ -11,6 +11,9 @@ const DEFAULTS = {
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 function merge(base, over) { for (const k in over) { if (over[k] && typeof over[k] === 'object' && !Array.isArray(over[k]) && base[k] && typeof base[k] === 'object') merge(base[k], over[k]); else base[k] = over[k]; } return base; }
+
+// Older time trials used the single 'tt' key and did not record the engine class.
+export const trialKey = cc => `tt:${cc}`;
 
 export class Save {
   constructor() {
@@ -36,7 +39,7 @@ export class Save {
     this.write();
   }
   trophy(cupId, cc) { return this.data.trophies[`${cupId}:${cc}`] || null; }
-  /* Time-trial ghosts are stored one per track under their own keys, so a full storage quota cannot break the main save. */
-  ghost(trackId) { try { const raw = localStorage.getItem(`${KEY}:ghost:${trackId}`); return raw ? JSON.parse(raw) : null; } catch { return null; } }
-  setGhost(trackId, ghost) { try { localStorage.setItem(`${KEY}:ghost:${trackId}`, JSON.stringify(ghost)); } catch { /* out of space: keep the old one */ } }
+  /* Time-trial ghosts are stored one per track and engine class under their own keys, so a full storage quota cannot break the main save. */
+  ghost(trackId, cc) { try { const raw = localStorage.getItem(`${KEY}:ghost:${trackId}:${cc}`); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+  setGhost(trackId, cc, ghost) { try { localStorage.setItem(`${KEY}:ghost:${trackId}:${cc}`, JSON.stringify(ghost)); } catch { /* out of space: keep the old one */ } }
 }

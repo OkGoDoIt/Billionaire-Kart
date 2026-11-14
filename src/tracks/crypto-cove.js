@@ -29,7 +29,7 @@ const SAND = [lin(0xf2), lin(0xdf), lin(0xae)];   // look.terrain.sand in linear
 const ADS = ['HAVE FUN STAYING POOR', 'NUMBER GO UP', 'HODL', 'NOT FINANCIAL ADVICE', 'TRUST ME BRO CAPITAL', 'WITHDRAWALS PAUSED', 'FULLY BACKED (BY VIBES)', 'GAS FEES APPLY', 'FUNDS ARE SAFU', 'BUY THE DIP', 'AUDITED BY MY COUSIN', 'FEW UNDERSTAND', 'WEN LAMBO', 'THIS IS GOOD FOR BITCOIN'];
 
 // The inside chord of the S on the beach. The shelf is soft sand between both kerbs.
-const DIVE = { ramp: 8.95, lip: 9.06, land: 9.5 };
+const DIVE = { ramp: 8.95, lip: 9.06, land: 9.4 };
 const SAND_CUT = [[173, 99], [175, 113], [178, 129], [182, 145], [188, 162]];
 function nearSandCut(x, z) {
   if (x < 163 || x > 198 || z < 89 || z > 172) return false;
@@ -97,7 +97,7 @@ export default {
   bridges: [{ from: 5.6, to: 9.75 }],
   gaps: [{ from: DIVE.lip, to: DIVE.land }],
   tunnels: [{ from: 13.3, to: 14.15, through: true }],
-  ramps: [{ at: DIVE.ramp, len: 10, lift: 3.2 }],
+  ramps: [{ at: DIVE.ramp, len: 10, lift: 3.6 }],
   boosts: [
     { at: 0.5, lat: 0, w: 5 },
     { at: 8.83, lat: 0, w: 7 },
@@ -126,8 +126,8 @@ export default {
     { kind: 'timed', model: 'flame', at: 5.45, lat: 6, period: 3, duty: 0.45, phase: 0, effect: 'spin', radius: 1.3 },
     { kind: 'timed', model: 'flame', at: 5.5, lat: -6, period: 3, duty: 0.45, phase: 1.5, effect: 'spin', radius: 1.3 },
     // washed up on the sandbar, either side of the landing
-    { kind: 'static', model: 'chest', at: 9.86, lat: 6.2, effect: 'bump', radius: 1.3 },
-    { kind: 'static', model: 'buoy', at: 9.92, lat: -6.2, effect: 'bump', radius: 1.2 },
+    { kind: 'static', model: 'chest', at: 9.86, lat: 7.4, effect: 'bump', radius: 1.3 },
+    { kind: 'static', model: 'buoy', at: 9.92, lat: -7.4, effect: 'bump', radius: 1.2 },
   ],
   models: { crab: () => C.crab(), chest: () => C.chest(), buoy: () => C.buoy(0xff6a3d, 'STABLECOIN') },
   terrain: {

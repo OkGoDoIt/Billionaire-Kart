@@ -18,7 +18,6 @@ import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
 import * as M from '../models/props-davos.js';
 import * as S from '../models/props-silicon-valley.js';   // the sign kit: canvas atlas, baker, text fitting
-import { bannerTexture } from '../render/textures.js';
 
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -232,6 +231,20 @@ function dress(ctx) {
   const take = (x, z, r) => taken.push({ x, z, r });
   /** Local frame of a placement: u to its right, v forward (toward the road for beside()), y up. */
   const local = (p, u, v, y) => [p.x + Math.cos(p.yaw) * u + Math.sin(p.yaw) * v, y, p.z - Math.sin(p.yaw) * u + Math.cos(p.yaw) * v];
+  // Aim roadside placards at a kart on approach. Perpendicular boards only
+  // present their faces once a driver is already passing them.
+  const sightLines = [];
+  const faceDriver = (p, distance = 42) => {
+    const eye = track.pointAt(p.i * track.ds - distance, 0, {});
+    p.yaw = Math.atan2(eye.x - p.x, eye.z - p.z);
+    sightLines.push({ x: p.x, z: p.z, dx: eye.x - p.x, dz: eye.z - p.z });
+    return p;
+  };
+  const sightClear = (x, z) => sightLines.every(line => {
+    const dx = x - line.x, dz = z - line.z;
+    const t = (dx * line.dx + dz * line.dz) / (line.dx ** 2 + line.dz ** 2);
+    return t < 0 || t > 1 || Math.hypot(dx - t * line.dx, dz - t * line.dz) > 5;
+  });
   const signs = new Map();
   const board = (text, opts = {}, w = 768, h = 256) => { const k = text + JSON.stringify(opts) + w + 'x' + h; if (!signs.has(k)) signs.set(k, atlas.add(w, h, S.signDraw(text, opts))); return signs.get(k); };
   /** Place and bake a static object. */
@@ -240,7 +253,7 @@ function dress(ctx) {
   const frameMat = c => { if (!frameMats.has(c)) frameMats.set(c, new THREE.MeshStandardMaterial({ color: c, roughness: 0.5 })); return frameMats.get(c); };
   /** A free-standing sign beside the road, facing it: frame baked, face in the atlas. */
   const roadSign = (at, side, off, text, opts = {}, { w = 10, h = 2.8, legs = 3.4, frame = 0x1f2a44, tw = 768, th = 220 } = {}) => {
-    const p = sc.beside(at, side, off);
+    const p = faceDriver(sc.beside(at, side, off));
     put(M.signFrame(w, h, legs, frameMat(frame)), p.x, p.z, { yaw: p.yaw, y: p.y - 0.15 });
     atlas.place(board(text, opts, tw, th), local(p, 0, 0.09, p.y - 0.15 + legs + h / 2), p.yaw, w, h);
     take(p.x, p.z, w * 0.5);
@@ -302,13 +315,17 @@ function dress(ctx) {
     [4.3, 'FONDUE — $400', 'CHEESE OPTIONAL', BROWN],
   ];
   houses.forEach(([at, name, kicker, bg], k) => {
-    const p = sc.beside(at, 1, 25.5);
+    const p = sc.beside(at, 1, 32.5);
     if (!clear(p.x, p.z, 4)) return;
     put(M.chalet(4 + k * 5, {}), p.x, p.z, { yaw: p.yaw + rng.range(-0.05, 0.05), y: p.y - 0.2 }); take(p.x, p.z, 10);
     // the shop sign stands out front, big enough to read at speed
-    const s = sc.beside(at, 1, 19.6);
-    put(M.signFrame(11.5, 3.4, 2.2, frameMat(0x3a2a1a)), s.x, s.z, { yaw: s.yaw, y: s.y - 0.15 });
-    atlas.place(board(name, { bg, fg: '#ffffff', kicker, kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(s, 0, 0.09, s.y - 0.15 + 2.2 + 1.7), s.yaw, 11.5, 3.4);
+    // Terrace the foundation through the downslope corners; otherwise the
+    // front edge of a chalet can hang a full storey above the village.
+    const footing = new THREE.Mesh(new THREE.BoxGeometry(10.9, 7, 7.95), frameMat(0x887a74));
+    put(footing, p.x, p.z, { yaw: p.yaw, y: p.y - 3.65 });
+    const s = faceDriver(sc.beside(at, 1, 21), 52);
+    put(M.signFrame(13, 4, 4.0, frameMat(0x3a2a1a)), s.x, s.z, { yaw: s.yaw, y: s.y - 0.15 });
+    atlas.place(board(name, { bg, fg: '#ffffff', kicker, kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(s, 0, 0.09, s.y - 0.15 + 4 + 2), s.yaw, 13, 4);
   });
   const piles = [2.8, 3.7].map(at => sc.beside(at, 1, 21)).filter(p => clear(p.x, p.z, 1.5) && free(p.x, p.z, 2));
   sc.instances(partsOf(M.woodPile()), piles, {});
@@ -571,12 +588,20 @@ function dress(ctx) {
   });
   sc.instances(partsOf(M.snowBank(2)), drifts, { scale: [0.6, 0.95], sink: 0.15, cast: false });
 
+  // Sponsor boards stand further up the slope so their faces clear the parapets.
+  [[1.95, -1, 17, 'SUMMIT NOW, PAY LATER'], [10.0, 1, 16, 'CONSCIOUS COCOA'], [16.8, -1, 16, 'NO PUBLIC MONEY BEYOND THIS POINT'], [25.9, 1, 14, 'BUILD BACK BUTTER'], [28.2, -1, 30, 'AGENDA COLA']].forEach(([at, side, off, text], i) => {
+    const p = sc.beside(at, side, off);
+    if (!clear(p.x, p.z, 3)) return;
+    const colors = [RED, BROWN, NAVY, '#bb301b', '#19643e'];
+    roadSign(at, side, off, text, { bg: colors[i], fg: '#ffffff', border: GOLD, size: 130 }, { w: 15, h: 4.6, legs: 4.8 });
+  });
+
   // ---- pines on the slopes (not on the pistes, not in town), rocks where the mountain shows through ----
   const pineA = partsOf(M.snowPine(3)), pineB = partsOf(M.snowPine(11, { h: 11 }));
   const pineC = partsOf(M.snowPine(23, { h: 13 })), pineD = partsOf(M.snowPine(31, { h: 6.5 }));
   const inTown = (x, z) => Math.hypot((x - 35) / 80, (z - 88) / 50) < 1.05;
   const onPiste = (x, z) => (Math.abs(x - 298) < 34 && z > 70 && z < 245) || (Math.abs(Math.abs(x) - 48) < 26 && z > 190 && z < 325) || Math.abs(x) < 22 && z > 160 && z < 300;
-  const pines = sc.scatter({ count: 560, min: 13, max: 250, maxSlope: 1.25, minGap: 6, where: (x, z) => clear(x, z, 1.5) && free(x, z, 3) && !inTown(x, z) && !onPiste(x, z) });
+  const pines = sc.scatter({ count: 560, min: 13, max: 250, maxSlope: 1.25, minGap: 6, where: (x, z) => clear(x, z, 1.5) && free(x, z, 3) && sightClear(x, z) && !inTown(x, z) && !onPiste(x, z) });
   const pineSets = [pineA, pineB, pineC, pineD];
   pineSets.forEach((set, v) => sc.instances(set, pines.filter((_, i) => i % 4 === v), { scale: [0.8, 1.35], yaw: 'random', sink: 0.2 }));
   const rowSpots = [
@@ -588,7 +613,7 @@ function dress(ctx) {
     ...sc.along({ from: 9.4, to: 10.3, side: -1, offset: 8, spacing: 7, jitter: 2 }),
     ...sc.along({ from: 26.0, to: 27.5, side: -1, offset: 7, spacing: 6.6, jitter: 1.8 }),
     ...sc.along({ from: 29.8, to: 30.5, side: 1, offset: 8, spacing: 7, jitter: 1.6 }),
-  ].filter(p => free(p.x, p.z, 2) && clear(p.x, p.z, 0.5) && !onPiste(p.x, p.z));
+  ].filter(p => free(p.x, p.z, 2) && clear(p.x, p.z, 0.5) && sightClear(p.x, p.z) && !onPiste(p.x, p.z));
   pineSets.forEach((set, v) => sc.instances(set, rowSpots.filter((_, i) => i % 4 === v), { scale: [0.8, 1.3], yaw: 'random', sink: 0.2 }));
   // Broken ledges separate the traverse from the face above; use a handful
   // of broad, low clusters rather than a line of identical upright stones.
@@ -614,14 +639,6 @@ function dress(ctx) {
       sc.place(b, p.x, p.z, { yaw: p.yaw, lift: edge === EDGE.OPEN ? 0.9 : 1.2 }); bake.add(b, false);
     }
   }
-
-  // ---- billboards where you are looking anyway ----
-  [[1.95, -1, 17, 'SUMMIT NOW, PAY LATER'], [10.0, 1, 16, 'CONSCIOUS COCOA'], [16.8, -1, 16, 'NO PUBLIC MONEY BEYOND THIS POINT'], [25.9, 1, 14, 'BUILD BACK BUTTER'], [28.2, -1, 30, 'AGENDA COLA']].forEach(([at, side, off, text], i) => {
-    const p = sc.beside(at, side, off);
-    if (!clear(p.x, p.z, 3)) return;
-    const tex = bannerTexture([text], i + 21); tex.repeat.set(0.25, 1);
-    put(P.billboard(tex, { w: 15, h: 5, legs: 6, frame: 0x1f2a44 }), p.x, p.z, { yaw: p.yaw + rng.range(-0.1, 0.1) });
-  });
 
   atlas.flush();
   bake.flush();

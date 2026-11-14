@@ -345,13 +345,13 @@ export default {
     // flagpoles and lamps lining the Avenue
     const flagA = partsOf(C.flagpole({ a: 0xb3122a, b: 0xd4af37 })), flagB = partsOf(C.flagpole({ a: 0x1f3f8a, b: 0xf2efe6 })), flagC = partsOf(C.flagpole({ a: 0xd4af37, b: 0x1f3f8a }));
     const avFlags = sc.along({ from: 43.5, to: 2.0, side: 1, offset: 13.2, spacing: 12 });
-    sc.instances(flagA, avFlags.filter((_, i) => i % 3 === 0), {});
-    sc.instances(flagB, avFlags.filter((_, i) => i % 3 === 1), {});
-    sc.instances(flagC, avFlags.filter((_, i) => i % 3 === 2), {});
-    sc.instances(flagA, obeliskRing.filter((_, k) => k % 2 === 0), {});
-    sc.instances(flagB, obeliskRing.filter((_, k) => k % 2 === 1), {});
+    sc.instances(flagA, avFlags.filter((_, i) => i % 3 === 0), { cast: false });
+    sc.instances(flagB, avFlags.filter((_, i) => i % 3 === 1), { cast: false });
+    sc.instances(flagC, avFlags.filter((_, i) => i % 3 === 2), { cast: false });
+    sc.instances(flagA, obeliskRing.filter((_, k) => k % 2 === 0), { cast: false });
+    sc.instances(flagB, obeliskRing.filter((_, k) => k % 2 === 1), { cast: false });
     const southFlags = sc.along({ from: 43.7, to: 1.6, side: -1, offset: 1.4, spacing: 34, phase: 32 });
-    sc.instances(flagA, southFlags, {});
+    sc.instances(flagA, southFlags, { cast: false });
     const lamp = partsOf(C.streetLamp());
     const lamps = [
       ...sc.along({ from: 43.5, to: 2.0, side: 1, offset: 13.2, spacing: 12, phase: 6 }),
@@ -511,8 +511,8 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
   for (let z = POOL.z0 - 8; z <= POOL.z1 + 10; z += 9.5) for (const x of [POOL.x1 + 11.5, POOL.x1 + 19.5]) elmSpots.push({ x: x + rng.range(-0.6, 0.6), z: z + rng.range(-1, 1) });
   for (let z = 52; z <= 230; z += 9.5) { if (z > 172 && z < 204) continue; for (const x of [134, 126]) elmSpots.push({ x: x + rng.range(-0.6, 0.6), z: z + rng.range(-1, 1) }); }
   const elms = elmSpots.filter(p => free(p.x, p.z) && !reach(p.x, p.z, 0.4)).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.1 }));
-  sc.instances(partsOf(C.elm(3, { h: 15 })), elms.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9 });
-  sc.instances(partsOf(C.elm(8, { h: 16, leafA: 0x467f37, leafB: 0x58983f })), elms.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9 });
+  sc.instances(partsOf(C.elm(3, { h: 15 })), elms.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9, cast: false });
+  sc.instances(partsOf(C.elm(8, { h: 16, leafA: 0x467f37, leafB: 0x58983f })), elms.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.15], yaw: 'random', tilt: 0.02, solid: 0.9, cast: false });
   // lamps along the far walk
   const lamps = [];
   for (let z = POOL.z0 + 6; z < POOL.z1; z += 19) lamps.push({ x: POOL.x1 + 8.6, z, y: Y - 0.05, yaw: 0 });
@@ -611,7 +611,7 @@ function filibuster(ctx, sc, { taken }) {
   };
   mk(pos, uv, idx, mat); mk(cpos, null, cidx, capMat);
   sc.instances(partsOf(C.balustrade(4)), balSpots, { cast: false });
-  sc.instances(partsOf(C.flagpole({ a: 0xb3122a, b: 0xf2efe6, h: 7 })), flagSpots, {});
+  sc.instances(partsOf(C.flagpole({ a: 0xb3122a, b: 0xf2efe6, h: 7 })), flagSpots, { cast: false });
   sc.instances(partsOf(C.streetLamp()), lampSpots, { cast: false });
 
   // the cloture fence: barricades just off the inside edge from the middle leg round hairpin two and back along the

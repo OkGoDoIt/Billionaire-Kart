@@ -316,8 +316,9 @@ export default {
       sc.place(B.paperclipArch({ span: track.hwL[i] + track.hwR[i] + 12, h: 12 }), p.x, p.z, { yaw: p.along, y: p.roadY - 0.2 });
       const cursor = B.waitCursor();
       // Set it just behind the arch so the top stays in the chase camera as the kart crests the hill.
-      const crest = track.indexAtCp(8.65);
-      cursor.position.set(track.px[crest], p.roadY + 20.6, track.pz[crest]); ctx.group.add(cursor);
+      const crest = track.indexAtCp(9.15);
+      cursor.scale.setScalar(0.72);
+      cursor.position.set(track.px[crest], p.roadY + 14.8, track.pz[crest]); ctx.group.add(cursor);
       const label = atlas.mesh(board('NOT RESPONDING', { bg: '#082e8c', fg: '#ffffff', font: S.SANS, lines: 1, size: 72 }, 512, 90), 14.5, 2.3);
       label.position.set(p.x, p.roadY + 8.4, p.z); label.rotation.y = p.along + Math.PI; ctx.group.add(label);
       cursor.visible = label.visible = false;

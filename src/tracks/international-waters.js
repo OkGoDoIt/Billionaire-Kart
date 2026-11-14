@@ -26,11 +26,11 @@ const tideOf = race => (race && race.lakeY != null ? race.lakeY - SEA : 0);
    height; swell: amplitude (m), period (s), phase. */
 const YACHTS = [
   { name: 'SOVEREIGN IMMUNITY', from: 21.48, to: 25.97, x0: -128, x1: -6, z0: 0, z1: 0, road: 12, B: 13, boot: 0xd9a63a, amp: 0.35, period: 6.4, phase: 0.0,
-    salon: [-40, 15], uppers: [[-34, 10, 3.2], [-26, 4, 3.0], [-16, -1, 2.4]], helipad: 38, header: 'OWNERS ONLY (AND KARTS)' },
+    salon: [-29, 15], uppers: [[-25, 10, 3.2], [-26, 4, 3.0], [-16, -1, 2.4]], helipad: 38, emblem: 'crown', header: 'CROWN DEPENDENCY' },
   { name: 'FAIR & BALANCED', from: 27.96, to: 31.98, x0: 6.5, x1: 80.5, z0: 0, z1: 0, road: 9.5, B: 12, boot: 0x2456a6, amp: 0.85, period: 4.8, phase: 1.3,
-    salon: [-20, 12], uppers: [[-16, 6, 3], [-10, 1, 2.4]], dishes: true, header: 'SOURCES SAY: FLOOR IT' },
+    salon: [-9, 15], uppers: [[-7, 8, 3], [-5, 4, 2.4]], dishes: true, emblem: 'camera', header: 'LIVE: TAX EVASION' },
   { name: 'HOSTILE TAKEOVER', from: 34.18, to: 38.0, x0: 85.5, x1: 155.5, z0: 0.45, z1: 3.5, road: 8, B: 12, boot: 0xc8323a, amp: 1.0, period: 5.4, phase: 3.0,
-    salon: [-18, 10], uppers: [[-13, 4, 2.8]], header: 'BOARDROOM: TAKEOVERS ONLY' },
+    salon: [-10, 13], uppers: [[-7, 7, 2.8]], emblem: 'shark', header: 'HOSTILE TAKEOVER' },
 ];
 const SPIT = { x: -122, z: -76, rx: 17, rz: 12 };                    // the sandbar inside the hairpin
 const spitE = (x, z) => Math.hypot((x - SPIT.x) / SPIT.rx, (z - SPIT.z) / SPIT.rz);
@@ -46,7 +46,7 @@ export default {
   width: 18,
   sky: 'day',
   skyOverrides: { zenith: 0x0d5bd6, horizon: 0x9fdcff, sunDir: [0.42, 0.6, 0.52], fogNear: 320, fogFar: 1500, sunIntensity: 3.5, cloudCover: 0.36 },
-  backdrop: { img: 'assets/backdrops/international-waters.webp', top: 9.4, bottom: -0.35, rot: 0.08 },
+  backdrop: { img: 'assets/backdrops/international-waters.webp', top: 16.5, bottom: -0.6, rot: 0.08 },
   offroad: 'sand',
   defaults: { edge: 'void', shoulder: 0, outer: 11 },
   // a figure eight: the low road (cp ~9.5, +1.6 m) runs down the channel under
@@ -181,7 +181,10 @@ export default {
     `<b>Final lap: low tide.</b> The sandbar is open.`,
   ],
   // the opening shot: the yacht chain from the water, names down the hulls
-  intro: [{ pos: [64, 6, 62], look: [-30, 11, 0], pos1: [34, 7, 64], look1: [-56, 11, 0], fov: 50, dur: 3.6 }],
+  intro: [
+    { pos: [-177, 46, 82], look: [-14, 9, 0], pos1: [-157, 40, 92], look1: [-8, 9, 0], fov: 48, dur: 3.1 },
+    { pos: [-43, 19, -30], look: [10, 11, 0], pos1: [-31, 17, -22], look1: [27, 12, 0], fov: 54, dur: 1.8 },
+  ],
   terrain: {
     cell: 3, margin: 240, blend: 26, water: SEA,
     fn(x, z) {
@@ -217,12 +220,17 @@ function decorate(ctx) {
   const bake = W.makeBaker(group, sc.shadows), atlas = W.makeAtlas(group);
   // everything moored and afloat (barges, pontoons, sailboats) is merged into one group that rides the tide
   const floatGroup = new THREE.Group(); group.add(floatGroup);
-  const fbake = W.makeBaker(floatGroup, sc.shadows);
+  // These pontoons, workboats, and hoardings stand over open water. The sea
+  // material has no shadow receiver, so casting their silhouettes wastes a pass.
+  const fbake = W.makeBaker(floatGroup, false);
   const DARK = MAT.dark;
   const at = (cp, lat = 0) => {
     const i = track.indexAtCp(cp), hl = Math.hypot(track.lx[i], track.lz[i]) || 1;
     return { x: track.px[i] + (track.lx[i] / hl) * lat, z: track.pz[i] + (track.lz[i] / hl) * lat, yaw: track.yaw[i], y: track.py[i], i, lx: track.lx[i] / hl, lz: track.lz[i] / hl };
   };
+  // Point a pontoon sign at the approaching driver. Alongside views give the
+  // driver a fraction of a second to read even an enormous board.
+  const faceApproach = (p, cp) => { const eye = at(cp); return Math.atan2(eye.x - p.x, eye.z - p.z); };
   const faceRoad = (p, side) => Math.atan2(-side * p.lx, -side * p.lz);
   const floaters = [];                         // things that ride the tide: { g, base, ph, amp, roll }
   const tide = () => tideOf(view.race);
@@ -270,10 +278,11 @@ function decorate(ctx) {
 
   /* ----- THE YACHT HOP: three yachts, each riding its own swell, the road on their decks ----- */
   const deckGroups = [];
+  const marshal = W.deckMarshal();
   const wood = roadSkin('wood'), carpet = roadSkin('carpet');
   const woodMat = new THREE.MeshStandardMaterial({ map: wood.map, roughness: 0.8 }), carpetMat = new THREE.MeshStandardMaterial({ map: carpet.map, roughness: 1 });
   const wallMat = paint(0xf7f6f2, { rough: 0.25, clear: 0.8 }), capMat = paint(0xe9b443, { rough: 0.25, metal: 0.75, clear: 0.6 });
-  const rampMat = makeChevronMaterial({ a: 0x1f6bff, b: 0x7fe0ff, speed: 1.6, glow: 0.35, side: THREE.DoubleSide });
+  const deckRamps = YACHTS.map(y => makeChevronMaterial({ a: 0x173748, b: y.boot, speed: 1.6, glow: 0.22, side: THREE.DoubleSide }));
   const padMat = makeChevronMaterial({ a: 0xff6a00, b: 0xffe04a, speed: 3.2, glow: 0.9 });
   padMat.polygonOffset = true; padMat.polygonOffsetFactor = -2; padMat.polygonOffsetUnits = -2;
   const foamGeos = [], foamMat = W.foamMaterial();
@@ -339,19 +348,38 @@ function decorate(ctx) {
     const G = new THREE.Group(); G.name = 'deck-' + k; group.add(G);
     const L = Y.x1 - Y.x0, cx = (Y.x0 + Y.x1) / 2, cz = (Y.z0 + Y.z1) / 2, yaw = Math.atan2(Y.x1 - Y.x0, Y.z1 - Y.z0);
     const D = Y.road - WL - 0.14;
-    const yacht = W.hopYacht({ L, B: Y.B, D, name: Y.name, boot: Y.boot, salon: Y.salon, uppers: Y.uppers, helipad: Y.helipad ?? null, header: Y.header });
+    const yacht = W.hopYacht({ L, B: Y.B, D, name: Y.name, boot: Y.boot, salon: Y.salon, uppers: Y.uppers, helipad: Y.helipad ?? null, header: Y.header, emblem: Y.emblem });
     yacht.position.set(cx, WL, cz); yacht.rotation.y = yaw; G.add(yacht);
     yacht.traverse(o => { if (o.isMesh) o.castShadow = sc.shadows && !o.material.transparent; });
-    if (Y.dishes) { const d = W.dishArray(); d.position.set(0, D + 5.8 + 5.4, -6); d.scale.setScalar(1.4); yacht.add(d); anim.push((dt, time) => { d.userData.spin.rotation.y = time * 0.45; }); }
+    // The launch marshal waves both signal flags on the flagship's helipad.
+    if (k === 0) {
+      marshal.root.position.set(-Y.B + 2.8, D + 0.02, 38);
+      marshal.root.scale.setScalar(1.65); yacht.add(marshal.root);
+      anim.push((dt, t) => {
+        const raise = 0.9 + 0.55 * Math.sin(t * 3.4);
+        marshal.left.rotation.z = raise; marshal.right.rotation.z = -raise;
+      });
+    }
+    if (Y.dishes) { const d = W.dishArray(); d.position.set(0, D + 8.6 + 5.4, 2); d.scale.setScalar(1.4); yacht.add(d); anim.push((dt, time) => { d.userData.spin.rotation.y = time * 0.45; }); }
     // the road over her deck: teak, red carpet through the salon
     const idx = range(Y.from, Y.to), salonX = [cx + Y.salon[0], cx + Y.salon[1]];
     const inSalon = i => track.px[i] > salonX[0] && track.px[i] < salonX[1];
     const segs = []; let cur = null;
     for (const i of idx) { const sal = inSalon(i); if (!cur || cur.sal !== sal) { if (cur) cur.idx.push(i); cur = { sal, idx: [i] }; segs.push(cur); } else cur.idx.push(i); }
     for (const sg of segs) if (sg.idx.length > 1) { const m = new THREE.Mesh(strip(sg.idx, 0.02, sg.sal ? carpet.tile : wood.tile), sg.sal ? carpetMat : woodMat); m.receiveShadow = true; G.add(m); }
+    if (Y.helipad != null) {
+      // The landing circle and H sit above the drivable teak. A disc inside
+      // the hull would disappear behind the independent road strip.
+      const pad = new ModelBuilder(), x = cx + Y.helipad;
+      pad.add('pad', cyl(6.45, 6.45, 0.05, 48), { p: [x, Y.road + 0.058, cz] });
+      pad.add('line', new THREE.RingGeometry(5.6, 5.85, 48).rotateX(-Math.PI / 2), { p: [x, Y.road + 0.09, cz] });
+      for (const z of [-1.6, 1.6]) pad.add('line', box(4.8, 0.03, 0.72, 0.005, 1), { p: [x, Y.road + 0.09, cz + z] });
+      pad.add('line', box(0.72, 0.03, 3.5, 0.005, 1), { p: [x, Y.road + 0.09, cz] });
+      G.add(pad.build({ pad: paint(0x253f48, { rough: 0.85 }), line: wallMat }, { cast: false }));
+    }
     const [wb, wc] = bulwark(idx);
     const wm = new THREE.Mesh(wb, wallMat), cm = new THREE.Mesh(wc, capMat); wm.castShadow = sc.shadows; G.add(wm, cm);
-    for (const r of track.ramps) if (track.deckK?.[r.i0] === k + 1) { const m = new THREE.Mesh(rampGeo(r), rampMat); m.castShadow = sc.shadows; G.add(m); }
+    for (const r of track.ramps) if (track.deckK?.[r.i0] === k + 1) { const m = new THREE.Mesh(rampGeo(r), deckRamps[k]); m.castShadow = sc.shadows; G.add(m); }
     for (const b of track.boosts) if (track.deckK?.[b.i0] === k + 1) { const m = new THREE.Mesh(padGeo(b), padMat); m.renderOrder = 2; G.add(m); }
     // foam round her waterline: it stays with the sea while she rises and falls through it
     const fg = W.foamRing(yacht.userData.o, 2.2);
@@ -388,14 +416,19 @@ function decorate(ctx) {
   }
   {
     const grp = marina.build(W.YACHT_MATS()); grp.position.y = WL; group.add(grp);
-    grp.traverse(o => { if (o.isMesh) o.castShadow = sc.shadows; });
+    // Only the projecting hulls shade the quay. The aft furniture and upper
+    // decks lie over open water and cannot put a shadow on the road.
+    grp.traverse(o => { if (o.isMesh) o.castShadow = sc.shadows && o.name === 'hull'; });
     floaters.push({ g: grp, base: WL, ph: 0.6, amp: 0, tideOnly: true });
     for (const n of bowNames) { const r = atlas.add(1024, 128, W.nameFace(n.text)); atlas.place(r, [n.x, n.y, n.z], n.yaw, n.len, n.len / 8); }
   }
 
   /* ----- the sand spit at the hairpin: palms, a beach bar, the tide board ----- */
   {
-    const spots = sc.scatter({ count: 46, min: 3.5, max: 40, maxSlope: 0.5, minGap: 6, where: (x, z, h) => h > WL + 0.6 && spitE(x, z) > 1.85 && spitE(x, z) < 3.6 });
+    const shell = W.shellOffice(), office = at(3.05, -21);
+    shell.position.set(office.x, sc.y(office.x, office.z) - 0.5, office.z);
+    shell.rotation.y = faceApproach(office, 1.6); shell.scale.setScalar(1.3); group.add(shell); bake.add(shell);
+    const spots = sc.scatter({ count: 46, min: 3.5, max: 40, maxSlope: 0.5, minGap: 6, where: (x, z, h) => Math.hypot(x - office.x, z - office.z) > 29 && h > WL + 0.6 && spitE(x, z) > 1.85 && spitE(x, z) < 3.6 });
     sc.instances(partsOf(P.palm(3, { h: 10 })), spots.filter((_, i) => i % 2 === 0), { scale: [0.9, 1.25], yaw: 'random', tilt: 0.08 });
     sc.instances(partsOf(P.palm(7, { h: 8 })), spots.filter((_, i) => i % 2 === 1), { scale: [0.9, 1.3], yaw: 'random', tilt: 0.1 });
     const bp = at(4.0, -24);
@@ -426,7 +459,8 @@ function decorate(ctx) {
   {
     const ci = track.indexAtCp(43.05), cg = sc.beside(43.05, 1, -track.hwL[ci]);
     const customs = P.gantry(track.hwL[ci] + track.hwR[ci] + 1.5, 'NOTHING TO DECLARE (EVER)', { color: 0x1d5c46, color2: 0xf3ead2 });
-    sc.place(customs, cg.x, cg.z, { yaw: cg.along, y: cg.roadY });
+    for (const light of customs.userData.lights) light.removeFromParent();
+    sc.place(customs, cg.x, cg.z, { yaw: cg.along, y: cg.roadY }); bake.add(customs);
     for (const side of [1, -1]) { const bp = sc.beside(43.05, side, 1.8); const booth = W.customsBooth(); sc.place(booth, bp.x, bp.z, { yaw: bp.yaw, y: bp.roadY }); bake.add(booth); }
   }
 
@@ -438,20 +472,20 @@ function decorate(ctx) {
 
   /* ----- jokes at the road ----- */
   {
-    const mw = at(7.15, 14);
-    const wall = W.mailboxWall(); wall.position.set(mw.x, WL, mw.z); wall.rotation.y = faceRoad(mw, 1); group.add(wall); fbake.add(wall);
-    const fs = at(14.9, 15);
-    const shop = W.flagShop(); shop.position.set(fs.x, WL, fs.z); shop.rotation.y = faceRoad(fs, 1); group.add(shop); fbake.add(shop);
+    const mw = at(7.5, 21);
+    const wall = W.mailboxWall(); wall.position.set(mw.x, WL, mw.z); wall.rotation.y = faceApproach(mw, 6.15); wall.scale.set(0.85, 1.45, 1); group.add(wall); fbake.add(wall);
+    const fs = at(14.7, -19);
+    const shop = W.flagShop(); shop.position.set(fs.x, WL, fs.z); shop.rotation.y = faceApproach(fs, 13.4); shop.scale.setScalar(1.45); group.add(shop); fbake.add(shop);
     const sb = W.signBuoy(), ss = at(0.25, 20);
     sb.position.set(ss.x, WL - 0.15, ss.z); sb.rotation.y = faceRoad(ss, 1); group.add(sb); fbake.add(sb);
-    [[1.0, 1, 1], [11.9, -1, 2], [16.9, 1, 3], [41.5, -1, 4], [44.3, 1, 5]].forEach(([cp, side, n], k) => {
-      const p = at(cp, side * 15);
-      const board = W.adBoard(n); board.position.set(p.x, WL, p.z); board.rotation.y = faceRoad(p, side); group.add(board); fbake.add(board); void k;
+    [[0.98, 1, 1, 0.42], [11.8, 1, 2, 10.75], [15.2, -1, 3, 14.2], [41.7, -1, 4, 40.4], [44.7, 1, 5, 43.55]].forEach(([cp, side, n, approach]) => {
+      const p = at(cp, side * 20);
+      const board = W.adBoard(n); board.position.set(p.x, WL, p.z); board.rotation.y = faceApproach(p, approach); board.scale.setScalar(1.6); group.add(board); fbake.add(board);
     });
     // gantry signs over the road
     const signs = [
-      [17.75, ['NOW BOARDING', 'SHOES OFF, TAXES OFF'], 15],
-      [8.75, ['THE CHANNEL', 'WATCH FOR FALLING BILLIONAIRES'], 15],
+      [17.75, ['NOW BOARDING', 'SHOES OFF. TAXES OFF.'], 20],
+      [8.15, ['FALLING BILLIONAIRES', 'MIND YOUR HEAD'], 20],
     ];
     const posts = new ModelBuilder();
     for (const [cp, lines, w] of signs) {
@@ -459,7 +493,7 @@ function decorate(ctx) {
       for (const s of [1, -1]) posts.add('post', cyl(0.18, 0.22, 7.2, 8), { p: [p.x + p.lx * half * s, y + 3.6, p.z + p.lz * half * s] });
       posts.add('post', box(half * 2 + 0.6, 0.35, 0.35, 0.1, 1), { p: [p.x, y + 7.1, p.z], r: [0, Math.atan2(p.lx, p.lz) + Math.PI / 2, 0] });
       const r = atlas.add(1024, 256, W.signFace(lines));
-      atlas.place2(r, [p.x, y + 5.7, p.z], p.yaw + Math.PI, w, w / 4);
+      atlas.place2(r, [p.x, y + 6.95, p.z], p.yaw + Math.PI, w, w / 4);
     }
     bake.builder(posts, { post: DARK });
   }
@@ -485,7 +519,7 @@ function decorate(ctx) {
         bands.push({ x, z, y: LOW_TIDE - 0.5, yaw: rng() * 6 });
       }
     }
-    sc.instances(partsOf(W.pile()), piles, { cast: true });
+    sc.instances(partsOf(W.pile()), piles, { cast: false });
     sc.instances(partsOf(W.pileBand()), bands, { cast: false });
   }
 
@@ -570,7 +604,7 @@ function decorate(ctx) {
     const ship = P.blimp('NO JURISDICTION', { accent: 0x1fb6c9 }); ship.scale.setScalar(1.3); group.add(ship);
     anim.push((dt, time) => {
       balloons.forEach((b, i) => { b.position.y += Math.sin(time * 0.4 + i * 1.7) * dt * 0.8; b.rotation.y += dt * 0.05; });
-      const a = time * 0.02; ship.position.set(-60 + Math.cos(a) * 70, 58 + Math.sin(time * 0.3) * 2, -60 + Math.sin(a) * 50); ship.rotation.y = -a;
+      const a = time * 0.02; ship.position.set(72 + Math.cos(a) * 70, 52 + Math.sin(time * 0.3) * 2, -148 + Math.sin(a) * 50); ship.rotation.y = -a;
     });
   }
 

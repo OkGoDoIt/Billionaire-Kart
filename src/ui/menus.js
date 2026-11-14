@@ -192,7 +192,7 @@ export class Menus {
     const shortLandscape = matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
     const drawInstall = () => {
       const spec = shortLandscape ? null : installButton();
-      if (spec && !installBtnEl) { installBtnEl = this.btn(spec.label, () => spec.act(), { cls: 'small' }); row.appendChild(installBtnEl); row.classList.add('has-install'); }
+      if (spec && !installBtnEl) { installBtnEl = this.btn(spec.label, () => spec.act(installBtnEl), { cls: 'small' }); row.appendChild(installBtnEl); row.classList.add('has-install'); }
       if (!spec && installBtnEl) { installBtnEl.remove(); installBtnEl = null; row.classList.remove('has-install'); }
       const card = installCard();
       slot.replaceChildren(...(card ? [card] : []));
@@ -466,7 +466,7 @@ export class Menus {
     // installing is a row too, wherever the browser allows it; the label says what tapping does here
     const installRow = () => {
       const spec = installButton(); if (!spec) return null;
-      const row = h('button', { class: 'opt', 'data-f': true, onclick: () => { spec.act(); A.audio?.ui('move'); } }, h('span', {}, 'Install app'), h('div', { class: 'opt-ctl' }, h('b', {}, spec.label === 'Install app' ? 'Install' : 'Guide')));
+      const row = h('button', { class: 'opt', 'data-f': true, onclick: () => { spec.act(row); A.audio?.ui('move'); } }, h('span', {}, 'Install app'), h('div', { class: 'opt-ctl' }, h('b', {}, spec.label === 'Install app' ? 'Install' : 'Guide')));
       return row;
     };
     const el = h('div', {}, this.header('Options'), h('div', { class: 'panel options' },

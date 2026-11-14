@@ -239,6 +239,70 @@ export function dock(len = 30, depth = 16) {
   return b.build({ plank: plastic(0xa47a4c, 0.9), pile: plastic(0x6a4e34, 0.9), rail: plastic(0xd9c9a8, 0.8), ring: plastic(0xff5a2a, 0.5) });
 }
 
+/** Shoreline electricity meter. The dial faces +Z. The rotor and needle turn about
+    their own axles, so their coloured parts can be baked together before animation. */
+export function demandMeter() {
+  const body = new ModelBuilder(), rotor = new ModelBuilder(), needle = new ModelBuilder();
+  const mats = {
+    iron: DARK, steel: STEEL, pipe: plastic(0x326fc0, 0.42, 0.25), navy: plastic(0x183556, 0.5),
+    enamel: plastic(0xfff3cc, 0.65), amber: plastic(0xffc928, 0.5), ink: plastic(0x182437, 0.6),
+    green: plastic(0x007f72, 0.55), red: plastic(0xc62c23, 0.5), base: CONCRETE,
+  };
+  const face = (b, mat, radius, depth, x, y, z) =>
+    b.add(mat, cyl(radius, radius, depth, 48), { p: [x, y, z], r: [Math.PI / 2, 0, 0] });
+
+  // A blue outlet with bolted collars and a steel saddle carrying the instrument.
+  body.add('base', box(4, 1.1, 3.7, 0.2, 1), { p: [0, 0.4, -0.45] });
+  body.add('pipe', cyl(1.14, 1.14, 7.4, 18), { p: [0, 4.1, -0.45] });
+  for (const y of [1.4, 4.6, 7.5]) body.add('navy', cyl(1.37, 1.37, 0.38, 18), { p: [0, y, -0.45] });
+  strut(body, 'steel', [-0.7, 4.8, -0.5], [-5.6, 8.2, -0.5], 0.26, 8);
+  body.add('navy', box(8.4, 0.65, 1.5, 0.14, 1), { p: [-2.1, 8.15, -0.45] });
+  body.add('iron', box(4.6, 1.4, 1.65, 0.25, 1), { p: [-5.1, 8.8, 0] });
+  body.add('amber', box(4.45, 0.3, 0.34, 0.08, 1), { p: [-5.1, 8.45, 0.85] });
+  face(body, 'navy', 3.33, 1.55, 0, 10.5, -0.1);
+  face(body, 'amber', 3.18, 0.32, 0, 10.5, 0.76);
+  face(body, 'iron', 3.04, 0.21, 0, 10.5, 0.97);
+  face(body, 'enamel', 2.87, 0.16, 0, 10.5, 1.13);
+
+  // The hand travels clockwise across the upper sweep. Coloured bands have
+  // different lengths, so the overloaded end also reads by position and shape.
+  const arc = (mat, start, end) => body.add(mat,
+    new THREE.RingGeometry(1.94, 2.45, 36, 1, start, end - start), { p: [0, 10.32, 1.23] });
+  arc('red', 0.14, 0.92); arc('amber', 0.95, 1.68); arc('green', 1.71, 3.0);
+  for (let i = 0; i <= 10; i++) {
+    const a = 0.18 + i * 0.277, major = i % 2 === 0;
+    body.add('ink', cube(major ? 0.13 : 0.09, major ? 0.48 : 0.28, 0.07), {
+      p: [2.37 * Math.cos(a), 10.32 + 2.37 * Math.sin(a), 1.29], r: [0, 0, a - Math.PI / 2],
+    });
+  }
+  const bolt = new THREE.Shape();
+  bolt.moveTo(0.11, 0.6); bolt.lineTo(-0.55, -0.07); bolt.lineTo(-0.09, -0.07);
+  bolt.lineTo(-0.21, -0.63); bolt.lineTo(0.55, 0.13); bolt.lineTo(0.1, 0.13); bolt.closePath();
+  body.add('ink', new THREE.ShapeGeometry(bolt), { p: [0, 8.98, 1.25] });
+  const hand = new THREE.Shape();
+  hand.moveTo(-0.27, -0.48); hand.lineTo(0.27, -0.48); hand.lineTo(0.12, 1.8);
+  hand.lineTo(0, 2.53); hand.lineTo(-0.12, 1.8); hand.closePath();
+  needle.add('ink', new THREE.ShapeGeometry(hand));
+  face(body, 'steel', 0.29, 0.15, 0, 10.32, 1.49);
+  face(body, 'ink', 0.14, 0.08, 0, 10.32, 1.60);
+
+  // Exposed escapement below the dial: an asymmetric induction disc and a
+  // spring-loaded pawl. The broad painted sector stays visible in motion.
+  face(body, 'iron', 1.49, 0.52, 0, 7.22, 0.57);
+  face(rotor, 'steel', 1.18, 0.21, 0, 0, 0);
+  rotor.add('navy', new THREE.RingGeometry(0.35, 1.13, 20, 1, 0.2, 3.65), { p: [0, 0, 0.115] });
+  rotor.add('amber', new THREE.RingGeometry(0.42, 1.13, 8, 1, -0.46, 0.54), { p: [0, 0, 0.12] });
+  for (let i = 0; i < 12; i++) {
+    const a = i * Math.PI / 6;
+    rotor.add('steel', cube(0.24, 0.36, 0.25), { p: [1.19 * Math.sin(a), 1.19 * Math.cos(a), 0], r: [0, 0, -a] });
+  }
+  face(rotor, 'ink', 0.24, 0.12, 0, 0, 0.17);
+  const pawl = new ModelBuilder();
+  strut(pawl, 'amber', [0, 0, 0], [1.05, -0.62, 0], 0.18, 5);
+  face(body, 'steel', 0.22, 0.23, -2.0, 7.79, 1.03);
+  return { housing: body.build(mats), needle: needle.build(mats), rotor: rotor.build(mats), pawl: pawl.build(mats) };
+}
+
 /** Lifeguard chair: a tall white wooden seat on splayed legs, with a red float. */
 export function lifeguardChair() {
   const b = new ModelBuilder();

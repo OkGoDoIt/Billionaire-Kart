@@ -319,6 +319,12 @@ function dress(ctx) {
   }
 
   /* ================= the Promenade: every shop is somebody's "House" ================= */
+  const pass = sc.beside(2.3, 0, 0);
+  pass.yaw = pass.along + Math.PI;
+  const opening = Math.max(track.hwL[pass.i], track.hwR[pass.i]) * 2 + 3;
+  put(M.delegatePass(opening), pass.x, pass.z, { yaw: pass.yaw, y: pass.roadY, cast: false });
+  atlas.place(board('A SPIRIT OF DIALOGUE', { bg: NAVY, fg: '#ffffff', kicker: 'AUDIENCE MICS: OFF', kfg: '#ffcf54', border: GOLD, size: 134 }, 1024, 256),
+    local(pass, 0, 0.63, pass.roadY + 10.8), pass.yaw, opening + 4.7, 4.6);
   const houses = [
     [2.6, 'AI HOUSE', 'FORMERLY CRYPTO HOUSE', '#1f2a44'],
     [3.02, 'CRYPTO HOUSE', 'FORMERLY A BAKERY', '#8a2f2a'],
@@ -345,7 +351,7 @@ function dress(ctx) {
   const snowmen = sc.along({ from: 2.55, to: 3.5, side: -1, offset: 15, spacing: 5.5, jitter: 0.8 }).filter(p => clear(p.x, p.z, 1.5) && free(p.x, p.z, 2)).map(p => ({ ...p, yaw: p.yaw + rng.range(-0.3, 0.3) }));
   sc.instances(partsOf(M.snowman(3)), snowmen, { scale: [1.0, 1.25], cast: false });
   roadSign(3.05, -1, 15.5, 'PANEL: WHY IS IT MELTING?', { bg: '#ffffff', fg: '#1f2a44', kicker: 'SPEAKERS: SNOWMEN', kfg: '#8a2f2a', border: NAVY, size: 116 }, { w: 10, h: 3, legs: 2.6, tw: 768, th: 230 });
-  roadSign(2.3, -1, 15, 'THE CLIMB IS PRIVATE TOO', { bg: BROWN, fg: CREAM, size: 118 }, { w: 11, h: 2.6, frame: 0x5d3d22 });
+  roadSign(3.95, -1, 9, 'MAGIC MOUNTAIN', { bg: BROWN, fg: CREAM, kicker: 'CHECKOUT IN SEVEN YEARS', kfg: '#ffcf54', size: 118 }, { w: 11, h: 2.6, frame: 0x5d3d22 });
 
   /* ================= the switchbacks: huts on the parapets, a ski school ================= */
   {
@@ -381,6 +387,22 @@ function dress(ctx) {
   group.attach(swing);
   bake.add(bell, false);
   anim.push((dt, time) => { swing.rotation.z = 0.24 * Math.sin(time * 2.6); });
+  // The express baggage lane travels across the course at the top of the climb.
+  {
+    const p = sc.beside(16.4, 0, 0); p.yaw = p.along + Math.PI;
+    const railY = p.roadY + 18;
+    const a = local(p, -22, 0, railY), b = local(p, 22, 0, railY);
+    const rail = M.tubeBetween(a, b, 0.22); group.add(rail); bake.add(rail, false);
+    for (const end of [a, b]) {
+      const base = Math.min(sc.y(end[0], end[2]), railY - 12);
+      put(M.gondolaPylon({ h: railY - base }), end[0], end[2], { y: base, yaw: p.yaw });
+    }
+    const queue = sc.beside(16.27, 1, 3.2);
+    put(M.velvetQueue(), queue.x, queue.z, { y: queue.y, yaw: queue.along + Math.PI / 2, cast: false });
+    const tray = M.luggageCarrier(); tray.rotation.y = p.yaw; group.add(tray);
+    anim.push((dt, time) => { tray.position.fromArray(local(p, 12 * Math.sin(time * 0.28), 0, railY - 8)); });
+    roadSign(16.22, 1, 3.5, 'CARRY-ON ONLY', { bg: '#9c2437', fg: '#ffffff', kicker: 'PRIVATE JET BAGGAGE', kfg: '#ffdf88', size: 150 }, { w: 14.5, h: 4, legs: 4 });
+  }
   // the gondola: from the town up to a station below the summit, cabins that actually move
   {
     const stops = [[66, 134], [76, 180], [86, 226], [94, 268], [99, 296]];
@@ -509,7 +531,7 @@ function dress(ctx) {
         g.fillStyle = '#101623'; g.fillRect(0, 0, w, h);
         g.fillStyle = '#c9a227'; g.fillRect(0, 0, w, 18); g.fillRect(0, h - 18, w, 18);
         S.fitText(g, 'THE GREAT RESET', w / 2, h * 0.36, w - 60, 120, S.FONT, '#ffffff', { lines: 1 });
-        const sub = last ? 'FINAL PANEL: WHO MELTED THE SNOW?' : lap >= 2 ? 'PANEL 5: LUNCH (PRIVATE)' : 'PANEL 4: OWNING THE SNOW';
+        const sub = last ? 'UNANIMOUS. NOBODY ELSE GOT A MIC.' : lap >= 2 ? 'FLOOR OPEN TO SPONSORS' : 'FLOOR CLOSED FOR DISCUSSION';
         S.fitText(g, sub, w / 2, h * 0.72, w - 80, 64, S.SANS, '#9fd4e8', { lines: 1 });
       });
       const sg = M.panelStage({ screenMat: screenSign.mat });
@@ -561,7 +583,7 @@ function dress(ctx) {
     const cs = { x: 84, z: 40, yaw: Math.PI }; cs.y = sc.y(cs.x, cs.z);
     if (clear(cs.x, cs.z, 2)) {
       put(M.signFrame(14, 4, 2.4, frameMat(0x2a4a6b)), cs.x, cs.z, { yaw: cs.yaw, y: cs.y - 0.2 });
-      atlas.place(board('CURLING — STONES SOLD SEPARATELY', { bg: '#e8f3ff', fg: '#1f2a44', kicker: 'DAVOS ICE CLUB · MEMBERS ONLY', kfg: '#8a2f2a', border: '#2a4a6b', size: 116 }, 1024, 290), local(cs, 0, 0.09, cs.y - 0.2 + 4.4), cs.yaw, 14, 4);
+      atlas.place(board('PUCKS SOLD SEPARATELY', { bg: '#e8f3ff', fg: '#1f2a44', kicker: 'HOLIDAY HOCKEY · EST. 1923', kfg: '#8a2f2a', border: '#2a4a6b', size: 116 }, 1024, 290), local(cs, 0, 0.09, cs.y - 0.2 + 4.4), cs.yaw, 14, 4);
     }
   }
 

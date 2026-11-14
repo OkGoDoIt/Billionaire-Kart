@@ -921,6 +921,38 @@ export function shellOffice() {
   return group;
 }
 
+/** An oversize self-inking registry stamp with the embossed travel document below. */
+export function registryDesk() {
+  const root = new THREE.Group(), bed = new ModelBuilder(), plunger = new ModelBuilder();
+  bed.add('green', box(13.5, 1.4, 6, 0.35, 2), { p: [0, 1.1, 0] });
+  bed.add('paper', box(12.9, 1.7, 5.5, 0.45, 2), { p: [0, 2.4, 0] });
+  for (const side of [-1, 1]) {
+    bed.add('brass', cyl(0.33, 0.45, 4.8, 12), { p: [5.6 * side, 5.55, -0.55] });
+    bed.add('ink', box(11.6, 0.1, 0.12), { p: [0, 2.15 + side * 0.35, 2.77] });
+  }
+  plunger.add('ink', box(12, 0.5, 5.1, 0.22, 2));
+  plunger.add('red', box(12.3, 1.2, 5.45, 0.38, 2), { p: [0, 0.72, 0] });
+  plunger.add('brass', cyl(0.95, 1.3, 2.25, 18), { p: [0, 2.28, 0] });
+  plunger.add('red', sphere(2.85, 20, 12), { p: [0, 4.15, 0], s: [1.35, 0.66, 0.76] });
+  const mats = { ink: MAT.dark, green: paint(0x115947), paper: WHITE, brass: GOLDP, red: paint(0xc72f3d) };
+  root.add(bed.build(mats));
+  const handle = plunger.build(mats); root.add(handle);
+  const states = ['PENDING', 'ELSEWHERE', 'CLASSIFIED'];
+  const draw = lap => signFace(['HOME PORT', states[lap]], { bg: '#f5e3af', fg: '#124f45', accent: '#a02e39', rule: false });
+  const texture = canvasTex(768, 256, draw(0), { repeat: false });
+  const paper = new THREE.Mesh(new THREE.PlaneGeometry(12.6, 3.7), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.78 }));
+  paper.position.set(0, 2.05, 2.98); root.add(paper);
+  let current = 0;
+  const repaint = () => { const c = texture.image; draw(current)(c.getContext('2d'), c.width, c.height); texture.needsUpdate = true; };
+  document.fonts?.ready.then(repaint);
+  return { root, update(time, lap) {
+    const phase = (time % 2.7) / 2.7;
+    handle.position.y = 3.46 + 3.15 * Math.min(1, Math.abs(phase - 0.5) * 6) ** 1.5;
+    const next = Math.min(2, Math.max(0, lap - 1));
+    if (current !== next) { current = next; repaint(); }
+  } };
+}
+
 /** A semaphore marshal, with each arm and flag pivoting at the shoulder. */
 export function deckMarshal() {
   const root = new THREE.Group(), body = new ModelBuilder();

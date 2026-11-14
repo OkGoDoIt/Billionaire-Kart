@@ -212,7 +212,7 @@ try {
       await key('Enter', 600);
     }
     await page.waitForFunction('BK.app.menus.screen?.spec.name === "cupResults"', null, { timeout: 30000 }).catch(() => fails.push('no cup results screen after the last race'));
-    await page.waitForTimeout(2500); await shot('22-podium');
+    await page.waitForTimeout(2500); await expect('cupResults', 'final cup standings'); await shot('22-podium');
     console.log('cup totals:', await page.evaluate('JSON.stringify(BK.app.gp.totals)'));
     // the podium screen offers a way back in, not just a way out (#146): the default button runs the same cup again from race 1
     const exits = await page.evaluate(`[...document.querySelectorAll('.screen-cupResults .foot .btn .btn-label')].map(e => e.textContent)`);

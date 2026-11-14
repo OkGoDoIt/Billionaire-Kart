@@ -268,7 +268,7 @@ export default {
       const chand = C.crashedChandelier(); chand.position.set(2.6, 9.0, 1.9); chand.rotation.set(0.4, 0.5, 0.25); site.add(chand);
       const fb = C.fallenBoard(); fb.position.set(-3, 0.55, 10.1); site.add(fb);
       sc.place(site, SX, SZ, { yaw: -0.38, y: SY, scale: 1.25 });
-      const masonry = C.makeBaker(group, sc.shadows);
+      const masonry = C.makeBaker(ctx.group, sc.shadows);
       masonry.add(site, false); masonry.flush();
       taken.push([SX, SZ, 26]);
       // the wrecking crane, west of the site, its jib reaching over the demolished half

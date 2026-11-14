@@ -99,9 +99,36 @@ export function makeAtlas(group, { S = 2048, emissive = 0.3 } = {}) {
 }
 
 /** Merges static props into one mesh per material (and per shadow casting). */
-export function makeBaker(group, shadows) {
+export function makeBaker(group, shadows, { batchFinishes = false } = {}) {
   const buckets = new Map();
-  const push = (mat, g, cast) => { let b = buckets.get(mat); if (!b) buckets.set(mat, b = [[], []]); b[cast && !mat.transparent ? 0 : 1].push(g); };
+  // Silicon Valley's many small campus props use different paint colors with the same finish.
+  // Put their original linear RGB into vertices so the renderer can draw a whole finish together.
+  const finishes = new Map();
+  const push = (mat, g, cast) => {
+    if (batchFinishes && mat.isMeshStandardMaterial && !mat.map && !mat.transparent &&
+        !mat.emissive?.getHex() && !mat.vertexColors && !mat.normalMap && !mat.alphaMap) {
+      // Nearby roughness values are visually equivalent at kart speed. Three gloss
+      // levels keep painted, brushed and matte surfaces distinct without a draw per tint.
+      const roughness = mat.roughness < 0.3 ? 0.22 : mat.roughness < 0.64 ? 0.45 : 0.82;
+      const metalness = Math.round(mat.metalness * 4) / 4;
+      const clearcoat = mat.isMeshPhysicalMaterial ? Math.round(mat.clearcoat * 2) / 2 : 0;
+      const key = [mat.type, roughness, metalness, clearcoat, mat.clearcoatRoughness, mat.envMapIntensity, mat.side].join('/');
+      if (!finishes.has(key)) {
+        const shared = mat.clone();
+        shared.color.set(0xffffff); shared.vertexColors = true;
+        shared.roughness = roughness; shared.metalness = metalness;
+        if (shared.isMeshPhysicalMaterial) shared.clearcoat = clearcoat;
+        finishes.set(key, shared);
+      }
+      const rgb = new Float32Array(g.attributes.position.count * 3);
+      for (let i = 0; i < rgb.length; i += 3) mat.color.toArray(rgb, i);
+      g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+      mat = finishes.get(key);
+    }
+    let lists = buckets.get(mat);
+    if (!lists) buckets.set(mat, lists = [[], []]);
+    lists[(shadows || !batchFinishes) && cast && !mat.transparent ? 0 : 1].push(g);
+  };
   const norm = (geo, matrix) => {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     for (const n of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(n)) g.deleteAttribute(n);
@@ -230,6 +257,37 @@ export function clockRim(r = 3) {
 /* ---------- the landmarks (playtest dressing): the tower, the garage ---------- */
 /* (The Golden Gate is no longer a prop: since #168 the lap drives over its deck, and the towers,
    cables and girders are built from the track's own samples in silicon-valley.js decorate().) */
+
+/** A vermilion bridge toll booth on a pier, with a cream visor and a glazed clerk's window. */
+export function tollBooth() {
+  const b = new ModelBuilder();
+  b.add('pier', bx(8, 16, 5), { p: [0,-7.8,0] });
+  b.add('cream', box(8.5, 0.45, 5.5, 0.12, 1), { p: [0,0.25,0] });
+  b.add('red', box(6.8, 4.8, 4, 0.32, 2), { p: [0,2.8,0] });
+  b.add('glass', box(7.05, 1.6, 4.12, 0.2, 1), { p: [0,3.45,0] });
+  for (const x of [-2.4, 0, 2.4]) b.add('cream', bx(0.14,1.6,0.12), { p: [x,3.45,2.07] });
+  b.add('red', box(12.35, 4.25, 0.7, 0.18, 2), { p: [0,6.85,2.14] });
+  b.add('cream', box(12.65, 0.28, 5.8, 0.1, 1), { p: [0,4.75,0.15] });
+  return b.build({ pier: farmMats().trim, cream: farmMats().sand, red: plastic(0xc0362c,0.45,0.25), glass: plastic(0x20546a,0.22,0.4) });
+}
+
+/** A stock-exchange bell on a cantilever above the crest's jump lane. Its pivot rocks on takeoff. */
+export function openingBell() {
+  const frame = new ModelBuilder(), m = farmMats();
+  frame.add('base', bx(3.5, 4.8, 3.3), { p: [0,-1.8,0] });
+  for (const z of [-1.1, 1.1]) {
+    frame.add('iron', bx(0.52, 13, 0.5), { p: [0,6.9,z] });
+    frame.add('iron', bx(9.5, 0.5, 0.52), { p: [4.3,13.3,z] });
+    frame.add('gold', tube([[0,8.7,z],[5.9,13.2,z]], 0.18, 1, 6));
+  }
+  frame.add('iron', bx(1.2, 0.75, 3.2), { p: [7.8,13.2,0] });
+  const stand = frame.build({ base: m.trim, iron: m.iron, gold: m.gold });
+  const bell = new ModelBuilder();
+  bell.add('gold', lathe([[0.05,-3.3],[1.85,-3.22],[2.2,-3.02],[2.18,-2.84],
+    [1.65,-2.45],[1.38,-1.25],[1.13,-0.78],[0.46,-0.59],[0.31,-0.1],[0.05,0]], 32));
+  bell.add('bronze', sphere(0.36,12,8), { p: [0,-3.38,0] });
+  return { stand, bell: bell.build({ gold: m.gold, bronze: m.bronze }) };
+}
 
 /** A Hoover Tower: tapered sandstone shaft, glass observation band, terracotta pyramid cap. y = 0 at the base. */
 export function hooverTower({ H = 27 } = {}) {
@@ -421,17 +479,17 @@ export function fountainIsland(L = 40, W = 4.8) {
 /** A topiary "$" for the Oval lawn: clipped hedge balls, ~10 m tall, facing +Z, on a sandstone base. */
 export function topiaryDollar() {
   const b = new ModelBuilder();
-  for (let k = 0; k <= 26; k++) {                       // the S, as two stacked arcs: top bowl opens right, bottom bowl opens left
-    const t = k / 26;
-    let x, y;
-    if (t < 0.5) { const a = Math.PI * (0.2 + t * 2 * 1.3); x = Math.cos(a) * 1.9; y = 6.4 + Math.sin(a) * 1.55; }
-    else { const a = Math.PI * (0.5 + (t - 0.5) * 2 * 1.3); x = -Math.cos(a) * 1.9; y = 3.3 - Math.sin(a) * 1.55; void 0; x = -x; }
-    b.add('hedge', sphere(0.62, 10, 8), { p: [x, y + 0.8, 0] });
-  }
-  for (let y = 0.9; y <= 9.7; y += 0.8) b.add('hedge2', sphere(0.48, 10, 8), { p: [0, y + 0.4, 0.2] });
-  b.add('trim', box(5.4, 0.8, 2.4, 0.2, 2), { p: [0, 0.4, 0] });
+  // One uninterrupted clipped hedge. The open counters and two projecting gold rods
+  // keep the currency silhouette clear against the palms from both legs of the hairpin.
+  const stroke = [[2.1,7.3,0],[1.2,8.2,0],[-1.15,8.35,0],[-2.22,7.45,0],[-2.18,6.25,0],
+    [-1.15,5.45,0],[1.2,4.85,0],[2.18,3.95,0],[2.05,2.75,0],[0.8,1.9,0],[-1.25,1.95,0],[-2.2,2.75,0]];
+  b.add('hedge', tube(stroke, 0.68, 44, 9));
+  for (const end of [stroke[0], stroke.at(-1)]) b.add('hedge', sphere(0.68, 9, 7), { p: end });
+  for (const x of [-0.48, 0.48]) b.add('gold', cyl(0.16, 0.16, 9.1, 10), { p: [x, 5.15, -0.34] });
+  b.add('trim', cyl(2.8, 3.2, 1.5, 16), { p: [0, 0.5, 0], s: [1,1,0.65] });
+  b.add('gold', cyl(2.85, 2.85, 0.13, 16), { p: [0, 1.22, 0], s: [1,1,0.65] });
   const m = farmMats();
-  return b.build({ hedge: m.hedge, hedge2: plastic(0x3d9a3e, 0.9, 0), trim: m.trim });
+  return b.build({ hedge: m.hedge, gold: m.gold, trim: m.trim });
 }
 
 /** A Palm Drive lamp post with a banner arm; the banner is an atlas panel (userData.banner = { x, y, w, h } in the post's frame). */

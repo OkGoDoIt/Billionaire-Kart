@@ -406,3 +406,24 @@ body.must-turn .hud, body.must-turn .track-card, body.must-turn .hint-card { vis
 
 button.opt, button.pad-row { font-family: inherit; color: inherit; border: 0; text-align: left; }
 .opt.volume { cursor: default; }
+
+/* Keyboard layout editor, styled with the controller panel's choices and rows. */
+.key-panel { width: min(100%, calc(var(--u) * 85)); padding: calc(var(--u) * 1.3) calc(var(--u) * 2); }
+.key-profiles { justify-content: center; margin-bottom: calc(var(--u) * 1); }
+.key-rows { display: grid; gap: calc(var(--u) * 0.35); }
+.key-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5em; padding: calc(var(--u) * 0.35) calc(var(--u) * 1.4); background: rgba(255,255,255,0.08); border-radius: calc(var(--u) * 1.1); }
+.key-action { font-weight: 600; font-size: calc(var(--u) * 2); }
+.key-values, .key-prompt { display: flex; align-items: center; gap: calc(var(--u) * 0.65); }
+.key-bind { border-radius: calc(var(--u) * .65); border: 2px solid var(--ink); background: #f2f3f8; color: var(--ink); font: 600 calc(var(--u) * 1.7) var(--body); min-width: calc(var(--u) * 3.9); min-height: calc(var(--u) * 3.6); cursor: pointer; }
+.key-bind:first-child { background: var(--gold); }
+.key-bind.focus, .key-bind.listening { outline: calc(var(--u) * .33) solid var(--gold); outline-offset: 2px; }
+.key-status { display: flex; justify-content: center; align-items: center; gap: 0.8em; flex-wrap: wrap; }
+.key-message:not(:empty) { padding: 0.5em 0; font-size: calc(var(--u) * 1.7); }
+.key-prompt[hidden], .key-prompt button[hidden] { display: none; }
+.key-panel .foot { margin-top: calc(var(--u) * 1.1); }
+@media (orientation: portrait) {
+  .key-row { flex-wrap: wrap; padding-block: 0.4em; }
+  .key-action { font-size: max(14px, calc(var(--u) * 1.9)); }
+  .key-bind, .key-message:not(:empty) { font-size: max(13px, calc(var(--u) * 1.65)); }
+  .key-bind { min-height: 34px; }
+}

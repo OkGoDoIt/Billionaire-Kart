@@ -8,6 +8,7 @@ import { DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindi
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
 import { installCard, installButton, installPanel, onInstallChange } from './install.js';
+import { KEY_LAYOUTS, KEY_ACTIONS, keyName, bindKey, resetKeys } from '../core/keyboard.js';
 import { trialKey } from '../core/save.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
 
@@ -225,17 +226,23 @@ export class Menus {
     const A = this.app, joined = [];
     const list = h('div', { class: 'join-list' });
     const draw = () => {
-      const keys = d => d === 'kb1' ? 'W A S D steer · Space drift · E item' : d === 'kb2' ? 'Arrows steer · Right Shift drift · Enter item' : 'Stick steer · A go · Right bumper drift · Left bumper item';
+      const keys = d => {
+        const k = A.input.keyBinds[d];
+        if (k) return `${keyName(k.left[0])} / ${keyName(k.right[0])} steer · ${keyName(k.gas[0])} go · ${keyName(k.drift[0])} drift · ${keyName(k.item[0])} item`;
+        const family = padFamily(navigator.getGamepads?.()[Number(d.slice(3))]?.id), key = a => describePadBind(A.input.padBinds, a, family);
+        return `${key('accelerate')} go · ${key('drift')} drift · ${key('item')} item`;
+      };
       list.replaceChildren(...Array.from({ length: n }, (_, i) => h('div', { class: 'join-slot' + (joined[i] ? ' in' : ''), style: `--pc:${PLAYER_COLORS[i]}` }, h('b', {}, `P${i + 1}`), h('span', {}, joined[i] ? [DEVICE_LABEL[joined[i]] || joined[i], h('small', {}, keys(joined[i]))] : i === joined.length ? 'Press a button to join' : 'Waiting'))));
     };
     draw();
-    const el = h('div', {}, this.header('Join the race', 'Each player presses a button on their own controller. Two can share a keyboard: W A S D with Space, and the arrow keys with Enter.'), list);
+    const el = h('div', {}, this.header('Join the race', `Each player presses a driving key or their controller’s confirm button. Shared keyboard: ${keyName(A.input.keyBinds.kb1.gas[0])} for Player 1, ${keyName(A.input.keyBinds.kb2.gas[0])} for Player 2.`), list);
     return {
       el, onAction: (a, dev) => {
         if (a === 'back') return false;
         if (a !== 'confirm' && a !== 'pause') return true;
-        const d = dev === 'kb' ? (joined.includes('kb1') ? 'kb2' : 'kb1') : dev;
-        if (joined.includes(d)) { if (joined.length === n) { A.flow.devices = joined.slice(); this.open('racers', { player: 0 }); } return true; }
+        if (dev === 'kb') return true;
+        const d = dev;
+        if (joined.includes(d) || joined.length >= n) { if (joined.length === n) { A.flow.devices = joined.slice(); this.open('racers', { player: 0 }); } return true; }
         joined.push(d); A.audio?.ui('select'); draw();
         if (joined.length === n) setTimeout(() => { if (this.screen?.spec.name === 'join') { A.flow.devices = joined.slice(); this.open('racers', { player: 0 }); } }, 500);
         return true;
@@ -454,10 +461,85 @@ export class Menus {
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
       document.fullscreenEnabled && fullScreenRow(),
       installRow(),
+      h('button', { class: 'opt', 'data-f': true, onclick: () => this.open('keyboard') }, h('span', {}, 'Keyboard'), h('span', { class: 'opt-ctl' }, h('b', {}, 'Keys…'))),
       padRow(),
       cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff), cycle('Pause in portrait', 'pausePortrait', onoff),
       touch && cycle('Automatic accelerate', 'autoGo', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
     return { el, onClose: () => fsOff?.() };
+  }
+
+  s_keyboard() {
+    const A = this.app, input = A.input, bindings = input.keyBinds;
+    const persist = () => { A.save.set('keyBinds', bindings); };
+    const list = h('div', { class: 'key-rows' }), message = h('p', { class: 'key-message', role: 'status' });
+    let layout = 'kb', field = null;
+    const rows = new Map();
+    const clearCapture = () => {
+      input.captureKey = null; field?.button.classList.remove('listening'); field = null;
+      prompt.hidden = true;
+    };
+    const stop = (text, restore = true) => {
+      const prev = field; clearCapture(); message.textContent = text;
+      if (restore && prev) this.focus(rows.get(prev.action).querySelectorAll('button')[prev.slot] || rows.get(prev.action).querySelector('button'), false);
+    };
+    const remove = this.btn('Remove key', () => {
+      if (!field || field.slot === 0) return;
+      const { action, slot } = field;
+      bindings[layout][action].splice(slot, 1); persist(); drawRow(action);
+      stop('Alternate key removed.');
+    }, { cls: 'small' });
+    const cancel = this.btn('Cancel', () => stop('Key unchanged.'), { cls: 'small' });
+    const prompt = h('div', { class: 'key-prompt', hidden: true }, remove, cancel);
+    const capture = (action, slot, button) => {
+      clearCapture(); field = { action, slot, button };
+      input.keys.clear();
+      button.classList.add('listening'); prompt.hidden = false;
+      remove.hidden = !bindings[layout][action][slot] || slot === 0;
+      message.textContent = remove.hidden ? 'Press a key, or Esc to cancel.' : 'Press a key, Delete to remove it, or Esc to cancel.';
+      input.captureKey = code => {
+        if (code === 'Escape') { stop('Key unchanged.'); return; }
+        if ((code === 'Backspace' || code === 'Delete') && !remove.hidden) { remove.click(); return; }
+        const result = bindKey(bindings, layout, action, slot, code);
+        if (!result.ok) { message.textContent = result.message; return; }
+        persist(); for (const id of rows.keys()) drawRow(id); stop(result.message);
+      };
+    };
+    const drawRow = action => {
+      const row = rows.get(action), keys = bindings[layout][action];
+      const button = (slot, text, label) => {
+        const b = h('button', { class: 'key-bind', 'data-f': true, 'aria-label': label, onclick: () => capture(action, slot, b) }, text);
+        return b;
+      };
+      const name = KEY_ACTIONS[action];
+      row.replaceChildren(h('span', { class: 'key-action' }, name), h('div', { class: 'key-values' },
+        keys.map((code, i) => button(i, keyName(code), `${name}, ${i === 0 ? 'primary' : 'alternate'} key ${keyName(code)}`)),
+        keys.length < 4 && button(keys.length, '+', `Add a key for ${name.toLowerCase()}`)));
+    };
+    for (const action of Object.keys(KEY_ACTIONS)) {
+      const r = h('div', { class: 'key-row' }); rows.set(action, r); list.append(r); drawRow(action);
+    }
+    const profiles = Object.entries(KEY_LAYOUTS).map(([id, label]) => {
+      const b = h('button', { class: 'seg-btn', 'data-f': true, 'data-default': id === layout, 'aria-pressed': String(id === layout), onclick: () => {
+        clearCapture(); layout = id; message.textContent = '';
+        for (const [other, elem] of profiles) { elem.classList.toggle('sel', other === id); elem.setAttribute('aria-pressed', String(other === id)); }
+        for (const action of rows.keys()) drawRow(action);
+      } }, label);
+      b.classList.toggle('sel', id === layout); return [id, b];
+    });
+    const reset = this.btn('Restore this layout', () => {
+      clearCapture(); const changes = resetKeys(bindings, layout); persist();
+      for (const action of rows.keys()) drawRow(action);
+      message.textContent = `${KEY_LAYOUTS[layout]} defaults restored. ${changes}`.trim();
+    }, { cls: 'small' });
+    const el = h('div', {}, this.header('Keyboard', 'Choose a key to change it. Players 1 and 2 share one keyboard.'),
+      h('div', { class: 'panel key-panel' }, h('div', { class: 'seg key-profiles' }, profiles.map(([, b]) => b)), list,
+        h('div', { class: 'key-status' }, message, prompt),
+        h('div', { class: 'foot' }, reset, this.btn('Done', () => this.back(), { cls: 'go small' }))));
+    return { el, onClose: clearCapture, onAction: action => {
+      if (!field) return false;
+      if (action === 'back') { stop('Key unchanged.'); return true; }
+      return !['up', 'down', 'left', 'right', 'confirm'].includes(action);
+    } };
   }
 
   /* ---------- controller buttons ----------
@@ -564,9 +646,9 @@ export class Menus {
     const padRows = [['Steer', this.app.input.padSteer === 'dpad' ? 'D-pad' : this.app.input.padSteer === 'stick' ? 'Left stick' : 'Left stick or D-pad'],
       ['Accelerate', withTrig('accelerate', 7, 'right trigger')], ['Drift and hop', D('drift')], ['Use item', D('item')],
       ['Brake and reverse', withTrig('brake', 6, 'left trigger')], ['Look behind', D('rear')], ['Pause', D('pause')]];
-    const HOW = {
-      kb: [['Steer', [key('A', 'D'), 'or', key('←', '→')]], ['Accelerate', [key('W'), 'or', key('↑')]], ['Drift and hop', key('Space')], ['Use item', [key('E'), 'or', key('Enter')]], ['Brake and reverse', [key('S'), 'or', key('↓')]], ['Look behind', key('Q')], ['Pause', key('Esc')]],
-      pad: padRows,
+    const keyboardHelp = layout => {
+      const keys = this.app.input.keyBinds[layout];
+      return [...Object.entries(KEY_ACTIONS).map(([action, label]) => [label, key(...keys[action].map(keyName))]), ['Pause', key('Esc')]];
     };
     const tips = touch ? [
       ['Drift for speed', 'Steer hard through a turn and the kart hops into a drift. Sparks go blue, orange, then purple. Straighten up to boost.'],
@@ -579,20 +661,26 @@ export class Menus {
       ['Collect coins', 'Each coin makes you faster, up to ten.'],
       ['Follow closely', 'Tuck in behind a kart to slingshot past.'],
     ];
-    let controls;
-    if (touch) {
-      // a picture of the screen: what each thumb does, where it does it
-      const half = (who, ...lines) => h('div', { class: 'pd-half' }, h('b', {}, who), lines.map(l => h('span', {}, l)));
-      controls = h('div', { class: 'panel' }, h('div', { class: 'howto-head' }, h('h3', {}, 'Controls')),
-        h('div', { class: 'pad-diagram' }, half('Left thumb', 'Slide to steer', 'Tap to use an item'), half('Right thumb', 'Hold to accelerate', 'Pull down to brake', 'Flick up to use an item')));
-    } else {
-      const body = h('tbody', {});
-      let kind = this.app.input.lastDevice.startsWith('pad') ? 'pad' : 'kb';
-      const chips = [['kb', 'Keyboard'], ['pad', 'Controller']].map(([id, label]) => { const b = h('button', { class: 'chip', 'data-f': true, onclick: () => { kind = id; show(); } }, label); b.dataset.kind = id; return b; });
-      const show = () => { body.replaceChildren(...HOW[kind].map(c => h('tr', {}, h('th', {}, c[0]), h('td', {}, h('span', { class: 'ctl-how' }, c[1]))))); for (const b of chips) b.classList.toggle('sel', b.dataset.kind === kind); };
-      show();
-      controls = h('div', { class: 'panel' }, h('div', { class: 'howto-head' }, h('h3', {}, 'Controls'), h('div', { class: 'chips' }, chips)), h('table', { class: 'ctl' }, body));
-    }
+    const types = touch ? [['touch', 'Touch']] : [];
+    const shared = this.app.session?.config?.players?.length > 1 && !this.app.attract;
+    if (shared) types.push(['kb1', 'Keyboard P1'], ['kb2', 'Keyboard P2']);
+    else types.push(['kb', 'Keyboard']);
+    types.push(['pad', 'Controller']);
+    let kind = this.app.input.lastDevice.startsWith('pad') ? 'pad' : types[0][0];
+    const half = (who, ...lines) => h('div', { class: 'pd-half' }, h('b', {}, who), lines.map(l => h('span', {}, l)));
+    const content = h('div');
+    const show = () => {
+      if (kind === 'touch') content.replaceChildren(h('div', { class: 'pad-diagram' },
+        half('Left thumb', 'Slide to steer', 'Tap to use an item'), half('Right thumb', 'Hold to accelerate', 'Pull down to brake', 'Flick up to use an item')));
+      else {
+        const rows = kind === 'pad' ? padRows : keyboardHelp(kind);
+        content.replaceChildren(h('table', { class: 'ctl' }, h('tbody', {}, rows.map(([label, how]) => h('tr', {}, h('th', {}, label), h('td', {}, h('span', { class: 'ctl-how' }, how)))))));
+      }
+      for (const [id, button] of chips) { button.classList.toggle('sel', id === kind); button.setAttribute('aria-pressed', String(id === kind)); }
+    };
+    const chips = types.map(([id, label]) => [id, h('button', { class: 'chip', 'data-f': true, onclick: () => { kind = id; show(); } }, label)]);
+    show();
+    const controls = h('div', { class: 'panel' }, h('div', { class: 'howto-head' }, h('h3', {}, 'Controls'), h('div', { class: 'chips' }, chips.map(([, b]) => b))), content);
     const el = h('div', {}, this.header('How to play'), h('div', { class: 'howto' + (touch ? ' touch' : '') },
       controls,
       h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1]))))),

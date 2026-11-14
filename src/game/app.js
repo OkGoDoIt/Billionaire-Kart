@@ -1,7 +1,8 @@
 /* The app shell: owns the renderer, input, saved data, and menus, and moves
    between the title's attract race, the showroom, races, and results. */
 import { Gfx, detectQuality } from '../render/gfx.js';
-import { Input } from '../core/input.js';
+import { Input, describePadBind, padFamily } from '../core/input.js';
+import { keyName, keyboardBindings } from '../core/keyboard.js';
 import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
 import { Wipe } from '../ui/wipe.js';
@@ -23,6 +24,7 @@ export class App {
     // automatic quality: a device that cannot hold its frame rate even at the smallest picture drops a tier
     this.gfx.onStruggle = () => { const order = ['ultra', 'high', 'medium', 'low'], i = order.indexOf(this.gfx.qualityName); if (this.save.settings.quality === 'auto' && !quality && i >= 0 && i < order.length - 1) { this.autoQuality = order[i + 1]; this.gfx.scale = 1; this.gfx.applyQuality(this.autoQuality); } };
     this.input = new Input();
+    this.input.keyBinds = keyboardBindings(this.save.settings.keyBinds);
     this.menus = new Menus(this);
     this.audio = new AudioEngine(this.save);
     this.session = null; this.showroom = null; this.attract = false; this.flow = {}; this.gp = null; this.inputs = []; this._turnOk = false;
@@ -30,6 +32,7 @@ export class App {
     this.wipe.onSound = k => this.audio?.play?.('wipe_' + k);
     this.rng = makeRng(Date.now() & 0xffff);
     this.input.onMenu = (a, d) => this.onMenu(a, d);
+    this.input.onJoinKey = device => this.menus.screen?.spec.name === 'join' && device !== 'kb' && this.menus.handle('confirm', device);
     this.input.onAnyInput = () => this.audio?.unlock?.();
     // sound may only start from a gesture, and which gestures count differs by browser: listen for all of them
     for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, () => this.audio?.unlock?.(), { passive: true, capture: true });
@@ -178,8 +181,14 @@ export class App {
   }
   /** First race only: a short reminder of the two controls people miss. */
   _hint() {
-    const pad = this.input.lastDevice.startsWith('pad');
-    const card = el('div', 'hint-card', pad ? '<b>Right bumper</b> drift &nbsp;·&nbsp; <b>Left bumper</b> use item' : '<kbd>Space</kbd> drift &nbsp;·&nbsp; <kbd>E</kbd> use item &nbsp;·&nbsp; <kbd>Esc</kbd> pause');
+    const pad = this.input.lastDevice.startsWith('pad'), keys = this.input.keyBinds.kb;
+    const family = pad && padFamily(navigator.getGamepads?.()[Number(this.input.lastDevice.slice(3))]?.id);
+    const control = (key, action) => pad ? describePadBind(this.input.padBinds, action, family) : keyName(keys[key][0]);
+    const card = el('div', 'hint-card');
+    for (const [label, verb] of [[control('gas', 'accelerate'), 'go'], [control('drift', 'drift'), 'drift'], [control('item', 'item'), 'item']]) {
+      if (card.childElementCount) card.append(' · ');
+      const key = document.createElement('kbd'); key.textContent = label; card.append(key, ' ' + verb);
+    }
     this.ui.appendChild(card); this.hintCard = card;
     setTimeout(() => { card.classList.add('out'); setTimeout(() => card.remove(), 500); }, 14000);
     this.save.data.seenHowTo = true; this.save.write();

@@ -17,12 +17,12 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 ## What is in it
 
 - **Twelve tracks in three cups**, each with its own signature moment, soundtrack, and hazards.
-- **Grand Prix, Quick Race, and Time Trial** (with a ghost of your best run in the same engine class), three engine classes, and three levels of rivals.
+- **Grand Prix, Quick Race, and Time Trial** (with a ghost of your best run in the same engine class), four engine classes (50cc, 100cc, 150cc, and 200cc), and three levels of rivals.
 - **One to four players** on one screen.
 - **Sixteen racers** with their own stats, signature karts, and things to say when they hit you, and a special of their own that changes how they drive.
 - **Sixteen items**, weighted by position. Leaders get defense; the back of the pack gets the comeback kit.
 - **Real kart-racer driving**: hop into a drift and hold it for a blue, orange, or purple mini-turbo; trick off ramps; slipstream; collect coins for top speed; nail the rocket start.
-- **A generated soundtrack** with a theme for every track, an announcer, and a final-lap lift.
+- **A different theme for every course**, with an announcer and faster music on the final lap.
 
 | | |
 |---|---|

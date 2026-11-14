@@ -810,8 +810,51 @@ function gags({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken, l
     const p = sc.beside(9.75, 1, 14); p.yaw = faceTraffic(p, 9.75);
     // seated on the lowest point of walls and driveway in the rendered terrain (#242)
     const gy = Math.min(...[[-4.75, 3.5], [4.75, 3.5], [-4.75, -3.5], [4.75, -3.5], [0, 11.85]].map(([u, v]) => { const [x, , z] = local(p, u, v, 0); return track.terrainHeight(x, z); })) - 0.05;
-    const gr = S.garage(); sc.place(gr, p.x, p.z, { yaw: p.yaw, y: gy }); bake.add(gr);
-    atlas.place(board('IT STARTED IN A GARAGE', { bg: '#ffffff', fg: '#1a1d29', kicker: 'NOW VALUED AT $3B', kfg: '#e23b3b', size: 110 }, 1024, 200), local(p, 0, 3.62, gy + 4.05), p.yaw, 12, 2.4);
+    const garage = S.garage();
+    sc.place(garage.shell, p.x, p.z, { yaw: p.yaw, y: gy });
+    bake.add(garage.shell);
+    sc.place(garage.door, p.x, p.z, { yaw: p.yaw, y: gy });
+    garage.door.add(garage.paddle);
+    const [tagX, , tagZ] = local(p, garage.paddle.position.x, garage.paddle.position.z, 0);
+    faceTraffic({ x: tagX, z: tagZ }, 9.75, 42, 4); // keep the avenue palms off the rotating tag
+
+    const paddleFace = (key, bg, fg, top, bottom, back = false) => {
+      const paint = sign(key, 740, 520, (g, w, h) => {
+        // Inset painted shoulders leave a strip of raw cardboard around the cut edge.
+        g.beginPath();
+        g.moveTo(w * 0.12, h * 0.02);
+        for (const [x, y] of [[0.88, 0.02], [0.985, 0.21], [0.985, 0.79], [0.88, 0.98],
+          [0.12, 0.98], [0.015, 0.79], [0.015, 0.21]]) g.lineTo(w * x, h * y);
+        g.closePath(); g.fillStyle = bg; g.fill();
+        g.fillStyle = fg;
+        g.fillRect(w * 0.13, h * 0.52, w * 0.74, h * 0.014);
+        fitText(g, top, w * 0.5, h * 0.33, w * 0.9, 157, FONT, fg, { lines: 1 });
+        fitText(g, bottom, w * 0.5, h * 0.72, w * 0.9, 154, FONT, fg, { lines: 1 });
+      });
+      const face = atlas.mesh(paint, 7.4, 5.2);
+      face.material = face.material.clone();
+      face.material.alphaTest = 0.5;
+      face.material.side = THREE.FrontSide;
+      face.rotation.y = back ? Math.PI : 0;
+      face.position.z = back ? -0.15 : 0.15;
+      garage.paddle.add(face);
+    };
+    paddleFace('garage-bid', '#173550', '#fff2c8', 'GARAGE', 'SERIES A');
+    paddleFace('garage-land', '#ffcf78', '#372028', 'LAND VALUE', 'ONLY', true);
+    atlas.place(board('3-5-75', { bg: '#ffedbe', fg: '#371e18', size: 92, font: SANS, lines: 1, shadow: false }, 256, 88),
+      local(p, 1.26, 3.19, gy + 1.23), p.yaw, 1.28, 0.44);
+    let lift = 0, turn = 0, targetLift = 0, targetTurn = 0;
+    lapFns.push(lap => { targetLift = lap >= 2 ? 2.7 : 0; targetTurn = lap >= 3 ? Math.PI : 0; });
+    anim.push((dt, time) => {
+      if (lift !== targetLift) {
+        lift += Math.sign(targetLift - lift) * Math.min(Math.abs(targetLift - lift), dt * 2.2);
+        garage.liftDoor(lift);
+      }
+      turn += Math.sign(targetTurn - turn) * Math.min(Math.abs(targetTurn - turn), dt * 4.2);
+      garage.paddle.rotation.y = turn;
+      garage.paddle.rotation.z = 0.04 * Math.sin(time * 3.3);
+    });
+    atlas.place(board('IT STARTED IN A GARAGE', { bg: '#ffffff', fg: '#1a1d29', kicker: 'NOW VALUED AT $3B', kfg: '#e23b3b', size: 110 }, 1024, 200), local(p, 0, 4.48, gy + 4.05), p.yaw, 12, 2.4);
     taken.push([p.x, p.z, 12]);
   }
 
@@ -859,6 +902,10 @@ function campus({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken,
     const tops = [[], []];
     for (const [side, list] of [[1, tops[0]], [-1, tops[1]]]) {
       for (const p of sc.along({ from: 8.75, to: 10.3, side, offset: 4.4, spacing: 18, phase: side > 0 ? 0 : 9 })) {
+        // Leave a gap in the left-hand bunting where two banners masked the garage auction.
+        if (side === 1 && track.cp[p.i] > 9.46 && track.cp[p.i] < 9.73) {
+          list.push(null); k++; continue;
+        }
         const L = lamp.clone(); sc.place(L, p.x, p.z, { yaw: p.yaw - Math.PI / 2 }); bake.add(L, false);
         const f = [Math.sin(p.yaw), Math.cos(p.yaw)], c = [p.x + f[0] * bn.x, p.y + bn.y, p.z + f[1] * bn.x];
         const text = BANNERS[k++ % BANNERS.length], b = board(text, { bg: RED, fg: CREAM, size: 120, lines: 2, border: '#ffc928' }, 256, 576);
@@ -869,7 +916,7 @@ function campus({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken,
     // bunting from each lamp to the one across the avenue, and on to the next one down
     const lines = [];
     for (let j = 0; j < Math.min(tops[0].length, tops[1].length); j++) { lines.push([tops[0][j], tops[1][j]]); if (tops[0][j + 1]) lines.push([tops[1][j], tops[0][j + 1]]); }
-    for (const [a, b] of lines) bake.add(S.bunting(a, b, 16), false);
+    for (const [a, b] of lines) if (a && b) bake.add(S.bunting(a, b, 16), false);
   }
 
   // ---- the Founders' Chapel, dead ahead all the way down Palm Drive ----

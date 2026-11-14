@@ -42,6 +42,8 @@ ok([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].every(n => !/\
 eq(padFamily('DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'), 'ps', 'DualSense id -> playstation names');
 eq(padFamily('Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 05c4)'), 'ps', 'DualShock 4 id -> playstation names');
 eq(padFamily('Xbox 360 Controller (STANDARD GAMEPAD Vendor: 045e Product: 028e)'), 'xb', 'Xbox id -> xbox names');
+eq(padFamily('Xbox Wireless Controller'), 'xb', 'Xbox Wireless Controller keeps its printed letters');
+eq(padFamily('Wireless Controller'), 'ps', 'plain Wireless Controller keeps PlayStation shapes');
 eq(padFamily('Fake'), 'xb', 'unknown pad -> xbox names'); eq(padFamily(undefined), 'xb', 'no id -> xbox names');
 
 /* 3. sanitize, including the v1 migration */
@@ -183,6 +185,22 @@ const fakePad = pressed => ({ connected: true, id: 'Fake', axes: [0, 0], buttons
   tap(1); tap(0);
   eq(events, ['back', 'confirm'], 'editor: released B and A navigate regardless of driving bindings');
   input.padEditor = null;
+  const editor = { poll: () => false, exclusive: () => false };
+  input.setPadBindings({ accelerate: [1], brake: [0] }, 'both');
+  events.length = 0;
+  input.onMenu = action => {
+    events.push(action);
+    if (action === 'confirm') input.padEditor = editor;
+    if (action === 'back') input.padEditor = null;
+  };
+  const holdB = () => {
+    pads[0] = fakePad([1]);
+    for (let frame = 0; frame < 3; frame++) input._padMenus(0.016);
+    pads[0] = fakePad([]); input._padMenus(0.016);
+  };
+  holdB(); holdB();
+  eq(events, ['confirm', 'back'], 'a held B opens and exits the editor once with swapped bindings');
+  input.onMenu = a => events.push(a);
   // a stored v1 confirm entry is ignored end-to-end: menus still follow Accelerate
   input.setPadBindings({ ...defaultPadBindings(), confirm: [3], back: [3] }, 'both');
   ok(!('confirm' in input.padBinds), 'setPadBindings drops the v1 menu entries');

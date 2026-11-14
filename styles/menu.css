@@ -283,7 +283,7 @@
 .howto-head .chips { margin: 0 0 calc(var(--u) * 0.7); }
 .howto-head .chips { gap: calc(var(--u) * 0.8); } .howto-head .chip { font-size: calc(var(--u) * 1.6); padding: calc(var(--u) * 0.5) calc(var(--u) * 1.6); border-width: calc(var(--u) * 0.3); box-shadow: 0 calc(var(--u) * 0.4) 0 rgba(0,0,0,0.4); }
 .ctl { border-collapse: collapse; font-size: calc(var(--u) * 1.8); min-width: calc(var(--u) * 34); }
-.ctl th, .ctl td { text-align: left; padding: calc(var(--u) * 0.5) calc(var(--u) * 2.4) calc(var(--u) * 0.5) 0; white-space: nowrap; height: calc(var(--u) * 3.3); }
+.ctl th, .ctl td { text-align: left; padding: calc(var(--u) * 0.32) calc(var(--u) * 2.4) calc(var(--u) * 0.32) 0; white-space: nowrap; height: calc(var(--u) * 2.95); }
 .ctl tr > :last-child { padding-right: 0; }
 .ctl th { font-weight: 700; }
 .ctl-how { display: inline-flex; align-items: center; gap: 0.4em; }

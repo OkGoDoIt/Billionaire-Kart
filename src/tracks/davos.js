@@ -343,7 +343,7 @@ function dress(ctx) {
   sc.instances(partsOf(M.woodPile()), piles, {});
   // the delegates have built a panel out of snow
   const snowmen = sc.along({ from: 2.55, to: 3.5, side: -1, offset: 15, spacing: 5.5, jitter: 0.8 }).filter(p => clear(p.x, p.z, 1.5) && free(p.x, p.z, 2)).map(p => ({ ...p, yaw: p.yaw + rng.range(-0.3, 0.3) }));
-  sc.instances(partsOf(M.snowman(3)), snowmen, { scale: [1.0, 1.25] });
+  sc.instances(partsOf(M.snowman(3)), snowmen, { scale: [1.0, 1.25], cast: false });
   roadSign(3.05, -1, 15.5, 'PANEL: WHY IS IT MELTING?', { bg: '#ffffff', fg: '#1f2a44', kicker: 'SPEAKERS: SNOWMEN', kfg: '#8a2f2a', border: NAVY, size: 116 }, { w: 10, h: 3, legs: 2.6, tw: 768, th: 230 });
   roadSign(2.3, -1, 15, 'THE CLIMB IS PRIVATE TOO', { bg: BROWN, fg: CREAM, size: 118 }, { w: 11, h: 2.6, frame: 0x5d3d22 });
 
@@ -377,6 +377,9 @@ function dress(ctx) {
   sc.place(bell, bellSpot.x, bellSpot.z, { y: bellSpot.y, yaw: bellSpot.yaw, scale: 1.55 });
   take(bellSpot.x, bellSpot.z, 11);
   const swing = bell.userData.swing;
+  bell.updateMatrixWorld(true);
+  group.attach(swing);
+  bake.add(bell, false);
   anim.push((dt, time) => { swing.rotation.z = 0.24 * Math.sin(time * 2.6); });
   // the gondola: from the town up to a station below the summit, cabins that actually move
   {
@@ -665,7 +668,6 @@ function dress(ctx) {
   const onPiste = (x, z) => (Math.abs(x - 298) < 34 && z > 70 && z < 245) || (Math.abs(Math.abs(x) - 48) < 26 && z > 190 && z < 325) || Math.abs(x) < 22 && z > 160 && z < 300;
   const pines = sc.scatter({ count: 560, min: 13, max: 250, maxSlope: 1.25, minGap: 6, where: (x, z) => clear(x, z, 1.5) && free(x, z, 3) && sightClear(x, z) && !inTown(x, z) && !onPiste(x, z) });
   const pineSets = [pineA, pineB, pineC, pineD];
-  pineSets.forEach((set, v) => sc.instances(set, pines.filter((_, i) => i % 4 === v), { scale: [0.8, 1.35], yaw: 'random', sink: 0.2 }));
   const rowSpots = [
     ...sc.along({ from: 2.4, to: 4.6, side: -1, offset: 10, spacing: 7.5, jitter: 2 }),
     ...sc.along({ from: 9.2, to: 10.4, side: 1, offset: 7, spacing: 6.4, jitter: 1.8 }),
@@ -676,7 +678,10 @@ function dress(ctx) {
     ...sc.along({ from: 26.0, to: 27.5, side: -1, offset: 7, spacing: 6.6, jitter: 1.8 }),
     ...sc.along({ from: 29.8, to: 30.5, side: 1, offset: 8, spacing: 7, jitter: 1.6 }),
   ].filter(p => free(p.x, p.z, 2) && clear(p.x, p.z, 0.5) && sightClear(p.x, p.z) && !onPiste(p.x, p.z));
-  pineSets.forEach((set, v) => sc.instances(set, rowSpots.filter((_, i) => i % 4 === v), { scale: [0.8, 1.3], yaw: 'random', sink: 0.2 }));
+  // Roadside and distant firs use the same four meshes; batch them together.
+  const forest = [...pines, ...rowSpots];
+  pineSets.forEach((set, v) => sc.instances(set, forest.filter((_, i) => i % 4 === v),
+    { scale: [0.8, 1.33], yaw: 'random', sink: 0.2, cast: false }));
   // Broken ledges separate the traverse from the face above; use a handful
   // of broad, low clusters rather than a line of identical upright stones.
   const ledges = sc.along({ from: 16.8, to: 19.9, side: 1, offset: 23, spacing: 15, jitter: 3 })
@@ -687,7 +692,7 @@ function dress(ctx) {
 
   // ---- balloons over the valley: the other way to arrive ----
   const bal1 = P.balloon([0x1f2a44, 0xc9a227], 2), bal2 = P.balloon([0x8a2f2a, 0xf4f6f8], 6);
-  sc.place(bal1, -70, 60, { y: 58 }); sc.place(bal2, 120, 140, { y: 84 });
+  sc.place(bal1, -70, 60, { y: 58, cast: false }); sc.place(bal2, 120, 140, { y: 84, cast: false });
   anim.push((dt, time) => { bal1.position.y = 58 + Math.sin(time * 0.24) * 2.2; bal2.position.y = 84 + Math.sin(time * 0.19 + 2) * 2.6; });
 
   // ---- arrow boards on the outside of every real corner (baked) ----

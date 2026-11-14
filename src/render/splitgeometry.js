@@ -25,7 +25,7 @@ export function simplifyScenery(root) {
     const weights = [], attrs = [];
     if (normal) { weights.push(0.04, 0.04, 0.04); attrs.push(normal); }
     if (uv && mesh.material.map) { weights.push(0.4, 0.4); attrs.push(uv); }
-    if (color) { weights.push(0.2, 0.2, 0.2); attrs.push(color); }
+    if (color) { for (let j = 0; j < color.itemSize; j++) weights.push(0.2); attrs.push(color); }
     const data = new Float32Array(pos.count * weights.length);
     for (let i = 0, offset = 0; i < pos.count; i++) for (const a of attrs) {
       for (let j = 0; j < a.itemSize; j++) data[offset++] = a.getComponent(i, j);

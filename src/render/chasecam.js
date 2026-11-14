@@ -51,6 +51,7 @@ export class ChaseCam {
       const a = this.t * 0.55 + k.yaw;
       _want.set(p.x + Math.sin(a) * 6.5, p.y + 2.3, p.z + Math.cos(a) * 6.5);
       this.pos.lerp(_want, 1 - Math.exp(-3 * dt));
+      this._clearCeiling(p);
       cam.position.copy(this.pos); _look.set(p.x, p.y + 1.1, p.z); cam.lookAt(_look);
       this.fov = damp(this.fov, 48, 3, dt); cam.fov = this.fov; cam.updateProjectionMatrix();
       this.focus.copy(_look); this.lines = 0; return;
@@ -91,6 +92,7 @@ export class ChaseCam {
       this.pos.x += (Math.random() - 0.5) * s; this.pos.y += (Math.random() - 0.5) * s; this.pos.z += (Math.random() - 0.5) * s;
       this.shake = damp(this.shake, 0, 7, dt);
     }
+    this._clearCeiling(p);
     cam.position.copy(this.pos);
     _look.set(p.x + Math.sin(yaw) * 4.2, this.y + 1.25 + k.pitch * 2.2, p.z + Math.cos(yaw) * 4.2);
     cam.lookAt(_look);
@@ -103,6 +105,21 @@ export class ChaseCam {
     this.focus.set(p.x + Math.sin(yaw) * 10, p.y, p.z + Math.cos(yaw) * 10);
     void lerp; void smoothstep;
   }
+  /** Keep the near plane and the sightline below indoor crossovers, including during a rear
+      check or a finish orbit. Judge the active floor from the driving surface, even in a hop. */
+  _clearCeiling(kartPos) {
+    const ceiling = this.track.cameraCeiling;
+    if (!ceiling) return;
+    const floor = this.kart.gy, eye = Math.min(kartPos.y, floor + .45) + 1.15;
+    let maxHeight = Infinity;
+    for (let i = 1; i <= 4; i++) {
+      const t = i / 4, x = lerp(kartPos.x, this.pos.x, t), z = lerp(kartPos.z, this.pos.z, t);
+      const roof = ceiling(x, z, floor);
+      maxHeight = Math.min(maxHeight, eye + (roof - .56 - eye) / t);
+    }
+    this.pos.y = Math.min(this.pos.y, maxHeight);
+  }
+
 }
 
 /** Pre-race flyover: a few sweeping shots of the course, then settle behind the grid. */

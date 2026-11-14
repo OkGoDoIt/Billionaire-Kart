@@ -24,6 +24,9 @@
 .install-blurb { margin: 0 0 calc(var(--u) * 2); font-size: calc(var(--u) * 1.9); line-height: 1.4; opacity: 0.92; }
 .install-x { position: absolute; top: calc(var(--u) * 1.6); right: calc(var(--u) * 1.6); width: calc(var(--u) * 4.6); height: calc(var(--u) * 4.6); border-radius: 50%; border: calc(var(--u) * 0.35) solid var(--ink); background: linear-gradient(180deg, #fff, #e8ecf7); color: var(--ink); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: calc(var(--u) * 1.1); }
 .install-x svg { width: 100%; height: 100%; }
+/* the sheet's focus ring (#274): same gold outline the menus give a focused button
+   (.btn.focus in menu.css covers "Got it"; the round close button needs its own) */
+.install-x.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.35); z-index: 2; }
 .install-gotit { min-width: 0; width: 100%; margin-top: calc(var(--u) * 2.2); font-size: calc(var(--u) * 2.4); padding: calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 0.7); }
 
 /* numbered steps, shared by the overlay and the How to Play panel */

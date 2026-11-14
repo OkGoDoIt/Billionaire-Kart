@@ -270,15 +270,15 @@ export default {
     // Reserve the approach as well as the feet of every board. At a bend a tree can
     // stand many metres upstream of a panel and still hide its punchline.
     const sightlines = [];
-    const faceTraffic = (p, cp, lead = 42) => {
+    const faceTraffic = (p, cp, lead = 42, clearance = 7) => {
       const eye = track.pointAt(track.sAtCp(cp) - lead, 0, new THREE.Vector3());
-      sightlines.push([p, eye]);
+      sightlines.push([p, eye, clearance]);
       return Math.atan2(eye.x - p.x, eye.z - p.z);
     };
-    const clearView = (x, z) => sightlines.every(([p, eye]) => {
+    const clearView = (x, z) => sightlines.every(([p, eye, clearance]) => {
       const dx = eye.x - p.x, dz = eye.z - p.z;
       const t = Math.max(0, Math.min(1, ((x - p.x) * dx + (z - p.z) * dz) / (dx * dx + dz * dz)));
-      return Math.hypot(x - p.x - t * dx, z - p.z - t * dz) > 7;
+      return Math.hypot(x - p.x - t * dx, z - p.z - t * dz) > clearance;
     });
     const boards = BOARDS.map(([cp, side, off, text, bg, fg]) => {
       const p = sc.beside(cp, side, off);
@@ -563,15 +563,25 @@ function gags({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken, l
     p.y = Math.min(...[[-15.65, 8.65], [15.65, 8.65], [-15.65, -8.65], [15.65, -8.65]].map(([u, v]) => { const [x, , z] = local(p, u, v, 0); return track.terrainHeight(x, z); })) - 0.25 + 0.4;
     sc.place(hq, p.x, p.z, { yaw: p.yaw, y: p.y - 0.4 }); bake.add(hq);
     const roof = p.y - 0.4 + 3 * 3.4 + 0.6;
-    legs({ ...p, y: roof }, 20, 6, 0xff7eb6, () => roof);
+    // The road doglegs past this office. Face its valuation toward the uphill
+    // approach, away from the tether and the final-lap banner on the roof.
+    const ticker = sc.beside(3.82, 1, 8);
+    ticker.y = track.terrainHeight(ticker.x, ticker.z);
+    ticker.yaw = faceTraffic(ticker, 3.82, 58, 13);
+    legs(ticker, 20, 8, 0x543246);
+    taken.push([ticker.x, ticker.z, 11]);
     // the valuation doubles every lap (#121) — until the final-lap correction takes it to zero
     let valLap = 1, valFinal = false;
     const valSign = dynSign(768, 300, (g, w, h) => {
-      if (valFinal) S.signDraw('VALUATION: $0', { bg: '#e23b3b', fg: '#ffffff', kicker: 'DOWN ROUND', kfg: '#ffd23c', size: 118 })(g, w, h);
-      else S.signDraw(`VALUATION: $${2 ** (valLap - 1)}B`, { bg: '#ff7eb6', fg: '#ffffff', kicker: 'UNICORNLY INC.', kfg: '#1a1d29', size: 118 })(g, w, h);
+      const caption = valFinal ? 'UNICORNLY · DOWN ROUND' : 'UNICORNLY · VALUATION';
+      const amount = valFinal ? '$0' : `$${2 ** (valLap - 1)}B`;
+      g.fillStyle = valFinal ? '#941f34' : '#582343'; g.fillRect(0, 0, w, h);
+      g.fillStyle = valFinal ? '#ffd35e' : '#ff9acb'; g.fillRect(0, 0, w, h * 0.31);
+      fitText(g, caption, w / 2, h * 0.17, w * 0.92, h * 0.22, SANS, '#241420', { lines: 1 });
+      fitText(g, amount, w / 2, h * 0.69, w * 0.9, h * 0.67, FONT, '#ffffff', { lines: 1 });
     });
     lapFns.push((lap, vw) => { valLap = lap; valFinal = !!vw.finalLap; valSign.redraw(); });
-    dynPanel(valSign, 20, 7.8, local(p, 0, 0, roof + 4.5), p.yaw);
+    dynPanel(valSign, 20, 7.8, local(ticker, 0, 0, ticker.y + 8), ticker.yaw);
     const u = S.unicorn({ L: 32 }), uy = track.py[p.i] + 24, uyaw = facing(p, 196, 105) + Math.PI / 2;
     const ux = p.x, uz = p.z; u.position.set(ux, uy, uz); u.rotation.y = uyaw; group.add(u);
     // the tether, with a banner on it
@@ -1007,8 +1017,9 @@ function sandHill({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, take
     atlas.place(board('SAND HILL RD', { bg: '#0f6b3a', fg: '#ffffff', kicker: 'VENTURE CAPITAL · NEXT 2 MI', kfg: '#ffffff', border: '#ffffff', size: 124 }, 768, 260), local(sp, 0, 0, sp.y + 8.4), sp.yaw, 15, 5.1);
     taken.push([sp.x, sp.z, 10]);
     const frame = P.billboard(null, { w: 15, h: 5, legs: 6 }); frame.remove(frame.children[frame.children.length - 1]);
-    [[2.2, 1, 17, 0], [2.55, -1, 15, 1], [2.95, -1, 14, 2], [3.45, 1, 16, 3]].forEach(([cp, side, off, k]) => {
-      const q = sc.beside(cp, side, off), yaw = faceTraffic(q, cp), f = frame.clone();
+    [[2.2, 1, 17, 0], [2.55, -1, 15, 1], [2.95, -1, 14, 2], [3.73, -1, 11, 3]].forEach(([cp, side, off, k]) => {
+      const q = sc.beside(cp, side, off), f = frame.clone();
+      const yaw = k === 3 ? faceTraffic(q, cp, 60, 15) : faceTraffic(q, cp);
       // planted on the lower leg in the rendered terrain, like the big boards (#242)
       const gy = Math.min(...[-4.8, 4.8].map(u => { const [x, , z] = local({ ...q, yaw }, u, -0.3, 0); return track.terrainHeight(x, z); })) - 0.05;
       sc.place(f, q.x, q.z, { yaw, y: gy }); bake.add(f);

@@ -684,8 +684,8 @@ export default {
       const sp = at(-half - 5, -wide - 6, 0);
       signAt(sp[0], sp[2], Math.atan2(-txn, -tzn) + 0.4, B.board('SAFETY NET', { bg: '#fff6e6', fg: '#c2410c', size: 150, sub: 'FUNDING ROUND: PENDING', subFg: '#1a1d29', subScale: 0.6, lines: 1 }), 12, 5, Math.max(6, track.py[gs0] - gy - 1), { frame: 0x3a2c34 });
       // the judges, on the far side of the gap: a scorecard on stilts, at eye level for the karts in the air
-      const jp = at(half + 4, wide + 7, 0);
-      signAt(jp[0], jp[2], Math.atan2(-txn, -tzn) - 0.45, B.board('JUDGES: 10/10', { bg: '#ffffff', fg: '#1a1d29', size: 150, sub: '(ALL INVESTORS)', subFg: '#c2410c', subScale: 0.65, lines: 1, border: '#1a1d29' }), 11, 4.6, Math.max(6, track.py[gs1] - gy + 1), { frame: 0x3a2c34 });
+      const jp = at(half + 4, wide + 9, 0);
+      signAt(jp[0], jp[2], Math.atan2(-txn, -tzn) + 0.40, B.board('JUDGES: 10/10', { bg: '#ffffff', fg: '#1a1d29', size: 150, sub: '(ALL INVESTORS)', subFg: '#1a1d29', subScale: 0.96, pad: 0.045, lines: 1, border: '#1a1d29' }), 20.5, 8.8, Math.max(8, track.py[gs1] - gy + 3), { frame: 0x3a2c34 });
       for (let k = 0; k < 3; k++) { const q = at(half + 1 + k * 1.6, wide + 4.5, 0), m = B.person({ seated: true }); sc.place(m, q[0], q[2], { yaw: Math.atan2(-lxn, -lzn), y: sc.y(q[0], q[2]) }); bake.add(m); }
       // over the landing, the boardwalk's welcome arch
       const li = track.indexAtCp(21.95), lw = track.hwL[li] + track.hwR[li] + 2.5, ly = track.py[li], la = Math.atan2(track.tx[li], track.tz[li]);

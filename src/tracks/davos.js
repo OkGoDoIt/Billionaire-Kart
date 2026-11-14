@@ -152,7 +152,7 @@ export default {
     { from: 29.85, to: 30.5, n: 3, lat: 3 },
   ],
   obstacles: [
-    { kind: 'patrol', model: 'plow', at: 3.5, lats: [6, 8.2], speed: 2.2, effect: 'bump', radius: 2.2 },
+    { kind: 'patrol', model: 'plow', at: 3.5, lats: [7, 8.6], speed: 2.2, effect: 'bump', radius: 2.2 },
   ],
   terrain: {
     cell: 3, margin: 280, blend: 26, water: -5.5,

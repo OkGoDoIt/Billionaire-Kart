@@ -1659,8 +1659,8 @@ function shorelineMeter({ THREE, sc, bake, group, palette, track }) {
     for (let y = 8; y < h; y += 16) {
       g.fillStyle = '#a79d83'; g.fillRect(5, y, 5, 7); g.fillRect(w - 10, y, 5, 7);
     }
-    fitText(g, 'ONE MORE', w / 2, 69, w - 34, 50, 'bold Arial, sans-serif', '#1b2534', { lines: 1 });
-    fitText(g, 'PROMPT', w / 2, 116, w - 34, 54, 'bold Arial, sans-serif', '#1b2534', { lines: 1 });
+    fitText(g, 'ONE MORE', w / 2, 69, w - 34, 53, SANS, '#111925', { lines: 1, stroke: '#111925', lw: 2.3 });
+    fitText(g, 'PROMPT', w / 2, 116, w - 34, 58, SANS, '#111925', { lines: 1, stroke: '#111925', lw: 2.3 });
     g.fillStyle = '#253548'; g.fillRect(20, 145, w - 40, 5);
     for (let i = 0; i < 9; i++) {
       const y = 166 + 25 * i;
@@ -1680,7 +1680,7 @@ function shorelineMeter({ THREE, sc, bake, group, palette, track }) {
     if (drop === 1 && i % 2) pos.setY(i, -0.985);
   }
   stock.computeVertexNormals();
-  const paper = new THREE.Mesh(stock, new THREE.MeshStandardMaterial({ map: receipt, roughness: 0.88, emissive: 0xfff1d4, emissiveIntensity: 0.12 }));
+  const paper = new THREE.Mesh(stock, new THREE.MeshStandardMaterial({ map: receipt, roughness: 0.88 }));
   paper.position.set(paperX, slotY, paperZ); mount.add(paper);
   hand.rotation.z = 1.28; paper.scale.y = 0.55;
   receipt.repeat.y = paper.scale.y / paperLength; receipt.offset.y = 1 - receipt.repeat.y;

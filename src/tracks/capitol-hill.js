@@ -168,9 +168,9 @@ export default {
     { kind: 'orbit', model: 'drone', at: 14.4, lat: -7, orbit: 1.8, speed: 5, effect: 'spin', lift: 0.6 },
     { kind: 'orbit', model: 'drone', at: 18.7, lat: 7, orbit: 1.7, speed: 4.5, effect: 'spin', lift: 0.6 },
     // red tape at the hairpins
-    { kind: 'static', model: 'redtape', at: 26.0, lat: -1.0, effect: 'bump', radius: 1.4 },
-    { kind: 'static', model: 'redtape', at: 35.6, lat: -6.4, effect: 'bump', radius: 1.4 },
-    { kind: 'static', model: 'redtape', at: 40.0, lat: -1.0, effect: 'bump', radius: 1.4 },
+    { kind: 'static', model: 'redtape', at: 26.0, lat: 7.0, effect: 'bump', radius: 1.1 },
+    { kind: 'static', model: 'redtape', at: 35.6, lat: -7.3, effect: 'bump', radius: 1.1 },
+    { kind: 'static', model: 'redtape', at: 40.0, lat: 7.0, effect: 'bump', radius: 1.1 },
   ],
   terrain: {
     cell: 3, margin: 240, blend: 16, water: -0.95,
@@ -414,12 +414,11 @@ export default {
     const formal = (x, z) => (Math.abs(z) < 48 && x > -150 && x < 175) || (x > -45 && x < 140 && z > 20 && z < 95) || inMall(x, z) || (x > 150 && x < 245 && z > -20 && z < 312) || onPlateau(x, z, 1.2);
     const woods = sc.scatter({ count: 440, min: 13, max: 230, maxSlope: 0.8, minGap: 5.5, where: (x, z) => !formal(x, z) && !blocksBoard(x, z) && ok(x, z, 1.5) });
     const oakA = partsOf(P.roundTree(1, { h: 8, leafA: 0x4f9e3f, leafB: 0x6fbf4a })), oakB = partsOf(P.roundTree(2, { h: 9.5, leafA: 0x3f8f3a, leafB: 0x5cae45 })), oakC = partsOf(P.roundTree(3, { h: 7, leafA: 0x6bb84a, leafB: 0x8fcc5a }));
-    for (const near of [true, false]) {                                  // distant trees skip the shadow pass
-      const set = woods.filter(p => (p.dist < 60) === near), o = { yaw: 'random', tilt: 0.04, cast: false };
-      sc.instances(oakA, set.filter((_, i) => i % 3 === 0), { ...o, scale: [0.85, 1.5] });
-      sc.instances(oakB, set.filter((_, i) => i % 3 === 1), { ...o, scale: [0.85, 1.6] });
-      sc.instances(oakC, set.filter((_, i) => i % 3 === 2), { ...o, scale: [0.85, 1.4] });
-    }
+    // The district's woods are a backdrop. Each species is one foliage batch.
+    const oakOptions = { yaw: 'random', tilt: 0.04, cast: false };
+    sc.instances(oakA, woods.filter((_, i) => i % 3 === 0), { ...oakOptions, scale: [0.85, 1.5] });
+    sc.instances(oakB, woods.filter((_, i) => i % 3 === 1), { ...oakOptions, scale: [0.85, 1.6] });
+    sc.instances(oakC, woods.filter((_, i) => i % 3 === 2), { ...oakOptions, scale: [0.85, 1.4] });
     const lawnOaks = sc.scatter({ count: 45, min: 14, max: 140, maxSlope: 0.4, minGap: 16, where: (x, z) => formal(x, z) && !inMall(x, z) && !onPlateau(x, z, 1.2) && !blocksBoard(x, z) && ok(x, z, 1.5) });
     sc.instances(oakB, lawnOaks, { scale: [1.0, 1.5], yaw: 'random', tilt: 0.03 });
     const low = sc.scatter({ count: 170, min: 12.5, max: 60, maxSlope: 0.7, minGap: 2.6, where: (x, z) => ok(x, z, 0.8) && !inMall(x, z) });

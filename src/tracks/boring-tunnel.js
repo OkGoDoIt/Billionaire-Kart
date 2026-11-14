@@ -69,7 +69,8 @@ export default {
   path: PATH,
   // the whole lap is one bore except the start cutting (cp 15.5 -> 0.45),
   // where the road daylights between the berms
-  tunnels: [{ from: 0.45, to: 2.95, through: true }, { from: 5.9, to: 6.4, through: true }, { from: 7.6, to: 15.5, through: true }],   // gaps: the Loop Station (#234 item 4) + the two shortcut junctions (item 6)
+  // Grade the trenched station approach to its banked road so sand stays below the metal deck.
+  tunnels: [{ from: 0.45, to: 2.95, through: true }, { from: 5.9, to: 6.4 }, { from: 7.6, to: 15.5, through: true }],   // gaps: the Loop Station (#234 item 4) + the two shortcut junctions (item 6)
   backdrop: { img: 'assets/backdrops/boring-tunnel.webp', top: 9, bottom: -0.3 },             // the boomtown skyline, painted (assets/tracks/boring-tunnel/prompts.md)
   sides: [
     { from: 15.5, to: 0.45, edge: 'wall' },   // retaining walls along the open-air cutting: the sponsor boards live here

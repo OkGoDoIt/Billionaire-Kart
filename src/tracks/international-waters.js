@@ -52,7 +52,7 @@ export default {
   // a figure eight: the low road (cp ~9.5, +1.6 m) runs down the channel under
   // the jump from SOVEREIGN IMMUNITY to FAIR & BALANCED (cp ~27, +12 m)
   path: [
-    { p: [40, 0.6, -110] },            // 0 start/finish: the marina quay, heading west under the bows
+    { p: [40, 0.6, -110] },            // 0 start/finish: the marina quay, heading west past the bows
     { p: [-50, 0.6, -111] },           // 1
     { p: [-100, 0.4, -106] },          // 2 the Sandbar Hairpin: turn-in, onto the spit
     { p: [-140, 0.3, -97] },           // 3
@@ -400,24 +400,24 @@ function decorate(ctx) {
     }
   });
 
-  /* ----- the marina: three superyachts moored bow-on, raked bows over the quay ----- */
+  /* ----- the marina: three superyachts moored bow-on, bows alongside the quay ----- */
   const marina = new ModelBuilder();
   const bows = [
     { x: 74, name: 'TAX EXEMPT', boot: 'bootTeal', L: 88, tiers: 3 },
     { x: -4, name: 'EXTRADITION DENIED', boot: 'bootGold', L: 96, tiers: 3 },
     { x: -62, name: 'OFFSHORE ACCOUNT', boot: 'bootRed', L: 84, tiers: 2 },
   ];
-  const nameGroup = new THREE.Group(), names = W.makeAtlas(nameGroup, 1024);
+  const nameGroup = new THREE.Group(), names = W.makeAtlas(nameGroup, 1024, { cutout: true, emissive: 0.08 });
   for (const m of bows) {
-    const zc = -112 - 9 - m.L * 0.41;
+    // Align the actual bow tips beyond the outside of the 18 m quay.
+    const zc = -124 - m.L / 2;
     const o = W.marinaYacht(marina, { L: m.L, B: 9.5, D: 7.6, x: m.x, z: zc, yaw: 0, boot: m.boot, tiers: m.tiers });
     const tile = names.add(944, 96, W.nameFace(m.name));
     W.marinaLettering(names, tile, o, m.x, zc);
   }
   {
     const grp = marina.build(W.YACHT_MATS()); grp.position.y = WL; group.add(grp);
-    // Only the projecting hulls shade the quay. The aft furniture and upper
-    // decks lie over open water and cannot put a shadow on the road.
+    // Only the large hulls need to cast shadows beside the quay.
     grp.traverse(o => { if (o.isMesh) o.castShadow = sc.shadows && o.name === 'hull'; });
     floaters.push({ g: grp, base: WL, ph: 0.6, amp: 0, tideOnly: true });
     names.flush(); grp.add(nameGroup);

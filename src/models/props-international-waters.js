@@ -399,7 +399,7 @@ export function navMine() {
    The yacht toolkit (quality pass): a hull generator with real sections,
    a raked stem and a flat teak deck, sleek lofted superstructure tiers,
    and two yachts built from it: the gigayacht the lap runs through and
-   along, and the marina yachts whose bows reach over the start straight.
+   along, and the marina yachts at the starting quay.
    Hull frame: bow +Z, port +X, waterline y = 0.
    ===================================================================== */
 const WHITE = paint(0xf7f6f2, { rough: 0.22, clear: 0.9 });
@@ -681,8 +681,8 @@ export function foamMaterial() {
 }
 
 /**
- * A marina superyacht moored bow-on to the quay, the raked stem reaching out
- * over the road, merged into the shared builder b (materials from YACHT_MATS).
+ * A marina superyacht moored bow-on to the quay, the raked stem facing
+ * the road, merged into the shared builder b (materials from YACHT_MATS).
  * Placed by x, z, yaw (bow toward yaw), waterline y = 0. Returns the hull numbers.
  */
 export function marinaYacht(b, { L = 92, B = 9.5, D = 7.6, x = 0, z = 0, yaw = 0, boot = 'bootRed', tiers = 3 } = {}) {
@@ -713,13 +713,13 @@ export function marinaYacht(b, { L = 92, B = 9.5, D = 7.6, x = 0, z = 0, yaw = 0
 /** The name follows the changing beam, sheer, and flare on each side of the bow. */
 export function marinaLettering(atlas, tile, hull, x, z) {
   const { L } = hull;
-  const height = L * 0.024, count = 14;
+  const height = L * 0.0205, count = 20;
   for (const side of [-1, 1]) {
     const edge = u => {
-      const st = station(L * (0.29 + side * (0.5 - u) * 0.25), hull);
+      const st = station(L * (0.241 + side * (0.5 - u) * 0.245), hull);
       return [-height / 2, height / 2].map(dy => {
-        const y = st.top - 4.35 + dy;
-        const [width] = sectionPt(st, uAt(st, y), 0.035);
+        const y = st.top - 4.1 + dy;
+        const [width] = sectionPt(st, uAt(st, y), 0.065);
         return [x + side * width, y, z + st.z];
       });
     };
@@ -861,11 +861,11 @@ export function makeBaker(group, shadows) {
 }
 
 /** Text panels packed into big canvases, one mesh per canvas; redrawn once the web fonts arrive. */
-export function makeAtlas(group, S = 2048, { emissive = 0.25 } = {}) {
+export function makeAtlas(group, S = 2048, { emissive = 0.25, cutout = false } = {}) {
   const pages = [], newPage = () => {
     const c = document.createElement('canvas'); c.width = c.height = S;
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: emissive, roughness: 0.6 });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: emissive, roughness: 0.6, alphaTest: cutout ? 0.4 : 0 });
     const p = { c, g: c.getContext('2d'), tex, mat, q: new Quads(), x: 0, y: 0, row: 0, items: [] }; pages.push(p); return p;
   };
   newPage();
@@ -935,8 +935,8 @@ export function registryDesk() {
   plunger.add('brass', cyl(0.95, 1.3, 2.25, 18), { p: [0, 2.28, 0] });
   plunger.add('red', sphere(2.85, 20, 12), { p: [0, 4.15, 0], s: [1.35, 0.66, 0.76] });
   const mats = { ink: MAT.dark, green: paint(0x115947), paper: WHITE, brass: GOLDP, red: paint(0xc72f3d) };
-  root.add(bed.build(mats));
-  const handle = plunger.build(mats); root.add(handle);
+  root.add(bed.build(mats, { cast: false }));
+  const handle = plunger.build(mats, { cast: false }); root.add(handle);
   const states = ['PENDING', 'ELSEWHERE', 'CLASSIFIED'];
   const draw = lap => signFace(['HOME PORT', states[lap]], { bg: '#f5e3af', fg: '#124f45', accent: '#a02e39', rule: false });
   const texture = canvasTex(768, 256, draw(0), { repeat: false });
@@ -1024,9 +1024,8 @@ export const signFace = (lines, { bg = '#10222e', fg = '#f3ead2', accent = '#e8b
   });
 };
 
-/** A yacht's name for the atlas: navy letters on hull white. */
+/** Navy paint on the hull. The bare gelcoat between letters remains visible. */
 export const nameFace = text => (g, W, H) => {
-  g.fillStyle = '#f7f6f2'; g.fillRect(0, 0, W, H);
   fitText(g, text, W / 2, H / 2 + 4, W * 0.94, H * 0.84, H * 0.8, FONT, { fill: '#10233f' });
 };
 

@@ -724,7 +724,7 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
     const g = at(12.62);
     for (const s of [-1, 1]) {
       const hw = s > 0 ? track.hwL[g.i] : track.hwR[g.i], p = at(12.62, s * (hw + 3.6));
-      const pil = S.gatePillar(); sc.place(pil, p.x, p.z, { yaw: g.back, y: track.terrainHeight(p.x, p.z) - 0.2 }); bake.add(pil);
+      const pil = S.gatePillar(); sc.place(pil, p.x, p.z, { yaw: g.back, y: track.terrainHeight(p.x, p.z) - 0.2 }); bake.add(pil, false);   // no shadow caster (#215 item 7)
       const pn = pil.userData.panel;
       atlas.place(board('PALM DRIVE', { bg: RED, fg: CREAM, kicker: 'THE FARM', kfg: '#ffc928', size: 120, lines: 2 }, 256, 448), [p.x + Math.sin(g.back) * pn.z, track.terrainHeight(p.x, p.z) - 0.2 + pn.y, p.z + Math.cos(g.back) * pn.z], g.back, pn.w, pn.h);
       track.addCollider(p.x, p.z, 1.8);
@@ -871,7 +871,7 @@ function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, boa
     const trees = [-12, 0, 12].map(dz => ({ x: c.x + Math.sin(c.yaw) * dz, z: c.z + Math.cos(c.yaw) * dz, y: surfBase(dz) + 0.48, yaw: rng() * 6.28 }));
     sc.instances(partsOf(P.roundTree(21, { h: 6.5, leafA: 0x3f9e3a, leafB: 0x5dbb45 })), trees, { scale: [0.9, 1.1] });
     for (const [k, z] of [[0, MEDIAN.z0 + 4], [1, MEDIAN.z0 + 22]]) {
-      const n = at(zToCp(z), ISLAND_LAT), mon = S.monument(4.2), my = n.y + 0.45; sc.place(mon, n.x, n.z, { yaw: n.back, y: my }); bake.add(mon);
+      const n = at(zToCp(z), ISLAND_LAT), mon = S.monument(4.2), my = n.y + 0.45; sc.place(mon, n.x, n.z, { yaw: n.back, y: my }); bake.add(mon, false);
       const pn = mon.userData.panel; atlas.place(firmPlate(k), [n.x + Math.sin(n.back) * pn.z, my + pn.y, n.z + Math.cos(n.back) * pn.z], n.back, pn.w, pn.h);
     }
     // the gate: shut on lap 1 (LIMITED PARTNERS ONLY), open from lap 2 (#121) — karts bounce off it until then
@@ -881,7 +881,7 @@ function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, boa
     const posts = [];
     for (let l = -lane / 2 + 0.6; l <= lane / 2 - 0.6; l += 1.3) { const q = at(zToCp(gz), gl + l); track.addCollider(q.x, q.z, 0.75); track.eachCollider(q.x, q.z, o => { if (Math.abs(o.x - q.x) < 1e-6 && Math.abs(o.z - q.z) < 1e-6) posts.push(o); }); }
     const beamH = 6.2, bc = [gc.x, gc.y + beamH, gc.z];
-    for (const s of [-1, 1]) { const q = at(zToCp(gz), gl + s * (lane / 2 + 0.9)), pst = S.post(beamH + 1.6, 0.28, 0x2b2f36); sc.place(pst, q.x, q.z, { y: q.y }); bake.add(pst); }
+    for (const s of [-1, 1]) { const q = at(zToCp(gz), gl + s * (lane / 2 + 0.9)), pst = S.post(beamH + 1.6, 0.28, 0x2b2f36); sc.place(pst, q.x, q.z, { y: q.y }); bake.add(pst, false); }   // no shadow casters: draw-call headroom (#215 item 7)
     const c2 = document.createElement('canvas'); c2.width = 768; c2.height = 220;
     const tex = new THREE.CanvasTexture(c2); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     let open = false;
@@ -930,7 +930,7 @@ function sandHill({ THREE, track, group, sc, rng, atlas, bake, taken, local, boa
       sc.place(hq, p.x, p.z, { yaw: p.yaw, y: p.y - 0.4 }); bake.add(hq);
       const m = sc.beside(cp, 1, off - 13), mon = S.monument(6.4);
       const my = Math.min(...[[-3.2, 0.5], [3.2, 0.5], [-3.2, -0.5], [3.2, -0.5]].map(([u, v]) => { const [x, , z] = local(m, u, v, 0); return track.terrainHeight(x, z); })) - 0.2;
-      sc.place(mon, m.x, m.z, { yaw: m.yaw, y: my }); bake.add(mon);
+      sc.place(mon, m.x, m.z, { yaw: m.yaw, y: my }); bake.add(mon, false);
       const pn = mon.userData.panel; atlas.place(firmPlate(k), [m.x + Math.sin(m.yaw) * pn.z, my + pn.y, m.z + Math.cos(m.yaw) * pn.z], m.yaw, pn.w, pn.h);
       for (const u of [-9, 9]) { const [x, , z] = local(m, u, -2, 0); sprays.push({ x, z, y: track.terrainHeight(x, z) + 0.3, ph: rng() * 6 }); }
       taken.push([p.x, p.z, 24], [m.x, m.z, 6]);

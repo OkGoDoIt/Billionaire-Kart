@@ -126,7 +126,7 @@ export class KartView {
     // per-kart paint so the hype-cycle star can flash it
     this.paint = rig.mainMat.clone(); this.baseColor = this.paint.color.clone();
     rig.bodyMesh.traverse(o => { if (o.isMesh && o.material === rig.mainMat) o.material = this.paint; });
-    if (batch) batchKart(rig, this.paint);
+    if (batch) batchKart(rig, this.paint, shadow);
     // name tag
     this.tag = nameTag(kart.racer, kart.isPlayer, kart.playerIndex);
     this.tag.position.set(0, 2.75, 0); this.tag.layers.set(kart.isPlayer ? TAG_LAYER + 1 + kart.playerIndex : TAG_LAYER);

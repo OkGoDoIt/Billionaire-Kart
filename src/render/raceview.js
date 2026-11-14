@@ -43,15 +43,15 @@ export class RaceView {
     track.clearColliders();
     if (def.decorate) def.decorate({ THREE, track, group: this.root, gfx, anim: this.anim, look: def.look, view: this, densityScale: race.players.length > 2 ? 0.5 : race.players.length === 2 ? 0.75 : 1 });
 
-    if (race.players.length > 2) { simplifyScenery(this.root); this.cull = splitScenery(this.root); }
+    if (race.players.length > 1) { simplifyScenery(this.root); this.cull = splitScenery(this.root); }
 
     // pickups
     this.boxes = race.items.boxes.map(b => { const m = buildItemBox(); m.position.set(b.x, b.y, b.z); m.rotation.set(0.5, Math.random() * 6, 0.3); this.root.add(m); return { b, m, pop: 1 }; });
     // All boxes share a finish; split cameras draw the visible row in one submission.
-    if (race.players.length > 2 && this.boxes.length) {
+    if (race.players.length > 1 && this.boxes.length) {
       const cube = this.boxes[0].m.userData.cube;
       this.boxMesh = new THREE.InstancedMesh(cube.geometry, cube.material, this.boxes.length);
-      this.boxMesh.frustumCulled = false;
+      this.boxMesh.frustumCulled = false; this.boxMesh.castShadow = cube.castShadow;
       this.boxMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       this.root.add(this.boxMesh);
       this.boxFrustum = new THREE.Frustum();
@@ -72,7 +72,7 @@ export class RaceView {
     });
 
     // karts and cameras
-    this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0, batch: race.players.length > 2 }));
+    this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0, batch: race.players.length > 1 }));
     // real shadows cost one extra pass per view: with three or four views, use contact shadows instead
     const many = race.players.length > 2;
     gfx.sun.castShadow = gfx.q.shadow > 0 && !many; gfx.renderer.shadowMap.enabled = gfx.sun.castShadow;
@@ -104,14 +104,17 @@ export class RaceView {
   _beforeView(v) {
     const h = this.gfx.renderer.domElement.height * v.rect[3];
     this.fx.setViewport(h, v.camera.fov);
-    this.cull?.before(v.camera);
+    // The light sees some casters behind the driver. Keep their geometry in this pane's batch.
+    const sun = this.gfx.sun, shadow = this.cull && sun.castShadow ? sun.shadow : null;
+    if (shadow) shadow.updateMatrices(sun);
+    this.cull?.before(v.camera, shadow?.camera);
     if (this.boxMesh) {
       const cam = v.camera;
       this.boxFrustum.setFromProjectionMatrix(_m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse), cam.coordinateSystem, cam.reversedDepth);
       let n = 0;
       for (const { m } of this.boxes) if (m.visible) {
         m.updateMatrixWorld();
-        if (this.boxFrustum.intersectsObject(m.userData.cube)) this.boxMesh.setMatrixAt(n++, m.matrix);
+        if (this.boxFrustum.intersectsObject(m.userData.cube) || shadow?.getFrustum().intersectsObject(m.userData.cube)) this.boxMesh.setMatrixAt(n++, m.matrix);
       }
       this.boxMesh.count = n; this.boxMesh.instanceMatrix.needsUpdate = true;
     }

@@ -47,7 +47,7 @@ export default {
   id: 'bliss-hills',
   name: 'Bliss Hills',
   tagline: 'It is now safe to turn off your kart.',
-  lapNotes: ['<b>Lap 2.</b> Updates are ready. Restarting in 10 seconds.', '<b>Final lap.</b> Installing update 3 of 214. Do not turn off your kart.'],
+  lapNotes: ['<b>Lap 2.</b> Updates are ready. Restarting in 10 seconds.', '<b>Final lap.</b> Your world ran into a problem and needs to restart.'],
   laps: 3,
   width: 18,
   sky: 'day',
@@ -431,6 +431,7 @@ export default {
     anim.push((dt, time) => { balloons.forEach((b, i) => { b.position.y += Math.sin(time * 0.4 + i * 1.7) * dt * 0.8; b.position.x += Math.sin(time * 0.05 + i) * dt * 0.6; b.rotation.y += dt * 0.05; }); });
     bake.flush();
     atlas.flush();
+    restartSky(ctx);
   },
 };
 
@@ -600,4 +601,37 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
       for (const m of meshes) m.instanceMatrix.needsUpdate = true;
     });
   }
+}
+
+// The painted cloud dome is fixed. Fade a crash screen over it while keeping the road and hills in front.
+function restartSky({ THREE, gfx, group, view, anim }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = 512;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#093da9'; g.fillRect(0, 0, 1024, 512);
+  const ink = '#eff8ff', font = 'Arial, sans-serif';
+  g.fillStyle = ink; g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = '40px Arial';
+  g.fillText(':(', 42, 210);
+  S.fitText(g, 'YOUR WORLD RAN INTO A PROBLEM', 299, 202, 400, 19, font, ink, { lines: 1 });
+  S.fitText(g, 'AND NEEDS TO RESTART.', 250, 225, 305, 19, font, ink, { lines: 1 });
+  // Repeat one readable message every 60 degrees. The negative repeat faces the lettering inward.
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace; map.wrapS = THREE.RepeatWrapping; map.repeat.x = -6;
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(1500, 48, 24), new THREE.MeshBasicMaterial({
+    map, transparent: true, opacity: 0, fog: false, depthWrite: false, side: THREE.BackSide, toneMapped: false,
+  }));
+  shell.renderOrder = -1; shell.visible = false; group.add(shell);
+  shell.onBeforeRender = (_renderer, _scene, camera) => {
+    shell.position.copy(camera.position); shell.updateMatrixWorld();
+  };
+  shell.frustumCulled = false;
+  const lighting = { fog: 0x2a5fd0, fogNear: 300, fogFar: 1400, sunLight: 0xcfe0ff, hemiSky: 0x7fa8ff };
+  let fade = 0;
+  anim.push(dt => {
+    if (!view.finalLap || (view.intro && !view.intro.done) || fade >= 1) return;
+    fade = Math.min(1, fade + dt / 4);
+    const t = smoothstep(0, 1, fade);
+    shell.visible = true; shell.material.opacity = t * 0.91;
+    gfx.shiftSky(lighting, t);
+  });
 }

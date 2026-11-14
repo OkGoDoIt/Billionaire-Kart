@@ -270,12 +270,16 @@ export class Kart {
     const vfPrev = this.fwd, sp = Math.abs(vfPrev), spFrac = sp / Math.max(1, this.top);
 
     // ----- drift state machine
-    if (driftPressed && !airborne && !stunned) {
-      // hop; also arms a trick when leaving a ramp
-      if (this.offRampT < 0.25 || (this.hit.ramp && this.hit.ramp.trick)) this.trickArmT = T.trickWindow;
-      if (this.grounded) { this.vy = T.hopV; this.grounded = false; this.airT = 0; this.hopping = true; this.emit('hop'); }
-      this.driftArmed = true;
-    } else if (driftPressed && airborne && this.offRampT < T.trickWindow + 0.2 && !this.trick && !this.hopping) {
+    if (driftPressed && this.grounded) {
+      if (this.hit.ramp?.trick) {
+        // Buffer the press until takeoff. A normal hop here overrides the ramp's launch velocity.
+        this.trickArmT = T.trickWindow;
+      } else {
+        this.vy = T.hopV; this.grounded = false; this.airT = 0; this.hopping = true;
+        this.driftArmed = true; this.emit('hop');
+      }
+    } else if (driftPressed && !this.hopping && this.offRampT < T.trickWindow + 0.2) {
+      // Use wheel contact for input. The short air grace above is for handling only.
       this._doTrick(steerIn);
     }
     if (this.trickArmT > 0) this.trickArmT -= dt;
@@ -397,7 +401,10 @@ export class Kart {
       if (vyGround < this.vy - g * dt - 0.6) { // ground falls away: we are airborne
         this.grounded = false; this.airT = 0;
         this.y += this.vy * dt; this.vy -= g * dt;
-        if (hit.ramp || this.lastRamp) { this.offRampT = 0; if (this.trickArmT > 0 || (this.autoTrick && (this.lastRamp || hit.ramp)?.trick)) this._doTrick(this.steer); }
+        if ((this.lastRamp || hit.ramp)?.trick) {
+          this.offRampT = 0;
+          if (this.trickArmT > 0 || this.autoTrick) this._doTrick(this.steer);
+        }
       } else { this.y = gy; this.vy = clamp(lerp(this.vy, vyGround, 0.55), -40, 40); }
     } else {
       this.vy -= g * dt; this.y += this.vy * dt; this.airT += dt; this.stats.airtime += dt;
@@ -407,7 +414,7 @@ export class Kart {
         this.y = gy; this.grounded = true; this.vy = clamp((gy - this.gy) / dt, -40, 8);
         if (this.airT > 0.12 || impact > 6) { this.landed = clamp(impact / 16, 0.2, 1); this.emit('land', impact); }
         if (this.trick) { this.trick = false; this.boost('trick'); this.emit('trickLand'); }
-        this.hopping = false; this.airT = 0;
+        this.hopping = false; this.airT = 0; this.offRampT = Infinity;
       }
     }
     this.lastRamp = hit.ramp;

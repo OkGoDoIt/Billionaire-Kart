@@ -334,16 +334,19 @@ function dress(ctx) {
   houses.forEach(([at, name, kicker, bg], k) => {
     const p = sc.beside(at, 1, 32.5);
     if (!clear(p.x, p.z, 4)) return;
+    // Outside a wall the collision query extends its road plane over the valley.
+    p.y = track.terrainHeight(p.x, p.z);
     put(M.chalet(4 + k * 5, {}), p.x, p.z, { yaw: p.yaw + rng.range(-0.05, 0.05), y: p.y - 0.2 }); take(p.x, p.z, 10);
     // the shop sign stands out front, big enough to read at speed
     // Terrace the foundation through the downslope corners; otherwise the
     // front edge of a chalet can hang a full storey above the village.
     const footing = new THREE.Mesh(new THREE.BoxGeometry(10.9, 7, 7.95), frameMat(0x887a74));
     put(footing, p.x, p.z, { yaw: p.yaw, y: p.y - 3.65 });
-    const s = faceDriver(sc.beside(at, 1, 20), 52);
-    const signBase = s.y - 0.15;
-    put(M.signFrame(13, 4, 1.2, frameMat(0x3a2a1a)), s.x, s.z, { yaw: s.yaw, y: signBase });
-    atlas.place(board(name, { bg, fg: '#ffffff', kicker, kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(s, 0, 0.09, signBase + 1.2 + 2), s.yaw, 13, 4);
+    // Keep the storefront signs on the lower bench, below the steep chalet cuts.
+    const s = faceDriver(sc.beside(at, 1, 7), 52);
+    const legs = 2.45, signBase = s.y - 0.4;
+    put(M.signFrame(13, 4, legs, frameMat(0x3a2a1a)), s.x, s.z, { yaw: s.yaw, y: signBase });
+    atlas.place(board(name, { bg, fg: '#ffffff', kicker, kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(s, 0, 0.09, signBase + legs + 2), s.yaw, 13, 4);
   });
   const piles = [2.8, 3.7].map(at => sc.beside(at, 1, 21)).filter(p => clear(p.x, p.z, 1.5) && free(p.x, p.z, 2));
   sc.instances(partsOf(M.woodPile()), piles, {});
@@ -406,7 +409,7 @@ function dress(ctx) {
   // the gondola: from the town up to a station below the summit, cabins that actually move
   {
     const stops = [[66, 134], [76, 180], [86, 226], [94, 268], [99, 296]];
-    const tops = stops.map(([x, z], k) => { const y = sc.y(x, z); return { x, z, y, top: y + (k === 0 || k === stops.length - 1 ? 9.3 : 13.85) }; });
+    const tops = stops.map(([x, z], k) => { const y = track.terrainHeight(x, z); return { x, z, y, top: y + (k === 0 || k === stops.length - 1 ? 9.3 : 13.85) }; });
     const yawL = Math.atan2(stops[4][0] - stops[0][0], stops[4][1] - stops[0][1]), lx = Math.cos(yawL), lz = -Math.sin(yawL);
     tops.forEach((t, k) => {
       if (k === 0 || k === tops.length - 1) {
@@ -437,6 +440,7 @@ function dress(ctx) {
     });
   }
 
+  let jumpSign;
   /* ================= THE GREAT RESET: the ski jump ================= */
   {
     // the tower: the landmark you see from the town, the grid, and the climb
@@ -468,7 +472,16 @@ function dress(ctx) {
     group.add(jump); bake.add(jump);
     const cx = (towers[0].x + towers[1].x) / 2, cz = (towers[0].z + towers[1].z) / 2, cy = (towers[0].y1 + towers[1].y1) / 2 - 1.4;
     const fx = Math.sin(yawT), fz = Math.cos(yawT), span = Math.hypot(towers[0].x - towers[1].x, towers[0].z - towers[1].z);
-    atlas.place(board('THE GREAT RESET', { bg: NAVY, fg: '#ffffff', kicker: 'WORLD ELITE FORUM · SESSION 1', kfg: '#f2c94c', border: GOLD, size: 130 }, 1024, 260), [cx - fx * 0.45, cy, cz - fz * 0.45], yawT + Math.PI, span - 0.4, 3.8);
+    // The judges fill the landing sightline. Play the microphone gag on the approach as well.
+    jumpSign = dynSign(THREE, 1024, 260, (g, w, h, lap, last) => {
+      const headline = last ? 'UNANIMOUS!' : lap === 2 ? 'SPONSORS ONLY' : 'THE GREAT RESET';
+      const kicker = last ? 'MICS OFF · VOTE RESULT' : lap === 2 ? 'AUDIENCE MIC ACCESS' : 'WORLD ELITE FORUM · SESSION 1';
+      S.signDraw(headline, { bg: NAVY, fg: '#ffffff', kicker, kfg: '#ffcf54', border: GOLD, size: 138, lines: 1 })(g, w, h);
+    });
+    const jumpFace = new THREE.Mesh(new THREE.PlaneGeometry(span - 0.4, 3.8), jumpSign.mat);
+    jumpFace.position.set(cx - fx * 0.45, cy, cz - fz * 0.45);
+    jumpFace.rotation.y = yawT + Math.PI;
+    group.add(jumpFace);
     atlas.place(board('ENJOY THE VIEW. WE OWN IT.', { bg: GOLD, fg: NAVY, size: 120 }, 1024, 200), [cx + fx * 0.45, cy, cz + fz * 0.45], yawT, span - 0.4, 3.0);
     // the big-air kicker's own sign
     const k0 = sc.beside(21.4, 1, 1.2);
@@ -525,7 +538,7 @@ function dress(ctx) {
     { tints: COATS, scale: [1.06, 1.34], cast: false });
   let screenSign = null;
   {
-    const sx = 6, sz = 112, sy = sc.y(sx, sz);
+    const sx = 6, sz = 112, sy = track.terrainHeight(sx, sz);
     if (clear(sx, sz, 10)) {
       screenSign = dynSign(THREE, 1024, 400, (g, w, h, lap, last) => {
         g.fillStyle = '#101623'; g.fillRect(0, 0, w, h);
@@ -549,7 +562,7 @@ function dress(ctx) {
 
   /* ================= the town: the World Elite Forum, in the valley ================= */
   {
-    const hx = 30, hz = 82, hy = sc.y(hx, hz);
+    const hx = 30, hz = 82, hy = track.terrainHeight(hx, hz);
     put(M.congressHall(), hx, hz, { yaw: 0, y: hy - 0.2 }); take(hx, hz, 40);
     // the name on the roof, both ways: up the hill to the jump, and down to the grid
     const wef = board('WORLD ELITE FORUM', { bg: '#ffffff', fg: NAVY, kicker: 'ANNUAL MEETING OF THE ALREADY RICH', kfg: '#8a2f2a', border: GOLD, size: 130 }, 1024, 300);
@@ -562,7 +575,7 @@ function dress(ctx) {
     for (let k = 0; k < 140 && homes.length + big.length < 36; k++) {
       const a = rng() * Math.PI * 2, rr = 0.42 + rng() * 0.55, x = 35 + Math.cos(a) * rr * 78, z = 88 + Math.sin(a) * rr * 48;
       if (Math.hypot(x - 84, z - 68) < 30 || !clear(x, z, 10) || !free(x, z, 8)) continue;
-      take(x, z, 7.5); (rng() < 0.16 ? big : homes).push({ x, y: sc.y(x, z) - 0.25, z, yaw: Math.atan2(hx - x, hz - z) + rng.range(-0.5, 0.5) });
+      take(x, z, 7.5); (rng() < 0.16 ? big : homes).push({ x, y: track.terrainHeight(x, z) - 0.25, z, yaw: Math.atan2(hx - x, hz - z) + rng.range(-0.5, 0.5) });
     }
     sc.instances(partsOf(M.chalet(77, {})), homes, { scale: [0.85, 1.15] });
     sc.instances(partsOf(M.grandHotel({ sign: false })), big, { scale: [0.55, 0.7] });
@@ -736,7 +749,12 @@ function dress(ctx) {
   let lapDrawn = 0, glowT = 0, glowWant = 0;
   anim.push((dt) => {
     const lap = view.showLap || 1, last = !!view.finalLap;
-    if (lap !== lapDrawn) { lapDrawn = lap; glowWant = last ? 1 : lap >= 2 ? 0.45 : 0; if (screenSign) screenSign.redraw(lap, last); }
+    if (lap !== lapDrawn) {
+      lapDrawn = lap;
+      glowWant = last ? 1 : lap >= 2 ? 0.45 : 0;
+      jumpSign.redraw(lap, last);
+      screenSign?.redraw(lap, last);
+    }
     if (Math.abs(glowWant - glowT) > 1e-3) {
       glowT += Math.sign(glowWant - glowT) * Math.min(Math.abs(glowWant - glowT), dt * 0.18);
       ctx.gfx?.shiftSky?.(ALPENGLOW, glowT);

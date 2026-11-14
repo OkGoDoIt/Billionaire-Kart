@@ -239,6 +239,43 @@
 
 /* controller panel: the live press readout, then one row per action */
 .panel.pad { width: min(100%, calc(var(--u) * 88)); display: flex; flex-direction: column; gap: calc(var(--u) * 0.95); padding-top: calc(var(--u) * 2.6); padding-bottom: calc(var(--u) * 2.6); }
+/* The controller and bindings share the available height. A portrait phone
+   stacks the picture above the actions; a short window puts it alongside. */
+.screen-pad {
+  --u: min(1vw, 1.5dvh);
+  font-size: calc(var(--u) * 1.75);
+  justify-content: center;
+  gap: 0.65em;
+}
+.screen-pad .menu-head { margin: 0; }
+.screen-pad .scroll-fade { display: none; }
+.screen-pad .panel.pad {
+  width: min(100%, 70em);
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  grid-template-areas: "diagram rows" "readout rows" "steer steer" "note foot";
+  align-items: center;
+  gap: 0.7em 1.8em;
+  padding: 1.3em 1.6em;
+}
+.screen-pad .pad-diagram-wrap { grid-area: diagram; }
+.screen-pad .pad-svg { width: min(100%, 45vh); }
+.screen-pad .pad-readout { grid-area: readout; min-height: 3em; display: grid; place-items: center; }
+.screen-pad .pad-rows { grid-area: rows; }
+.screen-pad .pad-steer { grid-area: steer; }
+.screen-pad .pad-note { grid-area: note; }
+.screen-pad .foot { grid-area: foot; margin: 0; }
+.screen-pad .foot .btn { min-width: 0; }
+@media (orientation: portrait) {
+  .screen-pad { --u: min(1.62vw, 1dvh); }
+  .screen-pad .panel.pad {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "diagram" "readout" "rows" "steer" "note" "foot";
+    gap: 0.65em;
+  }
+  .screen-pad .pad-svg { width: min(55%, 20vh); }
+  .screen-pad .pad-readout { min-height: 2.8em; }
+}
 /* the pad picture: one generic gamepad; a pressed button lights gold (.lit).
    Face buttons show the Xbox letter (.tx) or the PlayStation shape (.sh),
    whichever family the connected pad uses (.fam-ps on the svg). */

@@ -553,12 +553,13 @@ export class Menus {
     const A = this.app, S = A.save.settings, input = A.input;
     const persist = () => { S.padBinds = JSON.parse(JSON.stringify(input.padBinds)); S.padSteer = input.padSteer; A.save.write(); A.applySettings(); };
     let fam = 'xb';   // naming family of the connected pad; Xbox-style until a PlayStation pad shows up
-    const readout = h('div', { class: 'pad-readout' }, 'Press any button on your controller — it lights up here.');
+    const readout = h('div', { class: 'pad-readout' }, 'Choose an action to change its button.');
     const diagram = h('div', { class: 'pad-diagram-wrap', html: PAD_SVG });
     const btnEls = new Map(), txtEls = new Map();
     diagram.querySelectorAll('[data-btn]').forEach(el => btnEls.set(+el.dataset.btn, el));
     diagram.querySelectorAll('[data-txt]').forEach(el => txtEls.set(+el.dataset.txt, el));
-    let capturing = null, sawRelease = false, prev = new Set(), raf = 0, flashN = -1, flashUntil = 0;
+    let capturing = null, capturePad = null, opener = null, releasePad = null;
+    let previous = new Map(), flashN = -1, flashUntil = 0;
     const rows = new Map();
     const labelOf = id => PAD_ACTIONS.find(a => a.id === id).label;
     const drawRow = a => {
@@ -574,13 +575,20 @@ export class Menus {
       for (const [n, el] of txtEls) el.textContent = DIAGRAM_TEXT[fam][n] || el.textContent;
       drawAll();
     };
-    const startCapture = id => { capturing = id; sawRelease = prev.size === 0; readout.textContent = `Press the button for ${labelOf(id)} — or tap the row again to cancel.`; drawAll(); };
-    const endCapture = msg => { capturing = null; if (msg) readout.textContent = msg; drawAll(); };
-    const doBind = (id, n) => {
+    const startCapture = id => {
+      capturing = id; capturePad = opener; releasePad = opener;
+      readout.textContent = `Press a button for ${labelOf(id)}.`;
+      drawAll();
+    };
+    const endCapture = (msg, heldPad = null) => {
+      capturing = null; capturePad = null; releasePad = heldPad;
+      readout.textContent = msg; drawAll();
+    };
+    const doBind = (id, n, heldPad = null) => {
       const res = applyPadBind(input.padBinds, id, n);
       let msg = `${labelOf(id)} is now the ${buttonName(n, fam)} button.`;
       if (res.swapped) msg += ` It swapped with ${labelOf(res.swapped)}.`;
-      persist(); A.audio?.ui('select'); endCapture(msg);
+      persist(); A.audio?.ui('select'); endCapture(msg, heldPad);
     };
     const showPress = n => {
       const acts = PAD_ACTIONS.filter(a => input.padBinds[a.id].includes(n)).map(a => a.label);
@@ -590,28 +598,37 @@ export class Menus {
     /* Tapping a button on the diagram does what pressing it does — and while a
        row is listening, tapping the diagram is a way to bind without a pad. */
     for (const [n, el] of btnEls) el.addEventListener('click', () => { if (capturing) doBind(capturing, n); else showPress(n); });
-    /* While the panel is open it polls the pads itself: menu navigation only
-       reports the mapped actions, but discovery needs every raw button. */
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-      let pad = null; const pressed = new Set();
-      for (const gp of gps) { if (!gp || !gp.connected) continue; pad = pad || gp; gp.buttons.forEach((btn, i) => { if (btn.pressed || btn.value > 0.5) pressed.add(i); }); }
-      if (pad) setFamily(padFamily(pad.id));
-      const fresh = [...pressed].filter(i => !prev.has(i));
-      if (capturing) {
-        if (!pressed.size) sawRelease = true;               // the press that opened capture must clear first
-        else if (sawRelease && fresh.length) doBind(capturing, fresh[0]);
-      } else if (fresh.length) showPress(fresh[fresh.length - 1]);
-      /* the diagram and the rows light up live, for exactly as long as the press lasts */
-      const lit = capturing ? new Set() : new Set([...pressed, ...(performance.now() < flashUntil ? [flashN] : [])]);
+    // One raw sample feeds both discovery and navigation. A binding owns the
+    // complete press (including its release) before menus see another edge.
+    const poll = gps => {
+      const active = new Map();
+      let fresh = null, connected = null;
+      for (const gp of gps) {
+        if (!gp?.connected) continue;
+        connected ||= gp;
+        const down = gp.buttons.flatMap((b, i) => b.pressed || b.value > 0.5 ? [i] : []);
+        active.set(gp.index, down);
+        if (capturePad != null && gp.index !== capturePad) continue;
+        const n = down.find(n => !previous.get(gp.index)?.includes(n));
+        if (n != null && !fresh) fresh = { n, gp };
+      }
+      const pressed = new Set([...active.values()].flat());
+      if (fresh || connected) setFamily(padFamily((fresh?.gp || connected).id));
+      const block = !!capturing || releasePad != null;
+      if (capturing && capturePad != null && !active.has(capturePad)) endCapture('Controller disconnected.');
+      if (releasePad != null) {
+        if (!active.get(releasePad)?.length) releasePad = null;
+      } else if (capturing && fresh) doBind(capturing, fresh.n, fresh.gp.index);
+      else if (!capturing && fresh) showPress(fresh.n);
+      const lit = new Set([...pressed, ...(performance.now() < flashUntil ? [flashN] : [])]);
       for (const [n, el] of btnEls) el.classList.toggle('lit', lit.has(n));
-      for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.toggle('hit', !capturing && [...pressed].some(n => input.padBinds[a.id].includes(n)));
-      prev = pressed;
+      for (const a of PAD_ACTIONS) rows.get(a.id)?.el.classList.toggle('hit', !capturing && input.padBinds[a.id].some(n => lit.has(n)));
+      previous = active;
+      return block;
     };
     const list = h('div', { class: 'pad-rows' }, PAD_ACTIONS.map(a => {
       const name = h('span', { class: 'bind-name' });
-      const el = h('button', { class: 'pad-row', 'data-f': true, onclick: () => { if (capturing === a.id) endCapture('Tap an action, then press the button for it.'); else if (!capturing) startCapture(a.id); } },
+      const el = h('button', { class: 'pad-row', 'data-f': true, 'data-default': a === PAD_ACTIONS[0], onclick: () => { if (capturing === a.id) endCapture('Binding canceled.'); else if (!capturing) startCapture(a.id); } },
         h('span', { class: 'pad-label' }, a.label), name);
       rows.set(a.id, { el, name });
       return el;
@@ -621,18 +638,28 @@ export class Menus {
     const drawSteer = () => { for (const [id, b] of segBtns) b.classList.toggle('sel', input.padSteer === id); };
     const steerRow = h('div', { class: 'pad-steer' }, h('span', { class: 'pad-label' }, 'Steering'),
       h('div', { class: 'seg' }, STEER_CHOICES.map(([id, label]) => { const b = h('button', { class: 'seg-btn', 'data-f': true, onclick: () => { input.padSteer = id; persist(); drawSteer(); A.audio?.ui('move'); } }, label); segBtns.set(id, b); return b; })));
-    const el = h('div', {}, this.header('Controller', 'Tap an action, then press the button for it.'),
+    const el = h('div', {}, this.header('Controller'),
       h('div', { class: 'panel pad' }, diagram, readout, list, steerRow,
-        h('p', { class: 'pad-note' }, 'The triggers always work as the gas and brake pedals too.'),
+        h('p', { class: 'pad-note' }, 'Triggers give you gradual acceleration and braking when set as pedals.'),
         h('div', { class: 'foot' }, this.btn('Reset to defaults', () => { input.padBinds = defaultPadBindings(); input.padSteer = 'both'; drawSteer(); persist(); endCapture('Back to the standard layout.'); A.audio?.ui('back'); }), this.btn('Done', () => this.back(), { cls: 'go' }))));
     drawAll(); drawSteer();
     return {
-      /* no data-default button on this screen: initial focus lands on the first
-         row, so the mount-time scrollIntoView keeps the diagram in view */
-      el, onOpen: () => { raf = requestAnimationFrame(tick); }, onClose: () => { cancelAnimationFrame(raf); },
-      /* while capturing, pad presses belong to the capture (the poll above), not to menu navigation;
-         a keyboard Esc still cancels */
-      onAction: (a, dev) => { if (!capturing) return false; if (a === 'back' && !String(dev).startsWith('pad')) endCapture('Remap cancelled.'); return true; },
+      el,
+      onOpen: () => { input.padEditor = { poll, exclusive: () => !!capturing || releasePad != null }; },
+      onClose: () => { input.padEditor = null; },
+      onAction: (a, dev) => {
+        if (capturing) {
+          if (a === 'back' && !String(dev).startsWith('pad')) endCapture('Binding canceled.');
+          return true;
+        }
+        if (a === 'confirm' && String(dev).startsWith('pad') && this.focusEl?.classList.contains('pad-row')) {
+          opener = Number(dev.slice(3));
+          this.focusEl.click();
+          opener = null;
+          return true;
+        }
+        return false;
+      },
     };
   }
 
@@ -642,7 +669,7 @@ export class Menus {
     const key = (...k) => h('span', { class: 'keys' }, k.map(x => h('kbd', {}, x)));
     // each action, and how to do it on each kind of control; the screen shows one kind at a time
     // the controller column is read from the live bindings, so it stays true after a remap
-    const B = this.app.input.padBinds, gp0 = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(g => g && g.connected), D = a => describePadBind(B, a, padFamily(gp0?.id)), withTrig = (a, idx, word) => B[a].includes(idx) ? D(a) : `${D(a)} or ${word}`;
+    const B = this.app.input.padBinds, gp0 = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(g => g && g.connected), D = a => describePadBind(B, a, padFamily(gp0?.id)), withTrig = (a, idx, word) => this.app.input.pedals[a].includes(idx) && !B[a].includes(idx) ? `${D(a)} or ${word}` : D(a);
     const padRows = [['Steer', this.app.input.padSteer === 'dpad' ? 'D-pad' : this.app.input.padSteer === 'stick' ? 'Left stick' : 'Left stick or D-pad'],
       ['Accelerate', withTrig('accelerate', 7, 'right trigger')], ['Drift and hop', D('drift')], ['Use item', D('item')],
       ['Brake and reverse', withTrig('brake', 6, 'left trigger')], ['Look behind', D('rear')], ['Pause', D('pause')]];

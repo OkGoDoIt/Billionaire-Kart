@@ -85,8 +85,10 @@ export class Input {
   constructor() {
     this.keyBinds = keyboardBindings(); this.captureKey = null; this.suppressed = new Set();
     this.keys = new Set(); this.steerKb = { kb: 0, kb1: 0, kb2: 0 };
+    this.motorPulses = new Map();
+    this.rumbleFocused = true;
     this.assign = ['any'];                 // device per local player; 'any' merges everything (solo play)
-    this.padBinds = defaultPadBindings();   // gamepad bindings; the app replaces these from the save
+    this.setPadBindings(null);   // the app replaces the defaults from the save
     this.padSteer = 'both';                 // steering source: 'both' | 'stick' | 'dpad'
     this.touch = { active: false, steer: 0, throttle: 0, brake: 0, drift: false, item: false, itemBack: false, rear: false };
     this.tilt = { enabled: false, value: 0, available: false };
@@ -121,11 +123,24 @@ export class Input {
     addEventListener('keyup', e => { this.keys.delete(e.code); this.suppressed.delete(e.code); });
     addEventListener('blur', () => { this.keys.clear(); this.suppressed.clear(); });
     addEventListener('gamepadconnected', e => { this.lastDevice = 'pad' + e.gamepad.index; this.onPads?.(); });
-    addEventListener('gamepaddisconnected', () => this.onPads?.());
+    addEventListener('gamepaddisconnected', e => { this._endPulse(e.gamepad.index); this.onPads?.(); });
+    addEventListener('blur', () => { this.rumbleFocused = false; this.stopRumble(); });
+    addEventListener('focus', () => { this.rumbleFocused = true; });
+    addEventListener('pagehide', () => this.stopRumble());
+    globalThis.document?.addEventListener('visibilitychange', () => { if (document.hidden) this.stopRumble(); });
   }
 
   /** Adopt bindings + steering source from the save (sanitized on the way in). */
-  setPadBindings(raw, steer) { this.padBinds = sanitizePadBindings(raw); if (PAD_STEER_SOURCES.some(([id]) => id === steer)) this.padSteer = steer; }
+  setPadBindings(raw, steer) {
+    this.padBinds = sanitizePadBindings(raw);
+    this.pedals = {};
+    for (const [action, normal] of [['accelerate', 7], ['brake', 6]]) {
+      // An explicitly assigned trigger follows its new action, including a pedal swap.
+      this.pedals[action] = [6, 7].filter(n => this.padBinds[action].includes(n)
+        || (n === normal && !PAD_ACTIONS.some(a => this.padBinds[a.id].includes(n))));
+    }
+    if (PAD_STEER_SOURCES.some(([id]) => id === steer)) this.padSteer = steer;
+  }
 
   _kbDeviceFor(code) { for (const d of ['kb1', 'kb2']) for (const keys of Object.values(this.keyBinds[d])) if (keys.includes(code)) return d; return 'kb'; }
   _menu(action, device) { return this.onMenu?.(action, device); }
@@ -159,9 +174,17 @@ export class Input {
     }
     if (this.padSteer !== 'stick') { if (b(14)) x = -1; if (b(15)) x = 1; }   // the D-pad overrides the stick, as shipped
     if (Math.abs(x) > Math.abs(out.steer)) out.steer = x;
-    /* the triggers stay analogue pedals (RT gas, LT brake) whatever the buttons are bound to */
-    out.throttle = Math.max(out.throttle, has('accelerate') ? 1 : 0, v(7));
-    out.brake = Math.max(out.brake, has('brake') ? 1 : 0, v(6));
+    // Resting triggers sometimes report a small positive value. Preserve the
+    // usable analog stroke, even when the browser marks a half pull as pressed.
+    const pedal = action => {
+      if (this.padBinds[action].some(n => n !== 6 && n !== 7 && b(n))) return 1;
+      let value = 0;
+      for (const n of this.pedals[action]) value = Math.max(value, v(n));
+      const restingTravel = 0.06;
+      return clamp((value - restingTravel) / (1 - restingTravel), 0, 1);
+    };
+    out.throttle = Math.max(out.throttle, pedal('accelerate'));
+    out.brake = Math.max(out.brake, pedal('brake'));
     if (has('drift')) out.drift = true;
     if (has('item')) { out.item = true; if ((gp.axes[1] || 0) > 0.6 || b(13)) out.itemBack = true; }
     if (has('rear')) out.rear = true;
@@ -194,6 +217,8 @@ export class Input {
   /** Menu navigation from gamepads, with auto-repeat on directions. */
   _padMenus(dt) {
     const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+    const editor = this.padEditor;
+    const captured = editor?.poll(gps);
     for (let i = 0; i < Math.min(4, gps.length); i++) {
       const gp = gps[i]; if (!gp || !gp.connected) continue;
       const prev = this.padPrev[i], dev = 'pad' + i;
@@ -203,9 +228,13 @@ export class Input {
          confirm and back DERIVE from the Accelerate and Brake buttons — menus have no
          bindings of their own, and the derivation is exactly the shipped behaviour
          (A confirms, B goes back). alt/alt2 stay on X/Y as before (nothing remaps them) */
-      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: has('accelerate'), back: has('brake'), pause: has('pause'), alt: b(2), alt2: b(3) };
+      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: editor ? b(0) : has('accelerate'), back: editor ? b(1) : has('brake'), pause: !editor && has('pause'), alt: b(2), alt2: b(3) };
+      if (captured || editor?.exclusive()) {
+        this.padPrev[i] = now; this.padRepeat[i] = 0.38; continue;
+      }
       let anyDir = false;
       for (const k in now) {
+        if (editor && (editor.exclusive() || editor !== this.padEditor)) break;
         if (now[k] && !prev[k]) { this.lastDevice = dev; this.onAnyInput?.(); this._menu(k, dev); if (['up', 'down', 'left', 'right'].includes(k)) this.padRepeat[i] = 0.38; }
         if (now[k] && ['up', 'down', 'left', 'right'].includes(k)) anyDir = k;
       }
@@ -214,13 +243,43 @@ export class Input {
     }
   }
 
-  /** Controller rumble for a player (no-op where unsupported). */
+  _endPulse(index) {
+    const pulse = this.motorPulses.get(index);
+    if (!pulse) return;
+    clearTimeout(pulse.timer);
+    this.motorPulses.delete(index);
+    // Some drivers retain their last motor values until explicitly cleared.
+    const { actuator } = pulse;
+    const zero = () => actuator.playEffect('dual-rumble', { duration: 0, strongMagnitude: 0, weakMagnitude: 0 });
+    try {
+      if (actuator.reset) Promise.resolve(actuator.reset()).catch(() => {
+        if (!this.motorPulses.has(index)) return zero();
+      }).catch(() => {});
+      else Promise.resolve(zero()).catch(() => {});
+    } catch { /* Disconnected or unsupported. */ }
+  }
+
+  stopRumble(player) {
+    for (const [index, pulse] of this.motorPulses) {
+      if (player == null || pulse.player === player) this._endPulse(index);
+    }
+  }
+
+  /** A new impact replaces this pad's previous deadline, independently of other players. */
   rumble(player, strong = 0.5, weak = 0.5, ms = 150) {
+    if (!this.rumbleFocused || globalThis.document?.hidden) return;
     const dev = this.assign[player];
     const ids = dev === 'any' ? [0, 1, 2, 3] : dev?.startsWith('pad') ? [+dev.slice(3)] : [];
-    for (const i of ids) {
-      const gp = navigator.getGamepads?.()[i];
-      try { gp?.vibrationActuator?.playEffect?.('dual-rumble', { duration: ms, strongMagnitude: clamp(strong, 0, 1), weakMagnitude: clamp(weak, 0, 1) }); } catch { /* unsupported */ }
+    for (const index of ids) {
+      const actuator = navigator.getGamepads?.()[index]?.vibrationActuator;
+      if (!actuator?.playEffect) continue;
+      const previous = this.motorPulses.get(index);
+      if (previous) clearTimeout(previous.timer);
+      const timer = setTimeout(() => this._endPulse(index), ms);
+      this.motorPulses.set(index, { actuator, player, timer });
+      try {
+        Promise.resolve(actuator.playEffect('dual-rumble', { duration: ms, strongMagnitude: clamp(strong, 0, 1), weakMagnitude: clamp(weak, 0, 1) })).catch(() => {});
+      } catch { /* The actuator may have disconnected since the last poll. */ }
     }
     if (dev === 'any' && this.touch.active && navigator.vibrate && strong > 0.5) { try { navigator.vibrate(Math.min(60, ms / 3)); } catch { /* ignore */ } }
   }

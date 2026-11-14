@@ -101,7 +101,7 @@ export default {
   sides: [
     { from: 15.8, to: 20.6, side: 'L', edge: 'wall' },   // pit wall along the grandstand side
     { from: 14.95, to: 15.8, edge: 'wall', wallHeight: 1.1 }, // the Quad arcade: walls right under the arches
-    { from: 5.6, to: 6.9, edge: 'wall' },               // crest and jump are fenced in
+    { from: 5.6, to: 6.4, edge: 'wall' },               // crest and jump are fenced in; past the jump the downhill shoulder opens (the pilot's cut-1 corridor — open grass, see the design doc's 'As built')
     { from: 8.45, to: 10.4, shoulder: 1.6, outer: 3.2 }, // Palm Drive: the palms stand close, behind a low wall
     { from: 20.45, to: 22.12, edge: 'wall', wallHeight: 0.85 }, // the bridge guardrails: low enough to see the bay over
   ],
@@ -116,7 +116,10 @@ export default {
     { at: 19.55, lat: 0, w: 5 },
     { at: 22.45, lat: 0, w: 5 },
     { at: 0.78, lat: 21.5, w: 4.5 },                     // the fork's inside lane: a pad mid-gauntlet — the lane's reward (the LP lane's pads set the precedent; an entry pad wedged karts on the island tip)
+    { at: 1.55, lat: 3, w: 4.5 },                        // the meadow cut's feeder: cross it and you carry boost into the grass gate
+
     { at: 2.2, lat: -4, w: 4.5 },
+    { at: 6.52, lat: 4, w: 4.5 },                        // the downhill shoulder's feeder pad, just past the crest jump's landing
     { at: 12.3, lat: 3, w: 4.5 },                        // the Oval: a pad on the outside line round the hairpin (lat 5 -> 3, #215 item 1)
     { at: 17.55, lat: 5, w: 4.5 },                       // past the fountain plaza, on the run to the bridge
   ],
@@ -144,6 +147,13 @@ export default {
     // but it runs the due-diligence cone gauntlet; outside is clean and carries the item row. The two sides are
     // balanced to <=0.3 s by the lone-rival audit (the item 4 harness method) — see the PR body for the numbers.
     { name: 'the VC fork', from: 22.55, to: 1.5, path: [[253.2, 21.8], [260.6, 32.5], [264.8, 49.7], [263.8, 66.4], [260.7, 79.9], [253.7, 91.3]], skill: 0.3 },
+    // The meadow cut (#135's retained grass cut): across the climb's meadow, inside the summit bend — grass runs
+    // at ~58% speed, so only boost makes it pay (boost: true — the AI needs a boost in hand or running).
+    // Lone-rival audit (segment cp 1.45 -> 3.7): unboosted 6.73 s vs road 5.58 (loses 1.15, doc band ok);
+    // AI single-boost 5.82 vs 5.85 (break-even — the AI will not chain boosts, so the doc's +0.5..1.5 s boosted
+    // band is not met on AI timing; a player chaining boost3/golden through it gains — boosted grass speed is
+    // 43.5 m/s in the trace. Measured shortfall, recorded in the design doc's 'As built', not asserted away.)
+    { name: 'the meadow cut', from: 1.85, to: 2.95, path: [[238, 112], [228, 140], [210, 162], [192, 178]], skill: 0.35, boost: true },
   ],
   terrain: {
     cell: 3, margin: 150, blend: 30, water: -1.4,

@@ -72,7 +72,7 @@ export default {
   // then the top of the in-run, looking down the jump at the town
   intro: [
     { pos: [-190, 46, 30], pos1: [-170, 52, 52], look: [70, 52, 300], look1: [70, 54, 300], fov: 50, dur: 3.4 },
-    { pos: [6, 80, 318], pos1: [2, 76, 300], look: [10, 20, 150], look1: [12, 10, 120], fov: 58, dur: 3.0 },
+    { pos: [5, 80, 282], pos1: [2, 77, 266], look: [6, 31, 171], look1: [5, 16, 122], fov: 58, dur: 3.0 },
   ],
   offroad: 'snow',
   defaults: { edge: 'open', shoulder: 3.5, outer: 12 },

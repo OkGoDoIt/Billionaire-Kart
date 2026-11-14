@@ -140,3 +140,22 @@ own tunnel at the Boring Machine.
   the dive pays ~7% into Portal Bend and the climb taxes the whole north wall:
   the tunnel's race is won by whoever brakes latest at the bottom and carries
   most speed up the Ring Climb.
+
+## As built — the #234 quality pass (PR #223, Nov 2026)
+
+The checklist superseded two verdicts above, and the doc's own audit named
+where it would happen: the gated cut went into the infield inside the
+S-bend, dug by the Machine. Track features follow.
+
+- **One lane:** width 19 → 13, tunnelHeight 10 → 7 (the ring sector keeps
+  w:16 and the ring itself is sunk 2.5 m so it threads the smaller bore).
+  The stock shell is gone (`tunnelShell: false`): the track builds its own
+  tube — dark concrete with rainbow light strips, a colour wave running
+  `hsl(fract(s/120 − t·0.25))` down the bore.
+- **A city on top:** the plateau is a flat +14 m table with a casino block
+  grid, a pyramid hotel and a half-built tower; at cp 6.4–7.6 the bore
+  daylights into the Loop Station (glass canopy, platforms, a queue of
+  parked AUTOPILOT-ISH robotaxis) under a painted boomtown backdrop.
+- **The Machine** occupies the outside of the dig hall. Its 13 m cutter faces the incoming line while the road turns beneath the conveyor. Five arms carry banks of roller teeth. Dust comes off the lower rim so the rotation stays visible.
+- **The Breakthrough** runs straight through the chicane under the hall’s vaulted roof. The first two laps have an amber warning and wet cement. When the leading kart starts the final lap, the barrier falls, the overhead sign changes, and the edges turn green. The concrete sets from 0.2 to 0.92 speed. Six paired solo hard-driver runs through the fork saved 0.33–0.51 s on the express route.
+- **Loop Station** has continuous platforms, a glass canopy, two departures displays, and a station clock that runs backwards. The departing robotaxi noses into the lane, leaving room for the boost on the other side. Twin pressure mains and a bank of ventilation fans guide the climb to the ring.

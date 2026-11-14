@@ -74,8 +74,8 @@ export class ItemSystem {
     const race = this.race, n = race.karts.length;
     // map rank onto the 8-row table, then adjust by the gap to the leader
     let row = n <= 1 ? 3 : Math.round(((kart.rank - 1) / (n - 1)) * 7);
-    const leader = race.order[0], L = race.track.length;
-    const gap = leader && leader !== kart ? (leader.lap * L + leader.s) - (kart.lap * L + kart.s) : 0;
+    const leader = race.order[0];
+    const gap = leader && leader !== kart ? leader.raceDistance - kart.raceDistance : 0;
     if (kart.rank > 1 && gap < 28) row = Math.min(row, 2);          // tight pack: no nukes
     else if (gap > 260) row = Math.min(7, row + 1);
     if (race.time < 12) row = Math.min(row, 3);                      // calm opening

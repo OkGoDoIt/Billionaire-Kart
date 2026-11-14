@@ -117,7 +117,7 @@ export class Kart {
     this.squashT = 0;
     this.trickArmT = 0; this.trick = false; this.trickSpin = 0; this.offRampT = 9; this.lastRamp = null;
     this.draftT = 0; this.drafting = false;
-    this.hint = 0; this.s = 0; this.lap = 0; this.cpNext = 4; this.rank = 1; this.finished = false; this.finishTime = 0; this.finishRank = 0;
+    this.hint = 0; this.s = 0; this.circuit = -1; this.lap = 0; this.cpNext = 4; this.rank = 1; this.finished = false; this.finishTime = 0; this.finishRank = 0;
     this.lastSafeI = 0; this.safeT = 0; this.rescueT = 0; this.wrongWayT = 0; this.stuckT = 0;
     this.lapTimes = []; this.lapStart = 0; this.bestLap = Infinity;
     this.surface = SURFACES.road; this.wallT = 9; this.prevDrift = false; this.prevItem = false;
@@ -131,6 +131,17 @@ export class Kart {
     this.x = x; this.y = y; this.z = z; this.yaw = yaw; this.vx = this.vz = this.vy = 0; this.speed = 0;
     this.race.track.ground(x, z, hint, this.hit, y);
     this.hint = this.hit.i; this.s = this.hit.s; this.gy = this.hit.y; this.lastSafeI = this.hit.i; this.grounded = true;
+  }
+
+  // The grid is just before race distance zero. A reverse crossing takes the kart
+  // back onto the previous circuit without erasing a legitimately completed lap.
+  get raceDistance() { return this.finished ? this.race.laps * this.race.track.length : this.circuit * this.race.track.length + this.s; }
+
+  _setCoursePosition(s) {
+    const delta = s - this.s, half = this.race.track.length / 2;
+    if (delta < -half) this.circuit++;
+    else if (delta > half) this.circuit--;
+    this.s = s;
   }
 
   emit(type, data) { this.events.push({ type, data }); }
@@ -524,16 +535,20 @@ export class Kart {
 
   _progress(hit, dt, px, pz) {
     const tr = this.race.track, L = tr.length;
-    const prevS = this.s; this.s = hit.s;
-    if (this.finished) return;
+    const prevCircuit = this.circuit;
+    if (this.finished) { this.s = hit.s; return; }
+    this._setCoursePosition(hit.s);
     const sector = Math.min(3, Math.floor((this.s / L) * 4));
-    if (sector === this.cpNext && this.cpNext < 4) this.cpNext++;
-    if (prevS > L * 0.85 && this.s < L * 0.15) {
+    if (this.circuit === this.lap - 1 && sector === this.cpNext && this.cpNext < 4) this.cpNext++;
+    if (this.circuit > prevCircuit && this.circuit === this.lap) {
       if (this.cpNext >= 4) {
         this.lap++; this.cpNext = 1;
         if (this.lap > 1) { const t = this.race.time - this.lapStart; this.lapTimes.push(t); if (t < this.bestLap) this.bestLap = t; }
         this.lapStart = this.race.time;
         this.emit('lap', this.lap);
+      } else {
+        // A shortcut skipped a checkpoint. Start this lap again from the line.
+        this.circuit--; this.cpNext = 1;
       }
     }
     // wrong way / stuck detection
@@ -576,7 +591,9 @@ export class Kart {
     void t;
     if (this.rescueT <= 0) {
       this.rescueT = 0; this.hint = i; this.race.track.ground(this.x, this.z, i, this.hit, this.y);
-      this.s = this.hit.s; this.grounded = false; this.airT = 0; this.vy = 0; this.invulnT = 1.5; this.surface = SURFACES.road;
+      this._setCoursePosition(this.hit.s);
+      this.circuit = Math.min(this.circuit, this.lap - 1);
+      this.grounded = false; this.airT = 0; this.vy = 0; this.invulnT = 1.5; this.surface = SURFACES.road;
       this.emit('rescued');
     }
   }

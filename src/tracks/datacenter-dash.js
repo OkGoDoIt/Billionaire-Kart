@@ -1631,6 +1631,73 @@ function edgePods({ THREE, sc, rng, rackSys, atlas }) {
 
 /* ---------- the dam and the reservoir ---------- */
 const DAM = { x0: -86, x1: 54, zUp: -343, zDn: -333, top: 12.2, bottom: -9 };
+/** A paper strip feeds out of the same slot at all lengths. Crop the printed roll
+    to the exposed length so its headline and line items keep their physical size. */
+function shorelineMeter({ THREE, sc, bake, group, palette, track }) {
+  const p = sc.beside(10.32, 1, 8), exit = track.indexAtCp(9.15);
+  const yaw = Math.atan2(track.px[exit] - p.x, track.pz[exit] - p.z);
+  const { housing, needle, rotor, pawl } = D.demandMeter();
+  sc.place(housing, p.x, p.z, { y: p.y, yaw });
+  bake.add(housing, true);
+  const mount = new THREE.Group();
+  mount.position.set(p.x, p.y, p.z); mount.rotation.y = yaw;
+  group.add(mount);
+  function axle(parts, x, y, z) {
+    const pivot = new THREE.Group(), batch = makeBaker(THREE, pivot, false, palette);
+    batch.add(parts, false); batch.flush();
+    pivot.position.set(x, y, z); mount.add(pivot);
+    return pivot;
+  }
+  const hand = axle(needle, 0, 10.32, 1.38), wheel = axle(rotor, 0, 7.22, 0.98);
+  const lever = axle(pawl, -2.0, 7.79, 0.84);
+  const paperX = -5.1, paperZ = 0.68, slotY = 8.41, paperWidth = 4.05;
+  const paperBed = track.terrainHeight(p.x + paperX * Math.cos(yaw) + paperZ * Math.sin(yaw),
+    p.z - paperX * Math.sin(yaw) + paperZ * Math.cos(yaw));
+  const paperLength = p.y + slotY - paperBed;
+  const receipt = canvasTexture(THREE, 256, 512, (g, w, h) => {
+    g.fillStyle = '#fff3d1'; g.fillRect(0, 0, w, h);
+    for (let y = 8; y < h; y += 16) {
+      g.fillStyle = '#a79d83'; g.fillRect(5, y, 5, 7); g.fillRect(w - 10, y, 5, 7);
+    }
+    fitText(g, 'ONE MORE', w / 2, 69, w - 34, 50, 'bold Arial, sans-serif', '#1b2534', { lines: 1 });
+    fitText(g, 'PROMPT', w / 2, 116, w - 34, 54, 'bold Arial, sans-serif', '#1b2534', { lines: 1 });
+    g.fillStyle = '#253548'; g.fillRect(20, 145, w - 40, 5);
+    for (let i = 0; i < 9; i++) {
+      const y = 166 + 25 * i;
+      g.fillRect(26, y, 48 + (i * 19) % 51, 5); g.fillRect(w - 72, y, 44, 5);
+    }
+    g.fillRect(21, 409, w - 42, 5);
+    for (let x = 40; x < w - 40;) {
+      const width = 2 + x % 6; g.fillRect(x, 434, width, 40); x += width + 3;
+    }
+  });
+  const stock = new THREE.PlaneGeometry(paperWidth, 1, 18, 12);
+  stock.translate(0, -0.5, 0);
+  const pos = stock.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const drop = -pos.getY(i);
+    pos.setZ(i, 0.14 * Math.sin(drop * 9) + 0.44 * smoothstep(0.8, 1, drop));
+    if (drop === 1 && i % 2) pos.setY(i, -0.985);
+  }
+  stock.computeVertexNormals();
+  const paper = new THREE.Mesh(stock, new THREE.MeshStandardMaterial({ map: receipt, roughness: 0.88, emissive: 0xfff1d4, emissiveIntensity: 0.12 }));
+  paper.position.set(paperX, slotY, paperZ); mount.add(paper);
+  hand.rotation.z = 1.28; paper.scale.y = 0.55;
+  receipt.repeat.y = paper.scale.y / paperLength; receipt.offset.y = 1 - receipt.repeat.y;
+  const speeds = [0.6, 1.3, 2.6], angles = [1.28, -0.09, -1.29], lengths = [0.55, 4.15, paperLength];
+  return (dt, lap) => {
+    const i = clamp(lap - 1, 0, 2), ease = 1 - Math.exp(-3 * dt);
+    wheel.rotation.z = (wheel.rotation.z - dt * speeds[i]) % (Math.PI * 2);
+    // Twelve teeth lift the pawl gradually, then release it at the tooth edge.
+    const tooth = -wheel.rotation.z * 6 / Math.PI % 1;
+    lever.rotation.z = tooth * 0.27;
+    hand.rotation.z += (angles[i] + tooth * 0.025 - hand.rotation.z) * ease;
+    paper.scale.y += (lengths[i] - paper.scale.y) * ease;
+    receipt.repeat.y = paper.scale.y / paperLength;
+    receipt.offset.y = 1 - receipt.repeat.y;
+  };
+}
+
 function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, palette, view }) {
   const group = ctx.group, bottom = DAM.bottom;
 
@@ -1811,6 +1878,7 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, palette, view }) {
     atlas.place(s, [cx - 0.5, sc.y(cx, cz + 4.5) + 2.6, cz + 4.5], -Math.PI / 2, 3.6, 1.8, 0, true);
     const pb2 = new ModelBuilder(); pb2.add('p', cyl(0.08, 0.08, 2, 5), { p: [cx - 0.4, sc.y(cx, cz + 4.5) + 0.5, cz + 4.5] }); bake.builder(pb2, { p: plastic(0xd9c9a8, 0.8) }, false);
   }
+  const updateMeter = shorelineMeter({ THREE, sc, bake, group, palette, track });
   const boatSpots = [[30, -366, 0.7], [-44, -388, -2.2], [-48, -438, 2.4], [30, -458, -0.4], [-20, -470, 1.1]];
   const boats = boatSpots.map(([x, z, yaw]) => ({ x, z, yaw, bed: track.terrainHeight(x, z), tilt: [rng.range(-0.25, 0.25), rng.range(-0.18, 0.18)] }));
   for (const b of boats) track.addCollider(b.x, b.z, 2.4);
@@ -1861,6 +1929,7 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, palette, view }) {
     const y = race?.lakeY;
     st.level = Number.isFinite(y) ? y : LAKE.full;
     st.lap = race?.lakeLap ? Math.min(race.lakeLap, race.laps) : 1;
+    updateMeter(dt, st.lap);
     water.position.y = st.level;
     // the cracks fade in only as the water drops below each point of the bed
     if (crackFade && Math.abs(st.level - crackFade.at) > 0.02) {

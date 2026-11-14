@@ -94,8 +94,8 @@ export default {
     { p: [-58, 0, 0] },          // 17 the Founder's Fountain: the island is off-road dressing now (the split moved to Sand Hill, #135)
     { p: [-18, 0, 0] },          // 18
     { p: [0, 0, 0] },            // 19 the old line: the run east to the bridge
-    { p: [95, 0, 0] },           // 20
-    { p: [162, 4.5, -40], w: 19 },// 21 the bridge approach: swings south off the shore, climbing onto the deck
+    { p: [95, 1.5, 0] },         // 20 the shore run lifts: the climb to the deck starts here (Peninsula Run climax profile)
+    { p: [162, 6, -40], w: 19 }, // 21 the bridge approach: swings south off the shore, climbing onto the deck
     { p: [246, 8, -26], w: 19 }, // 22 far shore: the Golden Gate deck ends in a big sweeper back to the line
   ],
   sides: [
@@ -110,6 +110,7 @@ export default {
   ],
   ramps: [
     { at: 6.25, len: 9, lift: 2.1 },
+    { at: 22.32, len: 7, lift: 1.2 },   // the climax's air crest: a kick as the deck exit drops away — a short hop landing mid-sweeper, before the boost pad (lift 1.8 at 22.55 flew karts over the line into the fork entry)
   ],
   boosts: [
     { at: 19.55, lat: 0, w: 5 },

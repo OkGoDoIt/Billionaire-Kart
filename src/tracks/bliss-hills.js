@@ -315,9 +315,11 @@ export default {
       const i = track.indexAtCp(8.05), p = sc.beside(8.05, 1, -track.hwL[i]);
       sc.place(B.paperclipArch({ span: track.hwL[i] + track.hwR[i] + 12, h: 12 }), p.x, p.z, { yaw: p.along, y: p.roadY - 0.2 });
       const cursor = B.waitCursor();
-      cursor.position.set(p.x, p.roadY + 30, p.z); ctx.group.add(cursor);
-      const label = atlas.mesh(board('NOT RESPONDING', { bg: '#082e8c', fg: '#ffffff', font: S.SANS, lines: 1, size: 72 }, 512, 90), 15.2, 2.7);
-      label.position.set(p.x, p.roadY + 20.5, p.z); label.rotation.y = p.along + Math.PI; ctx.group.add(label);
+      // Set it just behind the arch so the top stays in the chase camera as the kart crests the hill.
+      const crest = track.indexAtCp(8.65);
+      cursor.position.set(track.px[crest], p.roadY + 20.6, track.pz[crest]); ctx.group.add(cursor);
+      const label = atlas.mesh(board('NOT RESPONDING', { bg: '#082e8c', fg: '#ffffff', font: S.SANS, lines: 1, size: 72 }, 512, 90), 14.5, 2.3);
+      label.position.set(p.x, p.roadY + 8.4, p.z); label.rotation.y = p.along + Math.PI; ctx.group.add(label);
       cursor.visible = label.visible = false;
       anim.push((dt, time) => {
         cursor.visible = label.visible = view.showLap >= 2;

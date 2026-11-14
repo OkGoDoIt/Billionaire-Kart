@@ -717,7 +717,7 @@ export class Menus {
         columns.map(([, id]) => { const time = A.save.bestFor(t.id, id)?.race; return h('td', {}, time ? fmtTime(time) : '–'); }))));
       for (const [value, b] of choices) { b.classList.toggle('sel', value === trial); b.setAttribute('aria-pressed', String(value === trial)); }
     };
-    const choices = [[false, 'Races'], [true, 'Time Trial']].map(([trial, label]) => [trial, this.btn(label, () => draw(trial), { cls: 'chip' })]);
+    const choices = [[false, 'Races'], [true, 'Time Trial']].map(([trial, label]) => [trial, h('button', { class: 'chip', 'data-f': true, onclick: () => draw(trial) }, label)]);
     draw(false);
     const el = h('div', {}, this.header('Records', `${st.races} races · ${st.wins} wins · ${st.coins} coins banked · ${st.hitsGiven} hostile takeovers`),
       h('div', { class: 'chips record-modes' }, choices.map(([, b]) => b)),

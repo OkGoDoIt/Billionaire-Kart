@@ -202,8 +202,9 @@ function decorate(ctx) {
 
   // road skins: planks on the pier, packed sand on the beach (drawn just above the road)
   const timber = plankTexture();
-  skin(ctx, 5.6, DIVE.lip, timber, 5.5);
-  skin(ctx, DIVE.land, 9.75, timber, 5.5);
+  skin(ctx, 5.6, 7.82, timber, 5.5);
+  skin(ctx, 7.82, DIVE.lip, chartDeck('#38dc91'), 16);
+  skin(ctx, DIVE.land, 9.75, chartDeck('#ff7760'), 16);
   skin(ctx, 1.9, 5.6, sandTexture(), 14, true);
 
   // Sailcloth pennants mark the soft-sand line. Twin tyre grooves lead across it even
@@ -381,6 +382,27 @@ function plankTexture() {
   }, { aniso: 8 });
 }
 
+/** Exchange-floor grating, with a broken price trace painted along each deck edge. */
+function chartDeck(accent) {
+  return canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#304454'; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < 8; k++) {
+      g.fillStyle = k % 2 ? '#354957' : '#3c505d'; g.fillRect(0, k * 64, w, 61);
+      g.fillStyle = '#223440'; g.fillRect(254, k * 64, 4, 61);
+      g.fillStyle = '#627784';
+      for (const x of [80, 242, 270, 432]) g.fillRect(x, k * 64 + 6, 4, 4);
+    }
+    for (const x of [0, w - 66]) {
+      g.fillStyle = '#152c33'; g.fillRect(x, 0, 66, h);
+      g.fillStyle = accent; g.fillRect(x + 5, 0, 5, h);
+      for (let j = 0; j < 4; j++) {
+        const cx = x + 25 + [0, 10, 6, 17][j], y = j * 128;
+        g.fillRect(cx, y + 14, 4, 102); g.fillRect(cx - 5, y + 34, 14, 56);
+      }
+    }
+  }, { aniso: 8 });
+}
+
 /** Hard-packed sand with faint tyre tracks. */
 function sandTexture() {
   return canvasTex(256, 512, (g, w, h) => {
@@ -505,6 +527,56 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt }) {
   // the price ticker, the chart's own title board, on two poles
   const tick = C.ledPanel(group, 1024, 352, [{ c: cw(26, 0.45, 30), yaw: CHART_YAW }, { c: cw(26, -0.45, 30), yaw: CHART_YAW + Math.PI }], 26, 8.9);
   for (const u of [15, 37]) { const p = cw(u, 0, 0); pole(p[0], p[2], W - 2, 25.6, 0.45); }
+
+  // The race takes place inside the second chart. Candles are anchored at the sea bed
+  // along the road's flanks, with the landing outlined before anyone leaves the lip.
+  const exchange = new ModelBuilder(), market = new ModelBuilder();
+  const end = track.sAtCp(DIVE.land), lip = track.sAtCp(DIVE.lip);
+  for (let s = track.sAtCp(7.82); s < end + 1; s += 6) {
+    const falling = s >= lip, last = Math.min(1, (s - lip) / (end - lip));
+    for (const side of [-1, 1]) {
+      const p = track.pointAt(s, side * 10.95, {}), yaw = track.yawAt(s);
+      const high = falling ? p.y + 0.9 - last * 8 : p.y + 0.5;
+      const low = Math.max(W + 0.5, high - (falling ? 4.8 : 3.9 + (p.y - 5) * 0.4));
+      if (high > low) market.add(falling ? 'red' : 'green', new THREE.BoxGeometry(3.4, high - low, 3.6), { p: [p.x, (high + low) / 2, p.z], r: [0, yaw, 0] });
+      const top = Math.max(low + 0.8, high + 1.5);
+      market.add(falling ? 'red' : 'green', new THREE.BoxGeometry(0.52, top - W, 0.52), { p: [p.x, (top + W) / 2, p.z] });
+    }
+  }
+  bake.builder(market, { green: greenMat, red: redMat }, false);
+
+  // Racing-line marquees have a dark enamel face set into brass frames. The
+  // corners step inward to clear the approach camera while the letters stay over the road.
+  function marquee(cp, label, palette, height, width) {
+    const s = track.sAtCp(cp), p = track.pointAt(s, 0, {}), yaw = track.yawAt(s) + Math.PI;
+    const frame = { ...p, yaw }, faceH = width * 0.188;
+    for (const side of [-1, 1]) {
+      const x = side * (width / 2 + 0.7);
+      const base = toWorld(frame, [x, 0, 0]), floor = cp < 9.7 ? W - 1 : p.y - 2;
+      exchange.add('brass', cyl(0.32, 0.52, p.y + height - floor, 8), { p: [base[0], (p.y + height + floor) / 2, base[2]] });
+      exchange.add('ink', box(1.1, faceH + 1, 1.1, 0.23), { p: toWorld(frame, [x, height, 0]), r: [0, yaw, 0] });
+      exchange.add('brass', box(1.9, 0.35, 1.4, 0.12), { p: toWorld(frame, [x, height + faceH / 2, 0]), r: [0, yaw, 0] });
+    }
+    exchange.add('brass', box(width + 1.4, faceH + 0.45, 0.85, 0.2), { p: toWorld(frame, [0, height, 0]), r: [0, yaw, 0] });
+    const sign = atlas.add(900, 170, signDraw(label, { bg: '#10242c', fg: palette, size: 142, lines: 1 }));
+    atlas.place2(sign, toWorld(frame, [0, height, 0.49]), yaw, width, faceH);
+    return frame;
+  }
+  marquee(8.94, 'ALL-TIME HIGH', '#ffdb59', 9.4, 21);
+  marquee(9.76, 'BOUGHT THE DIP', '#98ffbd', 7.6, 21);
+  // The plunge indicator sits beside the gap, facing the approaching driver. Its
+  // silhouette, the free water below, and the green landing hoop read in a single view.
+  {
+    const s = track.sAtCp(9.24), p = track.pointAt(s, -15.5, {}), yaw = yawTo(p, roadPt(8.87));
+    const frame = { ...p, yaw }, arrow = new THREE.Shape();
+    arrow.moveTo(-3.3, 4.4); arrow.lineTo(3.3, 4.4); arrow.lineTo(3.3, -0.3);
+    arrow.lineTo(5.2, -0.3); arrow.lineTo(0, -5); arrow.lineTo(-5.2, -0.3); arrow.lineTo(-3.3, -0.3); arrow.closePath();
+    exchange.add('crash', new THREE.ExtrudeGeometry(arrow, { depth: 0.58, bevelEnabled: true, bevelSize: 0.18, bevelThickness: 0.17, bevelSegments: 1 }), { p: toWorld(frame, [0, 5.3, 0]), r: [0, yaw, 0] });
+    const tag = atlas.add(480, 208, signDraw('-99%', { bg: '#b11d3e', fg: '#fff7de', size: 185, lines: 1, pad: 0.025 }));
+    atlas.place(tag, toWorld(frame, [0, 7.1, 0.85]), yaw, 6.55, 2.85);
+    pole(p.x, p.z, W - 1, p.y + 4, 0.29);
+  }
+  bake.builder(exchange, { brass: paint(0xdca347), ink: plastic(0x12313a), crash: redMat }, false);
 
   /* ---- 2. straight ahead of the start: a golden bull with laser eyes ---- */
   const bull = C.laserBull(), BS = 2.4, byaw = yawTo(BULL, { x: 0, z: 0 });

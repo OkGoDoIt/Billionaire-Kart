@@ -11,28 +11,19 @@ const once = (key, fn) => cache[key] || (cache[key] = fn());
 /* ---------- item box ---------- */
 export function buildItemBox() {
   const g = new THREE.Group();
-  const draw = (c, w) => {
+  const tex = once('qtex', () => canvasTex(128, 128, (c, w) => {
     const gr = c.createLinearGradient(0, 0, w, w);
     gr.addColorStop(0, '#ff5fa2'); gr.addColorStop(0.35, '#ffd23c'); gr.addColorStop(0.65, '#3cf0c5'); gr.addColorStop(1, '#5a8bff');
     c.fillStyle = gr; c.fillRect(0, 0, w, w);
     c.fillStyle = 'rgba(255,255,255,0.22)'; c.fillRect(0, 0, w, w * 0.45);
     c.font = '100px "Luckiest Guy", "Arial Black", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.lineWidth = 12; c.lineJoin = 'round'; c.strokeStyle = '#1a1440'; c.strokeText('?', w / 2, w / 2 + 8);
+    c.lineWidth = 12; c.strokeStyle = '#1a1440'; c.strokeText('?', w / 2, w / 2 + 8);
     c.fillStyle = '#ffffff'; c.fillText('?', w / 2, w / 2 + 8);
-  };
-  const tex = once('qtex', () => {
-    const t = canvasTex(128, 128, draw, { repeat: false, aniso: 4 });
-    // Safari can paint a just-loaded web font late, or lose a canvas under memory pressure: repaint once fonts settle
-    const again = () => { draw(t.image.getContext('2d'), 128); t.needsUpdate = true; };
-    if (document.fonts?.ready) document.fonts.ready.then(again);
-    return t;
-  });
-  // Opaque on purpose: a see-through cube has to be depth-sorted against every other see-through thing on the
-  // track, and the glow inside it was always hidden behind the front faces. Same look, no sorting to get wrong.
-  const mat = once('qmat', () => new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.15, metalness: 0.1 }));
+  }, { repeat: false }));
+  const mat = once('qmat', () => new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.93 }));
   const cube = new THREE.Mesh(once('qgeo', () => box(1.3, 1.3, 1.3, 0.2, 4)), mat);
   cube.castShadow = true; g.add(cube);
-  const core = new THREE.Object3D();   // kept so the renderer's pulse has something to scale
+  const core = new THREE.Mesh(once('qcore', () => sphere(0.34, 12, 8)), once('qcoremat', () => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })));
   g.add(core);
   g.userData = { cube, core };
   return g;

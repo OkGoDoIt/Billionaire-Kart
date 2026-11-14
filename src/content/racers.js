@@ -57,7 +57,7 @@ export const RACERS = [
     'Huge top speed. The biggest. Does not do corners: the corners are rigged. Has never lost a race, ask anyone.',
     { hit: ['Fake news!', 'That corner was rigged!'], boost: ['Tremendous speed, folks!', 'Huge boost. The biggest.'], taunt: ['You’re fired!', 'Sad!'], pass: ['Many people are saying I passed you.', 'Tariff on your kart. Two hundred percent.'], win: 'We won. By a lot. Everybody knows it.', lose: 'I actually won. Look into it.' }),
   R('cook', 'Cook', 'The Operator (Ret.)', [3, 3, 5, 3], [0xc7ccd4, 0x33383f],
-    { skin: 0xeec6a4, hair: 'short', hairColor: 0xc9c9c9, outfit: 'polo', top: 0x222428, accent: 0xc7ccd4, glasses: 'round', kart: 'unibody', kit: 'polo' },
+    { skin: 0xeec6a4, hair: 'short', hairColor: 0xc9c9c9, outfit: 'polo', top: 0x222428, accent: 0xc7ccd4, glasses: 'round', kart: 'unibody', kit: 'polo', prop: 'pricetag' },
     'I handed over the keys. Kept the kart.',
     'Calm, precise, and milled from a single block of aluminum. Wheels sold separately, $699 for four.',
     { hit: ['That dents the margins!', 'Supply chain disrupted!'], boost: ['Good morning. To the lead.', 'Operational excellence!', 'One more thing: speed.'], taunt: ['That will be $999. Stand not included.', 'You’re holding it wrong.'], pass: ['There’s a pass for that.', 'Courage.'], win: 'Cooked to perfection.', lose: 'Courage.' }),

@@ -64,7 +64,7 @@
 /* Let the screen own scrolling, including the space around the focus ring.
    Every card shares a picture row and title space, even for a short name. */
 .cards.tracks.many {
-  --track-name: calc(var(--u) * 1.6);
+  --track-name: calc(var(--u) * 1.48);
   --track-title-height: 3.3em;
   --track-photo-min: calc(var(--u) * 6);
   flex: 1 0 auto;
@@ -78,13 +78,14 @@
   display: grid;
   grid-template-rows: minmax(var(--track-photo-min), 1fr) auto;
   min-width: 0;
+  padding-inline: calc(var(--u) * 0.75);
   scroll-margin: calc(var(--u) * 1.2);
 }
 .cards.tracks.many .track-thumb { height: auto; min-width: 0; }
 .cards.tracks.many .card.track h2 {
   font-size: var(--track-name);
   min-height: var(--track-title-height);
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
 }
 .cards.tracks.many .card.focus { transform: none; }
 .card { font: inherit; color: #fff; text-align: left; background: rgba(18,20,43,0.9); border: calc(var(--u) * 0.45) solid #fff; border-radius: calc(var(--u) * 2.6); padding: calc(var(--u) * 2.2) calc(var(--u) * 2.6); cursor: pointer; box-shadow: 0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.4); transition: transform 0.1s; position: relative; }

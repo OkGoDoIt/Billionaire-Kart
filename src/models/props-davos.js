@@ -7,7 +7,7 @@
    time. */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { ModelBuilder, box, sphere, cyl, capsule, cone, plastic, glow, paint } from './build.js';
+import { ModelBuilder, box, sphere, cyl, capsule, cone, lathe, torus, plastic, glow, paint } from './build.js';
 import { canvasTex, fitText } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
 
@@ -218,18 +218,29 @@ export function redPost() {
   return b.build({ post: RED, band: SNOW });
 }
 
-/** A snow-dusted conifer, 7–10 m: trunk, three green tiers, three snow tiers. */
+/** Wind-bent firs. Matching irregular branch tips and snow mantles keep
+    the silhouette twiggy at distance without modelling individual needles. */
 export function snowPine(seed = 1, { h = 8.5 } = {}) {
-  const b = new ModelBuilder(), rng = makeRng(seed), s = h / 8.5;
-  b.add('trunk', cyl(0.22 * s, 0.3 * s, 1.6 * s, 8), { p: [0, 0.8 * s, 0] });
-  const tiers = [[3.3, 3.4, 2.6], [2.5, 3.0, 4.6], [1.6, 2.6, 6.5]];
-  for (const [r, th, y] of tiers) {
-    b.add('leaf', cone(r * s, th * s, 10), { p: [0, y * s, 0] });
-    b.add('snow', cone(r * 0.82 * s, th * 0.5 * s, 10), { p: [0, (y + th * 0.28) * s, 0] });
+  const b = new ModelBuilder(), rng = makeRng(seed);
+  const girth = rng.range(0.26, 0.39), lean = rng.range(-0.08, 0.08) * h;
+  b.add('trunk', cyl(h * 0.019, h * 0.041, h * 0.64, 6), { p: [0, h * 0.32, 0] });
+  for (let layer = 0; layer < 4; layer++) {
+    const base = 0.13 + 0.17 * layer, r = girth * h * (1 - layer * 0.20);
+    const angle = rng() * Math.PI, branch = Array.from({ length: 12 }, (_, i) => {
+      const a = angle + i * Math.PI / 6, tip = (i % 2 === 0 ? 1 : 0.73) * rng.range(0.88, 1.08);
+      return [Math.cos(a) * r * tip, base * h + (i % 2 ? 0.05 : -0.025) * h, Math.sin(a) * r * tip];
+    });
+    const top = [lean * (base + 0.35), (base + 0.37) * h, 0];
+    for (const [key, inset] of [['leaf', 1], ['snow', 0.81]]) {
+      const verts = [];
+      const edge = ([x, y, z]) => [lean * base + x * inset, y + (1 - inset) * h * 0.53, z * inset];
+      for (let i = 0; i < branch.length; i++) verts.push(...top, ...edge(branch[(i + 1) % 12]), ...edge(branch[i]));
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      geo.computeVertexNormals(); b.add(key, geo);
+    }
   }
-  const g = b.build({ trunk: WOOD_D, leaf: seed % 2 ? PINE : PINE_D, snow: SNOW });
-  g.rotation.y = rng() * 6.28;
-  return g;
+  return b.build({ trunk: WOOD_D, leaf: seed % 3 ? PINE : PINE_D, snow: SNOW });
 }
 
 /* ---------- polish round: resort, village and summit furniture ---------- */
@@ -590,6 +601,68 @@ export function skier({ skis = true } = {}) {
 }
 const COAT = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
 COAT.userData.tintable = true;
+
+/** The village's fondue chalet advertises with an enamel caquelon on
+    the roof. A long fork spears a bread cube above the melted cheese. */
+export function fonduePot() {
+  const b = new ModelBuilder();
+  b.add('base', cyl(2.1, 2.6, 0.75, 20), { p: [0, 0.38, 0] });
+  b.add('pot', lathe([[0, 0.48], [2.1, 0.5], [3.1, 1.0], [3.9, 2.15], [4.15, 3.4], [3.91, 3.5]], 24));
+  b.add('trim', torus(4.02, 0.16, 8, 24), { p: [0, 3.46, 0], r: [Math.PI / 2, 0, 0] });
+  b.add('cheese', cyl(3.9, 3.83, 0.25, 24), { p: [0, 3.33, 0] });
+  strut(b, 'handle', [3.4, 2.3, 0], [7.0, 3.6, 0], 0.95, 1.05);
+  strut(b, 'steel', [-1.2, 3.3, 0.7], [2.8, 9.85, -0.7], 0.24);
+  strut(b, 'handle', [1.95, 8.46, -0.4], [3.6, 11.18, -0.97], 0.52);
+  b.add('crust', box(2.55, 2.22, 2.21, 0.36, 2), { p: [0.73, 6.49, 0.05], r: [0.2, 0.3, -0.45] });
+  b.add('bread', box(2.23, 1.99, 0.15, 0.21, 1), { p: [0.98, 6.30, 1.06], r: [0.2, 0.3, -0.45] });
+  return b.build({ base: STEEL, pot: RED, trim: WHITE, cheese: plastic(0xffc44f), handle: WOOD_D,
+    steel: STEEL, crust: plastic(0xbf7137), bread: plastic(0xffe7aa) });
+}
+
+/** Alpine race bell. A flared brass mouth, dark interior, and swinging
+    clapper sit in a timber frame, like the bells the crowds ring for skiers. */
+export function raceBell() {
+  const b = new ModelBuilder();
+  for (const x of [-6.1, 6.1]) {
+    for (const z of [-2.7, 2.7]) {
+      strut(b, 'timber', [x, -3, z], [x, 13.4, z * 0.13], 0.65, 0.7);
+    }
+    strut(b, 'trim', [x, 9.6, 0.7], [x * 0.52, 13.1, 0.7], 0.48);
+  }
+  b.add('timber', box(14.1, 1.1, 1.4, 0.18, 1), { p: [0, 13.2, 0] });
+  b.add('snow', box(14.3, 0.35, 1.5, 0.15, 1), { p: [0, 13.85, 0] });
+  const group = b.build({ timber: WOOD_D, trim: RED, snow: SNOW });
+  const bell = new ModelBuilder();
+  bell.add('strap', torus(1.12, 0.31, 8, 20), { p: [0, -0.76, 0] });
+  bell.add('brass', lathe([[4.0, -7.5], [4.05, -7.0], [3.45, -6.5], [2.86, -4.8],
+    [2.55, -2.7], [1.9, -1.97], [0.7, -1.8], [0, -1.8]], 28), { s: [1, 1, 0.83] });
+  bell.add('inside', cyl(4.0, 4.0, 0.12, 28), { p: [0, -7.44, 0], s: [1, 1, 0.83] });
+  bell.add('band', cyl(2.98, 3.17, 0.55, 28, true), { p: [0, -5.45, 0], s: [1, 1, 0.84] });
+  bell.add('brass', sphere(0.78, 12, 8), { p: [0, -7.73, 0] });
+  const swing = bell.build({ strap: RED, brass: paint(0xf6ac31, { metal: 0.32, rough: 0.28 }), band: RED, inside: WOOD_D });
+  swing.position.y = 12.8;
+  group.add(swing); group.userData.swing = swing;
+  return group;
+}
+
+/** Padded, flexible ski race gates stand beyond the kerb. The fabric bows
+    between its two poles and a white stitched chevron points down the run. */
+export function slalomFlag(color, side) {
+  const b = new ModelBuilder(), cloth = plastic(color, 0.72);
+  for (const x of [-1.6, 1.6]) {
+    b.add('pole', cyl(0.095, 0.14, 4.8, 7), { p: [x, 2.35, 0] });
+    b.add('sleeve', cyl(0.2, 0.25, 1.1, 8), { p: [x, 0.55, 0] });
+  }
+  const shape = new THREE.PlaneGeometry(3.18, 1.85, 5, 1), pos = shape.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const sag = Math.cos(pos.getX(i) * Math.PI / 3.2);
+    pos.setY(i, pos.getY(i) - 0.17 * sag); pos.setZ(i, 0.22 * sag);
+  }
+  shape.computeVertexNormals();
+  b.add('cloth', shape, { p: [0, 3.4, 0] });
+  for (const y of [-1, 1]) strut(b, 'snow', [-side * 0.52, 3.35 + y * 0.56, 0.265], [side * 0.46, 3.35, 0.265], 0.19, 0.08);
+  return b.build({ pole: cloth, sleeve: NAVY, cloth, snow: SNOW });
+}
 
 /** A two-leg sign frame (no face): the face is an atlas panel the track places at y = legs + h / 2, z = 0.08. */
 export function signFrame(w = 9, h = 2.4, legs = 3.2, color = NAVY) {

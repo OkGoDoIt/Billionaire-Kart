@@ -18,8 +18,10 @@ import { makeGroundHit, EDGE } from '../track/track.js';
 import * as P from '../models/props.js';
 import * as M from '../models/props-davos.js';
 import * as S from '../models/props-silicon-valley.js';   // the sign kit: canvas atlas, baker, text fitting
-import { bannerTexture } from '../render/textures.js';
 
+// The ribbon gates on the climb mark three optional racing lines. A clean
+// transfer between alternating edges earns the speed for the summit bend.
+const SLALOM = [{ at: 16.6, lat: 4.4 }, { at: 17.45, lat: -4.4 }, { at: 18.35, lat: 4.4 }];
 const lerp = (a, b, t) => a + (b - a) * t;
 
 /* The alpenglow the sky shifts toward, lap by lap (gfx.shiftSky): lap one is golden
@@ -33,16 +35,24 @@ const RIDGES = [
   { reach: 300, pts: [[345, -10, 34], [350, 175, 62], [275, 395, 112], [70, 445, 128], [-100, 420, 100], [-250, 340, 60]] },
   { reach: 62, pts: [[0, 312, 68], [0, 262, 57], [-1, 220, 35], [-2, 182, 16], [-4, 150, 4]] },
   { reach: 120, pts: [[20, 200, 30], [-120, 175, 24], [-215, 120, 16], [-225, 30, 6]] },
-  { reach: 210, pts: [[90, 485, 240], [-50, 505, 205]] },                 // the horn behind the jump
+  // Narrow summits with a saddle between them, sitting above the broad massif.
+  { reach: 136, horn: true, pts: [[101, 481, 250], [67, 501, 203], [13, 513, 165]] },
+  { reach: 118, horn: true, pts: [[-12, 499, 194], [-57, 510, 215], [-103, 510, 151]] },
   { reach: 160, pts: [[335, 335, 150], [385, 225, 118]] },               // and its east shoulder over the climb
 ];
 function ridgeHeight(x, z) {
   let best = 0;
-  for (const { reach, pts } of RIDGES) for (let k = 0; k + 1 < pts.length; k++) {
+  for (const { reach, horn, pts } of RIDGES) for (let k = 0; k + 1 < pts.length; k++) {
     const [ax, az, ah] = pts[k], [bx, bz, bh] = pts[k + 1];
     const dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
     const d = Math.hypot(x - (ax + dx * t), z - (az + dz * t)), f = 1 - smoothstep(0, reach, d);
-    best = Math.max(best, (ah + (bh - ah) * t) * f * (0.6 + 0.4 * f));
+    let face = f * (0.6 + 0.4 * f);
+    if (horn && d < reach) {
+      const flank = 1 - d / reach;
+      const flute = Math.sin(x * 0.078 + z * 0.033) + Math.sin(x * 0.124 - z * 0.041) * 0.45;
+      face = flank * flank + 0.24 * flute * flank * (1 - flank);
+    }
+    best = Math.max(best, (ah + (bh - ah) * t) * face);
   }
   return best;
 }
@@ -60,12 +70,12 @@ export default {
   skyOverrides: { zenith: 0x2d63c8, horizon: 0xffd0a0, ground: 0xffe4c6, sun: 0xffe0b0, sunDir: [0.45, 0.34, -0.83], sunLight: 0xffdcb0, sunIntensity: 3.5, hemiSky: 0xb2c8ff, hemiGround: 0xf0d4c4, hemiIntensity: 1.05, cloud: 0xfff2e4, cloudShade: 0xe2a796, cloudCover: 0.3, fog: 0xf1d0b4, fogNear: 340, fogFar: 1650, exposure: 1.02 },
   // the painted Alps (two generated strips, prompts and assembly in assets/backdrops/davos-prompts.md): the hero
   // peak stands behind the summit from the town, and dead ahead up the east ridge; a glacier massif fills the rest
-  backdrop: { img: 'assets/backdrops/davos.webp', top: 25, bottom: -5, rot: 0.325 },
+  backdrop: { img: 'assets/backdrops/davos.webp', top: 25, bottom: -7, rot: 0.325 },
   // opening shots: the whole mountain from the valley, the switchbacks and the jump on its face;
   // then the top of the in-run, looking down the jump at the town
   intro: [
     { pos: [-190, 46, 30], pos1: [-170, 52, 52], look: [70, 52, 300], look1: [70, 54, 300], fov: 50, dur: 3.4 },
-    { pos: [6, 80, 318], pos1: [2, 76, 300], look: [10, 20, 150], look1: [12, 10, 120], fov: 58, dur: 3.0 },
+    { pos: [6, 83, 268], pos1: [4, 78, 245], look: [5, 25, 157], look1: [5, 19, 131], fov: 58, dur: 3.0 },
   ],
   offroad: 'snow',
   defaults: { edge: 'open', shoulder: 3.5, outer: 12 },
@@ -126,18 +136,21 @@ export default {
   ],
   boosts: [
     { at: 0.55, lat: 0, w: 5 },
-    { at: 9.3, lat: 0, w: 5 },                                            // out of Switchback One
-    { at: 14.3, lat: 0, w: 5 },                                           // out of Switchback Two
-    { at: 21.2, lat: 0, w: 9, len: 10 },                                  // the top of the in-run: feed the jump
+    { at: 9.3, lat: 3.8, w: 5 },                                            // out of Switchback One
+    { at: 14.3, lat: -3.8, w: 5 },                                           // out of Switchback Two
+    { at: SLALOM[2].at, lat: SLALOM[2].lat, w: 4.8, len: 9 },
+    { at: 21.2, lat: 1.6, w: 12, len: 10 },                                  // the top of the in-run: feed the jump
     { at: 26.8, lat: 0, w: 5 },
   ],
-  itemRows: [{ at: 1.4 }, { at: 3.6 }, { at: 15.2 }, { at: 18.4 }, { at: 26.1 }, { at: 29.0 }],
+  itemRows: [{ at: 1.4 }, { at: 15.2 }, { at: 26.1 }, { at: 29.0 }],
   coins: [
     { from: 0.15, to: 0.8, n: 3, lat: 4 },
     { from: 2.5, to: 3.2, n: 5, lat: [5, -3] },
     { from: 5.6, to: 8.4, n: 5, lat: 4 },                                 // Switchback One, inside line
     { from: 10.6, to: 13.4, n: 5, lat: -4 },                              // Switchback Two, inside line
-    { from: 17.0, to: 18.0, n: 4, lat: -3 },
+    ...SLALOM.slice(1).map((gate, index) => ({
+      from: SLALOM[index].at, to: gate.at - 0.12, n: 3, lat: [SLALOM[index].lat, gate.lat],
+    })),
     ...[[22.3, 5.5], [22.65, 12], [22.95, 15], [23.3, 12], [23.65, 4.5]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: -2, air })),   // the flight off the table
     ...[[22.4, 10], [22.75, 17], [23.1, 20], [23.45, 15]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 6.2, air })),             // the big-air line
     { from: 26.6, to: 27.4, n: 4, lat: -3 },
@@ -145,13 +158,19 @@ export default {
     { from: 29.85, to: 30.5, n: 3, lat: 3 },
   ],
   obstacles: [
-    { kind: 'patrol', model: 'plow', at: 3.5, lats: [6, 8.2], speed: 2.2, effect: 'bump', radius: 2.2 },
+    { kind: 'patrol', model: 'plow', at: 4.12, lats: [7, 8.6], speed: 2.2, effect: 'bump', radius: 2.2 },
   ],
   terrain: {
     cell: 3, margin: 280, blend: 26, water: -5.5,
     fn(x, z) {
       const base = (fbm(x * 0.008, z * 0.008, 4, 31) - 0.5) * 6;
       let h = 2 + base + ridgeHeight(x, z) + (fbm(x * 0.03, z * 0.03, 2, 77) - 0.5) * 5 * smoothstep(20, 60, z);
+      // The landing piste sits on an alluvial fan. Continue the snow shelf out
+      // from both sides of its embankment before it falls away into town.
+      const fan = (1 - smoothstep(28, 104, Math.abs(x - 4))) *
+        smoothstep(142, 190, z) * (1 - smoothstep(305, 349, z));
+      const shelf = 16 + (z - 174) * 0.42 - 0.12 * Math.abs(x - 4);
+      h = lerp(h, Math.max(h, shelf), fan);
       const bowl = 1 - smoothstep(0.7, 1.15, Math.hypot((x - 35) / 75, (z - 88) / 46));   // the town's valley floor
       h = lerp(h, 1 + (fbm(x * 0.02 + 5, z * 0.02, 2, 17) - 0.5) * 1.4, bowl);
       const resort = 1 - smoothstep(0.7, 1.1, Math.hypot((x - 15) / 150, (z - 8) / 50));  // the resort floor: flat for the grid, the jets, the stands
@@ -160,13 +179,18 @@ export default {
       h = lerp(h, -6.4, lake);
       const ring = smoothstep(360, 600, Math.hypot(x - 30, z - 170));                    // the far Alps, in front of the painted ones
       h += ring * (22 + ridged(x * 0.009, z * 0.009, 4, 7) * 38);
+      // A foreground ridge overlaps the bottom of the painted Alps. From
+      // the table, the real terrain used to end in a horizontal strip of sky.
+      const valleyRim = (1 - smoothstep(0, 115, Math.abs(z + 219 + 23 * Math.sin(x * 0.016))));
+      h += valleyRim * (62 + 23 * Math.sin(x * 0.022) + 16 * ridged(x * 0.013, z * 0.015, 2, 61));
       return h;
     },
     // snow light, per vertex: hollows fall blue, groomed pistes show their corduroy, exposed snow throws sparse glints
     color(x, z, h, slope, over, out) {
       if (h < -3) return;
       if (slope >= 0.5) {   // high faces stay snowy: the horn and the massif's crest should not read as bare grey rock
-        const k = smoothstep(70, 130, h) * 0.7;
+        const grain = 0.45 + 0.55 * fbm(x * 0.09, z * 0.09, 2, 52);
+        const k = Math.min(0.91, 0.32 + grain * 0.30 + smoothstep(65, 145, h) * 0.29);
         out[0] += (0.93 - out[0]) * k; out[1] += (0.95 - out[1]) * k; out[2] += (0.99 - out[2]) * k;
         return;
       }
@@ -217,6 +241,20 @@ function dress(ctx) {
   const take = (x, z, r) => taken.push({ x, z, r });
   /** Local frame of a placement: u to its right, v forward (toward the road for beside()), y up. */
   const local = (p, u, v, y) => [p.x + Math.cos(p.yaw) * u + Math.sin(p.yaw) * v, y, p.z - Math.sin(p.yaw) * u + Math.cos(p.yaw) * v];
+  // Aim roadside placards at a kart on approach. Perpendicular boards only
+  // present their faces once a driver is already passing them.
+  const sightLines = [];
+  const faceDriver = (p, distance = 42) => {
+    const eye = track.pointAt(p.i * track.ds - distance, 0, {});
+    p.yaw = Math.atan2(eye.x - p.x, eye.z - p.z);
+    sightLines.push({ x: p.x, z: p.z, dx: eye.x - p.x, dz: eye.z - p.z });
+    return p;
+  };
+  const sightClear = (x, z) => sightLines.every(line => {
+    const dx = x - line.x, dz = z - line.z;
+    const t = (dx * line.dx + dz * line.dz) / (line.dx ** 2 + line.dz ** 2);
+    return t < 0 || t > 1 || Math.hypot(dx - t * line.dx, dz - t * line.dz) > 5;
+  });
   const signs = new Map();
   const board = (text, opts = {}, w = 768, h = 256) => { const k = text + JSON.stringify(opts) + w + 'x' + h; if (!signs.has(k)) signs.set(k, atlas.add(w, h, S.signDraw(text, opts))); return signs.get(k); };
   /** Place and bake a static object. */
@@ -225,9 +263,11 @@ function dress(ctx) {
   const frameMat = c => { if (!frameMats.has(c)) frameMats.set(c, new THREE.MeshStandardMaterial({ color: c, roughness: 0.5 })); return frameMats.get(c); };
   /** A free-standing sign beside the road, facing it: frame baked, face in the atlas. */
   const roadSign = (at, side, off, text, opts = {}, { w = 10, h = 2.8, legs = 3.4, frame = 0x1f2a44, tw = 768, th = 220 } = {}) => {
-    const p = sc.beside(at, side, off);
+    const p = faceDriver(sc.beside(at, side, off));
     put(M.signFrame(w, h, legs, frameMat(frame)), p.x, p.z, { yaw: p.yaw, y: p.y - 0.15 });
-    atlas.place(board(text, opts, tw, th), local(p, 0, 0.09, p.y - 0.15 + legs + h / 2), p.yaw, w, h);
+    const tile = board(text, opts, tw, th), mid = p.y - 0.15 + legs + h / 2;
+    atlas.place(tile, local(p, 0, 0.09, mid), p.yaw, w, h);
+    atlas.place(tile, local(p, 0, -0.40, mid), p.yaw + Math.PI, w, h);
     take(p.x, p.z, w * 0.5);
     return p;
   };
@@ -284,22 +324,26 @@ function dress(ctx) {
     [3.02, 'CRYPTO HOUSE', 'FORMERLY A BAKERY', '#8a2f2a'],
     [3.45, 'IMPACT HOUSE', 'IMPACT TO BE CONFIRMED', '#2a4a6b'],
     [3.88, 'SUSTAINABILITY HOUSE', 'JET PARKING AT REAR', '#2e6b3c'],
-    [4.3, 'FONDUE — $400', 'CHEESE OPTIONAL', BROWN],
   ];
   houses.forEach(([at, name, kicker, bg], k) => {
-    const p = sc.beside(at, 1, 25.5);
+    const p = sc.beside(at, 1, 32.5);
     if (!clear(p.x, p.z, 4)) return;
     put(M.chalet(4 + k * 5, {}), p.x, p.z, { yaw: p.yaw + rng.range(-0.05, 0.05), y: p.y - 0.2 }); take(p.x, p.z, 10);
     // the shop sign stands out front, big enough to read at speed
-    const s = sc.beside(at, 1, 19.6);
-    put(M.signFrame(11.5, 3.4, 2.2, frameMat(0x3a2a1a)), s.x, s.z, { yaw: s.yaw, y: s.y - 0.15 });
-    atlas.place(board(name, { bg, fg: '#ffffff', kicker, kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(s, 0, 0.09, s.y - 0.15 + 2.2 + 1.7), s.yaw, 11.5, 3.4);
+    // Terrace the foundation through the downslope corners; otherwise the
+    // front edge of a chalet can hang a full storey above the village.
+    const footing = new THREE.Mesh(new THREE.BoxGeometry(10.9, 7, 7.95), frameMat(0x887a74));
+    put(footing, p.x, p.z, { yaw: p.yaw, y: p.y - 3.65 });
+    const s = faceDriver(sc.beside(at, 1, 20), 52);
+    const signBase = s.y - 0.15;
+    put(M.signFrame(13, 4, 1.2, frameMat(0x3a2a1a)), s.x, s.z, { yaw: s.yaw, y: signBase });
+    atlas.place(board(name, { bg, fg: '#ffffff', kicker, kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(s, 0, 0.09, signBase + 1.2 + 2), s.yaw, 13, 4);
   });
   const piles = [2.8, 3.7].map(at => sc.beside(at, 1, 21)).filter(p => clear(p.x, p.z, 1.5) && free(p.x, p.z, 2));
   sc.instances(partsOf(M.woodPile()), piles, {});
   // the delegates have built a panel out of snow
   const snowmen = sc.along({ from: 2.55, to: 3.5, side: -1, offset: 15, spacing: 5.5, jitter: 0.8 }).filter(p => clear(p.x, p.z, 1.5) && free(p.x, p.z, 2)).map(p => ({ ...p, yaw: p.yaw + rng.range(-0.3, 0.3) }));
-  sc.instances(partsOf(M.snowman(3)), snowmen, { scale: [1.0, 1.25] });
+  sc.instances(partsOf(M.snowman(3)), snowmen, { scale: [1.0, 1.25], cast: false });
   roadSign(3.05, -1, 15.5, 'PANEL: WHY IS IT MELTING?', { bg: '#ffffff', fg: '#1f2a44', kicker: 'SPEAKERS: SNOWMEN', kfg: '#8a2f2a', border: NAVY, size: 116 }, { w: 10, h: 3, legs: 2.6, tw: 768, th: 230 });
   roadSign(2.3, -1, 15, 'THE CLIMB IS PRIVATE TOO', { bg: BROWN, fg: CREAM, size: 118 }, { w: 11, h: 2.6, frame: 0x5d3d22 });
 
@@ -307,8 +351,10 @@ function dress(ctx) {
   {
     const p = sc.beside(7.0, -1, 9);   // Switchback One's outside, beyond the parapet
     if (clear(p.x, p.z, 2)) {
-      put(M.chalet(21, {}), p.x, p.z, { yaw: p.yaw, y: p.y - 0.3 }); take(p.x, p.z, 9);
-      atlas.place(board('GLÜHWEIN — $250', { bg: BROWN, fg: CREAM, kicker: 'PER SIP', kfg: '#f2c94c', border: GOLD, size: 120 }, 768, 230), local(p, 0, 5.4, p.y + 6.4), p.yaw, 9, 2.7);
+      put(M.chalet(21, {}), p.x, p.z, { yaw: p.yaw, y: p.y - 0.3 }); take(p.x, p.z, 12);
+      const fondue = M.fonduePot();
+      put(fondue, p.x, p.z, { yaw: p.yaw, y: p.y + 8.9, scale: 1.55 });
+      atlas.place(board('$400 FONDUE', { bg: BROWN, fg: CREAM, kicker: 'CHEESE OPTIONAL', kfg: '#f2c94c', border: GOLD, size: 120 }, 768, 230), local(p, 0, 5.4, p.y + 6.4), p.yaw, 12.4, 3.7);
     }
   }
   roadSign(12.0, 1, 4, 'SKI SCHOOL', { bg: '#e23b3b', fg: '#ffffff', kicker: 'LESSON ONE: BE BORN RICH', kfg: '#ffffff', size: 130 }, { w: 9, h: 3, legs: 2.4, frame: 0xe23b3b });
@@ -319,6 +365,22 @@ function dress(ctx) {
 
   /* ================= the high traverse and the summit ================= */
   roadSign(19.4, -1, 14, 'YOU ARE NOW ABOVE IT ALL', { bg: NAVY, fg: '#ffffff', kicker: 'ELEVATION 70 M · NET WORTH: YES', kfg: '#f2c94c', size: 118 }, { w: 11, h: 3, legs: 2.6 });
+  for (const { at, lat } of SLALOM) {
+    const side = Math.sign(lat), p = sc.beside(at, side, 2.8);
+    put(M.slalomFlag(side > 0 ? 0xda342e : 0x115abb, side), p.x, p.z,
+      { y: p.y, yaw: p.along + Math.PI, scale: 1.35, cast: false });
+    take(p.x, p.z, 3.2);
+  }
+  const bellSpot = sc.beside(17.48, 1, 19);
+  const bell = M.raceBell();
+  faceDriver(bellSpot, 65);
+  sc.place(bell, bellSpot.x, bellSpot.z, { y: bellSpot.y, yaw: bellSpot.yaw, scale: 1.55 });
+  take(bellSpot.x, bellSpot.z, 11);
+  const swing = bell.userData.swing;
+  bell.updateMatrixWorld(true);
+  group.attach(swing);
+  bake.add(bell, false);
+  anim.push((dt, time) => { swing.rotation.z = 0.24 * Math.sin(time * 2.6); });
   // the gondola: from the town up to a station below the summit, cabins that actually move
   {
     const stops = [[66, 134], [76, 180], [86, 226], [94, 268], [99, 296]];
@@ -389,7 +451,23 @@ function dress(ctx) {
     // the big-air kicker's own sign
     const k0 = sc.beside(21.4, 1, 1.2);
     put(M.signFrame(5.5, 2, 2.6, frameMat(0xe23b3b)), k0.x, k0.z, { yaw: k0.along + Math.PI, y: k0.roadY });
-    atlas.place(board('BIG AIR →', { bg: '#e23b3b', fg: '#ffffff', size: 140, lines: 1 }, 512, 186), local({ ...k0, yaw: k0.along + Math.PI }, 0, 0.09, k0.roadY + 2.6 + 1), k0.along + Math.PI, 5.5, 2);
+    atlas.place(board('BIG AIR', { bg: '#e23b3b', fg: '#ffffff', size: 140, lines: 1 }, 512, 186), local({ ...k0, yaw: k0.along + Math.PI }, 0, 0.09, k0.roadY + 2.6 + 1), k0.along + Math.PI, 5.5, 2);
+    // Three snowy delegates hold up their scores beyond the outrun. The
+    // last judge is bought; the final placard is a cheque. Read from midair.
+    for (const [x, z, score, bg] of [[31, 145, '9.8', NAVY], [13, 140, '9.9', NAVY], [-5, 133, '$10M', RED]]) {
+      const y = sc.y(x, z);
+      if (!clear(x, z, 3)) continue;
+      const yaw = Math.atan2(-x, 232 - z);
+      const podium = M.snowman(8);
+      put(podium, x, z, { yaw, y: y - 0.12, scale: 4.15 });
+      const paddle = { x, z, yaw };
+      const [px, , pz] = local(paddle, 5.8, 0.15, 0);
+      put(M.signFrame(12, 6.4, 9.2, frameMat(0x81563b)), px, pz, { yaw, y });
+      atlas.place(board(score, { bg, fg: '#ffffff', border: GOLD, size: 156, lines: 1 }, 450, 240),
+        local({ x: px, z: pz, yaw }, 0, 0.09, y + 12.4), yaw, 12, 6.4);
+      take(x, z, 11);
+      sightLines.push({ x, z, dx: -x, dz: 230 - z });
+    }
     // the landing hill: the K-line, distance boards, flags down both sides, a judges' tower
     for (const [at, txt] of [[22.55, '90 M'], [22.9, '120 M'], [23.25, 'K 140']]) {
       for (const side of [1, -1]) { const p = sc.beside(at, side, 3); atlas.place(board(txt, { bg: '#ffffff', fg: '#e23b3b', border: '#e23b3b', size: 130, lines: 1 }, 384, 160), local(p, 0, 0.1, p.y + 1.1), p.yaw, 3.6, 1.5); }
@@ -398,12 +476,31 @@ function dress(ctx) {
     sc.instances(partsOf(M.flagPole(13, { color: 0xe23b3b })), [...flagsL, ...flagsR].map(p => ({ ...p, y: p.y - 0.1 })), { cast: false });
     const jt = sc.beside(22.35, -1, 14);
     if (clear(jt.x, jt.z, 3)) {
-      put(M.watchtower({ h: 12 }), jt.x, jt.z, { yaw: jt.yaw, y: jt.y - 0.2 }); take(jt.x, jt.z, 6);
+      const judges = M.watchtower({ h: 12 });
+      judges.remove(judges.userData.beam);
+      put(judges, jt.x, jt.z, { yaw: jt.yaw, y: jt.y - 0.2 }); take(jt.x, jt.z, 6);
       atlas.place(board('JUDGES', { bg: NAVY, fg: '#ffffff', kicker: 'SCORING ON NET WORTH', kfg: '#f2c94c', size: 120 }, 512, 200), local(jt, 0, 2.6, jt.y + 9.6), jt.yaw, 5, 1.95);
+    }
+    // Blue timing stripes fan across the slope. They follow the banking
+    // and grade, so a driver looking down in flight can place the touchdown.
+    for (const [at, color] of [[22.6, 0x2583c9], [22.95, 0x2583c9], [23.3, 0xd63e39], [23.65, 0x2583c9]]) {
+      const s = track.sAtCp(at), verts = [];
+      for (const [ds, lat] of [[-0.48, -8.6], [0.48, 8.6], [-0.48, 8.6], [-0.48, -8.6], [0.48, -8.6], [0.48, 8.6]]) {
+        const v = track.pointAt(s + ds, lat, EV, 0.055);
+        verts.push(v.x, v.y, v.z);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3)); geo.computeVertexNormals();
+      const stripe = new THREE.Mesh(geo, frameMat(color));
+      group.add(stripe); bake.add(stripe, false);
     }
     // the outrun stadium: stands both sides, the panel stage straight ahead
     for (const [at, side] of [[24.3, 1], [24.3, -1], [24.85, 1]]) { const p = sc.beside(at, side, 4); putStand(side > 0 ? stand2 : stand, p, 0.9); }
   }
+  // Start and outrun grandstands share one instanced crowd. Leave aisles
+  // open and thin the far seats so phones can afford the whole stadium.
+  sc.instances(partsOf(P.spectator()), seats.filter((_, i) => i % 3 === 0),
+    { tints: COATS, scale: [1.06, 1.34], cast: false });
   let screenSign = null;
   {
     const sx = 6, sz = 112, sy = sc.y(sx, sz);
@@ -556,14 +653,21 @@ function dress(ctx) {
   });
   sc.instances(partsOf(M.snowBank(2)), drifts, { scale: [0.6, 0.95], sink: 0.15, cast: false });
 
+  // Sponsor boards stand further up the slope so their faces clear the parapets.
+  [[1.95, -1, 17, 'SUMMIT NOW, PAY LATER'], [10.0, 1, 16, 'CONSCIOUS COCOA'], [16.8, -1, 16, 'NO PUBLIC MONEY BEYOND THIS POINT'], [25.9, 1, 14, 'BUILD BACK BUTTER'], [28.2, -1, 30, 'AGENDA COLA']].forEach(([at, side, off, text], i) => {
+    const p = sc.beside(at, side, off);
+    if (!clear(p.x, p.z, 3)) return;
+    const colors = [RED, BROWN, NAVY, '#bb301b', '#19643e'];
+    roadSign(at, side, off, text, { bg: colors[i], fg: '#ffffff', border: GOLD, size: 130 }, { w: 15, h: 4.6, legs: 4.8 });
+  });
+
   // ---- pines on the slopes (not on the pistes, not in town), rocks where the mountain shows through ----
   const pineA = partsOf(M.snowPine(3)), pineB = partsOf(M.snowPine(11, { h: 11 }));
   const pineC = partsOf(M.snowPine(23, { h: 13 })), pineD = partsOf(M.snowPine(31, { h: 6.5 }));
   const inTown = (x, z) => Math.hypot((x - 35) / 80, (z - 88) / 50) < 1.05;
   const onPiste = (x, z) => (Math.abs(x - 298) < 34 && z > 70 && z < 245) || (Math.abs(Math.abs(x) - 48) < 26 && z > 190 && z < 325) || Math.abs(x) < 22 && z > 160 && z < 300;
-  const pines = sc.scatter({ count: 560, min: 13, max: 250, maxSlope: 1.25, minGap: 6, where: (x, z) => clear(x, z, 1.5) && free(x, z, 3) && !inTown(x, z) && !onPiste(x, z) });
+  const pines = sc.scatter({ count: 560, min: 13, max: 250, maxSlope: 1.25, minGap: 6, where: (x, z) => clear(x, z, 1.5) && free(x, z, 3) && sightClear(x, z) && !inTown(x, z) && !onPiste(x, z) });
   const pineSets = [pineA, pineB, pineC, pineD];
-  pineSets.forEach((set, v) => sc.instances(set, pines.filter((_, i) => i % 4 === v), { scale: [0.8, 1.35], yaw: 'random', sink: 0.2 }));
   const rowSpots = [
     ...sc.along({ from: 2.4, to: 4.6, side: -1, offset: 10, spacing: 7.5, jitter: 2 }),
     ...sc.along({ from: 9.2, to: 10.4, side: 1, offset: 7, spacing: 6.4, jitter: 1.8 }),
@@ -573,14 +677,22 @@ function dress(ctx) {
     ...sc.along({ from: 9.4, to: 10.3, side: -1, offset: 8, spacing: 7, jitter: 2 }),
     ...sc.along({ from: 26.0, to: 27.5, side: -1, offset: 7, spacing: 6.6, jitter: 1.8 }),
     ...sc.along({ from: 29.8, to: 30.5, side: 1, offset: 8, spacing: 7, jitter: 1.6 }),
-  ].filter(p => free(p.x, p.z, 2) && clear(p.x, p.z, 0.5) && !onPiste(p.x, p.z));
-  pineSets.forEach((set, v) => sc.instances(set, rowSpots.filter((_, i) => i % 4 === v), { scale: [0.8, 1.3], yaw: 'random', sink: 0.2 }));
+  ].filter(p => free(p.x, p.z, 2) && clear(p.x, p.z, 0.5) && sightClear(p.x, p.z) && !onPiste(p.x, p.z));
+  // Roadside and distant firs use the same four meshes; batch them together.
+  const forest = [...pines, ...rowSpots];
+  pineSets.forEach((set, v) => sc.instances(set, forest.filter((_, i) => i % 4 === v),
+    { scale: [0.8, 1.33], yaw: 'random', sink: 0.2, cast: false }));
+  // Broken ledges separate the traverse from the face above; use a handful
+  // of broad, low clusters rather than a line of identical upright stones.
+  const ledges = sc.along({ from: 16.8, to: 19.9, side: 1, offset: 23, spacing: 15, jitter: 3 })
+    .filter(p => clear(p.x, p.z, 3) && free(p.x, p.z, 4));
+  sc.instances(partsOf(P.rock(9, { color: 0x9a9eb0 })), ledges, { scale: [2, 3.5], yaw: 'random', sink: 0.8, cast: false });
   const rocks = sc.scatter({ count: 80, min: 14, max: 200, maxSlope: 1.4, minGap: 9, where: (x, z) => clear(x, z, 1.5) && free(x, z, 3) && !inTown(x, z) });
   sc.instances(partsOf(P.rock(5, { color: 0x666a7c })), rocks, { scale: [0.9, 2.4], yaw: 'random', sink: 0.35 });
 
   // ---- balloons over the valley: the other way to arrive ----
   const bal1 = P.balloon([0x1f2a44, 0xc9a227], 2), bal2 = P.balloon([0x8a2f2a, 0xf4f6f8], 6);
-  sc.place(bal1, -70, 60, { y: 58 }); sc.place(bal2, 120, 140, { y: 84 });
+  sc.place(bal1, -70, 60, { y: 58, cast: false }); sc.place(bal2, 120, 140, { y: 84, cast: false });
   anim.push((dt, time) => { bal1.position.y = 58 + Math.sin(time * 0.24) * 2.2; bal2.position.y = 84 + Math.sin(time * 0.19 + 2) * 2.6; });
 
   // ---- arrow boards on the outside of every real corner (baked) ----
@@ -594,14 +706,6 @@ function dress(ctx) {
       sc.place(b, p.x, p.z, { yaw: p.yaw, lift: edge === EDGE.OPEN ? 0.9 : 1.2 }); bake.add(b, false);
     }
   }
-
-  // ---- billboards where you are looking anyway ----
-  [[1.95, -1, 17, 'SUMMIT NOW, PAY LATER'], [10.0, 1, 16, 'CONSCIOUS COCOA'], [16.8, -1, 16, 'NO PUBLIC MONEY BEYOND THIS POINT'], [25.9, 1, 14, 'BUILD BACK BUTTER'], [28.2, -1, 30, 'AGENDA COLA']].forEach(([at, side, off, text], i) => {
-    const p = sc.beside(at, side, off);
-    if (!clear(p.x, p.z, 3)) return;
-    const tex = bannerTexture([text], i + 21); tex.repeat.set(0.25, 1);
-    put(P.billboard(tex, { w: 15, h: 5, legs: 6, frame: 0x1f2a44 }), p.x, p.z, { yaw: p.yaw + rng.range(-0.1, 0.1) });
-  });
 
   atlas.flush();
   bake.flush();

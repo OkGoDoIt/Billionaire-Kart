@@ -136,7 +136,7 @@ export default {
     { at: 0.45, lat: 0, w: 5 },                    // down the Avenue
     { at: 11.2, lat: -3, w: 4.5 },                 // up the Mall leg
     { at: 20.9, lat: 0, w: 5 },                    // on the red carpet under the dome
-    { at: 29.35, lat: 3, w: 4.5 },                  // between hairpins one and two: only if you dare
+    { at: 29.35, lat: -3.8, w: 4.5 },                  // between hairpins one and two: only if you dare
     { at: 43.35, lat: 0, w: 5 },                    // out of the Filibuster, onto the Avenue
   ],
   itemRows: [{ at: 4.6 }, { at: 13.6 }, { at: 21.5 }, { at: 36.85 }, { at: 44.4, n: 3 }],
@@ -153,7 +153,7 @@ export default {
   shortcuts: [
     { name: 'the Mall', from: 5.9, to: 11.2, path: [[149, 178], [136, 188], [100, 191], [88, 182]] },
     // the final lap only: cloture is invoked, the barricade folds away, and the steps cut out hairpin two
-    { name: 'cloture', from: 29.66, to: 36.4, path: [[-101, 85], [-99, 74], [-101, 62]], skill: 0.4, chance: 1.4, when: race => clotureOpen(race) },
+    { name: 'cloture', from: 29.66, to: 36.4, path: [[-108, 86], [-100, 78], [-99.5, 73.5], [-102, 65], [-109, 59]], skill: 0.4, chance: 1.4, when: race => clotureOpen(race) },
   ],
   obstacles: [
     // the motorcade crawls across the road
@@ -616,12 +616,50 @@ function filibuster(ctx, sc, { taken }) {
 
   // the cloture fence: barricades just off the inside edge from the middle leg round hairpin two and back along the
   // leg below, with a sign over the steps. They are solid until the race leader starts the final lap, then fold away.
-  const fence = sc.along({ from: 29.66, to: 36.42, side: 1, offset: 2.4, spacing: 1.3 }).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.05, yaw: p.yaw + Math.PI / 2 }));
-  const fenceMeshes = sc.instances(partsOf(C.barricade()), fence, { cast: false });
-  const gate = [];
-  for (const p of fence) { track.addCollider(p.x, p.z, 0.85); track.eachCollider(p.x, p.z, c => { if (c.x === p.x && c.z === p.z) gate.push(c); }); }
+  const fence = sc.along({ from: 29.66, to: 36.42, side: 1, offset: 2.4, spacing: 1.1 }).map(p => ({ ...p, y: sc.y(p.x, p.z) - 0.05, yaw: p.yaw + Math.PI / 2 }));
+  const fenceMeshes = sc.instances(partsOf(C.barricade()), fence, { cast: false, scale: 1.2 });
+  // A zero-radius scenery collider still catches the kart's wheel envelope. Use the actual
+  // drivable boundary at the barricades, then restore the authored infield width on opening.
+  const first = track.indexAtCp(29.6), last = track.indexAtCp(36.45);
+  const openWidths = track.outerL.slice(first, last + 1);
+  const setGate = open => {
+    if (open) track.outerL.set(openWidths, first);
+    else for (let i = first; i <= last; i++) track.outerL[i] = Math.min(2.25, openWidths[i - first]);
+  };
+  setGate(false);
+  // Follow the actual graded hillside. The flared stone treads bend from the top straight
+  // through the opening and back onto the lower leg, so the exit is visible from the crest.
+  const spine = new THREE.CatmullRomCurve3([
+    [-122, 90], [-108, 86], [-101, 80], [-99.5, 73.5], [-102, 65], [-109, 59], [-120, 57],
+  ].map(([x, z]) => new THREE.Vector3(x, 0, z)));
+  const tread = [], treadUv = [], faces = [];
+  for (let j = 0; j <= 72; j++) {
+    const u = j / 72, center = spine.getPointAt(u), tangent = spine.getTangentAt(u);
+    const half = 4.1 + 1.35 * Math.abs(2 * u - 1);
+    for (const side of [-1, 0, 1]) {
+      const x = center.x + tangent.z * half * side, z = center.z - tangent.x * half * side;
+      tread.push(x, sc.y(x, z) + 0.08, z);
+      treadUv.push((side + 1) / 2, u * 24);
+    }
+    if (j < 72) for (let k = 0; k < 2; k++) {
+      const q = j * 3 + k;
+      faces.push(q, q + 1, q + 3, q + 1, q + 4, q + 3);
+    }
+  }
+  const treadGeo = new THREE.BufferGeometry();
+  treadGeo.setAttribute('position', new THREE.Float32BufferAttribute(tread, 3));
+  treadGeo.setAttribute('uv', new THREE.Float32BufferAttribute(treadUv, 2));
+  treadGeo.setIndex(faces); treadGeo.computeVertexNormals();
+  const paving = canvasTex(256, 96, (g, w, h) => {
+    g.fillStyle = '#c8bb9e'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#e8dfc5'; g.fillRect(0, 3, w, 5);
+    g.fillStyle = '#756f65'; g.fillRect(0, 0, w, 3); g.fillRect(w / 2, 0, 1, h);
+    g.fillStyle = '#8f762f'; g.fillRect(6, 0, 3, h); g.fillRect(w - 9, 0, 3, h);
+  });
+  const landing = new THREE.Mesh(treadGeo, new THREE.MeshStandardMaterial({ map: paving, roughness: 0.92, side: THREE.DoubleSide }));
+  landing.receiveShadow = true; group.add(landing);
   // the sign over the steps: FILIBUSTER IN PROGRESS for two laps, CLOTURE INVOKED on the last
-  const SX = (CLOTURE.x0 + CLOTURE.x1) / 2 - 8, SZ = 73.5, SY = legY(1, SX) + 0.2;
+  const SX = -99.5, SZ = 73.5, SY = legY(1, SX) + 0.2;
   const draw = open => (g, w, h) => {
     g.fillStyle = open ? '#16a34a' : '#b3122a'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.strokeRect(8, 8, w - 16, h - 16);
     C.fitText(g, open ? 'CLOTURE INVOKED' : 'FILIBUSTER IN PROGRESS', w / 2, h * 0.38, w * 0.86, 120, C.SIGN_FONT, '#ffffff', { lines: 1 });
@@ -638,9 +676,9 @@ function filibuster(ctx, sc, { taken }) {
   let shown = false, drop = 0;
   anim.push(dt => {
     const open = clotureOpen(view.race);
-    if (open !== shown) { shown = open; const g = signTex.image.getContext('2d'); draw(open)(g, signTex.image.width, signTex.image.height); signTex.needsUpdate = true; for (const c of gate) c.r = open ? 0 : 0.85; }
+    if (open !== shown) { shown = open; const g = signTex.image.getContext('2d'); draw(open)(g, signTex.image.width, signTex.image.height); signTex.needsUpdate = true; setGate(open); }
     const target = open ? 1 : 0;
-    if (drop !== target) { drop += Math.sign(target - drop) * Math.min(Math.abs(target - drop), dt * 1.4); for (const m of fenceMeshes) m.position.y = -1.6 * drop; }
+    if (drop !== target) { drop += Math.sign(target - drop) * Math.min(Math.abs(target - drop), dt * 1.4); for (const m of fenceMeshes) m.position.y = -2.4 * drop; }
   });
 }
 

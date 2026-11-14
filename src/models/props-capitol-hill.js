@@ -10,7 +10,8 @@ import { ModelBuilder, box, sphere, cyl, cone, torus, lathe, plastic, paint, glo
 import { canvasTex, fitText as textFit } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
 // the sign toolkit (world-space quads, a text atlas, a static baker, LED panels) is shared with Crypto Cove
-export { Quads, makeBaker, makeAtlas, fitText, signDraw, ledPanel, SIGN_FONT, SANS } from './props-crypto-cove.js';
+export { makeBaker } from './props-international-waters.js';
+export { Quads, makeAtlas, fitText, signDraw, ledPanel, SIGN_FONT, SANS } from './props-crypto-cove.js';
 
 const MARBLE = 0xf2efe6, MARBLE_D = 0xe0d9c8, STONE = 0xe8e1d0, GOLD = 0xd4af37;
 const marble = () => plastic(MARBLE, 0.55);
@@ -637,9 +638,9 @@ export function revolvingDoorBridge({ span = 60, deckY = 10, TW = 15, TH = 36, R
 /** A road barricade: a red-and-white striped board on two splayed legs, 1.5 m wide. Faces +Z. */
 export function barricade() {
   const b = new ModelBuilder();
-  for (const s of [1, -1]) { b.add('leg', box(0.1, 1.15, 0.1, 0.02, 1), { p: [s * 0.6, 0.55, 0.15], r: [0.25, 0, 0] }); b.add('leg', box(0.1, 1.15, 0.1, 0.02, 1), { p: [s * 0.6, 0.55, -0.15], r: [-0.25, 0, 0] }); }
-  b.add('board', box(1.55, 0.32, 0.06, 0.02, 1), { p: [0, 0.95, 0] });
-  b.add('board', box(1.55, 0.32, 0.06, 0.02, 1), { p: [0, 0.5, 0] });
+  for (const s of [1, -1]) { b.add('leg', new THREE.BoxGeometry(0.1, 1.15, 0.1), { p: [s * 0.6, 0.55, 0.15], r: [0.25, 0, 0] }); b.add('leg', new THREE.BoxGeometry(0.1, 1.15, 0.1), { p: [s * 0.6, 0.55, -0.15], r: [-0.25, 0, 0] }); }
+  b.add('board', new THREE.BoxGeometry(1.55, 0.32, 0.06), { p: [0, 0.95, 0] });
+  b.add('board', new THREE.BoxGeometry(1.55, 0.32, 0.06), { p: [0, 0.5, 0] });
   const tex = canvasTex(128, 32, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#d61f2c'; for (let x = -32; x < w; x += 32) { g.beginPath(); g.moveTo(x, h); g.lineTo(x + 16, h); g.lineTo(x + 32, 0); g.lineTo(x + 16, 0); g.fill(); } }, { repeat: false });
   return b.build({ leg: plastic(0x8a8f99, 0.5, 0.3), board: new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 }) });
 }

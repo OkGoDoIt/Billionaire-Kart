@@ -179,7 +179,12 @@ export default {
     surface: (depth, race) => depth > 0 ? WADE : race.lakeLap >= race.laps ? WET_SAND : DRY_SAND,
   },
   shortcuts: [
-    { name: 'sandbar', from: 2.25, to: 6.35, path: [[-108, -94], [-122, -86], [-128, -76], [-122, -66], [-108, -58]], when: race => race.lakeLap >= race.laps },
+    {
+      name: 'sandbar', from: 2.25, to: 6.85,
+      // Straighten onto the eastbound causeway before aiming for the channel.
+      path: [[-108, -94], [-122, -86], [-128, -76], [-122, -66], [-108, -58], [-92, -49]],
+      when: race => race.lakeLap >= race.laps,
+    },
   ],
   lapNotes: [
     `<b>Customs has been notified.</b> They sent a postcard.`,

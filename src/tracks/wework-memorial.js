@@ -130,6 +130,7 @@ export default {
   // the opening: three shots composed INSIDE the building (#193) — the generic
   // Shoot inside the rooms with the chase sightline clear of both floors.
   introOnly: true,
+  thumbView: { at: AT['touchdown'], lat: -6.8, h: 4.3, back: 1, look: 37 },
   intro: [
     // a) the lobby, low, along the start straight toward the gantry and the $47B → $0 board
     { pos: [-60, 2.5, 50], pos1: [-40, 3, 52], look: [30, 4, 60], look1: [30, 4, 60], fov: 58, dur: 3.0 },
@@ -182,11 +183,11 @@ export default {
     // On the final lap the movers leave their dolly on the express stripe.
     { kind: 'timed', model: 'dolly', at: AT['L3 mid'] + 0.87, lat: -5, period: 1, duty: 1, effect: 'bump', radius: 1.15, fromLap: -1 },
     // the phone-booth slalom, all on the flat mezzanine deck (z = 23, 15, 7, -1)
-    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.295), lat: 6.45, effect: 'bump', radius: 0.95 },
-    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.477), lat: -6.45, effect: 'bump', radius: 0.95 },
-    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.659), lat: 6.45, effect: 'bump', radius: 0.95 },
-    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.841), lat: -6.45, effect: 'bump', radius: 0.95 },
-    { kind: 'static', model: 'neonO', at: AT['C3 exit'] - 0.35, lat: -6, effect: 'bump', radius: 1.9 },   // the fallen O
+    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.295), lat: 8.7, effect: 'bump', radius: 0.85 },
+    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.477), lat: -7.45, effect: 'bump', radius: 0.85 },
+    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.659), lat: 8.7, effect: 'bump', radius: 0.85 },
+    { kind: 'static', model: 'booth', at: between('C1 exit', 'C2 entry', 0.841), lat: -7.45, effect: 'bump', radius: 0.85 },
+    { kind: 'static', model: 'neonO', at: AT['L3 mid'] + 1.35, lat: -8.25, effect: 'bump', radius: 1.52 },   // the fallen O
     { kind: 'static', model: 'papers', at: AT['C6 entry'] - 0.9, lat: -6.2, effect: 'squash', radius: 1.6 },  // IPO paperwork (at -0.5→-0.9, lat -3.5→-6.2, #237 step 4: was on the racing line into C6, 9-10 hits/race at cp 39.5)
     { kind: 'static', model: 'papers', at: between('L15 entry', 'L16 entry', 0.5), lat: 4, effect: 'squash', radius: 1.6 },  // repossession paperwork
     { kind: 'patrol', model: 'bot', at: between('HP entry', 'L1 entry', 1.8), lats: [-8.4, -6.0], speed: 1.6, effect: 'spin', radius: 1.2 },  // the cleaning bot
@@ -564,7 +565,7 @@ function dressSectors(ctx, H) {
   bakePlace(W.deskUnit(), 78.2, 14, { yaw: -Math.PI / 2, y: 3.44 });       // the lone lit office
   for (const z of [21, 3]) bakePlace(W.planter(2.6), 58.6, z, { yaw: Math.PI / 2, y: 3.44 });
   { // DO NOT DISTURB on the second booth, facing the road (atlas panel)
-    const bp = atPos(between('C1 exit', 'C2 entry', 0.477), -6.45, 1.95);
+    const bp = atPos(between('C1 exit', 'C2 entry', 0.477), -7.45, 1.95);
     putSign(['DO NOT DISTURB — PERMANENTLY'], 1.7, .34, bp.x, bp.y, bp.z, bp.yaw / DEG + 180, { bg: '#23262d', fg: '#ffb3ab', size: 70 });
   }
 
@@ -786,6 +787,26 @@ function furnishOffice(ctx, H) {
     box(x-.43,3.04,z,.12,4.04,.10,ink);
     for(const dz of [-1.49,1.49]) {box(x-.43,5.06,z+dz,.10,1.28,.58,0xa1c8ca);box(x-.49,4.09,z+dz,.13,.15,2.07,ivory);}
     graphic(label,x-.27,9.22,z,-90,5.3,3.4,'#263941','#f5d4a5');
+    // From the approaching kart the transverse fire escape reads in profile:
+    // both sawtooth flights, the bridge in front of the fire doors, and the balustrade.
+    const wallX = x - 1.65, nearX = wallX - 1.12;
+    box(wallX, 2.62, z, 2.66, .32, 6.5, ink);
+    for (const [startZ, startY, rise] of [[z-17,.12,2.82],[z+3.2,2.94,3.7]]) {
+      const run = 13.8, count = 13, step = run / count;
+      for (let i = 0; i < count; i++) {
+        const posZ = startZ + (i + .5) * step, height = startY + (i + 1) * rise / count;
+        box(wallX, height-.37, posZ, 2.68, .37, step+.04, ivory);
+        box(nearX-.16, height-.34, posZ, .25, .34, step+.04, ink);
+        box(wallX, height-.02, posZ-step*.42, 2.72, .085, .18, 0xf7bd54);
+        if (i % 2 === 0) box(nearX, height, posZ, .12, 1.14, .12, ink);
+      }
+      const top = startY+rise+1.27, bottom = startY+1.27;
+      q.quad([nearX,bottom,startZ],[nearX,top,startZ+run],
+        [nearX,top-.17,startZ+run],[nearX,bottom-.17,startZ],1,1,ivory);
+      q.quad([nearX+.17,bottom,startZ],[nearX+.17,top,startZ+run],
+        [nearX,top,startZ+run],[nearX,bottom,startZ],1,1,ink);
+    }
+
     for(const dz of [-7,7]) {box(x-.43,8.24,z+dz,.16,2.32,3.62,0x9ab5b7);box(x-.53,8.24,z+dz,.19,2.32,.15,ink);}
   }
   // Right-angled corridors beyond the rounded driving apex; baseboards wrap the corner.

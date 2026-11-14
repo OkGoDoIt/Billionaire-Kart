@@ -650,6 +650,51 @@ export function person({ seated = false, h = 1.75 } = {}) {
   return b.build({ legs: plastic(0x2a2d36, 0.8), body: tintable(0xffffff, 0.8), head: plastic(0xd9a07a, 0.7) });
 }
 
+/** A dished costume sequin with a real sewing hole, tilted up from the dust. */
+export function cleanupSequin() {
+  const b = new ModelBuilder(), slice = Math.PI / 6, tilt = 55 * Math.PI / 180;
+  // Each wedge has its own normal and foil tint. From the plank they catch
+  // different amounts of sunset and distinguish the sequin from a pickup coin.
+  const foil = [0x64cfda, 0x9ebee4, 0x94dce5, 0xd9bcd9];
+  const mats = {};
+  for (let i = 0; i < 12; i++) {
+    const key = 'facet' + i % foil.length;
+    mats[key] ??= paint(foil[i % foil.length], { rough: 0.18, metal: 0.12, clear: 0.9 });
+    const wedge = new THREE.LatheGeometry([new THREE.Vector2(3, 0.56),
+      new THREE.Vector2(1.34, -0.18), new THREE.Vector2(0.68, -0.19)], 1, i * slice, slice);
+    wedge.rotateX(tilt); wedge.translate(0, 2.18, 0);
+    b.add(key, wedge);
+  }
+  // A loose strand still passes through the sewing hole.
+  b.add('thread', tube([[0, 2.0, 0], [-0.4, 1.76, 0.48], [-0.89, 0.66, 1.13],
+    [-1.5, 0.17, 1.75], [-2.45, 0.13, 1.48]], 0.095, 14, 6));
+  mats.thread = plastic(0xf5e9d8);
+  return b.build(mats);
+}
+
+/** The collection sack's origin is on the dust, so it can fill from the bottom. */
+export function cleanupSack() {
+  const b = new ModelBuilder();
+  b.add('sack', lathe([[0, 0], [1.45, 0.05], [1.9, 0.62], [2.04, 1.95],
+    [1.67, 3.13], [0.53, 3.75], [0.24, 3.95], [0.65, 4.25], [0.41, 4.42]], 9));
+  b.add('tie', torus(0.31, 0.085, 6, 10), { p: [0, 3.93, 0], r: [Math.PI / 2, 0, 0] });
+  strut(b, 'tie', [0.18, 3.95, 0.1], [0.65, 3.52, 0.1], 0.075);
+  return b.build({ sack: paint(0x20615f, { rough: 0.61, metal: 0.05 }), tie: plastic(0xf5c549) });
+}
+
+export function cleanupWorker(tint) {
+  const g = person({ h: 1.9 }), b = new ModelBuilder();
+  g.traverse(o => { if (o.isMesh && o.material.userData.tintable) o.material.color.setHex(tint); });
+  b.add('hat', cyl(0.31, 0.33, 0.045, 9), { p: [0, 1.86, 0] });
+  b.add('hat', cyl(0.21, 0.23, 0.12, 9), { p: [0, 1.93, 0] });
+  limb(b, 'arm', [0.20, 1.52, 0], [0.40, 1.1, 0.27], 0.085, 0.075);
+  limb(b, 'arm', [-0.20, 1.52, 0], [0.27, 1.2, 0.31], 0.085, 0.075);
+  strut(b, 'tool', [0.26, 1.33, 0.23], [0.72, 0.13, 1.2], 0.07);
+  for (const x of [0.61, 0.82]) strut(b, 'tool', [0.72, 0.13, 1.2], [x, 0.04, 1.32], 0.055);
+  g.add(b.build({ hat: WOOD_PALE, arm: plastic(0xd9a07a), tool: plastic(0x202e31) }));
+  return g;
+}
+
 /** Brass stanchion posts with red velvet rope sagging between them, through points [[x,y,z]...]. */
 export function velvetRope(pts) {
   const b = new ModelBuilder();

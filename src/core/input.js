@@ -104,7 +104,12 @@ export class Input {
         }
         return;
       }
-      if (e.repeat) { if (MENU_KEYS[e.code] && ['up', 'down', 'left', 'right'].includes(MENU_KEYS[e.code])) this._menu(MENU_KEYS[e.code], 'kb'); return; }
+      if (e.repeat) {
+        const action = MENU_KEYS[e.code];
+        if (action === 'confirm') e.preventDefault();
+        if (['up', 'down', 'left', 'right'].includes(action) && this._menu(action, 'kb')) e.preventDefault();
+        return;
+      }
       this.keys.add(e.code); this.lastDevice = 'kb'; this.kbUsed = true; this.onAnyInput?.();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && !(e.target instanceof HTMLInputElement)) e.preventDefault();
       if (this.onJoinKey?.(this._kbDeviceFor(e.code))) { e.preventDefault(); return; }

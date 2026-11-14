@@ -675,11 +675,17 @@ export function cleanupSequin() {
 /** The collection sack's origin is on the dust, so it can fill from the bottom. */
 export function cleanupSack() {
   const b = new ModelBuilder();
-  b.add('sack', lathe([[0, 0], [1.45, 0.05], [1.9, 0.62], [2.04, 1.95],
-    [1.67, 3.13], [0.53, 3.75], [0.24, 3.95], [0.65, 4.25], [0.41, 4.42]], 9));
-  b.add('tie', torus(0.31, 0.085, 6, 10), { p: [0, 3.93, 0], r: [Math.PI / 2, 0, 0] });
-  strut(b, 'tie', [0.18, 3.95, 0.1], [0.65, 3.52, 0.1], 0.075);
-  return b.build({ sack: paint(0x20615f, { rough: 0.61, metal: 0.05 }), tie: plastic(0xf5c549) });
+  // Slumping shoulders pinch into a narrow neck. The two loose corners above
+  // the knot break the silhouette of a round ball, even from the kart.
+  b.add('sack', lathe([[0, 0], [1.45, 0.06], [1.98, 0.62], [2.02, 1.62],
+    [1.66, 2.63], [0.95, 3.26], [0.27, 3.82], [0.25, 4.02]], 9));
+  for (const side of [-1, 1]) {
+    b.add('sack', cone(0.65, 1.15, 5), { p: [side * 0.36, 4.43, 0], r: [0.25, 0.1, Math.PI - side * 0.61] });
+    strut(b, 'tie', [0.05, 3.93, 0.23], [side * 0.87, 3.49, 0.32], 0.15);
+  }
+  b.add('tie', torus(0.3, 0.135, 6, 10), { p: [0, 3.92, 0], r: [Math.PI / 2, 0, 0] });
+  return b.build({ sack: new THREE.MeshStandardMaterial({ color: 0xa1d2ed, emissive: 0x79a6da,
+    emissiveIntensity: 0.46, roughness: 0.85 }), tie: plastic(0x332637, 0.88) });
 }
 
 export function cleanupWorker(tint) {

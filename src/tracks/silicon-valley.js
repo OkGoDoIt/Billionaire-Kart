@@ -799,7 +799,7 @@ function campus({ THREE, track, group, sc, rng, atlas, bake, taken, local, board
   // ---- the Oval: a topiary "$" on the lawn inside the hairpin ----
   {
     const ox = -173, oz = -30, t = S.topiaryDollar(), oy = track.terrainHeight(ox, oz);
-    sc.place(t, ox, oz, { yaw: Math.atan2(-208 - ox, 25 - oz), y: oy, scale: 1.25 }); bake.add(t);
+    sc.place(t, ox, oz, { yaw: Math.atan2(-208 - ox, 25 - oz), y: oy, scale: 1.6 }); bake.add(t);   // 1.25 -> 1.6 (#215 item 3): at 1.25 the $ stayed hidden behind its own bed ring from the racing line
     track.addCollider(ox, oz, 3.4);
     const beds = [];
     for (let k = 0; k < 26; k++) { const a = (k / 26) * Math.PI * 2, r = 9.5 + (k % 2) * 1.6, x = ox + Math.cos(a) * r, z = oz + Math.sin(a) * r * 0.8; beds.push({ x, z, y: track.terrainHeight(x, z), yaw: rng() * 6.28 }); }

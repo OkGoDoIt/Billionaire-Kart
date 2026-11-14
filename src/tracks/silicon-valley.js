@@ -61,7 +61,7 @@ export default {
   tagline: 'Move fast. Break things. Pivot to AI.',
   lapNotes: ['<b>Lap 2.</b> Pivot complete. You are now an AI company.', '<b>Final lap.</b> Market correction: layoffs, a down round, and one last pivot — to KARTS.'],
   // the opening shot: rising past the grandstands toward the pivot tower
-  intro: [{ pos: [-74, 3.5, -27], look: [-32, 10, -11], pos1: [-58, 8, -33], look1: [-24, 12, -8], fov: 48, dur: 2.2 },   // the Founder, from behind his fountain
+  intro: [{ pos: [274, 9, -10], look: [250, 8, 42], pos1: [264, 14, 10], look1: [248, 8, 50], fov: 47, dur: 2.6 },   // Peninsula Run hero: the grid under the gantry, the VC office island splitting Sand Hill, Term Sheet Towers behind
     { pos: [-6, 21, -10], look: [PIVOT.x, 30, PIVOT.z], pos1: [38, 23, 2], look1: [PIVOT.x, 32, PIVOT.z], fov: 45, dur: 3 }],
   laps: 3,
   width: 17,

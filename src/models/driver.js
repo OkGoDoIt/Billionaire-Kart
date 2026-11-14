@@ -4,7 +4,7 @@
    reads from behind (the chase camera's view). Each outfit is a "kit" named by the
    racer's look; everything for one driver merges into a handful of draw calls. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, torus, tube, lathe, plastic, glow, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, cone, torus, tube, lathe, plastic, glow, MAT } from './build.js';
 import { shell } from './kart-geo.js';
 import { FACES } from '../content/faces.js';
 import { buildHair } from './hair.js';
@@ -98,12 +98,105 @@ function ribs(g, n, amp) {
   return g;
 }
 
-let tagTex = null;
-const priceTag = () => tagTex ??= canvasTex(128, 64, (g, w, h) => {
-  g.fillStyle = '#fbfaf4'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#bdb8a8'; g.beginPath(); g.arc(16, h / 2, 6, 0, PI * 2); g.fill();
-  g.fillStyle = '#15161c'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '40px "Luckiest Guy", "Arial Black", sans-serif'; g.fillText('$999', w / 2 + 9, h / 2 + 3, w - 30);
+/* ---------- worn logos, hand-drawn in code (#153) ---------- */
+const rr = (g, x, y, w, h, r) => {
+  g.beginPath();
+  g.moveTo(x + r, y); g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+  g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+  g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y); g.closePath();
+};
+
+let t31 = null;
+/** The 1992 flag: a black-framed window in perspective, waving, its four panes
+    (red, green, blue, yellow) trailing motion streaks. Drawn as a warped grid of
+    cells so the wave is in the drawing, not faked with a skew. */
+const win31Flag = () => t31 ??= canvasTex(256, 192, (g, w, h) => {
+  g.fillStyle = '#f2ede0'; rr(g, 4, 4, w - 8, h - 8, 20); g.fill();          // the woven patch
+  g.strokeStyle = '#b3a888'; g.lineWidth = 2; g.setLineDash([6, 5]);
+  rr(g, 13, 13, w - 26, h - 26, 14); g.stroke(); g.setLineDash([]);          // stitching
+  const P = (u, v) => [92 + u * 140 - (v - 0.5) * 10 * u,
+    94 + Math.sin(u * 3.2 + 0.4) * 9 + (v - 0.5) * 2 * (30 + 14 * u)];
+  const quad = (u0, v0, u1, v1, inset) => {
+    const c = P((u0 + u1) / 2, (v0 + v1) / 2);
+    const pts = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => {
+      const [x, y] = P(u, v); return [x + (c[0] - x) * inset, y + (c[1] - y) * inset];
+    });
+    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < 4; i++) g.lineTo(pts[i][0], pts[i][1]);
+    g.closePath(); g.fill();
+  };
+  const COLS = 12, ROWS = 8, panes = [['#ee3224', '#00a651'], ['#0072bc', '#ffd200']];
+  g.fillStyle = '#101014';
+  for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) quad(i / COLS, j / ROWS, (i + 1) / COLS, (j + 1) / ROWS, 0);
+  for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) {
+    const u = (i + 0.5) / COLS, v = (j + 0.5) / ROWS;
+    g.fillStyle = panes[v < 0.5 ? 0 : 1][u < 0.5 ? 0 : 1];
+    quad(i / COLS, j / ROWS, (i + 1) / COLS, (j + 1) / ROWS, 0.16);
+  }
+  g.fillStyle = '#101014';                                                    // motion streaks off the left edge
+  for (let k = 0; k < 4; k++) {
+    const [fx, fy] = P(0, (k + 0.5) / 4), len = 52 - k * 6, th = 5.5 - k * 0.7;
+    g.beginPath();
+    g.moveTo(fx - 2, fy - th / 2);
+    g.lineTo(fx - len, fy - th / 2 + Math.sin(k * 1.3) * 2 + 1);
+    g.lineTo(fx - len - 6, fy + 1);
+    g.lineTo(fx - len, fy + th / 2 - 1);
+    g.lineTo(fx - 2, fy + th / 2);
+    g.closePath(); g.fill();
+  }
+}, { repeat: false, aniso: 4 });
+
+let t11 = null;
+/** The modern mark: four flat squares in Azure blues, dead level, no wave at
+    all — the whole joke is that it is everything the 1992 flag is not. */
+const win11Grid = () => t11 ??= canvasTex(256, 256, (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+  const m = 26, gap = 20, s = (w - m * 2 - gap) / 2, cols = ['#00a4ef', '#0078d4'];
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    g.fillStyle = cols[i];
+    rr(g, m + i * (s + gap), m + j * (s + gap), s, s, 12); g.fill();
+  }
+}, { repeat: false, aniso: 4 });
+
+let tAp = null;
+/** The apple: two lobes, a dimpled top, a leaf, and the bite out of the right side. */
+const appleLogo = () => tAp ??= canvasTex(256, 256, (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = '#ffffff';
+  g.beginPath();                                                              // the leaf
+  g.moveTo(134, 62);
+  g.bezierCurveTo(138, 30, 162, 14, 190, 12);
+  g.bezierCurveTo(189, 40, 170, 60, 138, 66);
+  g.closePath(); g.fill();
+  g.beginPath();                                                              // the body
+  g.moveTo(128, 70);
+  g.bezierCurveTo(112, 52, 74, 48, 60, 84);
+  g.bezierCurveTo(46, 118, 62, 172, 86, 202);
+  g.bezierCurveTo(100, 220, 114, 214, 128, 212);
+  g.bezierCurveTo(142, 214, 156, 220, 170, 202);
+  g.bezierCurveTo(188, 180, 198, 152, 196, 124);
+  g.bezierCurveTo(202, 92, 188, 56, 158, 50);
+  g.bezierCurveTo(142, 47, 134, 58, 128, 70);
+  g.closePath(); g.fill();
+  g.globalCompositeOperation = 'destination-out';                             // the bite
+  g.beginPath(); g.arc(200, 116, 27, 0, PI * 2); g.fill();
+  g.globalCompositeOperation = 'source-over';
+}, { repeat: false, aniso: 4 });
+
+let tMe = null;
+/** The loop: a lemniscate stroked fat in platform blue. */
+const metaLoop = () => tMe ??= canvasTex(256, 128, (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+  g.strokeStyle = '#1877f2'; g.lineWidth = 20; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath();
+  const a = 92, cx = 128, cy = 64;
+  for (let i = 0; i <= 72; i++) {
+    const t = i / 72 * PI * 2, d = 1 + Math.sin(t) ** 2;
+    const x = cx + a * Math.cos(t) / d, y = cy + a * Math.sin(t) * Math.cos(t) / d * 1.05;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.closePath(); g.stroke();
 }, { repeat: false, aniso: 4 });
 
 /* ---------- body ---------- */
@@ -130,6 +223,11 @@ function makeCtx(b, P) {
   const F = y => { const s = at(secs, y); return s.z + s.f; };
   const Bk = y => { const s = at(secs, y); return s.z - s.k; };
   const W = y => at(secs, y).w;
+  // the neck's axis in torso space: the head group sits at L(0.8)+0.03 (plus the
+  // hunch shift) and the neck cylinder is offset -0.01 inside it. Collars must be
+  // centred here, not on the torso sections' L(y), or the neck slices through
+  // the collar ring off-centre and the intersection reads ragged.
+  const neckZ = L(0.8) + 0.02 + P.hunch * 0.25;
   const joints = sx => {
     const sh = [sx * (P.sw - 0.045), 0.6, L(0.6)];
     const el = [sx * (P.sw + 0.085 + (P.buff ? 0.03 : 0)), 0.33, 0.12 + L(0.33) * 0.3];
@@ -137,7 +235,7 @@ function makeCtx(b, P) {
     return { sh, el, wr, hd };
   };
   const ctx = {
-    b, P, secs, L, F, Bk, W, joints,
+    b, P, secs, L, F, Bk, W, joints, neckZ,
     torso(mat = 'top', { grow = 0, ribbed = 0 } = {}) {
       let list = secs;
       if (ribbed) {   // quilted bands, for puffer coats
@@ -158,13 +256,13 @@ function makeCtx(b, P) {
       b.add(mat, vshell(list, { ring: 16, steps: 2 }));
     },
     /** Round collar ring at the neck. */
-    crew(mat, y = 0.735, r = 0.135, t = 0.026) { b.add(mat, torus(r, t, 6, 20), { p: [0, y, L(y)], r: [PI / 2, 0, 0] }); },
+    crew(mat, y = 0.735, r = 0.135, t = 0.026) { b.add(mat, torus(r, t, 9, 24), { p: [0, y, neckZ], r: [PI / 2, 0, 0] }); },
     /** Shirt collar points either side of the throat. */
     points(mat, spread = 0.07, y = 0.725) {
       for (const sx of [1, -1]) b.add(mat, box(0.085, 0.07, 0.014, 0.006, 1), { p: [sx * spread, y, F(y) - 0.012], r: [-0.35, sx * 0.35, sx * 0.7] });
     },
     /** A stand-up collar (lathe ring) with an optional gap at the front. */
-    stand(mat, prof, gap = 0) { b.add(mat, new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 20, gap / 2, PI * 2 - gap), { p: [0, 0, L(0.74)] }); },
+    stand(mat, prof, gap = 0) { b.add(mat, new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 20, gap / 2, PI * 2 - gap), { p: [0, 0, neckZ] }); },
     /** A line of buttons down the front. */
     buttons(mat, ys, r = 0.014, x = 0) { for (const y of ys) b.add(mat, sphere(r, 6, 4), { p: [x, y, F(y) + 0.008], s: [1, 1, 0.5] }); },
     /** A strip down the front centre (zip, placket, tie). */
@@ -220,8 +318,8 @@ function arms(ctx, { mat = 'top', len = 'long', cuff = null, puff = false, glove
 const PROPS = {
   /** the flamethrower that is legally not a flamethrower, slung across the back with the pilot light on */
   flamethrower(ctx) {
-    const { b, Bk } = ctx, zb = Bk(0.62) - 0.16, ang = 0.74, d = [Math.sin(ang), Math.cos(ang)], n = [Math.cos(ang), -Math.sin(ang)];
-    const o = [-0.25, 0.5], at = (t, u = 0) => [o[0] + d[0] * t + n[0] * u, o[1] + d[1] * t + n[1] * u, zb], r = [0, 0, -ang];
+    const { b, Bk } = ctx, zb = Bk(0.62) - 0.19, ang = 0.92, d = [Math.sin(ang), Math.cos(ang)], n = [Math.cos(ang), -Math.sin(ang)];
+    const o = [-0.28, 0.46], at = (t, u = 0) => [o[0] + d[0] * t + n[0] * u, o[1] + d[1] * t + n[1] * u, zb], r = [0, 0, -ang];
     b.add('white', box(0.13, 0.26, 0.085, 0.03, 1), { p: at(0.1, 0.02), r });          // stock
     b.add('white', box(0.115, 0.52, 0.095, 0.035, 1), { p: at(0.46), r });             // body
     b.add('black', box(0.05, 0.4, 0.1, 0.012, 1), { p: at(0.5, -0.02), r });           // the stripe down the side
@@ -235,10 +333,11 @@ const PROPS = {
     b.add('flame', sphere(0.085, 12, 8), { p: at(1.34) });
     ctx.straps('black', 0.56);
   },
-  /** a sack of money on the back: the seven-trillion ask */
+  /** a sack of money on the back: the seven-trillion ask. Slung low and well behind
+      the neck so the knotted top stays out of the bobblehead's swing. */
   moneybag(ctx) {
-    const { b, Bk } = ctx, c = [0, 0.7, Bk(0.62) - 0.22];
-    const prof = [[0.001, -0.25], [0.15, -0.235], [0.24, -0.14], [0.265, -0.02], [0.24, 0.1], [0.15, 0.19], [0.07, 0.24], [0.065, 0.27], [0.11, 0.31], [0.12, 0.34], [0.07, 0.36], [0.001, 0.355]];
+    const { b, Bk } = ctx, c = [0, 0.67, Bk(0.62) - 0.34];
+    const prof = [[0.001, -0.25], [0.15, -0.235], [0.24, -0.14], [0.265, -0.02], [0.24, 0.1], [0.15, 0.19], [0.07, 0.24], [0.065, 0.27], [0.09, 0.3], [0.095, 0.33], [0.05, 0.35], [0.001, 0.345]];
     b.add('sack', lathe(prof, 18), { p: c });
     b.add('twine', torus(0.07, 0.016, 6, 14), { p: [c[0], c[1] + 0.255, c[2]], r: [PI / 2, 0, 0] });
     const rAt = y => { for (let i = 0; i < prof.length - 1; i++) if (y >= prof[i][1] && y <= prof[i + 1][1]) { const t = (y - prof[i][1]) / (prof[i + 1][1] - prof[i][1]); return prof[i][0] + (prof[i + 1][0] - prof[i][0]) * t; } return 0.1; };
@@ -249,26 +348,40 @@ const PROPS = {
     b.add('ink', tube([onSack(0, 0.165), onSack(0, 0.0), onSack(0, -0.165)], 0.018, 6, 6));
     ctx.straps('twine', 0.5);
   },
-  /** a little robot co-pilot riding on the shoulder, whether you asked for it or not */
+  /** a little robot co-pilot riding on the shoulder, whether you asked for it or not.
+      Sized and perched so it reads at race distance: outboard of the head's silhouette,
+      not buried in it (at the old 1.6 scale its head sat inside the skull). */
   copilot(ctx) {
-    let { b, P, L } = ctx, x = P.sw + 0.02, y = 0.8, z = L(0.74) - 0.04;
-    const o = b; b = { add: (m, g, t = {}) => o.add(m, g, { p: [x + (t.p[0] - x) * 1.6, y + (t.p[1] - y) * 1.6, z + (t.p[2] - z) * 1.6], s: (typeof t.s === 'number' ? t.s : (t.s ?? [1, 1, 1]).map(v => v * 1.6)), r: t.r }) };
+    let { b, P, L } = ctx, x = P.sw + 0.11, y = 0.83, z = L(0.74) - 0.05;
+    const K = 1.95, o = b; b = { add: (m, g, t = {}) => o.add(m, g, { p: [x + (t.p[0] - x) * K, y + (t.p[1] - y) * K, z + (t.p[2] - z) * K], s: (typeof t.s === 'number' ? t.s : (t.s ?? [1, 1, 1]).map(v => v * K)), r: t.r }) };
     b.add('bot', sphere(0.09, 14, 10), { p: [x, y, z], s: [1, 0.9, 1] });
     b.add('bot', sphere(0.08, 14, 10), { p: [x, y + 0.13, z] });
     b.add('black', sphere(0.066, 14, 10), { p: [x, y + 0.135, z + 0.028], s: [1, 0.72, 0.75] });
     for (const sx of [1, -1]) b.add('eye', sphere(0.014, 8, 6), { p: [x + sx * 0.026, y + 0.14, z + 0.077] });
     b.add('bot', cyl(0.007, 0.007, 0.09, 5), { p: [x, y + 0.24, z] });
     b.add('eye', sphere(0.022, 8, 6), { p: [x, y + 0.29, z] });
-    for (const sx of [1, -1]) b.add('bot', sphere(0.03, 8, 6), { p: [x + sx * 0.085, y + 0.13, z] });
-  },
-  /** the price tag nobody took off, flapping behind */
-  pricetag(ctx) {
-    const { b, Bk } = ctx, z0 = Bk(0.76);
-    b.add('twine', tube([[0, 0.77, z0], [0.03, 0.86, z0 - 0.14], [0.1, 0.97, z0 - 0.32], [0.16, 1.02, z0 - 0.44]], 0.008, 10, 4));
-    const tg = new THREE.BoxGeometry(0.5, 0.25, 0.014);
-    b.add('tag', tg, { p: [0.26, 0.92, z0 - 0.52], r: [0.35, 0.2, -0.12] });
+    for (const sx of [1, -1]) b.add('bot', sphere(0.024, 8, 6), { p: [x + sx * 0.085, y + 0.13, z] });
   },
 };
+
+/** A logo flown behind the seat (#153 round 3): a short pole with a cross-bar and a
+    cloth banner, standing clear of the seat back and out to the side of the head, so
+    the mark reads from the chase camera. A print on the torso hides behind the seat
+    back; this one does not. The cloth ripples a little, like it is moving. */
+function banner(ctx, mat, { x = -0.46, top = 1.36, w = 0.6, h = 0.5, backing = null } = {}) {
+  const { b, Bk } = ctx;
+  const z = Bk(0.5) - 0.2;
+  const geo = new THREE.PlaneGeometry(w, h, 8, 1);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setZ(i, 0.035 * Math.sin(p.getX(i) / w * 7 + 0.6));
+  geo.computeVertexNormals();
+  const cy = top - 0.03 - h / 2;
+  b.add('steel', cyl(0.014, 0.014, top - 0.2, 6), { p: [x, 0.2 + (top - 0.2) / 2, z] });
+  b.add('steel', cyl(0.011, 0.011, w + 0.06, 6), { p: [x, top - 0.015, z], r: [0, 0, PI / 2] });
+  b.add('steel', sphere(0.028, 8, 6), { p: [x, top + 0.02, z] });
+  if (backing) b.add(backing, geo, { p: [x, cy, z - 0.004], r: [0, PI, 0] });
+  b.add(mat, geo, { p: [x, cy, z - (backing ? 0.012 : 0)], r: [0, PI, 0] });
+}
 
 /* ---------- outfits ---------- */
 const KITS = {
@@ -388,7 +501,7 @@ const KITS = {
   /** a black turtleneck, rolled right up to the chin */
   turtleneck: { P: { sw: 0.265, chest: 0.175, arm: 0.066 }, mats: { top: [null, 0.9] }, dress(c) {
     c.torso('top');
-    for (const [y, r] of [[0.72, 0.15], [0.765, 0.145], [0.81, 0.14], [0.85, 0.137]]) c.b.add('top', torus(r, 0.04, 8, 22), { p: [0, y, c.L(y)], r: [PI / 2, 0, 0] });
+    for (const [y, r] of [[0.72, 0.15], [0.765, 0.145], [0.81, 0.14], [0.85, 0.137]]) c.b.add('top', torus(r, 0.04, 8, 22), { p: [0, y, c.neckZ], r: [PI / 2, 0, 0] });
     c.b.add('silver', torus(0.15, 0.007, 4, 28), { p: [0, 0.64, c.L(0.64) + 0.04], r: [PI / 2 - 0.75, 0, 0] });
     c.b.add('silver', box(0.09, 0.03, 0.01, 0.006, 1), { p: [0, 0.535, c.F(0.535) + 0.012] });
     arms(c, {});
@@ -398,7 +511,7 @@ const KITS = {
     c.torso('top');
     c.b.add('top2', vshell([at(c.secs, 0.52), at(c.secs, 0.6), at(c.secs, 0.66), at(c.secs, 0.72)], { grow: 0.006 }));
     for (const a of [0, PI]) c.b.add('top2', vshell([at(c.secs, 0.04), at(c.secs, 0.27), at(c.secs, 0.5)], { a0: a - 0.2, a1: a + 0.2, grow: 0.005, ring: 6 }));
-    c.stand('collarTop2', [[0.145, 0.7], [0.15, 0.76], [0.145, 0.8]], 0.25);
+    c.stand('collarTop2', [[0.16, 0.7], [0.165, 0.76], [0.16, 0.8]], 0.25);
     c.frontStrip('steel', 0.1, 0.76, 0.008, 0.008, 0.012, 0.004);
     arms(c, { glove: true, cuff: 'top2' });
   } },
@@ -495,6 +608,20 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     b.add('white', torus(0.03, 0.006, 4, 16, PI * 1.4), { p: [0, 0.545, c.F(0.545) + 0.04], r: [-0.2, 0, 0] });
   }
   PROPS[look.prop]?.(c);
+  if (racer.id === 'cook') {
+    // the price tag is gone (#153): his seat back is a closed laptop lid now —
+    // space-grey aluminium with the apple glowing on it, parked exactly where
+    // the chase camera lives. The unibody's seat cushion sits at driver-space
+    // z -0.44..-0.26, y 0.06..0.66; the lid caps its rear face.
+    b.add('lid', box(0.62, 0.6, 0.032, 0.014, 2), { p: [0, 0.37, -0.456] });
+    b.add('apple', new THREE.PlaneGeometry(0.32, 0.32), { p: [0, 0.38, -0.474], r: [0, PI, 0] });
+  }
+  // the Microsoft men and Zuck fly their eras on a banner behind the seat (#153):
+  // Bill's is the waving 1992 flag on a stitched cream cloth, Satya's the flat
+  // modern grid on white, Zuck's the loop on white: same pole, different decade.
+  if (racer.id === 'bill') banner(c, 'win31', { w: 0.76, h: 0.57, top: 1.4 });
+  if (racer.id === 'satya') banner(c, 'win11', { w: 0.6, h: 0.6, top: 1.4, backing: 'cloth' });
+  if (racer.id === 'zuck') banner(c, 'meta', { w: 0.84, h: 0.42, x: 0.48, top: 1.4, backing: 'cloth' });
 
   // materials: [colour (null = the racer's top), roughness, metalness, brightness]
   const km = kit.mats ?? {};
@@ -515,7 +642,12 @@ export function buildDriver(racer, { scale = 1, faceId = racer.id, look = racer.
     gold: plastic(0xffcf4a, 0.25, 1), silver: plastic(0xc9ced6, 0.25, 1), steel: MAT.chrome, white: MAT.white, black: MAT.black,
     pend: plastic(accent, 0.3, 0.3), saw: plastic(0xf06a1a, 0.45), flame: glow(0xff8a1e, 3.2), flame2: glow(0x9fd4ff, 3.4), sack: plastic(0xc49a5c, 0.95), twine: plastic(0x8a6a3a, 0.9), ink: plastic(0x1e7a3c, 0.55),
     bot: plastic(0xf2f4f7, 0.3), eye: glow(0x5ce1ff, 2.2),
-    tag: cached('tagmat', () => new THREE.MeshStandardMaterial({ map: priceTag(), roughness: 0.7 })),
+    lid: plastic(0x33363c, 0.32, 0.85),
+    cloth: doubleSided(0xf4f4ee, 0.8),
+    apple: cached('applemat', () => new THREE.MeshStandardMaterial({ map: appleLogo(), emissiveMap: appleLogo(), emissive: 0xffffff, emissiveIntensity: 1.35, transparent: true, alphaTest: 0.35, roughness: 0.4 })),
+    win31: cached('win31mat', () => new THREE.MeshStandardMaterial({ map: win31Flag(), roughness: 0.85 })),
+    win11: cached('win11mat', () => new THREE.MeshStandardMaterial({ map: win11Grid(), emissiveMap: win11Grid(), emissive: 0xffffff, emissiveIntensity: 0.3, transparent: true, alphaTest: 0.35, roughness: 0.45 })),
+    meta: cached('metamat', () => new THREE.MeshStandardMaterial({ map: metaLoop(), emissiveMap: metaLoop(), emissive: 0xffffff, emissiveIntensity: 0.3, transparent: true, alphaTest: 0.35, roughness: 0.45 })),
     default: MAT.dark,
   };
   torso.add(b.build(mats));

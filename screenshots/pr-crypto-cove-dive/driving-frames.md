@@ -4,6 +4,8 @@ Sam, seed 4, medium quality. The desktop sheets use 1280 × 720. Touch sheets us
 
 The baseline and final desktop comparisons use 5-second intervals from 5 through 55 seconds. Four intermediate sheets use 4-second start plus 5-second intervals through 44 seconds. Changes to hazards and the shortcut divert the race, so sector sheets also follow the same places on the course.
 
+The normal six-race suite averaged 29.8 hits and zero rescues. Ten hard races averaged 24.9 hits and 0.4 rescues. Rivals entered the boost-only cut 25 and 77 times respectively. The track measures 1,276 m with a 10% maximum grade. The opening at checkpoint 13.3 exposes the road and tunnel lights from the approach. The stationary budget passed at 528 calls and 1.080M triangles. Driven peaks were 756 calls on desktop, 742 on tablet, and 791 on phone, with at most 1.231M triangles on any captured frame.
+
 | Device | Sector or frame | Seconds | Lap | Control point | Grounded | Calls | Triangles |
 |---|---|---:|---:|---:|---|---:|---:|
 | desktop | 004 | 4 | 0 | 18.67 | True | 756 | 1,212,451 |

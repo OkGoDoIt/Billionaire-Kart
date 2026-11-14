@@ -140,3 +140,30 @@ own tunnel at the Boring Machine.
   the dive pays ~7% into Portal Bend and the climb taxes the whole north wall:
   the tunnel's race is won by whoever brakes latest at the bottom and carries
   most speed up the Ring Climb.
+
+## As built — the #234 quality pass (PR #223, Nov 2026)
+
+The checklist superseded two verdicts above, and the doc's own audit named
+where it would happen: the gated cut went into the infield inside the
+S-bend, dug by the Machine. What shipped:
+
+- **One lane:** width 19 → 13, tunnelHeight 10 → 7 (the ring sector keeps
+  w:16 and the ring itself is sunk 2.5 m so it threads the smaller bore).
+  The stock shell is gone (`tunnelShell: false`): the track builds its own
+  tube — dark concrete with rainbow light strips, a colour wave running
+  `hsl(fract(s/120 − t·0.25))` down the bore.
+- **A city on top:** the plateau is a flat +14 m table with a casino block
+  grid, a pyramid hotel and a half-built tower; at cp 6.4–7.6 the bore
+  daylights into the Loop Station (glass canopy, platforms, a queue of
+  parked AUTOPILOT-ISH robotaxis) under a painted boomtown backdrop.
+- **The Machine at hero scale:** no longer chewing the wall — it stands at
+  the end of a dead-end side bore off cp 4.3, an 11 m lit cutter face the
+  road skims past.
+- **The shortcut exists now — on the final lap only.** The whole inside of
+  the S-bend is one junction cavern (the tube opens along it). Its floor is
+  wet cement (speed 0.2, via the lake hook with a never-water level) until
+  `race.lakeLap >= race.laps`, when it sets to fast cement (0.92), the
+  SHORTCUT COMING SOON barrier tips flat, and rivals take "The
+  Breakthrough". Two narrow junction gaps were tried first and failed sim
+  (wall grinds + stuck-rescues against the parallel walled segment); the
+  single cavern is what made it clean: rescues 0.0 at normal and hard.

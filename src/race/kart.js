@@ -676,6 +676,9 @@ export class Kart {
     this.vx = Math.sin(this.yaw) * sp; this.vz = Math.cos(this.yaw) * sp; this.speed = sp; this.fwd = sp; this.vy = 0;
     const px = this.x, pz = this.z;
     const hit = tr.ground(this.x, this.z, i, this.hit, this.y);
+    // The rocket follows the deck height across open water. Hand the driver back
+    // the kart on the landing instead of ending the flight grounded over a gap.
+    if (this.bulletT <= 0 && tr.gap[hit.i]) this.bulletT = dt;
     this.hint = hit.i; this.grounded = true; this.gy = hit.y; this.surface = SURFACES.road;
     this.pitch = damp(this.pitch, Math.atan2(tr.ty[i], 1), 8, dt); this.roll = damp(this.roll, 0, 8, dt);
     // advance s directly so progress is monotonic even off the centre line

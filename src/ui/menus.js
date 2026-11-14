@@ -331,8 +331,12 @@ export class Menus {
   }
 
   /* ---------- results ---------- */
-  s_results({ results, gp, track, records }) {
+  s_results({ results, gp, track, records, best }) {
     const A = this.app;
+    // One final screen (#243): a single race's finish wears the podium framing — the place
+    // headline and trophy — over this same full table, instead of a separate podium step
+    // with the table behind a button. GP races and time trials keep the plain header.
+    const head = best == null ? null : best === 1 ? 'You win!' : best === 2 ? 'Second place' : best === 3 ? 'Third place' : `${best}${ordinalSuffix(best)} place`;
     const rows = results.map((r, i) => {
       const total = gp ? gp.totals[r.racer.id] : null;
       // A kart classified on an estimate never crossed the line: the cell says DNF and labels the
@@ -362,8 +366,11 @@ export class Menus {
     const buttons = gp
       ? [this.btn(gp.last ? 'See final standings' : 'Next race', () => A.gpNext(), { cls: 'go', def: true })]
       : [this.btn('Race again', () => A.restartRace(), { cls: 'go', def: true }), this.btn('Choose another track', () => A.backToTracks()), this.btn('Quit to menu', () => A.quitToMenu())];
-    const el = h('div', {}, h('div', { class: 'panel results' },
-      h('h1', {}, track.name), gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
+    const el = h('div', {}, h('div', { class: 'panel results' + (head ? ' podium' : '') },
+      head
+        ? h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, track.name)))
+        : h('h1', {}, track.name),
+      gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
       strips.length && h('div', { class: 'res-strips' }, strips),
@@ -371,23 +378,11 @@ export class Menus {
       h('p', { class: 'res-quote' }, h('span', {}, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`),
         results.length > 2 && h('span', {}, h('b', {}, results[results.length - 1].racer.name + ': '), `“${results[results.length - 1].racer.barks.lose}”`)),
       h('div', { class: 'foot' }, buttons)));
-    return { el, onBack: () => false };
-  }
-
-  /* ---------- single-race podium (the cup finish, borrowed for a Quick Race) ---------- */
-  s_racePodium({ results, track, records, best }) {
-    const A = this.app;
-    const top3 = [...results].sort((a, b) => a.rank - b.rank).slice(0, 3);
-    const multi = results.filter(r => r.isPlayer).length > 1;
-    const head = best === 1 ? 'You win!' : best === 2 ? 'Second place' : best === 3 ? 'Third place' : `${best}${ordinalSuffix(best)} place`;
-    const el = h('div', {}, h('div', { class: 'panel cupres' },
-      h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, track.name))),
-      records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
-      h('div', { class: 'res-table final' }, top3.map((r, i) => h('div', { class: 'res-row' + (r.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(r.racer.color)}` + (r.isPlayer ? `;--pc:${PLAYER_COLORS[r.playerIndex]}` : '') },
-        h('b', { class: 'res-rank' }, String(r.rank)), h('img', { src: r.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, r.racer.name, r.isPlayer && h('em', {}, multi ? `P${r.playerIndex + 1}` : 'You')), h('span', { class: 'res-time' }, fmtTime(r.time))))),
-      h('p', { class: 'res-quote' }, h('span', {}, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`)),
-      h('div', { class: 'foot' }, this.btn('Full results', () => A.showResults(), { cls: 'go', def: true }))));
-    return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
+    // With the podium framing, the showroom's three-kart podium stands behind this screen,
+    // framed in whatever space the panel leaves — the deleted podium screen's arrangement.
+    return head
+      ? { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) }
+      : { el, onBack: () => false };
   }
 
   s_cupResults({ cup, standings, playerRanks, stars }) {

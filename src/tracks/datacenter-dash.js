@@ -27,7 +27,7 @@ const HB = { x0: 100.5, x1: 196, z0: -141.3, z1: 20, H: 13, ceil: 10.8, door: 8.
 const ENTRY = { z0: -11.5, z1: 11 }, EXIT = { x0: 160.5, x1: 183.5 };
 /* Campus halls (centre, yaw, length, width, height, accent, company sign). The ground around each is paved. */
 const HALLS = [
-  { x: 30, z: -88, yaw: 0, L: 92, W: 26, H: 15, c: 0x1f6bff, name: 'OMNIMIND', mural: 'LAKE' },
+  { x: 30, z: -88, yaw: 0, L: 92, W: 26, H: 15, c: 0x1f6bff, name: 'OMNIMIND' },
   { x: 60, z: -175, yaw: 0, L: 64, W: 24, H: 14, c: 0x16a34a, name: 'THIRSTCOMPUTE', mural: 'WATER: 100% RECYCLED (INTO STEAM)' },
   { x: 55, z: -245, yaw: 0, L: 56, W: 24, H: 13, c: 0xff6a00, name: 'NEURAL ACRES', mural: 'YOUR JOB, NOW AS A SERVICE' },
   { x: 255, z: -55, yaw: Math.PI / 2, L: 84, W: 26, H: 15, c: 0x7b5cff, name: 'HYPERSCALE HOLDINGS', mural: 'OUR CHATBOT SAYS THE LAKE IS FINE' },
@@ -65,15 +65,15 @@ const benchLevel = e => { if (e < BENCH.e0) return Infinity; const u = (e - BENC
    inference floor, round the back (blue). The road does not move; each stretch is a tunnel zone, so its edges
    are walls. Every rack wears the one shared rack material (rackKit), so all halls blink in sync for one draw. */
 const HALL_DEFS = [
-  { id: 'arena', from: 26.45, to: 1.1, wide: 'all', wideL: 12, wideR: 23.5, up: 15, upWide: 15, rackSides: [1], skin: 'carpet',
+  { id: 'arena', from: 26.45, to: 1.1, wide: 'all', wideL: 12, wideR: 23.5, up: 15, upWide: 15, skin: 'carpet',
     panel: ['#221a33', '#2c2242', '#140f1f', '#ff3dbb'], glow: 0xff7ad6, band: 0x3dc8ff, accent: 0xff3dbb, gantries: false,
     signIn: null, signOut: null, gables: [true, true] },
-  { id: 'chiller', from: 6.0, to: 9.15, narrow: 6.2, up: 10.5, rackRows: 0, skin: 'metal',
+  { id: 'chiller', from: 6.0, to: 9.15, narrow: 7.8, up: 10.5, rackRows: 1, skin: 'metal',
     panel: ['#15302e', '#1c3d3a', '#0d1f1d', '#3dffd0'], glow: 0x8dffe4, band: 0x3dffd0, accent: 0x16a39a,
-    signIn: ['CHILLER PLANT 3', '#7dffe0'], signOut: ['NEXT: THE LAKE (FOR NOW)', '#ffd23c'], jokes: ['PRESSURE: YES', 'COOLANT: 112% OF A LAKE', 'DO NOT LICK THE PIPES'] },
+    portal: ['NOW HIRING', '0 HUMANS', '#28d6ca'], signIn: ['CHILLER PLANT 3', '#7dffe0'], signOut: ['NEXT: THE LAKE (FOR NOW)', '#ffd23c'], jokes: ['PRESSURE: YES', 'COOLANT: 112% OF A LAKE', 'DO NOT LICK THE PIPES'] },
   { id: 'gpu', from: 15.0, to: 17.55, narrow: 7.4, up: 10.8, skin: 'metal', rowGlow: 0xff3a1a,   // dark metal floor under the red light (#238: the white hallfloor tile killed the look)
     panel: ['#2a1416', '#38191c', '#1a0c0e', '#ff5a2a'], glow: 0xffb08a, band: 0xff4a2a, accent: 0xe23b3b,
-    signIn: ['GPU HALL · 41°C AND RISING', '#ff8a5c'], signOut: ['COOL DOWN AHEAD (NOT REALLY)', '#ffd23c'], jokes: ['WE BOUGHT ALL OF THEM', 'FAN SPEED: YES', 'SPICY TENSORS INSIDE'] },
+    portal: ['NOW TRAINING', 'ON YOU', '#ff7847'], signIn: ['GPU HALL · 41°C AND RISING', '#ff8a5c'], signOut: ['COOL DOWN AHEAD (NOT REALLY)', '#ffd23c'], jokes: ['WE BOUGHT ALL OF THEM', 'FAN SPEED: YES', 'SPICY TENSORS INSIDE'] },
   { id: 'inference', from: 21.85, to: 26.45, wide: [23.5, 26.1], wideIn: 9.5, wideOut: 16, inAt: 24.0, narrow: 4.6, up: 9.8, upWide: 11.8, skin: 'neon',
     panel: ['#1d2333', '#262e42', '#121620', '#3dc8ff'], glow: 0x9fe6ff, band: 0x9fe6ff, accent: 0x1f6bff, tanks: [24.42, 25.2],
     signIn: ['HALL 2 · INFERENCE', '#7fd0ff'], signOut: ['NOW LEAVING THE CLOUD', '#ffd23c'], signOutSub: 'NEXT: THE KEYNOTE (ATTENDANCE MANDATORY)',
@@ -193,15 +193,16 @@ export default {
   ramps: [{ at: 4.62, len: 9, lift: 2.1 }],
   boosts: [
     { at: 0.5, lat: 0, w: 5 },
+    { at: 3.48, lat: 4.5, w: 3.4, len: 9 },
     { at: 5.12, lat: 0, w: 6 },
     { at: 9.3, lat: 4.5, w: 4.5 },     // on the lake side: the way into the shortcut on the last lap
     { at: 15.2, lat: 3, w: 4.5 },
     { at: 24.6, lat: -3, w: 4.5 },
   ],
-  itemRows: [{ at: 1.25 }, { at: 6.4 }, { at: 12.0 }, { at: 16.4 }, { at: 25.4, n: 3 }],
+  itemRows: [{ at: 3.48, lats: [-6.3, -3.0] }, { at: 6.4 }, { at: 12.0 }, { at: 16.4 }, { at: 25.4, n: 3 }],
   coins: [
     { from: 0.2, to: 0.45, n: 4, lat: -4 },
-    { from: 2.2, to: 3.0, n: 5, lat: [5, 2] },
+    { from: 2.25, to: 3.28, n: 5, lat: [2, 4.5] },
     { from: 4.75, to: 4.95, n: 3, lat: 0, air: 2.6 },
     { from: 10.5, to: 11.5, n: 5, lat: [3, 6] },
     { from: 12.5, to: 13.5, n: 5, lat: [6, 3] },
@@ -272,9 +273,9 @@ const BOARDS = [
   [6.6, -1, 16, 'YOUR LAKE, NOW IN THE CLOUD', '#1f6bff', '#ffffff'], [16.3, -1, 16, 'CARBON NEUTRAL BY 2099', '#16a34a', '#ffffff'],
   [20.0, 1, 16, 'POWERED BY GAS AND VIBES', '#ffd23c', '#1a1d29'], [23.6, 1, 15, 'ASK US ABOUT OUR LAKE', '#ffffff', '#1f6bff'],
   [25.2, 1, 15, 'NOW TRAINING ON YOU', '#db2777', '#ffffff'], [7.6, 1, 16, 'THIRSTY? SO ARE WE', '#0ea5e9', '#ffffff'],
-  [1.0, 1, 30, 'GPU GO BRRR', '#1a1d29', '#ffd23c'], [17.2, 1, 16, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
+  [17.2, 1, 16, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
   [22.9, -1, 16, 'WE ARE OUT OF GPUS', '#ffffff', '#e23b3b'], [26.2, -1, 16, 'SKY STILL MOSTLY BLUE', '#7b5cff', '#ffffff'],
-  [10.6, -1, 14, 'LAKEFRONT VIEWS (FOR NOW)', '#0ea5e9', '#ffffff'], [12.0, -1, 14, 'DRINK RESPONSIBLY. WE WILL.', '#ffffff', '#1f6bff'], [13.4, -1, 14, 'SHORTCUT OPENS AT 1%', '#ffd23c', '#1a1d29'],
+  [10.55, -1, 13, 'BEFORE', '#0ea5e9', '#ffffff'], [12.0, -1, 14, 'DRINK RESPONSIBLY. WE WILL.', '#ffffff', '#1f6bff'], [13.4, -1, 14, 'SHORTCUT OPENS AT 1%', '#ffd23c', '#1a1d29'],
 ];
 const PROTEST = ['WATER IS NOT A FEATURE', 'MY LAKE ≠ YOUR CACHE', 'BRING BACK THE FISH', "HONK IF YOU'RE THIRSTY", 'THE FISH WERE HERE FIRST', 'LEAVE SOME FOR US', 'UNPLUG IT', 'NOT MY RESERVOIR', 'TOUCH GRASS (WHILE IT LASTS)'];
 
@@ -431,8 +432,8 @@ function lakeMural(g, w, h) {
   g.fillStyle = '#2f86e0'; g.fillRect(0, h * 0.6, w, h * 0.4);
   g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 5; for (let k = 0; k < 14; k++) { const x = (k * 0.137 % 1) * w, y = h * (0.66 + (k % 4) * 0.08); g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 30, y - 10, x + 60, y); g.stroke(); }
   for (let k = 0; k < 5; k++) { const x = w * (0.25 + k * 0.14), y = h * (0.75 + (k % 2) * 0.1); g.fillStyle = '#ff8a3c'; g.beginPath(); g.ellipse(x, y, h * 0.07, h * 0.04, 0, 0, 7); g.fill(); g.beginPath(); g.moveTo(x - h * 0.06, y); g.lineTo(x - h * 0.11, y - h * 0.04); g.lineTo(x - h * 0.11, y + h * 0.04); g.fill(); g.fillStyle = '#1a1d29'; g.beginPath(); g.arc(x + h * 0.035, y - h * 0.01, h * 0.008, 0, 7); g.fill(); }
-  g.fillStyle = 'rgba(255,255,255,0.92)'; g.fillRect(w * 0.6, h * 0.08, w * 0.36, h * 0.4);
-  fitText(g, 'BEFORE', w * 0.78, h * 0.29, w * 0.33, Math.round(h * 0.34), FONT, '#e23b3b', { lines: 1 });
+  g.fillStyle = 'rgba(255,255,255,0.93)'; g.fillRect(w * 0.24, h * 0.05, w * 0.55, h * 0.46);
+  fitText(g, 'BEFORE', w * 0.515, h * 0.29, w * 0.51, Math.round(h * 0.43), FONT, '#b92a2c', { lines: 1 });
 }
 
 function canvasTexture(THREE, w, h, draw, { repeat = false } = {}) {
@@ -551,7 +552,7 @@ function decorate(ctx) {
     }
     if (h.mural) {  // the long front wall is the biggest canvas on the track: a joke you can read at speed
       const y0 = base + (h.muralLow ?? 1.4), y1 = base + h.H - 3.2, mh = y1 - y0, mw = h.L * 0.9, px = 1600, py = Math.round(clamp(px * mh / mw, 160, 900));
-      const r = atlas.add(px, py, h.mural === 'LAKE' ? lakeMural : muralDraw(h.mural, col));
+      const r = atlas.add(px, py, muralDraw(h.mural, col));
       atlas.place(r, W3(0, h.W / 2 + 0.32, (y0 + y1) / 2), h.yaw, mw, mh);
     }
   };
@@ -701,8 +702,9 @@ function decorate(ctx) {
   const BS = 1.5;   // billboards half again as big as the stock ones
   BOARDS.forEach(([cp, side, off, text, bg, fg], i) => {
     const p = sc.beside(cp, side, off + 4); if (!clear(p.x, p.z, 0.5) || inHallBox(p.x, p.z, 3) || campus.inside(p.x, p.z, 3)) return;
-    const yaw = p.yaw + rng.range(-0.12, 0.12), f = frame.clone(); sc.place(f, p.x, p.z, { yaw, scale: BS }); bake.add(f);
-    const r = atlas.add(768, 256, (g, w, h) => {
+    const approach = track.indexAtCp(cp - 0.65);
+    const yaw = Math.atan2(track.px[approach] - p.x, track.pz[approach] - p.z), f = frame.clone(); sc.place(f, p.x, p.z, { yaw, scale: BS }); bake.add(f);
+    const r = atlas.add(768, 256, text === 'BEFORE' ? lakeMural : (g, w, h) => {
       g.fillStyle = bg; g.fillRect(0, 0, w, h);
       const sh = g.createLinearGradient(0, 0, w, h); sh.addColorStop(0, 'rgba(255,255,255,0.16)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.14)'); g.fillStyle = sh; g.fillRect(0, 0, w, h);
       fitText(g, text, w / 2 + 3, h / 2 + 7, w - 60, 104, FONT, 'rgba(0,0,0,0.25)'); fitText(g, text, w / 2, h / 2 + 4, w - 60, 104, FONT, fg);
@@ -754,22 +756,22 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
 
   /* textures: raised floor tiles, the road version of them, wall panels, rack fronts and their blinking LEDs */
   const floorTex = canvasTexture(THREE, 512, 512, (g, w, h) => {
-    const n = 8, t = w / n; g.fillStyle = '#aab1ba'; g.fillRect(0, 0, w, h);
+    const n = 8, t = w / n; g.fillStyle = '#172433'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-      g.fillStyle = (i * 3 + j * 5) % 11 === 0 ? '#dfe3e8' : '#eef0f3'; g.fillRect(i * t + 2, j * t + 2, t - 4, t - 4);
-      if ((i + j * 3) % 7 === 0) { g.fillStyle = '#9aa3ad'; for (let a = 6; a < t - 4; a += 6) for (let b = 6; b < t - 4; b += 6) g.fillRect(i * t + a, j * t + b, 2.5, 2.5); }
+      g.fillStyle = (i * 3 + j * 5) % 11 === 0 ? '#2c4052' : '#354958'; g.fillRect(i * t + 2, j * t + 2, t - 4, t - 4);
+      if ((i + j * 3) % 7 === 0) { g.fillStyle = '#141d24'; for (let a = 6; a < t - 4; a += 6) for (let b = 6; b < t - 4; b += 6) g.fillRect(i * t + a, j * t + b, 2.5, 2.5); }
     }
   }, { repeat: true });
   floorTex.repeat.set(1, 1);
   const roadTex = canvasTexture(THREE, 1024, 1024, (g, w, h) => {
-    g.fillStyle = '#a3aab3'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#17202d'; g.fillRect(0, 0, w, h);
     const tu = w / (17 / 0.6), tv = h / (18 / 0.6);
     for (let i = 0; i * tu < w; i++) for (let j = 0; j * tv < h; j++) {
-      g.fillStyle = (i * 3 + j * 5) % 11 === 0 ? '#dce0e5' : '#ebedf0'; g.fillRect(i * tu + 2, j * tv + 2, tu - 4, tv - 4);
-      if ((i * 7 + j * 3) % 9 === 0) { g.fillStyle = '#9ba3ad'; for (let a = 5; a < tu - 4; a += 5) for (let b = 5; b < tv - 4; b += 5) g.fillRect(i * tu + a, j * tv + b, 2, 2); }
+      g.fillStyle = (i * 3 + j * 5) % 11 === 0 ? '#293644' : '#303d4d'; g.fillRect(i * tu + 2, j * tv + 2, tu - 4, tv - 4);
+      if ((i * 7 + j * 3) % 9 === 0) { g.fillStyle = '#111b24'; for (let a = 5; a < tu - 4; a += 5) for (let b = 5; b < tv - 4; b += 5) g.fillRect(i * tu + a, j * tv + b, 2, 2); }
     }
     for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? '#ffc928' : '#1a1d26'; g.fillRect(0, i * h / 16, w * 0.035, h / 16); g.fillRect(w * 0.965, i * h / 16, w * 0.035, h / 16); }
-    g.fillStyle = 'rgba(31,107,255,0.85)'; for (let j = 0; j < 4; j++) g.fillRect(w * 0.494, j * h / 4 + h * 0.05, w * 0.012, h * 0.14);
+    g.fillStyle = '#83939e'; for (let j = 0; j < 4; j++) g.fillRect(w * 0.494, j * h / 4 + h * 0.05, w * 0.012, h * 0.14);
   }, { repeat: true });
   const roadMat = view.trackMesh?.userData?.mats?.road_hallfloor;
   if (roadMat) { roadMat.map = roadTex; roadMat.emissiveMap = roadTex; roadMat.emissive.set(0xffffff); roadMat.emissiveIntensity = 0.22; roadMat.roughness = 0.5; roadMat.needsUpdate = true; }
@@ -876,7 +878,7 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
   for (let x = HB.x0 + 10; x < HB.x1 - 4; x += 18) ov.add('duct', cyl(0.55, 0.55, HB.z1 - HB.z0 - 2, 14, true), { p: [x, 10.0, (HB.z0 + HB.z1) / 2], r: [Math.PI / 2, 0, 0] });
   for (let z = HB.z0 + 3; z < HB.z1 - 2; z += 4.2) ov.add('light', new THREE.BoxGeometry(HB.x1 - HB.x0 - 3, 0.07, 0.34), { p: [(HB.x0 + HB.x1) / 2, HB.ceil - 0.08, z] });
   for (let z = HB.z0 + 18; z < HB.z1 - 10; z += 24) ov.add('tray', new THREE.BoxGeometry(HB.x1 - HB.x0 - 4, 0.16, 0.5), { p: [(HB.x0 + HB.x1) / 2, 8.6, z] });
-  bake.builder(ov, { tray: plastic(0xffc928, 0.5), ladder: plastic(0x8d96a6, 0.4, 0.6), duct: plastic(0xc9cfd6, 0.3, 0.7), light: glow(0xffffff, 1.5), hotglow: glow(0xff2d16, 2.6) }, false);
+  bake.builder(ov, { tray: plastic(0xffc928, 0.5), ladder: plastic(0x8d96a6, 0.4, 0.6), duct: plastic(0xc9cfd6, 0.3, 0.7), light: glow(0xa2d9ef, 0.95), hotglow: glow(0xff2d16, 2.6) }, false);
 
   // cooling units round the walls, inside
   const units = [], free = (x, z) => edgeDist(x, z) > 2.5;
@@ -896,7 +898,7 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
     const tiny = atlas.add(96, 192, (g, w, h) => { g.fillStyle = '#5b636f'; g.fillRect(0, 0, w, h); g.fillStyle = '#7d8590'; g.fillRect(6, 6, w - 12, h - 12); g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(w * 0.78, h * 0.55, 5, 0, 7); g.fill(); });
     atlas.place(tiny, [150, FY + 0.7, zf], 0, 0.7, 1.4);
     const hs = atlas.add(256, 72, signDraw('HUMANS', { bg: '#ffffff', fg: '#1a1d29', font: SANS, size: 50, lines: 1, border: '#1a1d29' }));
-    atlas.place(hs, [150, FY + 1.75, zf], 0, 1.0, 0.28);
+    atlas.place(hs, [150, FY + 2.25, zf], 0, 3.4, 0.96);
   }
   // a rack all of its own, labelled YOUR DATA, on the walkway beside the road
   {
@@ -950,7 +952,8 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
     atlas.place(atlas.add(1024, 96, signDraw('AIRLOCK 9B — NOTHING LEAVES (EXCEPT STEAM)', { bg: '#20242c', fg: '#7fd0ff', font: SANS, size: 52, lines: 1 })), [172, FY + 8.1, HB.z0 + 0.7], 0, 13, 1.0, 0, true);
 
     // cable-run gantries crossing OVER the road: a yellow tray on ceiling rods, two sagging cable runs, a warning sign
-    for (const [cp, label] of [[1.62, 'DO NOT UNPLUG'], [2.5, 'CABLE MANAGEMENT IS A LIE'], [3.5, 'HOT AISLE: 41°C AND CLIMBING']]) {
+    {
+      const cp = 2.48, label = 'CABLE MANAGEMENT IS A LIE';
       const i = track.indexAtCp(cp), S = Math.max(track.hwL[i], track.hwR[i]) + 3.4, yaw = Math.atan2(-track.tx[i], -track.tz[i]);
       gb.add('tray', new THREE.BoxGeometry(2 * S, 0.12, 0.55), { p: rp(i, 0, 7.5), r: [0, yaw, 0] });
       for (const s of [-1, 1]) {
@@ -966,6 +969,50 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
       const r = atlas.add(1024, 150, signDraw(label, { bg: '#20242c', fg: '#ffd34d', font: SANS, size: 84, lines: 1, border: '#ffd34d' }));
       atlas.place(r, rp(i, 0, 6.15), yaw, 7.2, 1.05, 0, true);
     }
+    // A real choice on the straight. Drivers have the bend and two lengths of ceiling
+    // rail to line up. Keep the middle clear for packs and for recovery after a hit.
+    const split = track.indexAtCp(3.05), end = track.indexAtCp(3.65);
+    const trays = new ModelBuilder();
+    for (const [side, label, color, paint, ink] of [
+      [1, 'OVERCLOCK', 0xff873b, '#fc843e', '#221525'],
+      [-1, 'ITEM CACHE', 0x4ee8f2, '#67eaf1', '#10243a'],
+    ]) {
+      const lane = side * 4.5;
+      const panel = atlas.add(640, 170, (g, w, h) => {
+        g.fillStyle = paint; g.fillRect(0, 0, w, h);
+        g.fillStyle = ink;
+        if (side > 0) {
+          for (const x of [17, 55]) {
+            g.beginPath(); g.moveTo(x, h * 0.25); g.lineTo(x + 22, h * 0.25);
+            g.lineTo(x + 56, h / 2); g.lineTo(x + 22, h * 0.75); g.lineTo(x, h * 0.75); g.lineTo(x + 32, h / 2); g.fill();
+          }
+        } else {
+          g.save(); g.translate(66, h / 2); g.rotate(Math.PI / 4); g.fillRect(-37, -37, 74, 74); g.restore();
+          fitText(g, '?', 66, h * 0.52, 52, 69, FONT, paint, { lines: 1 });
+        }
+        fitText(g, label, w * 0.59, h * 0.52, w * 0.76, 111, FONT, ink, { lines: 1 });
+      });
+      for (const i of [split, track.indexAtCp(3.62)]) {
+        const yaw = Math.atan2(-track.tx[i], -track.tz[i]);
+        atlas.place(panel, rp(i, lane, 6.25), yaw, 8.6, 2.25, 0, true);
+        for (const off of [-3.5, 3.5]) trays.add('dark', new THREE.BoxGeometry(0.1, 3.3, 0.1), { p: rp(i, lane + off, 9.0) });
+      }
+      const trim = new Quads();
+      for (let i = split; i < end; i++) {
+        for (const off of [-1.9, 1.9]) {
+          const a = lane + off;
+          trim.quad(rp(i, a - 0.09, 0.042), rp(i + 1, a - 0.09, 0.042), rp(i + 1, a + 0.09, 0.042), rp(i, a + 0.09, 0.042));
+        }
+        if ((i - split) % 9 === 0) {
+          trays.add('dark', new THREE.BoxGeometry(7.6, 0.35, 0.8), { p: rp(i, lane, 8.6), r: [0, Math.atan2(track.tx[i], track.tz[i]), 0] });
+          const led = rp(i, lane, 8.58);
+          led[0] -= track.tx[i] * 0.42; led[2] -= track.tz[i] * 0.42;
+          trim.panel(led, Math.atan2(-track.tx[i], -track.tz[i]), 7.45, 0.23, [0, 0, 1, 1]);
+        }
+      }
+      bake.geo(glow(color, 1.2), trim.geometry(THREE), false);
+    }
+    bake.builder(trays, { dark: plastic(0x2c323c, 0.5) }, false);
     bake.geo(new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: 0.6, side: THREE.DoubleSide }), cables.geometry(THREE), false);
 
     // the delivery bay: rack 4,096 has just arrived on a pallet, still wrapped, jack still under it
@@ -1005,12 +1052,8 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
     atlas.place(s, [HB.x0 + 1.55, y0 + 3.9, 0], -Math.PI / 2, 33, 7.1, 0, true);
   }
   const drip = { x: 161.6, y: 5.6, z: -118 };
-  // giant painted jokes on the three plain faces of the building
-  for (const [text, c, yaw, w] of [
-    ['NOW TRAINING ON YOU', [148, 5.8, HB.z1 + 0.36], 0, 88],
-    ['THIS BUILDING USES MORE WATER THAN YOUR TOWN', [130, 5.8, HB.z0 - 0.36], Math.PI, 54],
-    ['NOW HIRING: 0 HUMANS', [HB.x1 + 0.36, 5.8, -17.5], Math.PI / 2, 64],
-  ]) { const hgt = 9.2, r = atlas.add(1600, Math.round(clamp(1600 * hgt / w, 160, 900)), muralDraw(text, '#1f6bff')); atlas.place(r, c, yaw, w, hgt); }
+  const southMural = atlas.add(1600, 272, muralDraw('THIS BUILDING USES MORE WATER THAN YOUR TOWN', '#1f6bff'));
+  atlas.place(southMural, [130, 5.8, HB.z0 - 0.36], Math.PI, 54, 9.2);
   // jokes at eye level along the road, and big banners hung over it, all facing the drivers
   {
     const hang = new ModelBuilder(), eye = ['THIS RACK IS SMARTER THAN YOU', 'YOUR PROMPT IS IMPORTANT TO US', 'COOLING: ONE LAKE PER HOUR', 'EMPLOYEE OF THE MONTH: RACK 42', 'MODEL WEIGHTS: LIFT WITH YOUR LEGS', 'CAUTION: OVERFITTING', 'NO HUMANS BEYOND THIS POINT', 'BACKUPS OF YOUR SELFIES →', 'WE ARE NOT A BUBBLE', 'PLEASE DO NOT TAP THE GLASS', 'DO NOT UNPLUG', 'PROD — YES, THAT PROD'];
@@ -1027,8 +1070,8 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
       atlas.place(r, [x, FY + 2.2, z], yaw, 6.6, 2.2, 0, true);
       for (const o of [-2.8, 2.8]) hang.add('c', cyl(0.06, 0.06, 1.2, 5), { p: [x + Math.cos(yaw) * o, FY + 0.55, z - Math.sin(yaw) * o] });
     }
-    const over = ['SLOW DOWN: GPUs AT WORK', 'NOW ENTERING THE CLOUD', 'THINKING... STILL THINKING...', 'YOU ARE THE PRODUCT (VROOM)'];
-    [1.75, 2.45, 3.05, 3.55].forEach((cp, j) => {
+    const over = ['GPU GO BRRR', 'NOW ENTERING THE CLOUD'];
+    [1.75, 2.28].forEach((cp, j) => {
       const i = track.indexAtCp(cp), yaw = Math.atan2(-track.tx[i], -track.tz[i]), x = track.px[i], z = track.pz[i];
       const r = atlas.add(1024, 170, signDraw(over[j], { bg: '#1a1d29', fg: ['#ffd23c', '#7fd0ff', '#ffffff', '#ff9ab0'][j], font: FONT, size: 110, lines: 1, stripe: '#1f6bff' }));
       atlas.place(r, [x, 7.0, z], yaw, 15, 2.5, 0, true);
@@ -1136,7 +1179,7 @@ function roadHall(ctxs, cfg, kit) {
   const segLen = k => Math.hypot(track.px[idx[k + 1]] - track.px[idx[k]], track.pz[idx[k + 1]] - track.pz[idx[k]]);
   const DK = [[0, 0.04], [0.2, 0.04], [0.2, 0.16], [0, 0.16]];
   const gapAt = (k, r, sd) => ((sAt(k) + r * 10 + (sd > 0 ? 0 : 5)) % 30) < 3.1;   // a cross aisle now and then
-  const rackSides = cfg.rackSides || [-1, 1], rows = cfg.rackRows ?? 5;
+  const rows = cfg.rackRows ?? 5;
   const skipRack = (a, b, sd, r) => cfg.tanks && sd !== inSide && r < 3 && cpOf(a) > cfg.tanks[0] - 0.05 && cpOf(b) < cfg.tanks[1] + 0.05;
   const lift = p => { p[1] = Math.max(p[1], track.terrainHeight(p[0], p[2]) + 0.06); return p; };
   /** Side-aware quad: given the four corners as seen for the left (+) side, flip the winding for the right side. */
@@ -1163,11 +1206,14 @@ function roadHall(ctxs, cfg, kit) {
       { const ba = sd * (Wd(a, sd) - 0.04), bb = sd * (Wd(b, sd) - 0.04); sq(bands, sd, at(a, ba, 6.6), at(b, bb, 6.6), at(b, bb, 6.9), at(a, ba, 6.9)); }
 
       // rack rows parallel to the road, each one taller than the one in front of it
-      if (rackSides.includes(sd)) for (let r = 0; r < rows; r++) {
+      for (let r = 0; r < rows; r++) {
+        // One low bank in front of the stage keeps its crowd and screen in view.
+        const stageSide = cfg.id === 'arena' && sd < 0;
+        if (stageSide && r > 0) break;
         const l0a = hw(a) + 2.3 + r * 3.1, l0b = hw(b) + 2.3 + r * 3.1, l1a = l0a + 1.1, l1b = l0b + 1.1;
         if (l1a > Wd(a, sd) - 0.9 || l1b > Wd(b, sd) - 0.9) continue;
         if (skipRack(a, b, sd, r) || gapAt(k, r, sd)) continue;
-        const hgt = (2.9 + r * 0.95) * (0.92 + 0.08 * wideK(a)), y0 = -0.05;
+        const hgt = stageSide ? 1.9 : (2.9 + r * 0.95) * (0.92 + 0.08 * wideK(a)), y0 = -0.05;
         const R0 = at(a, sd * l0a, y0), R1 = at(b, sd * l0b, y0), R2 = at(b, sd * l0b, y0 + hgt), R3 = at(a, sd * l0a, y0 + hgt);
         const fu0 = sAt(k) / RACK_TILE, fu1 = fu0 + L / RACK_TILE;
         if (sd > 0) racks.quad(R0, R1, R2, R3, [[fu0, 0.2], [fu1, 0.2], [fu1, 1], [fu0, 1]]); else racks.quad(R1, R0, R3, R2, [[fu1, 0.2], [fu0, 0.2], [fu0, 1], [fu1, 1]]);
@@ -1208,6 +1254,33 @@ function roadHall(ctxs, cfg, kit) {
     atlas.place(atlas.add(1024, 160, signDraw(sign[0], { bg: '#1a1d29', fg: sign[1], font: SANS, size: 92, lines: 1, stripe: '#' + new THREE.Color(cfg.band).getHexString() })), P(0.5), yawBack, w, w / 6.4);
     if (j > 0 && cfg.signOutSub) atlas.place(atlas.add(1024, 128, signDraw(cfg.signOutSub, { bg: '#20242c', fg: '#7dff9a', font: SANS, size: 64, lines: 1 })), P(-1.15), yawBack, w * 0.85, w * 0.85 / 8);
   });
+
+  if (cfg.portal) {
+    const i = idx[0], [top, bottom, color] = cfg.portal;
+    const yaw = Math.atan2(-track.tx[i], -track.tz[i]);
+    // The wings and parapet are in one rigid frame. Facing the previous straight
+    // gives the lake and pond approaches a long read through the centre of the glass.
+    const front = (lat, y, depth) => {
+      const p = at(i, lat);
+      return [p[0] - track.tx[i] * depth, p[1] + y, p[2] - track.tz[i] * depth];
+    };
+    ov.add('sunk', box(38, 9, 1.1, 0.35, 1), { p: front(0, 15.9, 0.3), r: [0, yaw, 0] });
+    const face = atlas.add(1024, 256, (g, w, h) => {
+      g.fillStyle = '#111e2b'; g.fillRect(0, 0, w, h);
+      g.fillStyle = color; g.fillRect(0, h * 0.9, w, h * 0.1);
+      fitText(g, top, w / 2, h * 0.23, w * 0.96, 70, FONT, '#ffffff', { lines: 1 });
+      fitText(g, bottom, w / 2, h * 0.64, w * 0.96, 126, FONT, color, { lines: 1 });
+    });
+    atlas.place(face, front(0, 15.9, 0.97), yaw, 35, 8.75);
+    for (const side of [-1, 1]) {
+      ov.add('sunk', box(9.4, 14, 3.6, 0.7, 1), { p: front(side * 14.2, 5.4, 0.5), r: [0, yaw, 0] });
+      const c = front(side * 14.2, 6.25, 2.35);
+      ov.add('steel', new THREE.TorusGeometry(3.85, 0.38, 6, 32), { p: c, r: [0, yaw, 0] });
+      kit.fans.push({ x: c[0], y: c[1], z: c[2], yaw, r: 3.5 });
+      ov.add('tray', cyl(0.7, 0.7, 0.4, 12), { p: front(side * 14.2, 6.25, 2.61), r: [Math.PI / 2, 0, -yaw] });
+      for (const lamp of [1.4, 2.05, 10.8]) ov.add('tray', new THREE.BoxGeometry(7.2, 0.16, 0.2), { p: front(side * 14.2, lamp, 2.33), r: [0, yaw, 0] });
+    }
+  }
 
   // cable gantries across the road, jokes hung from some of them
   if (cfg.gantries !== false) {
@@ -1426,7 +1499,12 @@ function campusHalls(ctxs) {
   let fanMesh = null;
   if (kit.fans.length) {
     const blade = new THREE.BufferGeometry(), pos = [];
-    for (let b = 0; b < 4; b++) { const a = b * Math.PI / 2, c = Math.cos(a), s = Math.sin(a), w = 0.28; pos.push(0, 0, 0, c * 1 - s * w, s * 1 + c * w, 0, c * 1 + s * w, s * 1 - c * w, 0); }
+    for (let b = 0; b < 7; b++) {
+      const angle = b * Math.PI * 2 / 7;
+      const vertex = (radius, twist) => [radius * Math.cos(angle + twist), radius * Math.sin(angle + twist), 0];
+      const root = vertex(0.16, 0), tip = vertex(0.98, 0.26), edge = vertex(0.96, 0.73), heel = vertex(0.22, 0.48);
+      pos.push(...root, ...tip, ...edge, ...root, ...edge, ...heel);
+    }
     blade.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); blade.computeVertexNormals();
     fanMesh = new THREE.InstancedMesh(blade, new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide }), kit.fans.length);
     fanMesh.frustumCulled = false; ctxs.ctx.group.add(fanMesh);
@@ -1467,7 +1545,14 @@ function edgePods({ THREE, sc, rng, rackSys, atlas }) {
   const front = new THREE.PlaneGeometry(11.0, 2.2), uv = front.attributes.uv;
   for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * 11.0 / RACK_TILE, 0.2 + 0.8 * uv.getY(k));
   add(front, rackSys.mat, 0, 1.75, 1.315);
-  for (const x of [-3.8, 0, 3.8]) { add(cyl(0.85, 0.85, 0.3, 14), plastic(0x3a414c, 0.5, 0.4), x, 3.3, 0); add(cyl(0.55, 0.55, 0.32, 10), plastic(0x14171c, 0.6), x, 3.32, 0); }
+  // Combine the three identical fan caps and the three fan wells. All bench
+  // pods can then draw their rooftop detail in two instanced meshes.
+  const fans = new ModelBuilder();
+  for (const x of [-3.8, 0, 3.8]) {
+    fans.add('rim', cyl(0.85, 0.85, 0.3, 14), { p: [x, 3.3, 0] });
+    fans.add('well', cyl(0.55, 0.55, 0.32, 10), { p: [x, 3.32, 0] });
+  }
+  pod.add(fans.build({ rim: plastic(0x3a414c, 0.5, 0.4), well: plastic(0x14171c, 0.6) }));
   const parts = partsOf(pod), spots = [];
   for (let k = 0; k < BENCH.n; k++) {
     const e = BENCH.e0 + BENCH.de * (k + 0.36), y0 = LAKE.rim + 1.5 + BENCH.rise * k;

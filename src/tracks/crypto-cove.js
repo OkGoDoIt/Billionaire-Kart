@@ -188,12 +188,13 @@ function decorate(ctx) {
   sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY });
   view.startLights = gantry.userData.lights;
   const stand = P.grandstand({ w: 30, rows: 6, color: 0xff6a3d }), stand2 = P.grandstand({ w: 30, rows: 6, color: 0x1fc3c8 });
+  const staticProps = C.makeBaker(ctx.group, sc.shadows);
   const seats = [];
   const M = new THREE.Matrix4(), V = new THREE.Vector3();
   const standSpots = [];
   const putStand = (proto, p) => {
     const g = proto.group.clone(); sc.place(g, p.x, p.z, { yaw: p.yaw, y: track.py[p.i] - 0.3 }); standSpots.push({ x: p.x, z: p.z, yaw: p.yaw, y: track.py[p.i] - 0.3 });
-    g.updateMatrixWorld(true); M.copy(g.matrixWorld);
+    g.updateMatrixWorld(true); M.copy(g.matrixWorld); staticProps.add(g);
     for (const s of proto.seats) if (rng() < 0.82) { V.set(s[0], s[1], s[2]).applyMatrix4(M); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
   };
   sc.along({ from: 18.3, to: 0.95, side: 1, offset: 6.5, spacing: 36 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
@@ -220,7 +221,7 @@ function decorate(ctx) {
   // after a racer ahead collects the coins. Sample actual ground as the chord leaves the kerb.
   {
     const hit = makeGroundHit(), xyz = [], faces = [];
-    const marks = new ModelBuilder();
+    const marks = new ModelBuilder(), sails = [];
     for (let j = 1; j < SAND_CUT.length; j++) {
       const [ax, az] = SAND_CUT[j - 1], [bx, bz] = SAND_CUT[j];
       const len = Math.hypot(bx - ax, bz - az), nx = (bz - az) / len, nz = (ax - bx) / len;
@@ -236,10 +237,10 @@ function decorate(ctx) {
       }
       const x = ax - nx * 4, z = az - nz * 4, y = track.ground(x, z, -1, hit).y;
       marks.add('mast', cyl(0.09, 0.13, 3.1, 6), { p: [x, y + 1.5, z] });
-      const sail = new THREE.BufferGeometry();
-      sail.setAttribute('position', new THREE.Float32BufferAttribute([x,y+3.1,z, x,y+1.8,z, x-1.65,y+2.64,z+0.12], 3));
-      sail.computeVertexNormals(); const flag = new THREE.Mesh(sail, new THREE.MeshBasicMaterial({color: 0xff9a18, side: THREE.DoubleSide})); ctx.group.add(flag);
+      sails.push(x, y + 3.1, z, x, y + 1.8, z, x - 1.65, y + 2.64, z + 0.12);
     }
+    const sail = new THREE.BufferGeometry(); sail.setAttribute('position', new THREE.Float32BufferAttribute(sails, 3));
+    ctx.group.add(new THREE.Mesh(sail, new THREE.MeshBasicMaterial({ color: 0xff9a18, side: THREE.DoubleSide })));
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(xyz, 3)); g.setIndex(faces);
     ctx.group.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xbd9b6b, side: THREE.DoubleSide })));
     ctx.group.add(marks.build({ mast: plastic(0x543c32) }));
@@ -336,7 +337,7 @@ function decorate(ctx) {
       const a = (n + 0.5) * Math.PI / 13, x = span * Math.cos(a), y = spring + 6.8 * Math.sin(a);
       masonry.add(n % 3 === 0 ? 'salt' : 'rock', box(1.7, 1.05, 1.2, 0.12), {
         p: [p.x + Math.cos(yaw) * x, p.y + y, p.z - Math.sin(yaw) * x],
-        r: [0, yaw, Math.atan2(-6.8 * Math.cos(a), span * Math.sin(a)), 'YXZ'] });
+        r: [0, yaw, Math.atan2(-6.8 * Math.cos(a), span * Math.sin(a))] });
     }
     for (const side of [-1, 1]) {
       const x = p.x + side * span * Math.cos(yaw), z = p.z - side * span * Math.sin(yaw);
@@ -347,6 +348,7 @@ function decorate(ctx) {
   }
 
   // arrow boards on the outside of every real corner (not over the sea)
+  const arrowBoard = P.chevronBoard(0xff6a3d);
   for (const c of track.corners) {
     const side = c.dir > 0 ? -1 : 1, n = Math.max(2, Math.min(5, Math.round(c.len / 15)));
     for (let k = 0; k < n; k++) {
@@ -355,8 +357,9 @@ function decorate(ctx) {
       if (track.bridge[i] || edge !== 0) continue;
       const p = sc.beside(track.cp[i], side, (side > 0 ? track.outerL[i] : track.outerR[i]) + 1.2);
       if (p.y < W + 0.3) continue;
-      const b = P.chevronBoard(0xff6a3d); if (c.dir > 0) b.scale.x = -1;
+      const b = arrowBoard.clone();
       sc.place(b, p.x, p.z, { yaw: p.yaw, lift: 0.9 }); if (c.dir > 0) b.scale.x = -1;
+      staticProps.add(b, false);
     }
   }
 
@@ -369,6 +372,7 @@ function decorate(ctx) {
     balloons.forEach((b, i) => { b.position.y += Math.sin(time * 0.4 + i * 1.7) * dt * 0.8; b.rotation.y += dt * 0.05; });
     const a = time * 0.03; ship.position.set(cx + Math.cos(a) * 170, 80 + Math.sin(time * 0.3) * 2, cz + Math.sin(a) * 150); ship.rotation.y = -a;
   });
+  staticProps.flush();
   jk.flush();
   void far;
 }

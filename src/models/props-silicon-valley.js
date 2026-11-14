@@ -302,16 +302,78 @@ export function hooverTower({ H = 27 } = {}) {
   return b.build({ sand: plastic(0xe2cfa3, 0.8, 0), terra: plastic(0xa04a34, 0.7, 0), glass: plastic(0x1a1d29, 0.5, 0.2), conc: plastic(0x8b93a6, 0.8, 0) });
 }
 
-/** A suburban garage with a pitched pyramid roof and a paneled door, facing +Z. y = 0 at the slab. */
+/** The founding garage, front at +Z. Only the fixed walls and furnishings go into the scenery bake. */
 export function garage() {
-  const b = new ModelBuilder(), WL = 'wall', RF = 'roof', DR = 'door', CC = 'conc';
-  b.add(WL, bx(9.5, 4.4, 7), { p: [0, 2.2, 0] });
-  b.add(RF, cone(5.9, 2.6, 4), { p: [0, 5.7, 0], r: [0, Math.PI / 4, 0], s: [1.22, 1, 0.9] });
-  b.add(DR, bx(6.6, 3.1, 0.18), { p: [0, 1.65, 3.55] });
-  for (const y of [1.0, 1.9, 2.8]) b.add(CC, bx(6.6, 0.09, 0.06), { p: [0, y, 3.66] });
-  b.add(CC, bx(7.2, 0.12, 8.5), { p: [0, 0.06, 7.6] });                                  // the driveway
-  b.add(DR, bx(1.5, 1.1, 0.12), { p: [-3.4, 2.9, 3.53] });                               // a side window
-  return b.build({ wall: plastic(0xe2cfa3, 0.8, 0), roof: plastic(0xa04a34, 0.7, 0), door: plastic(0xb9bfca, 0.4, 0.7), conc: plastic(0x8b93a6, 0.8, 0) });
+  const b = new ModelBuilder(), m = farmMats();
+  b.add('sand', bx(9.5, 4.4, 0.32), { p: [0, 2.2, -3.34] });
+  for (const side of [-1, 1]) {
+    b.add('sand', bx(0.32, 4.4, 7), { p: [side * 4.59, 2.2, 0] });
+    b.add('sand', bx(1.25, 4.4, 0.4), { p: [side * 4.125, 2.2, 3.3] });
+    b.add('terra2', bx(0.17, 3.5, 0.22), { p: [side * 3.55, 1.97, 3.52] });
+  }
+  b.add('sand', bx(7, 0.94, 0.4), { p: [0, 3.93, 3.3] });
+  b.add('terra', cone(5.9, 2.6, 4), { p: [0, 5.7, 0], r: [0, Math.PI / 4, 0], s: [1.22, 1, 0.9] });
+  b.add('terra2', bx(10.15, 0.18, 7.52), { p: [0, 4.38, 0] });
+  b.add('floor', bx(9.48, 0.35, 7), { p: [0, 0.175, 0] });
+  b.add('floor', bx(7.2, 0.12, 8.5), { p: [0, 0.06, 7.6] });
+  // A deep, dark workshop backing keeps the light-colored equipment legible from the road.
+  b.add('shade', bx(8.75, 3.75, 0.15), { p: [0, 2.2, -3.05] });
+  // Keep the working surface just inside the jamb, with the legs crossing under it.
+  b.add('wood', box(5.65, 0.18, 1.25, 0.075, 1), { p: [0, 1.24, 2.55] });
+  for (const z of [2.08, 3.02]) for (const side of [-1, 1]) {
+    b.add('iron', tube([[side * 1.1, 0.34, z], [side * 2.42, 1.17, z]], 0.075, 1, 6));
+    b.add('iron', tube([[side * 2.42, 0.34, z], [side * 1.1, 1.17, z]], 0.075, 1, 6));
+  }
+  // A rounded cream CRT, hooded green phosphor screen, knob, and separate keyboard.
+  b.add('white', box(2.24, 1.47, 1.04, 0.17, 2), { p: [-1.15, 2.09, 2.42] });
+  b.add('dark', box(1.74, 1.15, 0.12, 0.12, 2), { p: [-1.29, 2.1, 2.96] });
+  b.add('phosphor', box(1.49, 0.93, 0.13, 0.12, 2), { p: [-1.29, 2.1, 3.03] });
+  b.add('white', bx(0.19, 0.08, 0.025), { p: [-1.78, 1.86, 3.11] });
+  b.add('iron', cyl(0.11, 0.11, 0.12, 10), { p: [-0.25, 1.85, 2.95], r: [Math.PI / 2, 0, 0] });
+  b.add('trim', bx(1.85, 0.15, 0.43), { p: [-1.1, 1.42, 3.06] });
+  // Bare board on a tilted easel: socketed ICs, solder traces, and a loop of jumper wire.
+  b.add('board', box(1.72, 1.02, 0.11, 0.05, 1), { p: [1.38, 1.88, 2.55], r: [-0.15, 0, -0.05] });
+  for (const x of [0.94, 1.36, 1.8]) {
+    b.add('dark', bx(0.27, 0.36, 0.12), { p: [x, 1.87, 2.67] });
+    for (const dy of [-0.12, 0, 0.12]) b.add('trim', bx(0.37, 0.035, 0.05), { p: [x, 1.87 + dy, 2.64] });
+  }
+  b.add('jumper', tube([[0.81, 2.18, 2.59], [1.03, 2.54, 2.66], [1.59, 2.13, 2.61]], 0.045, 10, 6));
+  // The auction paddle is planted alongside the eaves; its broad head can turn on a pin.
+  b.add('bronze', bx(0.8, 7.3, 0.55), { p: [8.55, 3.65, 2.9] });
+  b.add('trim', bx(1.32, 0.38, 1.2), { p: [8.55, 0.3, 2.9] });
+  const outline = new THREE.Shape();
+  outline.moveTo(-3.7, -1.55); outline.lineTo(-2.85, -2.6); outline.lineTo(2.85, -2.6);
+  outline.lineTo(3.7, -1.55); outline.lineTo(3.7, 1.55); outline.lineTo(2.85, 2.6);
+  outline.lineTo(-2.85, 2.6); outline.lineTo(-3.7, 1.55); outline.closePath();
+  const paddle = new THREE.Mesh(new THREE.ExtrudeGeometry(outline, { depth: 0.28, bevelEnabled: false }), m.trim);
+  paddle.geometry.translate(0, 0, -0.14);
+  paddle.position.set(8.55, 6.8, 3.45);
+  const slat = new ModelBuilder();
+  slat.add('white', bx(7, 0.49, 0.085), { p: [0, 0.01, 0] });
+  slat.add('trim', bx(7, 0.05, 0.11), { p: [0, -0.235, 0] });
+  const strip = slat.build(m);
+  // The shallow moulded profile and the lip share the same moving transform.
+  const door = new THREE.Group(), count = 6;
+  const strips = strip.children.map(part => new THREE.InstancedMesh(part.geometry, part.material, count));
+  door.add(...strips);
+  const segment = new THREE.Object3D();
+  const liftDoor = lift => {
+    const radius = 0.35, bend = Math.PI * radius / 2;
+    for (let i = 0; i < count; i++) {
+      const travel = 0.35 + (i + 0.5) * 0.52 + lift - 3.46;
+      const angle = Math.min(bend, Math.max(0, travel)) / radius;
+      segment.position.set(0, 3.46 + Math.min(0, travel) + radius * Math.sin(angle),
+        3.36 - radius * (1 - Math.cos(angle)) - Math.max(0, travel - bend));
+      segment.rotation.x = -angle;
+      segment.updateMatrix();
+      for (const mesh of strips) mesh.setMatrixAt(i, segment.matrix);
+    }
+    for (const mesh of strips) { mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); }
+  };
+  liftDoor(0);
+  const shell = b.build({ ...m, floor: plastic(0x8b93a6, 0.8, 0), wood: plastic(0xe2aa68, 0.8, 0),
+    phosphor: glow(0x3ae6a0, 0.75), board: plastic(0x168059, 0.75, 0), jumper: plastic(0xed6042, 0.8, 0) });
+  return { shell, door, liftDoor, paddle };
 }
 
 /* ---------- The Farm: the campus kit (sandstone, red tile, gold) ---------- */

@@ -29,6 +29,7 @@ const SAND = [lin(0xf2), lin(0xdf), lin(0xae)];   // look.terrain.sand in linear
 const ADS = ['HAVE FUN STAYING POOR', 'NUMBER GO UP', 'HODL', 'NOT FINANCIAL ADVICE', 'TRUST ME BRO CAPITAL', 'WITHDRAWALS PAUSED', 'FULLY BACKED (BY VIBES)', 'GAS FEES APPLY', 'FUNDS ARE SAFU', 'BUY THE DIP', 'AUDITED BY MY COUSIN', 'FEW UNDERSTAND', 'WEN LAMBO', 'THIS IS GOOD FOR BITCOIN'];
 
 // The inside chord of the S on the beach. The shelf is soft sand between both kerbs.
+const DIVE = { ramp: 8.95, lip: 9.06, land: 9.5 };
 const SAND_CUT = [[173, 99], [175, 113], [178, 129], [182, 145], [188, 162]];
 function nearSandCut(x, z) {
   if (x < 163 || x > 198 || z < 89 || z > 172) return false;
@@ -73,9 +74,9 @@ export default {
     { p: [180, 0.8, 196] },          // 5 right-hander onto the pier (shortcut on the inside)
     { p: [182, 3.0, 272], w: 17 }, // 6 pier, heading out to sea
     { p: [175, 3.3, 303], wl: 7.8, wr: 9.2 }, // 7 the bend on the pier
-    { p: [150, 3.5, 311], wl: 7.8, wr: 9.2 }, // 8
-    { p: [60, 3.6, 311], w: 16.5 },  // 9 ramp and gap
-    { p: [-38, 2.6, 300] },          // 10 landing on the sandbar
+    { p: [150, 5, 311], wl: 7.8, wr: 9.2 }, // 8
+    { p: [52, 12.3, 311], w: 16.5 },  // 9 ramp and gap
+    { p: [-38, 5.6, 300] },          // 10 landing on the sandbar
     { p: [-108, 5, 272] },           // 11 headland climb
     { p: [-154, 9.5, 210] },         // 12 drift right
     { p: [-98, 13.5, 150] },        // 13 drift left, into the cave
@@ -94,12 +95,13 @@ export default {
   shortcuts: [{ name: 'sand cut', from: 3.35, to: 4.65, path: SAND_CUT, boost: true, skill: 0.35 }],
   zones: [{ from: 1.9, to: 5.6, surface: 'dirt' }],
   bridges: [{ from: 5.6, to: 9.75 }],
-  gaps: [{ from: 9.2, to: 9.37 }],
+  gaps: [{ from: DIVE.lip, to: DIVE.land }],
   tunnels: [{ from: 13.3, to: 14.15, through: true }],
-  ramps: [{ at: 9.06, len: 10, lift: 2.6 }],
+  ramps: [{ at: DIVE.ramp, len: 10, lift: 3.2 }],
   boosts: [
     { at: 0.5, lat: 0, w: 5 },
-    { at: 9.5, lat: 0, w: 6 },
+    { at: 8.83, lat: 0, w: 7 },
+    { at: 9.6, lat: 0, w: 6 },
     { at: 14.2, lat: 0, w: 5 },
     { at: 16.6, lat: -3, w: 4.5 },
   ],
@@ -110,7 +112,8 @@ export default {
     { from: 3.72, to: 3.94, n: 3, lat: [-17, -26] },
     { from: 4.03, to: 4.38, n: 4, lat: [-26, -13] },   // the sand cut
     { from: 7.2, to: 7.8, n: 5, lat: [-4, 4] },
-    { from: 9.22, to: 9.35, n: 3, lat: 0, air: 2.8 },
+    { from: 9.16, to: 9.27, n: 3, lat: 0, air: 5.8 },
+    { from: 9.36, to: 9.44, n: 2, lat: 0, air: 4.2 },
     { from: 12.2, to: 12.8, n: 5, lat: [-4, 5] },
     { from: 15.4, to: 16.0, n: 4, lat: [4, -3] },
   ],
@@ -198,8 +201,9 @@ function decorate(ctx) {
   const jk = jokes(ctx, sc, { standSpots, seats, gantryAt: g0 });
 
   // road skins: planks on the pier, packed sand on the beach (drawn just above the road)
-  skin(ctx, 5.6, 9.06, plankTexture(), 5.5);
-  skin(ctx, 9.37, 9.75, plankTexture(), 5.5);
+  const timber = plankTexture();
+  skin(ctx, 5.6, DIVE.lip, timber, 5.5);
+  skin(ctx, DIVE.land, 9.75, timber, 5.5);
   skin(ctx, 1.9, 5.6, sandTexture(), 14, true);
 
   // Sailcloth pennants mark the soft-sand line. Twin tyre grooves lead across it even

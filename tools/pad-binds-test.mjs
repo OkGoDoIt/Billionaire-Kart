@@ -140,6 +140,26 @@ const fakePad = pressed => ({ connected: true, id: 'Fake', axes: [0, 0], buttons
   pads[0] = fakePad([15]); o = out(); input._pad(0, o); eq(o.steer, 0, 'steering source = stick: D-pad no longer steers');
   input.setPadBindings(custom, 'dpad');
   pads[0] = fakePad([]); pads[0].axes = [0.9, 0]; o = out(); input._pad(0, o); eq(o.steer, 0, 'steering source = dpad: stick no longer steers');
+  const pedalSample = (lt, rt, buttons = []) => {
+    pads[0] = fakePad(buttons);
+    for (const [n, value] of [[6, lt], [7, rt]]) pads[0].buttons[n] = { value, pressed: value > 0.5 };
+    return input.poll(1 / 60)[0];
+  };
+  input.setPadBindings(null, 'both');
+  eq(pedalSample(0.01, 1).brake, 0, 'a resting brake cannot cancel full gas');
+  eq(pedalSample(0.01, 1).throttle, 1, 'full analog travel reaches full gas');
+  input.keys.add('ArrowUp');
+  eq(pedalSample(0.02, 0).brake, 0, 'an idle attached pad does not brake the keyboard player');
+  input.keys.clear();
+  const pedals = defaultPadBindings();
+  applyPadBind(pedals, 'drift', 6); input.setPadBindings(pedals, 'both');
+  o = pedalSample(1, 1); ok(o.drift && o.throttle === 1 && !o.brake, 'a remapped drift trigger does not secretly brake');
+  applyPadBind(pedals, 'accelerate', 6); applyPadBind(pedals, 'brake', 7);
+  input.setPadBindings(pedals, 'both');
+  o = pedalSample(0.6, 0);
+  ok(o.throttle > 0.5 && o.throttle < 0.6 && !o.brake, 'swapped gas trigger remains proportional past the pressed threshold');
+  o = pedalSample(0, 0.8);
+  ok(!o.throttle && o.brake > 0.7 && o.brake < 0.8, 'swapped brake applies only proportional braking');
   // menu edges DERIVE from Accelerate/Brake — there is nothing else to remap
   const events = []; input.onMenu = a => events.push(a);
   input.setPadBindings(null, 'both');

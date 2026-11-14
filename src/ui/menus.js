@@ -640,7 +640,7 @@ export class Menus {
       h('div', { class: 'seg' }, STEER_CHOICES.map(([id, label]) => { const b = h('button', { class: 'seg-btn', 'data-f': true, onclick: () => { input.padSteer = id; persist(); drawSteer(); A.audio?.ui('move'); } }, label); segBtns.set(id, b); return b; })));
     const el = h('div', {}, this.header('Controller'),
       h('div', { class: 'panel pad' }, diagram, readout, list, steerRow,
-        h('p', { class: 'pad-note' }, 'The triggers always work as the gas and brake pedals too.'),
+        h('p', { class: 'pad-note' }, 'Triggers give you gradual acceleration and braking when set as pedals.'),
         h('div', { class: 'foot' }, this.btn('Reset to defaults', () => { input.padBinds = defaultPadBindings(); input.padSteer = 'both'; drawSteer(); persist(); endCapture('Back to the standard layout.'); A.audio?.ui('back'); }), this.btn('Done', () => this.back(), { cls: 'go' }))));
     drawAll(); drawSteer();
     return {
@@ -669,7 +669,7 @@ export class Menus {
     const key = (...k) => h('span', { class: 'keys' }, k.map(x => h('kbd', {}, x)));
     // each action, and how to do it on each kind of control; the screen shows one kind at a time
     // the controller column is read from the live bindings, so it stays true after a remap
-    const B = this.app.input.padBinds, gp0 = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(g => g && g.connected), D = a => describePadBind(B, a, padFamily(gp0?.id)), withTrig = (a, idx, word) => B[a].includes(idx) ? D(a) : `${D(a)} or ${word}`;
+    const B = this.app.input.padBinds, gp0 = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(g => g && g.connected), D = a => describePadBind(B, a, padFamily(gp0?.id)), withTrig = (a, idx, word) => this.app.input.pedals[a].includes(idx) && !B[a].includes(idx) ? `${D(a)} or ${word}` : D(a);
     const padRows = [['Steer', this.app.input.padSteer === 'dpad' ? 'D-pad' : this.app.input.padSteer === 'stick' ? 'Left stick' : 'Left stick or D-pad'],
       ['Accelerate', withTrig('accelerate', 7, 'right trigger')], ['Drift and hop', D('drift')], ['Use item', D('item')],
       ['Brake and reverse', withTrig('brake', 6, 'left trigger')], ['Look behind', D('rear')], ['Pause', D('pause')]];

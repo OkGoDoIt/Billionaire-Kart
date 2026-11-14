@@ -6,7 +6,9 @@
 
 No install. Works on a computer with a keyboard or controllers, and on a phone with touch. Add it to your home screen for full screen; tracks you have already played keep working offline.
 
-![Racing on Crypto Cove at sunset](screenshots/race-crypto-cove.jpg)
+![Billionaire Kart gameplay](screenshots/trailer.gif)
+
+![Jumping the price-chart crash in Crypto Cove](screenshots/race-crypto-cove.jpg)
 
 Sixteen caricatured tech moguls race rocket karts through their own world, armed with what they actually fight with: funding rounds, viral tweets, subpoenas, antitrust suits, and market crashes. The further back you are, the better your items, so nobody is ever out of the race. Skill still wins: drift well and you leave everyone behind.
 
@@ -14,7 +16,7 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 
 ## What is in it
 
-- **Eight tracks in two cups**, each with its own signature moment, soundtrack, and hazards.
+- **Twelve tracks in three cups**, each with its own signature moment, soundtrack, and hazards.
 - **Grand Prix, Quick Race, and Time Trial** (with a ghost of your best run), three engine classes, and three levels of rivals.
 - **One to four players** on one screen.
 - **Sixteen racers** with their own stats, signature karts, and things to say when they hit you, and a special of their own that changes how they drive.
@@ -28,6 +30,8 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 | ![Burning Circuit](screenshots/race-burning-circuit.jpg) | ![Four-player split-screen](screenshots/split-screen.jpg) |
 | ![Datacenter Dash](screenshots/race-datacenter-dash.jpg) | ![Mars Colony](screenshots/race-mars-colony.jpg) |
 | ![Capitol Hill Climb](screenshots/race-capitol-hill.jpg) | ![Choosing a cup](screenshots/menu-cups.jpg) |
+| ![Davos ski jump](screenshots/race-davos.jpg) | ![Jumping between yachts in International Waters](screenshots/race-international-waters.jpg) |
+| ![WeWork Memorial](screenshots/race-wework-memorial.jpg) | ![Boring Tunnel GP](screenshots/race-boring-tunnel.jpg) |
 | ![Racer select](screenshots/racers.jpg) | ![On a phone](screenshots/phone.jpg) |
 
 ### The grid
@@ -60,12 +64,12 @@ Two players can share a keyboard: one on W A S D with Space, the other on the ar
 
 ## Tracks
 
-| Seed Round Cup | Unicorn Cup |
-|---|---|
-| **Silicon Valley Circuit**: sunny campus loop, a crest jump, a rocket that launches mid-race | **Capitol Hill Climb**: a red-carpet run through the rotunda, then three hairpins down |
-| **Bliss Hills**: rolling crests, a wind farm, error dialogs wandering the road | **Burning Circuit**: fire slalom and a jump through a ring of flame at dusk |
-| **Crypto Cove**: a plank pier over the bay with a gap to clear, then a cave | **Mars Colony**: low gravity and a 43-metre canyon jump |
-| **Datacenter Dash**: a neon server hall, a bridge over the coolant pond, a dam crest | **Singularity Speedway**: a rainbow road spiralling around a newborn superintelligence |
+| Seed Round Cup | Unicorn Cup | Offshore Cup |
+|---|---|---|
+| **Silicon Valley Circuit** runs from Sand Hill Road through campus to the Golden Gate Bridge. | **Capitol Hill Climb** follows the Reflecting Pool before the turn back toward the Capitol. | **Davos Circuit** climbs through a summit slalom to a ski jump above the town. |
+| **Bliss Hills** climbs between desktop icons. Take the update-window jump or the Minesweeper meadow. | **Burning Circuit** threads the playa camps and jumps through a ring of fire. | **International Waters** sends you across three moving yachts, deck to deck. |
+| **Crypto Cove** climbs a green price chart and jumps the crash to an island landing. | **Mars Colony** sends karts over a low-gravity canyon toward the colony’s biodome. | **WeWork Memorial** races through office floors, up a stairwell, and along a hot-desk express lane. |
+| **Datacenter Dash** runs between server racks and out around the coolant lake. | **Singularity Speedway** banks a rainbow road around a watchful machine. | **Boring Tunnel GP** runs past a working cutter and opens an express bore on the last lap. |
 
 ![Singularity Speedway](screenshots/race-singularity-speedway.jpg)
 

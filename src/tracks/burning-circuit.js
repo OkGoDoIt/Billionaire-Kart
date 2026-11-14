@@ -239,6 +239,13 @@ export default {
       posters.place(k, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h);
       const r = atlas.add(768, 512, B.board(back, { bg: '#1a1d29', fg: '#ffd23c', size: 120, stripe: '#ff6a2a' }));
       atlas.place(r, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
+      // The payoff belongs under the poster art on its approach face. Both share the same frame.
+      const bandH = Math.min(3.5, h * 0.26), bandY = y0 + up - (h + bandH) / 2;
+      const rail = new ModelBuilder();
+      rail.add('ink', new THREE.BoxGeometry(w, bandH, 0.35));
+      bake.add(sc.place(rail.build({ ink: plastic(0x1a1d29, 0.5) }), x, z, { yaw, y: bandY }), false);
+      const caption = atlas.add(1024, Math.round(1024 * bandH / w), B.board(back, { bg: '#17212c', fg: '#fff2c5', lines: 1, pad: 0.035, size: 110 }));
+      atlas.place(caption, [x + Math.sin(yaw) * 0.19, bandY, z + Math.cos(yaw) * 0.19], yaw, w, bandH);
     };
     /** The same beside the road at control point `at`, if the spot is clear for its full width. */
     const poster = (at, side, off, k, back, opts = {}) => {

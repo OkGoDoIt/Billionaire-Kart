@@ -152,6 +152,12 @@ export default {
     fn(x, z) {
       const base = (fbm(x * 0.008, z * 0.008, 4, 31) - 0.5) * 6;
       let h = 2 + base + ridgeHeight(x, z) + (fbm(x * 0.03, z * 0.03, 2, 77) - 0.5) * 5 * smoothstep(20, 60, z);
+      // The landing piste sits on an alluvial fan. Continue the snow shelf out
+      // from both sides of its embankment before it falls away into town.
+      const fan = (1 - smoothstep(28, 104, Math.abs(x - 4))) *
+        smoothstep(142, 190, z) * (1 - smoothstep(305, 349, z));
+      const shelf = 16 + (z - 174) * 0.42 - 0.12 * Math.abs(x - 4);
+      h = lerp(h, Math.max(h, shelf), fan);
       const bowl = 1 - smoothstep(0.7, 1.15, Math.hypot((x - 35) / 75, (z - 88) / 46));   // the town's valley floor
       h = lerp(h, 1 + (fbm(x * 0.02 + 5, z * 0.02, 2, 17) - 0.5) * 1.4, bowl);
       const resort = 1 - smoothstep(0.7, 1.1, Math.hypot((x - 15) / 150, (z - 8) / 50));  // the resort floor: flat for the grid, the jets, the stands

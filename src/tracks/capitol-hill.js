@@ -223,6 +223,7 @@ export default {
   /** Dress the course. ctx: { THREE, track, group, gfx, anim, view } */
   decorate(ctx) {
     const { THREE, track, anim, view } = ctx, sc = new Scenery(ctx), rng = sc.rng;
+    const domesticStone = C.makeBaker(ctx.group, sc.shadows);
     const ds = doorSite(track), dcx = Math.cos(ds.yaw), dsx = Math.sin(ds.yaw);
     const taken = [[ds.x - dcx * DOOR.span / 2, ds.z + dsx * DOOR.span / 2, 14], [ds.x + dcx * DOOR.span / 2, ds.z - dsx * DOOR.span / 2, 14], [ds.x, ds.z, 12], [STATUE.x, STATUE.z, 15], [LECTERN.x, LECTERN.z, 16], [PERMIT.x, PERMIT.z, 16], [MAZE.x, MAZE.z, 26], [CANNON.x, CANNON.z, 9]];   // footprints of landmarks: [x, z, r]
     const free = (x, z, pad = 0) => !taken.some(([tx, tz, r]) => (tx - x) ** 2 + (tz - z) ** 2 < (r + pad) ** 2);
@@ -252,6 +253,7 @@ export default {
       const len = Math.hypot(track.px[i1] - track.px[i0], track.pz[i1] - track.pz[i0]);
       const cap = C.capitol({ len: len + 0.4, half: 20 });
       sc.place(cap, cx, cz, { cast: false, yaw: Math.atan2(track.px[i1] - track.px[i0], track.pz[i1] - track.pz[i0]), y: track.py[i0] });
+      domesticStone.add(cap, false);
       taken.push([cx, cz, 30], [cx + (track.px[i1] - cx) * 0.7, cz, 26], [cx - (track.px[i1] - cx) * 0.7, cz, 26]);
     }
 
@@ -271,8 +273,7 @@ export default {
       const chand = C.crashedChandelier(); chand.position.set(2.6, 9.0, 1.9); chand.rotation.set(0.4, 0.5, 0.25); site.add(chand);
       const fb = C.fallenBoard(); fb.position.set(-3, 0.55, 10.1); site.add(fb);
       sc.place(site, SX, SZ, { yaw: -0.38, y: SY, scale: 1.25 });
-      const masonry = C.makeBaker(ctx.group, sc.shadows);
-      masonry.add(site, false); masonry.flush();
+      domesticStone.add(site, false);
       taken.push([SX, SZ, 26]);
       // the wrecking crane, west of the site, its jib reaching over the demolished half
       const wc = C.wreckCrane(), swing = wc.userData.swing;
@@ -311,6 +312,7 @@ export default {
       for (let k = 0; k < 28; k++) { const a = (k / 28) * Math.PI * 2; const x = OBELISK.x + Math.cos(a) * 19, z = OBELISK.z + Math.sin(a) * 19; obeliskRing.push({ x, y: sc.y(x, z) - 0.1, z, yaw: -a }); }
       taken.push([OBELISK.x, OBELISK.z, 22]);
     }
+    domesticStone.flush();
     ctx.monument = mon;
     { const t = artTex(THREE, 'ashlar', 'monument'); t.repeat.set(3, OBELISK.h / 6); mon.traverse(o => { if (o.isMesh && o.material.color?.getHex() === 0xece6d6) { o.material = o.material.clone(); o.material.map = t; o.material.color.setHex(0xfaf6ee); o.material.flatShading = true; } }); }
     reflectingPool(ctx, sc, { taken, free, reach });
@@ -768,7 +770,7 @@ const MONO = '"Courier New", Courier, monospace';
 
 function jokes(ctx, sc, { seats, stands, gantryAt, reach }) {
   const { THREE, track, anim, view } = ctx, rng = sc.rng, group = ctx.group;
-  const bake = C.makeBaker(group, sc.shadows), atlas = C.makeAtlas(group), F = C.SIGN_FONT, SANS = C.SANS, signDraw = C.signDraw, fitText = C.fitText;
+  const bake = C.makeBaker(group, false), atlas = C.makeAtlas(group), F = C.SIGN_FONT, SANS = C.SANS, signDraw = C.signDraw, fitText = C.fitText;
   const yawTo = (from, to) => Math.atan2(to.x - from.x, to.z - from.z);
   const roadPt = cp => { const i = track.indexAtCp(cp); return { x: track.px[i], y: track.py[i], z: track.pz[i], i }; };
   const toWorld = (o, l) => { const c = Math.cos(o.yaw), s = Math.sin(o.yaw), k = o.scale ?? 1; return [o.x + (l[0] * c + l[2] * s) * k, o.y + l[1] * k, o.z + (-l[0] * s + l[2] * c) * k]; };

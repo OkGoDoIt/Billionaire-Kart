@@ -10,7 +10,8 @@ import { ModelBuilder, box, sphere, cyl, cone, torus, lathe, plastic, paint, glo
 import { canvasTex, fitText as textFit } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
 // the sign toolkit (world-space quads, a text atlas, a static baker, LED panels) is shared with Crypto Cove
-export { Quads, makeBaker, makeAtlas, fitText, signDraw, ledPanel, SIGN_FONT, SANS } from './props-crypto-cove.js';
+export { makeBaker } from './props-international-waters.js';
+export { Quads, makeAtlas, fitText, signDraw, ledPanel, SIGN_FONT, SANS } from './props-crypto-cove.js';
 
 const MARBLE = 0xf2efe6, MARBLE_D = 0xe0d9c8, STONE = 0xe8e1d0, GOLD = 0xd4af37;
 const marble = () => plastic(MARBLE, 0.55);

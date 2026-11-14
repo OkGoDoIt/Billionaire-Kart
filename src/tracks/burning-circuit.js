@@ -19,6 +19,7 @@ function strutGeo(a, b, w) {
   const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], len = Math.hypot(dx, dy, dz) || 1e-3;
   return new THREE.BoxGeometry(w, len, w).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx / len, dy / len, dz / len))).translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
 }
+const SAIL_LINE = [[0, -338], [-14, -344], [-30, -345], [-46, -343], [-62, -338], [-76, -330], [-86, -322]];
 const DUNE = { x: -38, z: -344, top: 15.5 };   // the big dune inside the dune loop: the boost cut goes up its face and off its lee
 
 export default {
@@ -53,8 +54,8 @@ export default {
     { p: [9.5, 8.5, -330], w: 18 },           // 16 right
     { p: [-7, 11, -366], w: 18 },             // 17
     { p: [-28, 14, -391], w: 18 },            // 18 long left over the crest
-    { p: [-60, 16.5, -391], w: 18 },          // 19 crest
-    { p: [-80, 15, -366], w: 18 },            // 20
+    { p: [-60, 19, -391], w: 20, bank: 5 },          // 19 crest
+    { p: [-80, 16, -366], w: 20, bank: 4 },            // 20
     { p: [-95, 14.5, -310] },                 // 21 the dune lip: off the plank, over the camp
     { p: [-108, 11, -250], w: 16 },           // 22 boardwalk over the camp
     { p: [-128, 8.5, -190], w: 16 },          // 23
@@ -73,16 +74,17 @@ export default {
     { from: 24.6, to: 26.6, side: 'L', outer: 40, shoulder: 5 }, // room to run wide through the camp corner
   ],
   shortcuts: [
-    { name: 'dune cut', from: 15.95, to: 20.8, boost: true, path: [[0, -338], [-14, -344], [-30, -345], [-46, -343], [-62, -338], [-76, -330], [-86, -322]] },
+    { name: 'dune cut', from: 15.95, to: 20.8, boost: true, path: SAIL_LINE },
   ],
   zones: [{ from: 13.25, to: 21.0, skin: 'sand' }, { from: 21.0, to: 24.4, skin: 'wood' }, { from: 24.4, to: 26.75, skin: 'dirt' }],
   bridges: [{ from: 21.0, to: 24.4 }],
   gaps: [{ from: 21.45, to: 21.68 }],
-  ramps: [{ at: 12.55, len: 9, lift: 2.2 }, { at: 21.25, len: 9, lift: 1.8 }],
+  ramps: [{ at: 12.55, len: 9, lift: 2.2 }, { at: 21.25, len: 9, lift: 1.8 },
+    { at: 19.08, lat: -4.4, w: 5.8, len: 8.5, lift: 1.45 }],
   boosts: [
     { at: 0.55, lat: 0, w: 5 },
     { at: 12.9, lat: 0, w: 8, len: 10 },
-    { at: 17.4, lat: 3, w: 4.5 },
+    { at: 18.53, lat: -4, w: 5.4, len: 9 },
     { at: 21.03, lat: 0, w: 8, len: 9 },   // onto the plank: speed for the gap
     { at: 23.4, lat: -3, w: 4.5 },
   ],
@@ -93,20 +95,18 @@ export default {
     { from: 11.5, to: 12.2, n: 5, lat: x => [-1.5, 0, 1.5, 0, -1.5][Math.round(x * 4)] },
     { from: 12.63, to: 12.78, n: 3, lat: 0, air: 3 },
     { from: 14.4, to: 15.2, n: 4, lat: [-4, 4] },
-    { from: 18.2, to: 19.4, n: 4, lat: [5, -3] },
+    { from: 18.1, to: 18.65, n: 3, lat: [0, -4] },
+    { from: 19.44, to: 19.68, n: 3, lat: -4.3, air: 2.4 },
     ...[[16.62, 23, 0.4], [16.69, 32, 1.4], [16.72, 40, 2.4]].map(([at, lat, air]) => ({ from: at, to: at, n: 1, lat, air })),   // up the big dune on the cut
     ...[[21.52, 3.6], [21.62, 4.4], [21.72, 4.0]].map(([at, air]) => ({ from: at, to: at, n: 1, lat: 0, air })),   // over the gap
     { from: 22.8, to: 23.6, n: 4, lat: 3 },
     { from: 25.1, to: 25.8, n: 4, lat: 8 },
   ],
   obstacles: [
-    // fire slalom: three gates 7 m wide, phases alternating, the gap swapping sides
-    { kind: 'timed', model: 'flame', at: 11.5, lat: -5, period: 3, duty: 0.34, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 11.5, lat: 2, period: 3, duty: 0.34, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 11.85, lat: -2, period: 3, duty: 0.34, phase: 1.5, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 11.85, lat: 5, period: 3, duty: 0.34, phase: 1.5, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 12.2, lat: -5, period: 3, duty: 0.34, phase: 0, effect: 'spin', radius: 1.3 },
-    { kind: 'timed', model: 'flame', at: 12.2, lat: 2, period: 3, duty: 0.34, phase: 0, effect: 'spin', radius: 1.3 },
+    // Fire jets alternate between the verges, leaving room to steer after an item hit.
+    { kind: 'timed', model: 'flame', at: 11.5, lat: -5, period: 3, duty: 0.25, phase: 0, effect: 'spin', radius: 1.3 },
+    { kind: 'timed', model: 'flame', at: 11.85, lat: 5, period: 3, duty: 0.25, phase: 1.5, effect: 'spin', radius: 1.3 },
+    { kind: 'timed', model: 'flame', at: 12.2, lat: -5, period: 3, duty: 0.25, phase: 0, effect: 'spin', radius: 1.3 },
     // art cars crawling out across the Esplanade and the Bowl exit
     { kind: 'patrol', model: 'artcar', at: 1.75, lats: [-8, -3], speed: 3.5, effect: 'spin', radius: 2.0 },
     { kind: 'patrol', model: 'artcar', at: 8.6, lats: [7.5, 1], speed: 3, effect: 'spin', radius: 2.0 },
@@ -114,7 +114,7 @@ export default {
     { kind: 'patrol', model: 'ledbus', at: 15.9, lats: [7.6, 3.4], speed: 1.8, effect: 'spin', radius: 2.1 },
     // dust devils waiting on the outside of the dune corners
     { kind: 'orbit', model: 'dustdevil', at: 14.05, lat: -6.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
-    { kind: 'orbit', model: 'dustdevil', at: 19.4, lat: -6.5, orbit: 5, speed: 6, effect: 'spin', radius: 1.6 },
+    { kind: 'orbit', model: 'dustdevil', at: 18.72, lat: -11.2, orbit: 2.4, speed: 6, effect: 'spin', radius: 1.6 },
   ],
   terrain: {
     cell: 3, margin: 170, blend: 30, water: -50,
@@ -125,6 +125,9 @@ export default {
       const ridge = smoothstep(-285, -345, z);
       const crest = 11 + Math.sin(x * 0.035 + z * 0.012) * 4 + (fbm(x * 0.02, z * 0.02, 3, 5) - 0.5) * 8;
       h += ridge * Math.max(0, crest);
+      // The far slip faces curl back along the long line; keep the boat high on its bank.
+      const lip = z + 420 + 6 * Math.sin(x * 0.055);
+      h += 10 * Math.exp(-((lip / (lip > 0 ? 10 : 25)) ** 2)) * Math.exp(-(((x + 40) / 60) ** 4));
       // the big dune inside the loop: a long windward face from the east, a short steep lee to the west
       { const u = DUNE.x - x, v = z - DUNE.z, f = u < 0 ? smoothstep(-34, 0, u) : 1 - smoothstep(0, 13, u), g = 1 - smoothstep(16, 34, Math.abs(v));
         h = h * (1 - f * g) + DUNE.top * f * g; }
@@ -140,6 +143,21 @@ export default {
     color(x, z, h, slope, over, out) {
       const sand = smoothstep(2.5, 8, h) * (1 - smoothstep(0.5, 0.9, slope)) * smoothstep(-260, -300, z);
       out[0] += (0.95 - out[0]) * sand * 0.7; out[1] += (0.86 - out[1]) * sand * 0.7; out[2] += (0.7 - out[2]) * sand * 0.7;
+      // Wind streaks across the high sand and a packed amber trail through the cut.
+      if (z < -298) {
+        const ripple = (0.5 + 0.5 * Math.cos(z * 0.69 + x * 0.12 + 2 * Math.sin(x * 0.05))) * sand;
+        out[0] *= 1 - ripple * 0.075; out[1] *= 1 - ripple * 0.17; out[2] *= 1 - ripple * 0.24;
+        if (x < 6 && x > -92 && z > -357 && z < -314) {
+          let distance = Infinity;
+          for (let i = 1; i < SAIL_LINE.length; i++) {
+            const [ax, az] = SAIL_LINE[i - 1], [bx, bz] = SAIL_LINE[i], dx = bx - ax, dz = bz - az;
+            const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+            distance = Math.min(distance, Math.hypot(x - ax - dx * t, z - az - dz * t));
+          }
+          const packed = 1 - smoothstep(3.4, 7.4, distance);
+          out[0] += (0.92 - out[0]) * packed; out[1] += (0.49 - out[1]) * packed; out[2] += (0.2 - out[2]) * packed;
+        }
+      }
       const cx = Math.abs(Math.sin(x * 0.21 + Math.sin(z * 0.13) * 1.7)), cz = Math.abs(Math.sin(z * 0.19 + Math.sin(x * 0.11) * 1.9));
       const crack = (1 - smoothstep(0.0, 0.07, Math.min(cx, cz))) * (1 - smoothstep(1.5, 3, h)) * smoothstep(3, 8, over);
       out[0] *= 1 - crack * 0.12; out[1] *= 1 - crack * 0.14; out[2] *= 1 - crack * 0.1;
@@ -148,7 +166,7 @@ export default {
   look: {
     road: { base: 0x6a6470, line: 0xffffff, center: false },
     kerb: [0xff6a2a, 0xfff0d0],
-    shoulder: 0xdcc8a2,
+    shoulder: 0xdcc8a2, groundDetail: 0.055, groundMatte: true,
     terrain: { low: 0xe6d3b0, high: 0xf0e2c2, dry: 0xd9c29c, rock: 0x8a6f7a, sand: 0xf3e6c8, dirt: 0xd2b98e },
     deck: 0x8a5a36, wall: 0xe0b37a, wallStripe: 0x8a5a36, rail: 0xff6a2a,
     ads: ['RADICAL SELF-RELIANCE (CATERED)', 'LEAVE NO TRACE OF TAXES', 'DUST TO DUST', 'GIFTING ECONOMY: $40K', 'TURNKEY CAMP', 'ART CAR VALET', 'DEFAULT WORLD', 'PLAYA PROVIDES', 'HUG DEALER', 'CACHE YOUR WATER', 'BURN RATE', 'MOOP PATROL'],
@@ -218,6 +236,13 @@ export default {
       posters.place(k, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h);
       const r = atlas.add(768, 512, B.board(back, { bg: '#1a1d29', fg: '#ffd23c', size: 120, stripe: '#ff6a2a' }));
       atlas.place(r, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
+      // The payoff belongs under the poster art on its approach face. Both share the same frame.
+      const bandH = Math.min(3.5, h * 0.26), bandY = y0 + up - (h + bandH) / 2;
+      const rail = new ModelBuilder();
+      rail.add('ink', new THREE.BoxGeometry(w, bandH, 0.35));
+      bake.add(sc.place(rail.build({ ink: plastic(0x1a1d29, 0.5) }), x, z, { yaw, y: bandY }), false);
+      const caption = atlas.add(1024, Math.round(1024 * bandH / w), B.board(back, { bg: '#17212c', fg: '#fff2c5', lines: 1, pad: 0.035, size: 110 }));
+      atlas.place(caption, [x + Math.sin(yaw) * 0.19, bandY, z + Math.cos(yaw) * 0.19], yaw, w, bandH);
     };
     /** The same beside the road at control point `at`, if the spot is clear for its full width. */
     const poster = (at, side, off, k, back, opts = {}) => {
@@ -344,20 +369,31 @@ export default {
 
     // ---- the burn you cannot miss: real flames climbing the Man, a smoke column, and a sky that catches ----
     {
+      // Each tongue has a rounded foot and a wind-bent, tapering tip. A soft alpha
+      // at the heel lets the timber and the orange body overlap without hard seams.
       const tex = new THREE.CanvasTexture(Object.assign(document.createElement('canvas'), { width: 8, height: 128 }));
-      { const g = tex.image.getContext('2d'), gr = g.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,244,190,1)'); gr.addColorStop(0.25, 'rgba(255,170,40,0.95)'); gr.addColorStop(0.7, 'rgba(240,70,10,0.6)'); gr.addColorStop(1, 'rgba(160,20,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 8, 128); }
-      tex.colorSpace = THREE.SRGBColorSpace;
-      const cone = new THREE.ConeGeometry(1, 1, 10, 4, true); cone.translate(0, 0.5, 0);
-      const mat = new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(2.2, 1.7, 1.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      const g = tex.image.getContext('2d'), gr = g.createLinearGradient(0, 128, 0, 0);
+      for (const [stop, color] of [[0, 'rgba(255,108,20,0)'], [0.12, '#ff7c12'], [0.32, '#ffcd54'], [0.58, '#ff8d25'], [0.84, '#f64e17'], [1, 'rgba(211,39,9,0.15)']]) gr.addColorStop(stop, color);
+      g.fillStyle = gr; g.fillRect(0, 0, 8, 128); tex.colorSpace = THREE.SRGBColorSpace;
+      const profile = [[0.05, 0], [0.7, 0.09], [1, 0.25], [0.84, 0.48], [0.53, 0.69], [0.27, 0.84], [0.025, 1]];
+      const tongue = new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 12);
+      const pos = tongue.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i); pos.setX(i, pos.getX(i) + y * y * (1.2 - Math.sin(y * 5.6)));
+      }
+      tongue.computeVertexNormals();
+      const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffedc0, transparent: true, depthWrite: false, fog: false });
       // tongues of flame at burn points up the body, plus a crown over the head
       const pts = body.slice().sort((p, q) => p.lvl - q.lvl), N = 16, top = pts[pts.length - 1];
-      const tongues = []; for (let k = 0; k < N; k++) { const p = pts[Math.floor((k + 0.5) / N * pts.length)]; tongues.push({ x: p.x, y: p.y - 1.5, z: p.z, lvl: p.lvl, r: 3.2 + rng() * 2.4, h: 10 + rng() * 8, ph: rng() * 6.28 }); }
-      tongues.push({ x: top.x, y: top.y, z: top.z, lvl: 31, r: 7, h: 30, ph: 1.3 }, { x: top.x, y: top.y - 6, z: top.z, lvl: 28, r: 9, h: 20, ph: 4.1 });
-      const flames = new THREE.InstancedMesh(cone, mat, tongues.length); flames.frustumCulled = false; flames.renderOrder = 6; ctx.group.add(flames);
-      const column = new THREE.Mesh(new THREE.CylinderGeometry(26, 5, 150, 14, 1, true), new THREE.MeshBasicMaterial({ color: 0x1c1614, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false }));
-      column.position.set(top.x, top.y + 82, top.z); column.renderOrder = 5; ctx.group.add(column);
+      const tongues = []; for (let k = 0; k < N; k++) { const p = pts[Math.floor((k + 0.5) / N * pts.length)]; tongues.push({ x: p.x, y: p.y - 1.5, z: p.z, lvl: p.lvl, r: 1.65 + rng() * 1.55, h: 8.5 + rng() * 7, ph: rng() * 6.28 }); }
+      tongues.push({ x: top.x, y: top.y, z: top.z, lvl: 31, r: 4.2, h: 20, ph: 1.3 }, { x: top.x, y: top.y - 6, z: top.z, lvl: 28, r: 4.9, h: 16, ph: 4.1 });
+      const flames = new THREE.InstancedMesh(tongue, mat, tongues.length); flames.frustumCulled = false; flames.renderOrder = 6; ctx.group.add(flames);
+      const soot = new THREE.MeshLambertMaterial({ color: 0x40343d, transparent: true, opacity: 0, depthWrite: false, flatShading: true });
+      const column = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), soot, 9);
+      column.frustumCulled = false; column.renderOrder = 4; ctx.group.add(column);
       const FIRE = { zenith: 0x3a0e14, horizon: 0xff5a1c, ground: 0xb8401c, fog: 0xc8552a, fogNear: 110, fogFar: 700, hemiSky: 0xff9a5c, hemiGround: 0xc0603a, cloud: 0xff9a5a, cloudShade: 0x5a1c18 };
       const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S = new THREE.Vector3();
+      const axis = new THREE.Vector3(0, 1, 0);
       let reach = 2, heat = 0, t = 0, fell = false;
       anim.push(dt => {
         t += dt;
@@ -367,10 +403,19 @@ export default {
         tongues.forEach((f, k) => {
           const on = smoothstep(f.lvl - 2, f.lvl + 2, reach), fl = 0.78 + 0.22 * Math.sin(t * 9 + f.ph) + 0.12 * Math.sin(t * 23 + f.ph * 2);
           S.set(f.r * on * (0.9 + 0.1 * Math.sin(t * 13 + f.ph)), Math.max(0.001, f.h * on * fl * (1 + heat * 0.5)), f.r * on);
-          M.compose(V.set(f.x + Math.sin(t * 3 + f.ph) * 0.5, f.y, f.z), Q.setFromAxisAngle(V.clone().set(0, 1, 0), t * 0.6 + f.ph), S); flames.setMatrixAt(k, M);
+          M.compose(V.set(f.x + Math.sin(t * 3 + f.ph) * 0.5, f.y, f.z), Q.setFromAxisAngle(axis, t * 0.6 + f.ph), S); flames.setMatrixAt(k, M);
         });
         flames.instanceMatrix.needsUpdate = true;
-        column.material.opacity = 0.16 * smoothstep(8, 16, reach) + 0.5 * heat; column.rotation.y = t * 0.07;
+        column.visible = reach > 8;
+        if (column.visible) {
+          soot.opacity = 0.09 * smoothstep(8, 16, reach) + 0.52 * heat;
+          for (let i = 0; i < column.count; i++) {
+            const phase = (i + t * 0.24) % column.count, size = (5 + 1.35 * phase) * smoothstep(0, 0.8, phase) * (1 - smoothstep(7.5, 9, phase));
+            V.set(FIGURE.x + phase * 2.7 + Math.sin(i * 4 + t * 0.45) * 2, top.y + 9 + phase * 6.7, FIGURE.z - phase * 1.3);
+            M.compose(V, Q.setFromAxisAngle(axis, i + t * 0.13), S.set(size * 1.2, size, size)); column.setMatrixAt(i, M);
+          }
+          column.instanceMatrix.needsUpdate = true;
+        }
         ctx.gfx.shiftSky(FIRE, heat * (0.72 + 0.1 * Math.sin(t * 5.3) + 0.06 * Math.sin(t * 11.7)));
         if (heat > 0.3) {
           // embers on the wind, across the road around the Bowl
@@ -420,8 +465,8 @@ export default {
 
       // EL PULPO MECÁNICO: breathes fire on the hour, insurance pending. Parked past
       // the landing so the ring jump aims you straight at it.
-      const PU = { x: 44, z: -288 };
-      const pu = B.pulpo(); sc.place(pu, PU.x, PU.z, { yaw: 0.85, y: sc.y(PU.x, PU.z) });
+      const PU = { x: 50, z: -292 };
+      const pu = B.pulpo(); sc.place(pu, PU.x, PU.z, { yaw: 0.85, y: sc.y(PU.x, PU.z), scale: 1.45 });
       pu.updateMatrixWorld(true);
       const nozzles = pu.userData.flames.map(p => {
         const tip = new THREE.Vector3(p[0], p[1], p[2]).applyMatrix4(pu.matrixWorld);
@@ -429,7 +474,7 @@ export default {
         return { x: tip.x, y: tip.y, z: tip.z, dx: out.x, dz: out.z };
       });
       bake.add(pu); take(PU.x, PU.z, 13);
-      signAt(63, -282, 0.8, B.board('EL PULPO MECÁNICO', { bg: '#1a1d29', fg: '#ffb020', size: 130, sub: 'BREATHES FIRE. STAND BACK.', subFg: '#ff6a2a', subScale: 0.6, lines: 1 }), 15, 5.4, 6.5, { frame: 0x1a1d29 });
+      signAt(39, -288, 1.1, B.board('EL PULPO MECÁNICO', { bg: '#1a1d29', fg: '#ffb020', size: 130, sub: 'BREATHES FIRE. STAND BACK.', subFg: '#ff6a2a', subScale: 0.6, lines: 1 }), 15, 5.4, 6.5, { frame: 0x1a1d29 });
       anim.push((dt, time) => {
         const live = nozzles.filter((nz, k) => (time * 0.22 + k * 0.17) % 1 < 0.3);
         if (!live.length) return;
@@ -560,11 +605,9 @@ export default {
       for (const sx of [-9, 9]) for (let z = -98; z > -292; z -= 8) rw.add('lamp', box(0.3, 0.3, 0.3, 0.05, 1), { p: [rx + sx, sc.y(rx + sx, z) + 0.2, z] });
       const g = rw.build({ tar: plastic(0x3a3540, 0.9), line: plastic(0xf4f4f0, 0.6), lamp: glow(0x46d6ff, 2.2) }, { cast: false }); ctx.group.add(g); bake.add(g, false);
       posterAt(142, -214, -0.4, 3, 'CARBON NEUTRAL (VIBES)', { w: 27, h: 18, up: 14, legs: 3 });
-      signAt(112, -262, -0.75, B.board('CARBON OFFSET BY VIBES', { bg: '#7dff6a', fg: '#1a1d29', size: 140 }), 14, 5, 7.5, { frame: 0x1a1d29 });
     }
     // fire jets in the slalom: product placement
     sign(11.4, 1, 14.5, B.board('NOT A FLAMETHROWER', { bg: '#1a1d29', fg: '#ff6a2a', size: 140, border: '#ff6a2a' }), 12, 4, 6.5, { turn: 0.25 });
-    sign(12.2, -1, 17, B.board('NOT A FLAMETHROWER', { bg: '#1a1d29', fg: '#ff6a2a', size: 140, border: '#ff6a2a' }), 13, 4.4, 6.5, { turn: 0.6 });
 
     // ---- the Bowl's outside: a camp with principles ----
     {
@@ -601,27 +644,20 @@ export default {
       sign(21.0, -1, 36, B.board('WIFI PASSWORD: NAMASTE123', { bg: '#7b5cff', fg: '#ffffff', size: 120 }), 16, 5.2, 8, { turn: 0.6 });
     }
 
-    // ---- the dune cut: whip flags up the big dune's face, two boards flanking the line, a warning on the crest ----
+    // Stranded marina: the sails trace the boost cut, the big hull marks the drift ridge.
+    // Two staggered banks leave the cut and its wide re-entry open even after a spin.
     {
-      const CUT = track.def.shortcuts[0].path, flags = [];
-      for (let k = 0; k < CUT.length - 1; k++) {
-        const [ax, az] = CUT[k], [bx, bz] = CUT[k + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
-        for (let d = 0; d < len; d += 8) for (const sd of [-1, 1]) {
-          const x = ax + (bx - ax) * d / len + nx * sd * 8, z = az + (bz - az) * d / len + nz * sd * 8;
-          if (!track.ground(x, z, -1, hit).onRoad) flags.push({ x, y: sc.y(x, z), z, yaw: rng() * 6.28 });
-        }
+      const sail = B.landYacht();
+      for (const [k, side, off, scale, yaw] of [[0, 1, 12, 1.02, 0.12], [1, -1, 12, 0.85, -0.34], [2, 1, 13, 1.05, 0.28], [3, -1, 14, 0.87, -0.36], [4, 1, 11, 0.95, 0.3], [5, -1, 13, 0.88, -0.3]]) {
+        const [ax, az] = SAIL_LINE[k], [bx, bz] = SAIL_LINE[k + 1], len = Math.hypot(bx - ax, bz - az);
+        const x = ax - (bz - az) * off * side / len, z = az + (bx - ax) * off * side / len;
+        if (track.ground(x, z, -1, hit).outside < 2) continue;
+        bake.add(sc.place(sail.clone(), x, z, { yaw, scale }), false);
       }
-      const mb = new ModelBuilder();
-      mb.add('pole', cyl(0.06, 0.08, 5.2, 5), { p: [0, 2.6, 0] });
-      mb.add('flag', box(0.05, 1.1, 1.6, 0.02, 1), { p: [0, 4.6, 0.8] });
-      bakeAll(mb.build({ pole: plastic(0x3a2c34, 0.6, 0.3), flag: plastic(0xff4fa8, 0.5) }), flags);
-      const beside = (k, sd, off) => { const [ax, az] = CUT[k], [bx, bz] = CUT[k + 1], len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len; return { x: ax + nx * sd * off, z: az + nz * sd * off, yaw: Math.atan2(ax - bx, az - bz) }; };
-      for (const [k, sd, text, st] of [[1, -1, 'CHEF-LED VISION QUEST', 'paper'], [4, 1, 'PLAYA NAME: CHIEF VIBES OFFICER', 'violet']]) {
-        const q = beside(k, sd, 15); if (!clear(q.x, q.z, 0)) continue;
-        signAt(q.x, q.z, q.yaw - sd * 0.5, B.board(text, { ...STYLE[st], size: 130 }), 16, 5.4, 8);
-      }
-      const c = beside(3, 1, 11);
-      signAt(c.x, c.z, c.yaw - 0.4, B.board('TRESPASSERS WILL BE GIFTED', { bg: '#ffd23c', fg: '#1a1d29', size: 130, border: '#1a1d29' }), 12, 4.2, 4.6, { frame: 0x1a1d29 });
+      const p = sc.beside(18.85, -1, 16);
+      bake.add(sc.place(sail.clone(), p.x, p.z, { yaw: 0.72, scale: 1.24 }), false);
+      const c = sc.beside(20.22, 1, 18);
+      signAt(c.x, c.z, faceIn(c.i, 1, 2), B.board('TRESPASSERS WILL BE GIFTED', { bg: '#ffd23c', fg: '#1a1d29', size: 130, border: '#1a1d29' }), 12, 4.2, 4.6, { frame: 0x1a1d29 });
     }
 
     // ---- the plank: off the dune lip, over the camp, onto the boardwalk. Below the gap, the safety net (pending) ----

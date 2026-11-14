@@ -110,10 +110,16 @@ export function figure({ h = 30 } = {}) {
     `clear` metres above the road. userData.rim lists [x,y,z] points around it. */
 export function fireHoop({ d = 14, hw = 8.5, clear = 1.6 } = {}) {
   const b = new ModelBuilder(), R = d / 2, cy = clear + R, foot = hw + 1.5;
-  b.add('steel', torus(R, 0.42, 10, 56), { p: [0, cy, 0] });
-  b.add('glow', torus(R - 0.5, 0.14, 6, 56), { p: [0, cy, 0.3] });
-  b.add('glow', torus(R - 0.5, 0.14, 6, 56), { p: [0, cy, -0.3] });
+  b.add('steel', torus(R, 0.58, 10, 56), { p: [0, cy, 0] });
+  b.add('glow', torus(R - 0.34, 0.28, 8, 56), { p: [0, cy, 0.48] });
+  b.add('glow', torus(R - 0.34, 0.28, 8, 56), { p: [0, cy, -0.48] });
   for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; b.add('dark', box(0.9, 0.5, 1.2, 0.1, 1), { p: [Math.cos(a) * R, cy + Math.sin(a) * R, 0], r: [0, 0, a] }); }
+  // Gas tongues silhouette the rim even at a distance or with reduced particles.
+  for (let k = 0; k < 32; k++) {
+    const a = (k + 0.5) * Math.PI / 16, h = 0.85 + ((k * 7) % 5) * 0.32;
+    const x = Math.cos(a) * R, y = cy + Math.sin(a) * R;
+    b.add('fire', cone(0.44, h, 6), { p: [x, y + 0.35 + h * 0.5, 0.06], r: [0, 0, -0.16 + Math.sin(k) * 0.18] });
+  }
   for (const sx of [-1, 1]) {
     strut(b, 'steel', [sx * R * 0.92, cy - 1.2, 0], [sx * foot, 0, 1.6], 0.45);
     strut(b, 'steel', [sx * R * 0.92, cy - 1.2, 0], [sx * foot, 0, -1.6], 0.45);
@@ -122,10 +128,45 @@ export function fireHoop({ d = 14, hw = 8.5, clear = 1.6 } = {}) {
     b.add('warn', box(0.5, 2.2, 0.5, 0.1, 1), { p: [sx * foot, 1.4, 2.1] });
     b.add('warn', box(0.5, 2.2, 0.5, 0.1, 1), { p: [sx * foot, 1.4, -2.1] });
   }
-  const g = b.build({ steel: plastic(0x3a3440, 0.45, 0.6), dark: MAT.dark, glow: glow(0xff7a1e, 3.5), warn: paint(0xff6a2a, { rough: 0.5 }) });
+  const g = b.build({ steel: plastic(0x3a3440, 0.45, 0.6), dark: MAT.dark, fire: glow(0xff6020, 1.25), glow: glow(0xffad35, 1.7), warn: paint(0xff6a2a, { rough: 0.5 }) });
   const rim = []; for (let k = 0; k < 40; k++) { const a = (k / 40) * Math.PI * 2; rim.push([Math.cos(a) * R, cy + Math.sin(a) * R, 0]); }
   g.userData.rim = rim; g.userData.cy = cy; g.userData.R = R;
   return g;
+}
+
+/** Three-wheel land yacht with a battened sail. The luff bows toward the wind. */
+export function landYacht() {
+  const b = new ModelBuilder();
+  const nose = [0, 1.6, 4.6], mast = [0, 1.4, 0.7], head = [0.2, 14.2, -1.1];
+  b.add('hull', loft([{ z: -3.3, w: 0.45, h: 0.38, y: 1.6 }, { z: -2, w: 1.15, h: 0.58, y: 1.55 }, { z: 0.5, w: 0.85, h: 0.42, y: 1.63 }, { z: 4.6, w: 0.12, h: 0.12, y: 1.6 }], 12, 2));
+  b.add('frame', box(0.83, 0.25, 1.2), { p: [0, 2.17, -1.6] });
+  limb(b, 'frame', mast, head, 0.18, 0.09);
+  for (const side of [-1, 1]) {
+    strut(b, 'frame', [side * 2.9, 0.92, -2.1], mast, 0.17);
+    strut(b, 'frame', [side * 2.9, 0.92, -2.1], [0, 1.6, -2.6], 0.22);
+  }
+  for (const [x, z] of [[-2.95, -2.1], [2.95, -2.1], [0, 4.35]]) {
+    b.add('tyre', cyl(0.93, 0.93, 0.5, 16), { p: [x, 0.93, z], r: [0, 0, Math.PI / 2] });
+    b.add('hull', cyl(0.5, 0.5, 0.54, 12), { p: [x, 0.93, z], r: [0, 0, Math.PI / 2] });
+  }
+  strut(b, 'frame', nose, [0, 0.92, 4.35], 0.18);
+  const sail = (level, width) => {
+    const chord = 0.1 + (1 - level) * 7.2;
+    return [0.2 * level + Math.sin(width * Math.PI) * chord * 0.21, 3.3 + 10.9 * level + width * (1 - level) * 1.7, 0.45 - level * 1.55 - chord * width];
+  };
+  const bands = [0, 0.2, 0.28, 0.49, 0.57, 0.77, 1], colors = ['sea', 'cream', 'sea', 'cream', 'gold', 'cream'];
+  for (let i = 0; i < colors.length; i++) {
+    const verts = [];
+    for (let j = 0; j < 4; j++) {
+      const a = sail(bands[i], j / 4), c = sail(bands[i], (j + 1) / 4);
+      const d = sail(bands[i + 1], j / 4), e = sail(bands[i + 1], (j + 1) / 4);
+      verts.push(...a, ...c, ...d, ...c, ...e, ...d, ...a, ...d, ...c, ...c, ...d, ...e);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    b.add(colors[i], geo);
+  }
+  limb(b, 'frame', sail(0, 0), sail(0, 1), 0.13, 0.09);
+  return b.build({ hull: paint(0xf0ad35), tyre: MAT.rubber, frame: MAT.dark, sea: plastic(0x087d94, 0.85), cream: plastic(0xffedd1, 0.88), gold: plastic(0xffad35, 0.83) });
 }
 
 /* ---------- the temple ---------- */

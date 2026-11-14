@@ -297,7 +297,7 @@ export class Menus {
         h('ol', {}, cup.tracks.map(id => h('li', { class: TRACK_BY_ID[id] ? '' : 'soon' }, TRACK_BY_ID[id]?.name || 'Coming soon'))),
         t && h('div', { class: 'cup-best' }, trophyImg(t.rank), h('span', {}, `${t.rank <= 3 ? '' : 'Best: '}${t.rank}${ordinalSuffix(t.rank)}, ${t.points} points`), t.rank === 1 && starRow(t.stars)));
     });
-    return { el: h('div', {}, this.header('Choose a cup', `${CLASSES[flow.cc].label} · ${LEVELS.find(l => l[0] === flow.level)[1]} rivals`), h('div', { class: 'cards two' }, cards)) };
+    return { el: h('div', {}, this.header('Choose a cup', `${CLASSES[flow.cc].label} · ${LEVELS.find(l => l[0] === flow.level)[1]} rivals`), h('div', { class: 'cards cups' }, cards)) };
   }
 
   /* ---------- single track ---------- */

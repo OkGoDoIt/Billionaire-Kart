@@ -77,6 +77,8 @@ const VOICE_LINES = [
   ['you_win', 'You win!'], ['champion', 'Champion!'], ['cup_over', 'What a cup!'],
   ['rocket_start', 'Rocket start!'], ['nice_start', 'Nice start!'], ['title', 'Billionaire Kart!'],
   ['track_silicon-valley', 'Silicon Valley Circuit!'], ['track_bliss-hills', 'Bliss Hills!'], ['track_crypto-cove', 'Crypto Cove!'], ['track_datacenter-dash', 'Datacenter Dash!'],
+  ['track_davos', 'Davos Circuit!'], ['track_international-waters', 'International Waters!'],
+  ['track_wework-memorial', 'WeWork Memorial!'], ['track_boring-tunnel', 'Boring Tunnel GP!'],
   ['track_capitol-hill', 'Capitol Hill Climb!'], ['track_burning-circuit', 'Burning Circuit!'], ['track_mars-colony', 'Mars Colony!'], ['track_singularity-speedway', 'Singularity Speedway!'],
 ];
 const LOOP = 'Instrumental only, no vocals. A seamless loop: it ends on the same groove and energy it starts with, with no intro build and no fade-out.';

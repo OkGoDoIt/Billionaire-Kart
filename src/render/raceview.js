@@ -2,6 +2,8 @@
    and the effects fired by sim events. One RaceView per Race. */
 import * as THREE from 'three';
 import { buildTrackMesh, trackUniforms } from '../track/trackmesh.js';
+import { simplifyScenery } from './splitgeometry.js';
+import { splitScenery } from './splitcull.js';
 import { KartView } from './kartview.js';
 import { ChaseCam, IntroCam, TvCam } from './chasecam.js';
 import { Particles, rgbOf } from './particles.js';
@@ -41,8 +43,20 @@ export class RaceView {
     track.clearColliders();
     if (def.decorate) def.decorate({ THREE, track, group: this.root, gfx, anim: this.anim, look: def.look, view: this, densityScale: race.players.length > 2 ? 0.5 : race.players.length === 2 ? 0.75 : 1 });
 
+    if (race.players.length > 2) { simplifyScenery(this.root); this.cull = splitScenery(this.root); }
+
     // pickups
     this.boxes = race.items.boxes.map(b => { const m = buildItemBox(); m.position.set(b.x, b.y, b.z); m.rotation.set(0.5, Math.random() * 6, 0.3); this.root.add(m); return { b, m, pop: 1 }; });
+    // All boxes share a finish; split cameras draw the visible row in one submission.
+    if (race.players.length > 2 && this.boxes.length) {
+      const cube = this.boxes[0].m.userData.cube;
+      this.boxMesh = new THREE.InstancedMesh(cube.geometry, cube.material, this.boxes.length);
+      this.boxMesh.frustumCulled = false;
+      this.boxMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.root.add(this.boxMesh);
+      this.boxFrustum = new THREE.Frustum();
+      for (const { m } of this.boxes) m.removeFromParent();
+    }
     const coins = race.items.coins;
     if (coins.length) {
       this.coinMesh = new THREE.InstancedMesh(coinGeometry(), coinMaterial(), coins.length);
@@ -58,7 +72,7 @@ export class RaceView {
     });
 
     // karts and cameras
-    this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0 }));
+    this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0, batch: race.players.length > 2 }));
     // real shadows cost one extra pass per view: with three or four views, use contact shadows instead
     const many = race.players.length > 2;
     gfx.sun.castShadow = gfx.q.shadow > 0 && !many; gfx.renderer.shadowMap.enabled = gfx.sun.castShadow;
@@ -80,16 +94,27 @@ export class RaceView {
   layout() {
     const n = this.cams.length;
     const rects = n <= 1 ? [[0, 0, 1, 1]] : n === 2 ? [[0, 0.5, 1, 0.5], [0, 0, 1, 0.5]] : [[0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5], [0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5]];
-    this.views = this.cams.map((c, i) => ({ camera: c.camera, rect: rects[i], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v) }));
+    this.views = this.cams.map((c, i) => ({ camera: c.camera, rect: rects[i], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v), onAfterRender: () => this.cull?.after() }));
     if (!n) { // spectator: follow the leader
       const c = this.tv ? new TvCam(this.race.karts[0], this.race.track) : new ChaseCam(this.race.karts[0], this.race.track, 9); this.cams = [c]; this.spectate = true;
-      this.views = [{ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v) }];
+      this.views = [{ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v), onAfterRender: () => this.cull?.after() }];
     }
     this.gfx.setViews(this.views);
   }
   _beforeView(v) {
     const h = this.gfx.renderer.domElement.height * v.rect[3];
     this.fx.setViewport(h, v.camera.fov);
+    this.cull?.before(v.camera);
+    if (this.boxMesh) {
+      const cam = v.camera;
+      this.boxFrustum.setFromProjectionMatrix(_m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse), cam.coordinateSystem, cam.reversedDepth);
+      let n = 0;
+      for (const { m } of this.boxes) if (m.visible) {
+        m.updateMatrixWorld();
+        if (this.boxFrustum.intersectsObject(m.userData.cube)) this.boxMesh.setMatrixAt(n++, m.matrix);
+      }
+      this.boxMesh.count = n; this.boxMesh.instanceMatrix.needsUpdate = true;
+    }
     // a rival close enough to fill the screen (its hat or hair in the lens) is left out of this view
     const cp = v.camera.position, own = v.cam?.kart;
     for (const kv of this.karts) {
@@ -378,6 +403,7 @@ export class RaceView {
   dispose() {
     const scene = this.gfx.scene;
     scene.remove(this.root);
+    this.cull?.dispose();
     this.root.traverse(o => { if (o.userData?.dispose) o.userData.dispose(); else if (o.isMesh || o.isPoints || o.isSprite) { o.geometry?.dispose?.(); } });
     releaseCanvases(this.root);   // Safari caps total canvas memory; see canvasmem.js
     this.gfx.setViews([]);

@@ -774,9 +774,9 @@ function ballroomBoardTex() {
     g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#d4af37'; g.lineWidth = 12; g.strokeRect(10, 10, w - 20, h - 20);
     g.strokeStyle = '#12142b'; g.lineWidth = 3; g.strokeRect(28, 28, w - 56, h - 56);
-    textFit(g, 'COMING SOON', w / 2, 74, w - 140, 62, 62, SITE_SANS, { fill: '#8a6d1f' });
-    textFit(g, 'A BALLROOM', w / 2, 186, w - 110, 138, 138, SITE_FONT, { fill: '#12142b' });
-    textFit(g, 'PAID FOR BY (REDACTED)', w / 2, 298, w - 140, 56, 56, SITE_SANS, { fill: '#b3122a' });
+    textFit(g, 'EAST WING', w / 2, 74, w - 140, 62, 62, SITE_SANS, { fill: '#8a6d1f' });
+    textFit(g, 'STATE BALLROOM', w / 2, 186, w - 110, 138, 138, SITE_FONT, { fill: '#12142b' });
+    textFit(g, 'BLACK TIE · HARD HAT', w / 2, 298, w - 140, 56, 56, SITE_SANS, { fill: '#b3122a' });
   }, { repeat: false, aniso: 8 });
 }
 
@@ -800,6 +800,15 @@ export function ballroomSite() {
   b.add('marbleD', box(12.1, 0.9, 1.1, 0.1, 1), { p: [7.75, BASE + 8.05, 3.4] });         // entablature
   b.add('marble', prism(9, 2.4, 1.2), { p: [7.75, BASE + 8.5, 3.4] });                    // pediment
   b.add('marbleD', box(11, 0.3, 6.4, 0.05, 1), { p: [7.75, BASE + 0.15, 0] });            // ballroom floor
+  // Without dark recesses and broken glazing, the intact white half reads
+  // as a solid box behind the sign. Leave one bay boarded up.
+  for (const x of [5.65, 9.85]) {
+    b.add('glass', box(2.55, 3.9, 0.16), { p: [x, BASE + 3.55, 3.78] });
+    b.add('marbleD', box(2.95, 0.24, 0.58), { p: [x, BASE + 1.57, 3.9] });
+    b.add('gold', box(0.11, 3.9, 0.12), { p: [x, BASE + 3.55, 3.89] });
+    b.add('gold', box(2.55, 0.1, 0.12), { p: [x, BASE + 4.12, 3.89] });
+  }
+  b.add('timber', box(3.15, 0.45, 0.16), { p: [5.65, BASE + 3.05, 4.03], r: [0, 0, -0.38] });
   // the break: jagged ends where the demolition stopped
   b.add('marble', prism(3.4, 1.4, 1.1), { p: [3.6, BASE + 8.35, 3.4], r: [0, 0, 0.35] }); // a pediment chunk, slipping
   b.add('marble', box(0.9, 5.2, 0.7, 0.08, 1), { p: [1.8, BASE + 2.6, 3.4], r: [0, 0, 0.16] });
@@ -807,6 +816,23 @@ export function ballroomSite() {
   b.add('marble', box(0.9, 6.4, 0.7, 0.08, 1), { p: [1.9, BASE + 3.2, -3.4], r: [0, 0, 0.1] });
   for (const [rx, rz, ry] of [[0.3, 0.4, 2.9], [-0.2, 0.55, 2.2], [0.45, -0.3, 3.4]])     // rebar poking out of the break
     b.add('site', cyl(0.05, 0.05, 1.8, 5), { p: [1.45, BASE + ry, 3.4], r: [rx, 0, rz] });
+  // An open steel bay frames the chandelier. The flanges catch the sun;
+  // the X-bracing and missing walls let the sky show through the new wing.
+  for (const x of [-13, -6.4, 0.2]) {
+    for (const z of [-3.8, 3.8]) {
+      b.add('steel', box(0.32, 8.9, 0.48), { p: [x, BASE + 4.45, z] });
+      for (const d of [-0.28, 0.28]) b.add('steel', box(0.78, 8.9, 0.13), { p: [x, BASE + 4.45, z + d] });
+    }
+    b.add('steel', box(0.45, 0.62, 8.35), { p: [x, BASE + 8.8, 0] });
+  }
+  for (const z of [-3.8, 3.8]) {
+    for (const y of [4.4, 8.8]) b.add('steel', box(14, 0.55, 0.45), { p: [-6.4, BASE + y, z] });
+  }
+  for (const x of [-9.7, -3.1]) {
+    for (const slope of [-1, 1]) b.add('steel', box(8.0, 0.22, 0.24), {
+      p: [x, BASE + 6.6, -3.8], r: [0, 0, slope * 0.59],
+    });
+  }
   // --- the west half: demolished to stubs and rubble ---
   b.add('marbleD', box(13, 1.7, 0.6, 0.1, 1), { p: [-6, BASE + 0.85, 3.4] });             // front wall stub
   b.add('marbleD', box(13, 2.6, 0.6, 0.1, 1), { p: [-6, BASE + 1.3, -3.4] });             // back wall stub
@@ -848,12 +874,12 @@ export function ballroomSite() {
   for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + 0.4; b.add('gold', sphere(0.17, 8, 6), { p: [-2 + Math.cos(a) * 1.2, BASE + 10.65, 0.8 + Math.sin(a) * 1.2] }); }
   b.add('gold', sphere(0.26, 9, 7), { p: [-2, BASE + 8.95, 0.8] });                       // finial
   // the site board's posts and backing board (in the 'site' bucket, so they cost no extra draw call)
-  for (const x of [6.2, 13.8]) b.add('site', box(0.3, 6.6, 0.3, 0.05, 1), { p: [x, BASE + 2.4, 8.6] });
-  b.add('site', box(9.9, 3.7, 0.14, 0.05, 1), { p: [10, BASE + 5.7, 8.6] });
-  grp.add(b.build({ marble: marble(), marbleD: marbleD(), site: plastic(0x9b968a, 0.9), gold: gold(), crane: paint(0xf5a800, { rough: 0.5, clear: 0.25 }) }));
+  for (const x of [6.2, 13.8]) b.add('site', box(0.3, 4.6, 0.3, 0.05, 1), { p: [x, BASE + 1.8, 8.6] });
+  b.add('site', box(9.9, 3.7, 0.14, 0.05, 1), { p: [10, BASE + 3.8, 8.6] });
+  grp.add(b.build({ marble: marble(), marbleD: marbleD(), site: plastic(0x9b968a, 0.9), glass: plastic(0x17304b, .42, .18), timber: plastic(0xb58754), steel: paint(0x963f28, { rough: 0.72 }), gold: gold(), crane: paint(0xf5a800, { rough: 0.5, clear: 0.25 }) }));
   const tex = ballroomBoardTex();
   const face = new THREE.PlaneGeometry(9.6, 3.4), back = new THREE.PlaneGeometry(9.6, 3.4);
-  face.translate(10, BASE + 5.7, 8.68); back.rotateY(Math.PI); back.translate(10, BASE + 5.7, 8.52);
+  face.translate(10, BASE + 3.8, 8.68); back.rotateY(Math.PI); back.translate(10, BASE + 3.8, 8.52);
   const merged = new THREE.BufferGeometry();   // both faces in one mesh, so the board costs one draw call
   {
     const pos = [], nor = [], uv = [], idx = []; let o = 0;
@@ -1011,18 +1037,13 @@ export function crashedChandelier() {
 
 function fallenBoardTex() {
   return canvasTex(1024, 364, (g, w, h) => {
-    g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h);
-    g.strokeStyle = '#d4af37'; g.lineWidth = 12; g.strokeRect(10, 10, w - 20, h - 20);
-    g.strokeStyle = '#12142b'; g.lineWidth = 3; g.strokeRect(28, 28, w - 56, h - 56);
-    textFit(g, 'COMING SOON', w / 2, 74, w - 140, 62, 62, SITE_SANS, { fill: '#8a6d1f' });
-    textFit(g, 'A BALLROOM', w / 2, 186, w - 110, 138, 138, SITE_FONT, { fill: '#12142b' });
-    textFit(g, 'PAID FOR BY (REDACTED)', w / 2, 298, w - 140, 56, 56, SITE_SANS, { fill: '#b3122a' });
-    // the correction, in spray paint: SOON is crossed out and the verdict scrawled over the middle
-    g.strokeStyle = 'rgba(200,20,30,0.9)'; g.lineWidth = 17; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(w * 0.16, 42); g.lineTo(w * 0.84, 108); g.moveTo(w * 0.16, 108); g.lineTo(w * 0.84, 42); g.stroke();
-    g.save(); g.translate(w / 2, h * 0.56); g.rotate(-0.045);
-    textFit(g, "IT'S GONE", 0, 0, w * 0.8, 120, 120, SITE_FONT, { fill: 'rgba(200,20,30,0.92)' });
-    g.restore();
+    g.fillStyle = '#174775'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#4483a4'; g.lineWidth = 2;
+    for (let x = 0; x < w; x += 36) g.strokeRect(x, 0, 36, h);
+    for (let y = 0; y < h; y += 36) g.strokeRect(0, y, w, 36);
+    g.strokeStyle = '#e9f6fa'; g.lineWidth = 6; g.strokeRect(15, 15, w - 30, h - 30);
+    textFit(g, 'CONCEPTS OF A PLAN', w / 2, h * .42, w - 85, 104, 104, SITE_FONT, { fill: '#ffffff' });
+    textFit(g, 'FLOOR PLAN   /   SHEET 0 OF 0', w / 2, h * .79, w - 115, 42, 42, SITE_SANS, { fill: '#d2e9f0' });
   }, { repeat: false, aniso: 8 });
 }
 

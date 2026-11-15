@@ -413,12 +413,6 @@ body.must-turn .hud, body.must-turn .track-card, body.must-turn .hint-card { vis
 
 .res-quote { font-size: calc(var(--u) * 1.75); font-style: italic; opacity: 0.92; margin-top: calc(var(--u) * 0.55) !important; text-align: center; } .res-quote b { font-style: normal; color: var(--gold); } .res-quote span { display: inline-block; margin: 0 calc(var(--u) * 1.2); }
 
-/* centered with margins, not a transform: the entry animation's transform would replace a translateX(-50%) and leave the card hanging over the position badge */
-.hint-card { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; max-width: calc(100% - min(1vw, 1.78vh) * 6); bottom: calc(min(1vw, 1.78vh) * 1.6 + var(--safe-b)); --u: min(1vw, 1.78vh); font-family: var(--body); font-weight: 600; font-size: calc(var(--u) * 2.1); color: #fff; background: rgba(18,20,43,0.86); border: calc(var(--u) * 0.3) solid rgba(255,255,255,0.8); border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.6); pointer-events: none; white-space: nowrap; animation: menu-in 0.4s ease-out 1.5s both; z-index: 6; }
-.hint-card b { color: var(--gold); } .hint-card.out { transition: opacity 0.5s; opacity: 0; }
-/* on a squarer screen the corner blocks reach further in, so the hint sits above the lap counter instead of beside it */
-@media (max-aspect-ratio: 3/2) and (orientation: landscape) { .hint-card { bottom: calc(12vh + var(--safe-b)); } }
-
 /* cup standings: a slim panel on the right so the podium shows on the left */
 .screen-cupResults { align-items: flex-end; }
 .panel.cupres { width: min(46%, calc(var(--u) * 46)); padding: calc(var(--u) * 1.4) calc(var(--u) * 2); margin: auto 0; }

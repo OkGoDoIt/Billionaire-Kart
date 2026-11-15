@@ -3,6 +3,7 @@
 import { Race } from '../race/race.js';
 import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
+import { DrivingGuide } from '../ui/driving-guide.js';
 import { Hud } from '../ui/hud.js';
 import { TouchControls, isTouchDevice } from '../ui/touch.js';
 import { ITEMS, HIT_LINES } from '../race/items.js';
@@ -44,9 +45,8 @@ export class RaceSession {
     // touch controls for a solo player on a touch screen
     this.touch = null;
     if (n === 1 && isTouchDevice() && !config.auto) {
-      const S = app.save?.settings || {}, seen = app.save?.data.touchRaces || 0;
-      this.touch = new TouchControls(app.ui, app.input, this.race.players[0], { onPause: () => app.pause?.(), autoGo: !!S.autoGo, coach: seen < 3 });
-      if (app.save) { app.save.data.touchRaces = seen + 1; app.save.write(); }
+      const S = app.save?.settings || {};
+      this.touch = new TouchControls(app.ui, app.input, this.race.players[0], { onPause: () => app.pause?.(), autoGo: !!S.autoGo });
       this.huds[0].root.classList.add('hud-touch'); this.race.players[0].autoTrick = true;
       // touch play gets the steering assist by default (issue #136), the way automatic
       // tricks are forced here too; the Options toggle governs the other controls
@@ -54,6 +54,7 @@ export class RaceSession {
       // a phone screen is small and the thumbs cover its corners: sit the camera further back so there is more road in view
       for (const c of this.view.cams) c.pullBack = 1.24;
     } else app.input.touch.active = false;
+    this.guides = app.save && !config.auto ? this.huds.map(h => new DrivingGuide(h, app.input, app.save, this.touch)) : [];
     for (const c of this.view.cams) c.shakeScale = app.shake === false ? 0 : 1;
     // time trial: race your own best run, and record this one
     this.rec = null;
@@ -84,6 +85,13 @@ export class RaceSession {
         if (e.type === 'rankDown' && this.race.time > 6 && !kart.finished && Math.random() < 0.45) { const passer = this.race.order[kart.rank - 2]; if (passer && !passer.isPlayer) hud.talk(passer.racer, pick(passer.racer.barks.pass), 2600); }
         if (e.type === 'lap' && e.data > 1 && e.data <= this.race.laps && this.def.lapNotes?.[e.data - 2]) hud.feed(this.def.lapNotes[e.data - 2], 4200);
         const p = kart.playerIndex;
+        const guide = !this.autopilots && this.guides[p];
+        if (guide) {
+          if (e.type === 'itemUse') guide.learned('item');
+          if (e.type === 'driftStart') guide.learned('drift');
+          if (e.type === 'miniTurbo') guide.learned('release');
+          if (e.type === 'trick' && !kart.autoTrick) guide.learned('trick');
+        }
         if (e.type === 'finish') { app.input.stopRumble(p); this._slowMo(); }
         else if (!kart.finished) {
           if (e.type === 'hit') { const big = e.data.kind === 'tumble'; app.input.rumble(p, 1, big ? 1 : 0.8, big ? 520 : 380); this._hitStop(big ? 0.11 : e.data.kind === 'zap' ? 0.06 : 0.08); }
@@ -139,7 +147,9 @@ export class RaceSession {
       for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
       if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
       this.touch?.sync(dt);
-      if (this.touch) this.huds[0].quiet = this.touch.root.classList.contains('coaching');   // rivals hold their tongues while the controls are being explained
+      for (const [i, guide] of this.guides.entries()) {
+        if (this.autopilots) guide.hide(); else guide.update(dt, inputs[i]);
+      }
       for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
       if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
     }
@@ -149,7 +159,7 @@ export class RaceSession {
     app.gfx.render(dt, frameTime);
   }
 
-  setPaused(p) { if (p) this.app.input.stopRumble(); this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
+  setPaused(p) { if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
 
   dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

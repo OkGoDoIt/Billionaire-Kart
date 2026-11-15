@@ -168,7 +168,7 @@ export function hangingBanner(w, h, clothMat) {
 
 /** A glass meeting room shell: floor pad, glass walls with a door gap on
     the +Z side, a solid back wall, mullions. Name signs are decorate's. */
-export function meetingRoom(w, d, h = 3.4) {
+export function meetingRoom(w, d, h = 3.4, withTable = true) {
   const b = new ModelBuilder();
   b.add('floor', box(w, .07, d, .01), { p: [0, .035, 0] });
   b.add('back', box(w, h, .09, .02), { p: [0, h / 2, -d / 2] });
@@ -181,9 +181,11 @@ export function meetingRoom(w, d, h = 3.4) {
   b.add('mull', box(.09, h, .09, .01), { p: [-w * .16, h / 2, d / 2] });
   b.add('mull', box(.09, h, .09, .01), { p: [w * .16, h / 2, d / 2] });
   b.add('top', box(w, .09, d, .01), { p: [0, h + .04, 0] });
-  b.add('table', box(w * .55, .07, d * .34, .02), { p: [0, .76, 0] });
-  b.add('table', box(.09, .72, .09, .01), { p: [-w * .22, .37, 0] });
-  b.add('table', box(.09, .72, .09, .01), { p: [w * .22, .37, 0] });
+  if (withTable) {
+    b.add('table', box(w * .55, .07, d * .34, .02), { p: [0, .76, 0] });
+    b.add('table', box(.09, .72, .09, .01), { p: [-w * .22, .37, 0] });
+    b.add('table', box(.09, .72, .09, .01), { p: [w * .22, .37, 0] });
+  }
   return b.build({ floor: paint(0xb9b2a2, { rough: .7 }), back: paint(0xe9e4d8, { rough: .8 }), side: GLASS, glass: GLASS, mull: MAT.dark, top: paint(0xd8d2c2, { rough: .8 }), table: paint(0x8a6f4d, { rough: .5 }) });
 }
 
@@ -205,9 +207,12 @@ export function workPods(feltColor, occupied = true) {
   block('felt', 0, .1, -2.45, 11.8, 2.45, .26);
   block('trim', 0, 2.55, -2.45, 12, .10, .35);
   for (const x of [-5.85, 0, 5.85]) {
-    block('felt', x, .1, -.45, .24, 2.45, 4.1);
-    block('trim', x, 2.55, -.45, .33, .10, 4.16);
-    block('trim', x, .10, 1.63, .32, 2.45, .12);
+    // The return drops to elbow height at the aisle, exposing keyboards,
+    // screens, and rolling chairs through the approach rather than a blank end panel.
+    block('felt', x, .1, -1.44, .24, 2.45, 2.14);
+    block('trim', x, 2.55, -1.44, .33, .10, 2.20);
+    block('felt', x, .1, .61, .24, 1.18, 1.96);
+    block('trim', x, 1.28, .61, .33, .10, 2.04);
   }
   for (const [i,x] of [-3,3].entries()) {
     block('oak',x,1.17,-1.30,5.2,.16,1.86);
@@ -217,11 +222,26 @@ export function workPods(feltColor, occupied = true) {
     block('ink',x,1.33,-1.50,.22,.63,.24);
     block('ink',x,1.86,-1.55,2.28,1.35,.19);
     block(i?'blue':'sand',x,1.98,-1.443,2.05,1.09,.025);
-    block('oak',x,1.38,-.74,1.1,.06,.34);
+    // The lit windows and keyboard distinguish a working computer from a flat panel.
+    block('paper',x-.61,2.12,-1.414,.56,.76,.025);
+    for (let j=0; j<3; j++) {
+      if (i) block('ink',x+.04+j*.28,2.13,-1.414,.19,.17+j*.19,.025);
+      else block('ink',x+.27,2.23+j*.22,-1.414,.83-j*.12,.09,.025);
+    }
+    block('ink',x,1.33,-.67,1.38,.07,.48);
+    for (const row of [-.80,-.67,-.54]) block('paper',x,1.405,row,1.15,.016,.038);
+    block('ink',x+.95,1.33,-.68,.26,.07,.34);
     block('ink',x,.03,.83,.18,.68,.18);
     block('ink',x,.04,.83,1.12,.10,.18); block('ink',x,.04,.83,.18,.10,1.05);
     block('chair',x,.67,.82,1.26,.21,1.14); block('chair',x,.86,1.32,1.24,1.06,.19);
     for(const dx of [-.64,.64]) block('ink',x+dx,1.04,.80,.09,.14,.68);
+    if (i===0 && occupied) {
+      // A jointed task lamp, with its shade extending toward the paperwork.
+      block('ink',x-1.74,1.33,-1.44,.66,.12,.50);
+      b.add('ink',box(.11,1.33,.11),{p:[x-1.58,2.04,-1.44],r:[0,0,-.28]});
+      block('ink',x-1.04,2.65,-1.44,.79,.10,.11);
+      b.add('lamp',cone(.42,.42,10),{p:[x-.69,2.52,-1.44]});
+    }
     if (occupied && i===1) {
       b.add('pot',cyl(.36,.24,.46,8),{p:[x+1.65,1.56,-1.25]});
       for (const [off,rot] of [[-.16,.56],[.15,-.42],[0,-.04]]) b.add('leaf',sphere(.41,6,5),{p:[x+1.65+off,2.13,-1.27],r:[.1,0,rot],s:[.48,1.52,.52]});
@@ -230,7 +250,7 @@ export function workPods(feltColor, occupied = true) {
       block('pot',x-1.32,1.33,-.77,.28,.38,.29);
     }
   }
-  return b.build({felt:plastic(feltColor,.96),trim:plastic(0xd6c7a4,.64),oak:plastic(0xddb484,.67),ink:MAT.dark,bin:plastic(0x909a93,.85),chair:plastic(0x334957,.86),blue:glow(0x79c5c0,.65),sand:glow(0xffc57a,.55),pot:plastic(0xc8724d,.73),leaf:plastic(0x638e5c,.89),paper:MAT.white});
+  return b.build({felt:plastic(feltColor,.96),trim:plastic(0xd6c7a4,.64),oak:plastic(0xddb484,.67),ink:MAT.dark,bin:plastic(0x909a93,.85),chair:plastic(0x334957,.86),blue:glow(0x79c5c0,.65),sand:glow(0xffc57a,.55),lamp:plastic(0xf1b555,.55),pot:plastic(0xc8724d,.73),leaf:plastic(0x638e5c,.89),paper:MAT.white});
 }
 
 /** A single long conference table under a pendant, with high-backed directors' chairs. */

@@ -47,7 +47,12 @@ export class DrivingGuide {
     if (!c) return;
     const lesson = this.lesson(skill, c);
     if (lesson.uses < USES_TO_LEARN) { lesson.uses++; this.save.write(); }
-    if (this.active === skill) this.hide();
+    if (this.active === skill) {
+      // A charged drift can last less than the usual quiet interval. Finish
+      // this maneuver's instruction as soon as the player has sparks to spend.
+      if (skill === 'drift') this.teachingDrift = true;
+      this.hide();
+    }
   }
 
   hide() {
@@ -65,6 +70,7 @@ export class DrivingGuide {
       this.launched = true;
       if (!(c.touch && this.touch.autoGo && !this.touch.pedal)) this.learned('start');
     }
+    if (!k.drifting && !k.hopping) this.teachingDrift = false;
     const tr = race.track;
     const ahead = s => loopDelta(k.s, s, tr.length);
     const driving = k.grounded && k.fwd > k.baseTop * 0.52 && k.hit.onRoad;
@@ -82,13 +88,13 @@ export class DrivingGuide {
       ['trick', ramp], ['item', !!k.item && !k.rouletteT], ['drift', corner],
     ];
     if (this.active) {
+      if (this.active === 'drift' && k.drifting) this.teachingDrift = true;
       if (this.clock >= this.until || !candidates.some(([skill, yes]) => yes && skill === this.active)) this.hide();
       else this.draw(this.active, c);
       return;
     }
-    if (this.clock < this.restUntil) return;
     for (const [skill, eligible] of candidates) {
-      if (!eligible) continue;
+      if (!eligible || (this.clock < this.restUntil && !(skill === 'release' && this.teachingDrift))) continue;
       const lesson = this.lesson(skill, c);
       const key = c.profile + '/' + skill + '/' + lesson.binding;
       if (this.shown.has(key) || lesson.uses >= USES_TO_LEARN || lesson.shows >= MAX_SHOWS) continue;

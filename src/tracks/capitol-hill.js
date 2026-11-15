@@ -857,7 +857,15 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
   let displayLap = 1;
   {
     const p = sc.beside(CAFE_CP, -1, 19), yaw = yawTo(p, roadPt(14.1));
-    const stand = new ModelBuilder(), cup = { x: p.x, y: p.y, z: p.z, yaw };
+    // The ground falls steeply outside the Climb. The concession sits on
+    // its own piled terrace level with the avenue; the hill cannot hide the menu.
+    const stand = new ModelBuilder(), cup = { x: p.x, y: Math.max(p.y, p.roadY) + 0.6, z: p.z, yaw };
+    for (const x of [-5.5, 5.5]) for (const z of [-2.25, 2.25]) {
+      const [wx, , wz] = toWorld(cup, [x, 0, z]);
+      const height = Math.max(0.3, cup.y - sc.y(wx, wz) + 0.4);
+      stand.add('sleeve', box(.8, height, .8), { p: [x, -height / 2, z] });
+    }
+    stand.add('green', box(12.4, .45, 5.8, .05), { p: [0, -.2, 0] });
     stand.add('green', box(11.8, 4.8, 5.3, .22), { p: [0, 2.4, 0] });
     stand.add('cream', box(12.5, .5, 5.9, .1), { p: [0, 4.95, 0] });
     stand.add('cream', cyl(2.9, 2.1, 6.0, 20), { p: [-3.1, 8.15, 0], r: [0, 0, .1] });
@@ -865,7 +873,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
     stand.add('green', cyl(3.04, 3.11, .55, 20), { p: [-3.41, 11.34, 0], r: [0, 0, .1] });
     stand.add('green', box(13.4, 6.1, .28, .15), { p: [1.7, 5.3, 2.74] });
     const kiosk = stand.build({ green: plastic(0x17443d), cream: plastic(0xffeed5), sleeve: plastic(0xbd804d) });
-    sc.place(kiosk, p.x, p.z, { yaw, y: p.y }); bake.add(kiosk);
+    sc.place(kiosk, p.x, p.z, { yaw, y: cup.y }); bake.add(kiosk);
     const menu = lapSigns.add(768, 352, (g, w, h) => {
       g.fillStyle = '#123e39'; g.fillRect(0, 0, w, h);
       fitText(g, 'FED CAFÉ', w / 2, h * .18, w * .9, 64, F, '#f3dd99', { lines: 1 });

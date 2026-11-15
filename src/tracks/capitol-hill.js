@@ -261,7 +261,7 @@ export default {
     // Put the construction site in the vanishing point of the Avenue. Its
     // open steel and chandelier now introduce turn one from the starting grid.
     {
-      const SX = 163, SZ = -28, SY = sc.y(SX, SZ) - 0.30, scale = 1.65;
+      const SX = 174, SZ = -30, SY = sc.y(SX, SZ) - 0.30, scale = 1.65;
       const yaw = -1.28, cyw = Math.cos(yaw), syw = Math.sin(yaw);
       const sitePoint = (x, z) => [SX + scale * (cyw * x + syw * z), SZ + scale * (-syw * x + cyw * z)];
       const site = C.ballroomSite();
@@ -400,7 +400,7 @@ export default {
       ...sc.along({ from: 10.2, to: 11.6, side: 1, offset: 13.5, spacing: 8, jitter: 1 }),
     ];
     cherrySpots.push(...sc.scatter({ count: 60, min: 14, max: 70, maxSlope: 0.5, minGap: 7, where: (x, z) => (onPlateau(x, z, 1.6) && !onPlateau(x, z, 1.02)) || (x > -60 && x < 100 && z > 20 && z < 95) }));
-    const cafe = sc.beside(CAFE_CP, -1, 12);
+    const cafe = sc.beside(CAFE_CP, -1, 19);
     taken.push([cafe.x, cafe.z, 9]);
     const sightlines = BOARDS.map(([cp, side, offset]) => {
       const board = sc.beside(cp, side, offset), i = track.indexAtCp(cp);
@@ -856,7 +856,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
   const lapSigns = C.makeAtlas(group, 1024);
   let displayLap = 1;
   {
-    const p = sc.beside(CAFE_CP, -1, 12), yaw = yawTo(p, roadPt(14.1));
+    const p = sc.beside(CAFE_CP, -1, 19), yaw = yawTo(p, roadPt(14.1));
     const stand = new ModelBuilder(), cup = { x: p.x, y: p.y, z: p.z, yaw };
     stand.add('green', box(11.8, 4.8, 5.3, .22), { p: [0, 2.4, 0] });
     stand.add('cream', box(12.5, .5, 5.9, .1), { p: [0, 4.95, 0] });
@@ -985,7 +985,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
     const hearings = [
       ['NOW IN SESSION', '“SENATOR, WE RUN ADS”'],
       ['IMPEACHMENT TRIAL II', '57 GUILTY · 43 NOT GUILTY'],
-      ['IMPEACHMENT TRIAL II', '57 OF 67 · ACQUITTED'],
+      ['IMPEACHMENT TRIAL II', '67 NEEDED · ACQUITTED'],
     ];
     const s = lapSigns.add(1020, 200, (g, w, h) => {
       g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff1b8';

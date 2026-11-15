@@ -1,8 +1,8 @@
 /* The app shell: owns the renderer, input, saved data, and menus, and moves
    between the title's attract race, the showroom, races, and results. */
 import { Gfx, detectQuality } from '../render/gfx.js';
-import { Input, describePadBind, padFamily } from '../core/input.js';
-import { keyName, keyboardBindings } from '../core/keyboard.js';
+import { Input } from '../core/input.js';
+import { keyboardBindings } from '../core/keyboard.js';
 import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
 import { handleInstallAction } from '../ui/install.js';
@@ -131,7 +131,7 @@ export class App {
   _clearScene() {
     this.session?.dispose(); this.session = null; this.attract = false; document.body.classList.remove('must-turn');
     this.showroom?.dispose(); this.showroom = null;
-    this.trackCard?.remove(); this.trackCard = null; this.hintCard?.remove(); this.hintCard = null;
+    this.trackCard?.remove(); this.trackCard = null;
   }
 
   /* ---------- title and attract race ---------- */
@@ -184,27 +184,11 @@ export class App {
       card.innerHTML = `${cupLine ? `<div class="cup-line">${cupLine}</div>` : ''}<h1>${def.name}</h1><p>${def.tagline || ''}</p>`;
       this.ui.appendChild(card);
       if (this.session.phase !== 'intro') setTimeout(() => this.onCountdown(), 1400);
-      if (!this.save.data.seenHowTo && config.players.length === 1 && !this.session.touch) this._hint();
       this.audio?.music?.(def.music || def.id);
       this.audio?.say?.('track_' + def.id, { force: true, delay: 0.7 });
       this._onTurn();
     });
   }
-  /** First race only: show the active gas, drift, and item bindings. */
-  _hint() {
-    const pad = this.input.lastDevice.startsWith('pad'), keys = this.input.keyBinds.kb;
-    const family = pad && padFamily(navigator.getGamepads?.()[Number(this.input.lastDevice.slice(3))]?.id);
-    const control = (key, action) => pad ? describePadBind(this.input.padBinds, action, family) : keyName(keys[key][0]);
-    const card = el('div', 'hint-card');
-    for (const [label, verb] of [[control('gas', 'accelerate'), 'go'], [control('drift', 'drift'), 'drift'], [control('item', 'item'), 'item']]) {
-      if (card.childElementCount) card.append(' · ');
-      const key = document.createElement('kbd'); key.textContent = label; card.append(key, ' ' + verb);
-    }
-    this.ui.appendChild(card); this.hintCard = card;
-    setTimeout(() => { card.classList.add('out'); setTimeout(() => card.remove(), 500); }, 14000);
-    this.save.data.seenHowTo = true; this.save.write();
-  }
-
   /** Called by the session when the flyover ends. */
   onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
 

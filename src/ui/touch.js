@@ -19,7 +19,7 @@ const GAS_GRACE = 0.22;                 // seconds the throttle holds after the 
 const DRIFT_AT = 0.72, DRIFT_HOLD = 0.16, DRIFT_KEEP = 0.12;
 
 export class TouchControls {
-  constructor(parent, input, kart, { onPause, autoGo = false, coach = false } = {}) {
+  constructor(parent, input, kart, { onPause, autoGo = false } = {}) {
     this.input = input; this.kart = kart; this.autoGo = autoGo; const t = this.t = input.touch;
     t.active = true; t.steer = 0; t.drift = false; t.item = false; t.brake = 0; t.throttle = 0;
     this.raw = 0; this.pedal = false; this.braking = false; this.gasT = 0; this.itemT = 0;
@@ -28,21 +28,19 @@ export class TouchControls {
     root.innerHTML = `
       <div class="tc-zone tc-left"><div class="tc-stick"><div class="tc-knob"></div><div class="tc-tap"><img alt=""><b>TAP</b></div></div></div>
       <div class="tc-zone tc-right"><div class="tc-pedal"><i class="tc-up"><img alt=""></i><div class="tc-foot"><span>GO</span></div><i class="tc-down">BRAKE</i></div></div>
-      <div class="tc-coach"><div class="tc-coach-l"><h2>Steer</h2><p>Slide your thumb. Tap to use an item.</p></div><div class="tc-coach-r"><h2>Go</h2><p>Hold to accelerate. Pull down to brake. Flick up to use an item.</p></div></div>
-      <div class="tc-tip"></div>
       <button class="tc-pause" aria-label="Pause">II</button>`;
     parent.appendChild(root);
     const q = s => root.querySelector(s);
-    const $ = this.$ = { left: q('.tc-left'), right: q('.tc-right'), stick: q('.tc-stick'), knob: q('.tc-knob'), tap: q('.tc-tap'), tapImg: q('.tc-tap img'), pedal: q('.tc-pedal'), foot: q('.tc-foot'), footLabel: q('.tc-foot span'), up: q('.tc-up'), upImg: q('.tc-up img'), coach: q('.tc-coach'), tip: q('.tc-tip'), pause: q('.tc-pause') };
+    const $ = this.$ = { left: q('.tc-left'), right: q('.tc-right'), stick: q('.tc-stick'), knob: q('.tc-knob'), tap: q('.tc-tap'), tapImg: q('.tc-tap img'), pedal: q('.tc-pedal'), foot: q('.tc-foot'), footLabel: q('.tc-foot span'), up: q('.tc-up'), upImg: q('.tc-up img'), pause: q('.tc-pause') };
     this.lastItem = undefined;
-    if (coach) { root.classList.add('coaching'); this.coachT = 0; }
 
     // ---- left thumb: steering, and tap for the item
     const R = () => Math.max(46, Math.min(innerWidth, innerHeight) * 0.15);
     let sid = null, ox = 0, sx = 0, sy = 0, st0 = 0, smax = 0;
     const placeStick = (x, y) => { const r = $.left.getBoundingClientRect(); $.stick.style.left = clamp(x - r.left, R() + 8, r.width - 8) + 'px'; $.stick.style.top = clamp(y - r.top, 40, r.height - 30) + 'px'; };
     $.left.addEventListener('pointerdown', e => {
-      if (sid != null) return; sid = e.pointerId; ox = sx = e.clientX; sy = e.clientY; st0 = performance.now(); smax = 0;
+      if (sid != null) return; this.input.lastDevice = 'touch';
+      sid = e.pointerId; ox = sx = e.clientX; sy = e.clientY; st0 = performance.now(); smax = 0;
       try { $.left.setPointerCapture(sid); } catch { /* pointer already gone */ }
       placeStick(e.clientX, e.clientY); $.left.classList.add('on'); e.preventDefault();
     });
@@ -67,7 +65,8 @@ export class TouchControls {
     const placePedal = (x, y) => { const r = $.right.getBoundingClientRect(); $.pedal.style.left = clamp(x - r.left, 50, r.width - 50) + 'px'; $.pedal.style.top = clamp(y - r.top, 60, r.height - 50) + 'px'; };
     const setBrake = on => { if (on === this.braking) return; this.braking = on; $.pedal.classList.toggle('braking', on); $.footLabel.textContent = on ? 'BRAKE' : 'GO'; if (on) buzz(30); };
     $.right.addEventListener('pointerdown', e => {
-      if (pid != null) return; pid = e.pointerId; py = e.clientY; hist = [{ t: performance.now(), y: py }]; flickAt = -1e9;
+      if (pid != null) return; this.input.lastDevice = 'touch';
+      pid = e.pointerId; py = e.clientY; hist = [{ t: performance.now(), y: py }]; flickAt = -1e9;
       try { $.right.setPointerCapture(pid); } catch { /* pointer already gone */ }
       this.pedal = true; setBrake(false); placePedal(e.clientX, e.clientY); $.right.classList.add('on'); buzz(8); e.preventDefault();
     });
@@ -94,7 +93,6 @@ export class TouchControls {
   }
 
   useItem() { this.itemT = 0.09; if (this.kart.item) buzz(12); }
-  tip(text, ms = 2600) { const n = this.$.tip; n.textContent = text; n.classList.add('show'); clearTimeout(this._tt); this._tt = setTimeout(() => n.classList.remove('show'), ms); }
 
   /** Once per frame: turn thumbs into driving input, and reflect the kart's state in the controls. */
   sync(dt = 0) {
@@ -125,7 +123,6 @@ export class TouchControls {
         t.drift = true;
         // inside a drift the thumb's whole travel on that side runs from a wide arc to a tight one
         t.steer = k.drifting ? dir * lerp(-0.6, 1, clamp((same - DRIFT_KEEP) / (0.92 - DRIFT_KEEP), 0, 1)) : raw;
-        if (k.drifting && !this.toldDrift && this.vdT > 0.5) { this.toldDrift = true; if (this.coachT != null) this.tip('Drifting. Straighten up to boost.', 3000); }
       }
     }
 
@@ -137,10 +134,8 @@ export class TouchControls {
     }
     $.stick.dataset.tier = k.drifting ? k.driftTier : '';
     this.root.classList.toggle('drifting', !!k.drifting);
-    // first races: name the two halves until the player has been driving for a few seconds
-    if (this.coachT != null && race && !race.frozen) { this.coachT += dt; if (this.coachT > 5 && !this.coachOut) { this.coachOut = true; this.root.classList.remove('coaching'); } }
   }
   setVisible(v) { this.root.classList.toggle('hidden', !v); if (!v) { const t = this.t; this.raw = 0; this.pedal = false; this.braking = false; this.gasT = 0; this.vd = 0; t.steer = 0; t.drift = false; t.item = false; t.brake = 0; t.throttle = 0; } }
-  dispose() { this.setVisible(false); clearTimeout(this._tt); this.root.remove(); }
+  dispose() { this.setVisible(false); this.root.remove(); }
 }
 export const isTouchDevice = () => matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;

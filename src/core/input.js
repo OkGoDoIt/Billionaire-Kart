@@ -240,6 +240,8 @@ export class Input {
          bindings of their own, and the derivation is exactly the shipped behaviour
          (A confirms, B goes back). alt/alt2 stay on X/Y as before (nothing remaps them) */
       const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: confirm.some(b), back: back.some(b), pause: !editor && has('pause'), alt: b(2), alt2: b(3) };
+      // A trigger or shoulder button can be the first driving input on a hybrid device.
+      if (gp.buttons.some((button, j) => button.pressed && !prev.buttons?.[j])) this.lastDevice = dev;
       this.padPrev[i] = { ...now, buttons: gp.buttons.map(button => button.pressed) };
       if (captured || editor?.exclusive()) {
         this.padRepeat[i] = 0.38; continue;

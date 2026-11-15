@@ -27,7 +27,7 @@ assert.equal(second.active, true);
 events.dispatchEvent(new Event('blur'));
 input.rumble(0); assert.equal(first.active, false); assert.equal(second.active, false);
 events.dispatchEvent(new Event('focus'));
-const session = { app: { input }, huds: [], view: { dispose() {} } };
+const session = { app: { input }, huds: [], guides: [], view: { dispose() {} } };
 for (const stop of [() => RaceSession.prototype.setPaused.call(session, true), () => RaceSession.prototype.dispose.call(session), () => events.dispatchEvent(new Event('pagehide')), () => events.dispatchEvent(Object.assign(new Event('gamepaddisconnected'), { gamepad: { index: 0 } }))]) {
   input.rumble(0); assert.equal(first.active, true); stop(); assert.equal(first.active, false);
 }

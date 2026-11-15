@@ -20,7 +20,7 @@ function sample(fps) {
   const race = new Race({ track, cc: 150, countdown: 0, entries: [{ racer: RACERS[1], player: 0 }], items: false, coins: false });
   const app = { gfx: { render: noop }, input: { poll: () => [{ throttle: 1 }] } };
   const view = { cams: [], snapshot: noop, update: noop };
-  app.session = Object.assign(Object.create(RaceSession.prototype), { race, phase: 'racing', view, app, hudOf: new Map(), acc: 0 });
+  app.session = Object.assign(Object.create(RaceSession.prototype), { race, phase: 'racing', view, app, hudOf: new Map(), guides: [], acc: 0 });
   App.prototype.run.call(app);
   const from = performance.now();
   for (let frame = 0; frame <= 4 * fps; frame++) next(from + frame * 1000 / fps);

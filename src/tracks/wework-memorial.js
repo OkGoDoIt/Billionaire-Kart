@@ -394,13 +394,13 @@ function decorate(ctx) {
   wall(-124.3, -.4, -78.3, 182.3, 16, -77.7); wall(-124.3, -.4, 83.7, 182.3, 16, 84.3);
   wall(-124.3, -.4, -78.3, -123.7, 16, 84.3); wall(181.7, -.4, -78.3, 182.3, 16, 84.3);
   ceil(-124.3, -78.3, 182.3, 84.3, 16);
-  ceil(-92, -58, 58, -5, 13.6, true);
+  ceil(-92, -64, 85, -5, 13.6, true);
 
   // An open kitchen with a back bar and a walk-through lift lobby. Confine
   // room partitions to actual islands between lanes, including camera room.
   wall(-48, 0, 2, 34, 5.8, 2.4);
-  wall(-91, 0, -56, 46, 12.5, -55.6);
-  wall(-92, 0, -56, -91.6, 4.8, -12);
+  wall(-91, 0, -64, 86, 12.5, -63.6);
+  wall(-92, 0, -64, -91.6, 4.8, -12);
 
   wall(176, 0, -73, 176.4, 13, -12);
   wall(109, 0, -73, 176, 13, -72.6);
@@ -424,11 +424,15 @@ function decorate(ctx) {
 
   /* ---- mezzanine deck + bridge ---- */
   slab(58, -8, 79, 36, 3.44, 'stone');
+  // Ease the lower-floor chase camera underneath the bridge before its new
+  // handrail crosses the driver's view. Upper-floor karts clear this ceiling.
+  addRoof(35, 7, 58, 41, 6.63, -.15);
+  addRoof(79, 7, 95, 41, 3.18, .18);
   FQ.box(82, 3.44, -8, 82.3, 8.9, 26);                                      // frosted office fronts, east
   ceil(60, 28, 75, 34, 3.25);                                                // bridge soffit light panels
 
   /* ---- floor overlays ---- */
-  KQ.quad([-88, -.02, -52], [80, -.02, -52], [80, -.02, 2], [-88, -.02, 2], 168 / 4, 54 / 4);   // field carpet
+  KQ.quad([-90, -.02, -63], [87, -.02, -63], [87, -.02, 2], [-90, -.02, 2], 177 / 4, 65 / 4);   // field carpet
 
   for (const [q, m] of [[WQ, wallMat], [FQ, frostMat], [CQ, ceilMat], [CDQ, ceilDarkMat], [SQ, floorMat], [KQ, carpetMat]]) if (q.pos.length) group.add(q.mesh(m));
 
@@ -512,6 +516,17 @@ function dressSectors(ctx, H) {
   bakePlace(W.bleacherStep(50), 18, 68.4, { yaw: Math.PI, y: 0 });
   bakePlace(W.bleacherStep(50), 18, 70.3, { yaw: Math.PI, y: .42 });
   for (const x of [-52, -30, 30, 52]) bakePlace(W.planter(3), x, 71.5, { yaw: 0, y: 0 });
+  // End-facing monitors break up the long view down the lobby before the start gantry.
+  // These bays sit beyond the second bleacher tread, facing the arriving karts.
+  for (const [i,x] of [-64,-46,-27,-8,12,32,51].entries()) {
+    const pod = W.workPods(i % 3 === 0 ? 0xa96351 : 0x426f71);
+    bakePlace(pod, x, 76.0, { yaw: -2.49, y: 0, scale: 1.22 });
+  }
+  // Flexible desks occupy the island between the outbound and return lanes.
+  for (const [x,z] of [[-49,45.75],[-26,45.5],[-6,43.75]])
+    bakePlace(W.workPods(0x536c85), x, z, { y: 0, scale: .81 });
+  // The upper meeting gallery has a row of desks along its west wall.
+  bakePut(W.workPods(0x426f71), -112.5, 5.95, -6.5, 90);
   // glass entrance doors in the C1 braking zone, with the notice on them
   const doorMat = new THREE.MeshStandardMaterial({ color: 0xaad4e2, roughness: .15, transparent: true, opacity: .4 });
   for (const x of [33, 38.5]) { const d = new THREE.Mesh(new THREE.BoxGeometry(4.6, 3.3, .14), doorMat); d.position.set(x, 1.65, 49.3); group.add(d); bake.add(d); }
@@ -582,11 +597,23 @@ function dressSectors(ctx, H) {
   for (const side of [-1,1]) {
     for (const [j,x] of [-36,-23.6,-11.2,1.2,13.6,26].entries()) {
       // Pull the last three inside desks back from the widened turning apron.
-      const rowZ = side < 0 ? -42.3 : (x < 0 ? -10.3 : -13.3);
+      const rowZ = side < 0 ? -46.0 : (x < 0 ? -6.8 : -10.5);
       const pod = W.workPods((j + (side === 1 ? 1 : 0)) % 3 ? 0x426f71 : 0xa96351, j % 3 !== 0);
-      bakePut(pod, x, 0, rowZ, side < 0 ? 0 : 180);
+      bakePlace(pod, x, rowZ, { y: 0, yaw: (side < 0 ? 32 : 148) * DEG, scale: 1.12 });
     }
   }
+  // A second staggered bank continues into the depth of the room; its aisle
+  // leads to two pods facing the driver on the approach to the office elbow.
+  for (const [i,x] of [-70,-55,-40,-25,-10,5,20,35].entries())
+    bakePut(W.workPods(i % 3 === 0 ? 0x536c85 : 0x426f71), x, 0, -57, 15);
+  for (const z of [-35,-20]) bakePlace(W.workPods(0xa96351), -81, z, { y: 0, yaw: Math.PI/2, scale: 1.22 });
+  // The lounge points directly into this room on its descent. A wall of
+  // staffed-looking work bays replaces the bare far end of the warehouse.
+  for (const x of [50,65,80]) {
+    bakePlace(W.workPods(0x416f74), x, -43.5, { y: 0, scale: 1.5 });
+    bakePlace(W.workPods(0x9b655b), x, -54, { y: 0, scale: 1.22 });
+  }
+  putSign(['DESK 404', 'OCCUPANT NOT FOUND'],8.8,2.55,66,5,-47.9,0,{bg:'#344751',fg:'#ffe6b5',size:126});
   bakePlace(W.deskUnit(), -46, -7, { yaw: Math.PI, y: 0 });
   bakePlace(W.deskUnit(), 30, -10.5, { yaw: Math.PI, y: 0 });
   bakePlace(W.paperStack(), 62, -45, { yaw: .7, y: 0 });
@@ -608,7 +635,7 @@ function dressSectors(ctx, H) {
     bg: '#274b63', fg: '#ffe9a8', size: 150,
     after: (g, w, h) => { g.fillStyle = '#1b2f40'; for (const [x, y] of [[.18, .12], [.55, .55], [.82, .1]]) g.fillRect(w * x, h * y, w * .09, h * .34); },
   });
-  putSign(['KOMBUCHA ON TAP —', 'HELP YOURSELF, FOREVER'], 12, 2.7, -31, 4.1, 3.0, 28, { bg: '#2a4a2f', fg: '#ffe9a8', size: 95 });
+
   putSign(['HUSTLE HARDER', '(RENT DUE)'], 3.6, 1.8, -69.55, 2.9, 22, 90, { bg: '#7a1f3a', fg: '#ffe9a8', size: 100 });
   bakePlace(W.keg(), -30, 6.5, { yaw: 0, y: 0 });
   bakePlace(W.keg(), -32.2, 6.2, { yaw: .5, y: 0 });
@@ -618,10 +645,26 @@ function dressSectors(ctx, H) {
   bakePut(tgim1, 42, 7.6, 17, -90);
 
   /* ================= S5: service corridor ================= */
+  // A glass conference suite fills the end view down the kitchen aisle. Ten
+  // leather chairs surround an empty table; every participant dialed in.
+  bakePut(W.meetingRoom(21, 13, 8.4, false), 115.5, 0, 12, -90);
+  bakePlace(W.boardTable(), 115.5, 12, { y: .07, yaw: Math.PI / 2, scale: 1.20 });
+  const meeting = atlas.add(768,384,(g,w,h) => {
+    g.fillStyle='#172b34'; g.fillRect(0,0,w,h);
+    fitText(g,'ALL HANDS',w*.5,h*.15,w*.84,h*.22,83,FONT,{fill:'#fff1ca'});
+    const tileW=w*.24, tileH=h*.27;
+    for (let i=0; i<6; i++) {
+      const x=w*.115+(i%3)*(tileW+9), y=h*.29+Math.floor(i/3)*(tileH+7);
+      g.fillStyle=['#39786f','#855d77','#355979'][i%3];g.fillRect(x,y,tileW,tileH);
+      g.fillStyle='#eed2a6';g.beginPath();g.arc(x+tileW*.5,y+tileH*.40,tileH*.18,0,Math.PI*2);g.fill();
+      g.beginPath();g.ellipse(x+tileW*.5,y+tileH*.88,tileW*.19,tileH*.26,0,Math.PI,2*Math.PI);g.fill();
+    }
+  });
+  atlas.place(meeting,[121.9,4.6,12],-Math.PI/2,13,6.0);
   const atmScreen = sign(['OUT OF CASH', 'SEE THE COMMUNITY MANAGER'], .1, .1, { bg: '#0d2138', fg: '#9fd0ff', size: 64, w: 512, h: 320 }).material;
   bakePut(W.atm(atmScreen), 85.8, 0, -2, -90);
   putSign(['STAIR A — MIND THE PAPERWORK'], 5.4, .8, 113, 4.6, -10, -90, { bg: '#23262d', fg: '#f5efe0', size: 80 });
-  putSign(['PERKS INCLUDE:', 'EXPOSURE'], 3.2, 1.6, 86, 3.2, -2, 90, { bg: '#274b63', fg: '#ffe9a8', size: 95 });
+  putSign(['PERKS INCLUDE:', 'EXPOSURE'], 3.2, 1.6, 85.82, 3.2, -2, -90, { bg: '#274b63', fg: '#ffe9a8', size: 95 });
   bakePlace(W.paperStack(), 46.5, 8.5, { yaw: 1.9, y: 0 });
 
   /* ================= S6: Stairwell A ================= */
@@ -715,6 +758,15 @@ function furnishOffice(ctx, H) {
     box(x,5.27,-44.8,5.78,.09,1.26,ivory);
     for (const dx of [-2.4,2.4]) box(x+dx,5.68,-44.8,.09,7.8,.09,ink);
   }
+  // The rear bank is lit as a row of workrooms; the height breaks up the blank
+  // backdrop behind the screens without putting walls between the driver and desks.
+  for (let x=-82; x<=81; x+=15) {
+    box(x, 1.10, -63.15, 14.4, 6.9, .28, ink);
+    box(x, 1.37, -62.95, 13.9, 6.36, .18, 0xaac6c5);
+    box(x, 4.9, -62.78, 14.0, .17, .20, ivory);
+    box(x, 1.37, -62.79, .19, 6.36, .20, ink);
+  }
+  for (const x of [62.5,69.5]) box(x,0,-48,.16,5.9,.16,ink);
   // The giant tap wall is built from real tanks, tap handles, the tiled
   // back bar, a drip tray, shelves of cups, and a scalloped hanging canopy.
   box(-11, 0, 5, 51, 1.7, 3, teal);
@@ -736,6 +788,31 @@ function furnishOffice(ctx, H) {
     for (const dx of [1.9,2.7]) cylinder(x+dx, 1.94, 5.95, .24, .42, ivory);
   }
   for (let x=-34; x<=12; x+=2.4) box(x, 6.1, 5.45, 2.4, .56, 4.6, (Math.round((x+34)/2.4)%2) ? ivory : teal);
+
+  box(86, 2.32, -2, .32, 1.76, 3.38, ink);  // backing of the ATM's perk notice
+  // The kitchen endcap is a commercial dispenser with two sight glasses,
+  // pull handles, and a ribbed spill tray. The perk expires with the lease.
+  box(16.5, 0, 5.4, 5.2, 1.55, 6.2, ink);
+  box(16.1, 1.55, 5.4, 5.9, .27, 6.7, oak);
+  box(17.1, 1.82, 5.4, 2.7, 4.2, 6, teal);
+  for (const [i,z] of [3.8,7].entries()) {
+    cylinder(15.75, 2.92, z, 1.20, 2.53, i ? 0xecc85b : 0xe68152);
+    for (const y of [2.83,5.40]) cylinder(15.75,y,z,1.27,.18,ivory);
+    for (const y of [3.33,3.86,4.39,4.92]) box(14.57,y,z,.06,.065,.42,ivory);
+    box(14.52,2.94,z,.93,.23,.24,ink);
+    box(14.14,2.73,z,.2,.45,.24,ink);
+    box(14.28,3.17,z,.18,.60,.18,ink);
+    box(14.28,3.70,z,.32,.34,.30,coral);
+    cylinder(14.06,1.82,z,.42,.68,ivory);
+  }
+  // The two-line offer hangs over the kitchen entrance, connected to the
+  // dispensers by a brass pipe. It has its own clear moment before the bridge.
+  box(16.5,7.95,15.3,.36,.25,20.4,oak);
+  for (const z of [11.1,23.7]) box(16.5,7.91,z,.12,.79,.12,ink);
+  box(16.5,4.92,17.4,.22,3.02,14.7,teal);
+  putSign(['UNLIMITED KOMBUCHA', 'UNTIL THE LEASE RUNS OUT'],14.5,2.96,16.37,6.43,17.4,-90,
+    {bg:'#17493f',fg:'#fff0b9',w:1024,h:320,size:143});
+  box(16.5,5.65,5.35,.32,2.47,.32,oak);
 
   // Ribbed walnut frames and a brass cornice set the executive gallery apart.
   for (const x of [-64,-40,-16,8,32]) {
@@ -900,9 +977,11 @@ function furnishOffice(ctx, H) {
     box(-119.95, 10.5, z, .32, .22, 10, oak);
   }
   for (const x of [-49,-20,9,38]) {
-    box(x, .02, 45.2, 15, 1.0, 2.4, teal);
-    box(x, 1.03, 45.1, 15.2, .32, 2.5, oak);
-    box(x, 1.35, 45.8, 15.2, 1.1, .4, coral);
+    if (x === 38) {
+      box(x, .02, 45.2, 15, 1.0, 2.4, teal);
+      box(x, 1.03, 45.1, 15.2, .32, 2.5, oak);
+      box(x, 1.35, 45.8, 15.2, 1.1, .4, coral);
+    }
     box(x, 5.94, 48.3, 9.3, .6, 1.2, oak);
     box(x, 6.55, 48.4, 9.4, .38, 1.2, 0xa75652);
     box(x, 6.92, 48.85, 9.4, .85, .29, coral);
@@ -923,9 +1002,8 @@ function furnishOffice(ctx, H) {
     for (const dx of [-5.9,-3.9,-1.9,.1,2.1,4.1,6.1]) box(x+dx,.16,78.65,.16,7.5,.26,oak);
     box(x, 7.69, 78.96, 15.6, .15, .36, ivory);
   }
-  // Stock road barriers have a 2.5 m deep outside face. At a crossover
-  // this drops a solid curtain into the aisle below. Build low office plinths
-  // to exactly the same collision perimeter, with a shallow lip on both sides.
+  // A chair-height partition follows the solid edge. Its face grows upward
+  // from the road; the underside stays flush so the lower crossover remains open.
   view.trackMesh.getObjectByName('walls').visible = false;
   for (const side of [-1,1]) {
     const hw = side > 0 ? tr.hwL : tr.hwR;
@@ -933,12 +1011,25 @@ function furnishOffice(ctx, H) {
       const lat = (hw[i] + offset) * side;
       return [tr.px[i]+tr.lx[i]*lat, tr.py[i]+tr.ly[i]*lat+lift, tr.pz[i]+tr.lz[i]*lat];
     };
-    for(let i=0; i<tr.N; i++) {
-      const j=(i+1)%tr.N, tone = Math.floor(i*tr.ds/7)%2 ? oak : ivory;
-      const ai=edge(i,0,.22), bi=edge(j,0,.22), ao=edge(i,.28,.22), bo=edge(j,.28,.22);
-      q.quad(ai,bi,bo,ao,1,1,tone);
-      q.quad(edge(i,0,-.12),edge(j,0,-.12),bi,ai,1,1,ink);
-      q.quad(ao,bo,edge(j,.28,-.15),edge(i,.28,-.15),1,1,teal);
+    for (let i=0; i<tr.N; i++) {
+      const j = (i+1)%tr.N;
+      const module = Math.floor(i*tr.ds/4.8);
+      const face = module%2 ? 0x356c68 : 0x407a73;
+      const band = (bottom,top,tint) =>
+        q.quad(edge(i,0,bottom),edge(j,0,bottom),edge(j,0,top),edge(i,0,top),1,1,tint);
+      band(-.10,.17,ink);
+      band(.17,.45,face);
+      // Open rails leave the office furniture visible along the top edge.
+      // A repeating short mullion connects the oak cap to the solid kickboard.
+      if (Math.floor(j*tr.ds/4.8) !== module) {
+        const [x,y,z] = edge(i,.20,.45);
+        q.box(x-.12,y,z-.12,x+.12,y+.54,z+.12,ink);
+      }
+      band(.98,1.13,oak);
+      q.quad(edge(i,0,1.13),edge(j,0,1.13),edge(j,.40,1.13),edge(i,.40,1.13),1,1,oak);
+      q.quad(edge(i,.40,1.13),edge(j,.40,1.13),edge(j,.40,.98),edge(i,.40,.98),1,1,oak);
+      q.quad(edge(i,.40,.45),edge(j,.40,.45),edge(j,.40,-.10),edge(i,.40,-.10),1,1,teal);
+      q.quad(edge(i,0,.45),edge(j,0,.45),edge(j,.40,.45),edge(i,.40,.45),1,1,face);
     }
   }
   const fittings = q.mesh(new THREE.MeshStandardMaterial({ vertexColors:true, roughness:.72, side:THREE.DoubleSide }));

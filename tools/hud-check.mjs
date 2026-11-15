@@ -73,8 +73,6 @@ catch { browser = await chromium.launch({ headless: true, args: ['--enable-unsaf
 const stress = async () => {
   const wait = ms => new Promise(r => setTimeout(r, ms));
   await new Promise(r => { const t = setInterval(() => { if (window.BK?.race && !BK.race.frozen) { clearInterval(t); r(); } }, 150); });
-  // on a phone, let the first-race coaching cards finish: nothing else is shown while they are up
-  for (let i = 0; i < 80 && document.querySelector('.tc.coaching'); i++) await wait(150);
   await wait(900);
   const { RACERS } = await import('/src/content/racers.js'); const { ITEMS } = await import('/src/race/items.js'); const { TRACKS } = await import('/src/content/tracks.js');
   const longestBy = (list, f) => list.reduce((a, b) => (f(b).length > f(a).length ? b : a));
@@ -88,8 +86,8 @@ const stress = async () => {
   const rectsOf = e => { const rs = []; for (const n of e.childNodes) if (n.nodeType === 3 && n.textContent.trim()) { const r = document.createRange(); r.selectNodeContents(n); for (const q of r.getClientRects()) if (q.width > 0.5 && q.height > 0.5) rs.push(q); } return rs; };
   const label = e => `"${e.textContent.trim().slice(0, 24)}" (${(typeof e.className === 'string' && e.className ? '.' + e.className.split(' ')[0] : e.tagName.toLowerCase())})`;
   const shown = (e, stop) => { for (let a = e; a && a !== stop; a = a.parentElement) { const s = getComputedStyle(a); if (+s.opacity < 0.3 || s.visibility === 'hidden' || s.display === 'none') return false; } return true; };
-  const BLOCKS = ['.hud-item', '.hud-item-info', '.hud-bl', '.hud-rank', '.hud-time', '.hud-map', '.hud-talk', '.hud-feed', '.hud-banner', '.hud-wrong', '.hud-warn'];
-  const TOUCH = ['.tc-pause', '.tc-tip', '.tc-tap'];
+  const BLOCKS = ['.hud-item', '.hud-item-info', '.hud-bl', '.hud-rank', '.hud-time', '.hud-map', '.hud-talk', '.hud-feed', '.hud-banner', '.hud-wrong', '.hud-warn', '.hint-card'];
+  const TOUCH = ['.tc-pause', '.tc-tap'];
   const scan = (root, tag, faults) => {
     const V = root.getBoundingClientRect(), els = new Set(), walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let n; (n = walk.nextNode());) if (n.textContent.trim() && n.parentElement?.offsetParent) els.add(n.parentElement);

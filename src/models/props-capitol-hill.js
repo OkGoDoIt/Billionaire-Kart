@@ -6,7 +6,7 @@
    canvases are only created inside the functions, so this module imports
    cleanly in Node. */
 import * as THREE from 'three';
-import { ModelBuilder, box, sphere, cyl, cone, torus, lathe, plastic, paint, glow, MAT } from './build.js';
+import { ModelBuilder, box, sphere, cyl, cone, torus, lathe, tube, plastic, paint, glow, MAT } from './build.js';
 import { canvasTex, fitText as textFit } from '../render/textures.js';
 import { makeRng } from '../core/util.js';
 // the sign toolkit (world-space quads, a text atlas, a static baker, LED panels) is shared with Crypto Cove
@@ -774,17 +774,16 @@ function ballroomBoardTex() {
     g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#d4af37'; g.lineWidth = 12; g.strokeRect(10, 10, w - 20, h - 20);
     g.strokeStyle = '#12142b'; g.lineWidth = 3; g.strokeRect(28, 28, w - 56, h - 56);
-    textFit(g, 'COMING SOON', w / 2, 74, w - 140, 62, 62, SITE_SANS, { fill: '#8a6d1f' });
-    textFit(g, 'A BALLROOM', w / 2, 186, w - 110, 138, 138, SITE_FONT, { fill: '#12142b' });
-    textFit(g, 'PAID FOR BY (REDACTED)', w / 2, 298, w - 140, 56, 56, SITE_SANS, { fill: '#b3122a' });
+    textFit(g, 'EAST WING', w / 2, 74, w - 140, 62, 62, SITE_SANS, { fill: '#8a6d1f' });
+    textFit(g, 'STATE BALLROOM', w / 2, 186, w - 110, 138, 138, SITE_FONT, { fill: '#12142b' });
+    textFit(g, 'BLACK TIE · HARD HAT', w / 2, 298, w - 140, 56, 56, SITE_SANS, { fill: '#b3122a' });
   }, { repeat: false, aniso: 8 });
 }
 
 /**
  * The ballroom construction zone: a marble wing half demolished, hoardings round a gravel slab,
  * a tower crane lifting a gold chandelier out of the ruins, and one big site board.
- * Front faces +Z. Built merged per material (marble, marbleD, site, gold, crane) plus the board
- * panel as a single two-faced mesh: six draw calls in total.
+ * The front faces +Z. The geometry is merged by material and the two sign faces share a mesh.
  */
 export function ballroomSite() {
   const grp = new THREE.Group(), b = new ModelBuilder();
@@ -800,6 +799,15 @@ export function ballroomSite() {
   b.add('marbleD', box(12.1, 0.9, 1.1, 0.1, 1), { p: [7.75, BASE + 8.05, 3.4] });         // entablature
   b.add('marble', prism(9, 2.4, 1.2), { p: [7.75, BASE + 8.5, 3.4] });                    // pediment
   b.add('marbleD', box(11, 0.3, 6.4, 0.05, 1), { p: [7.75, BASE + 0.15, 0] });            // ballroom floor
+  // Without dark recesses and broken glazing, the intact white half reads
+  // as a solid box behind the sign. Leave one bay boarded up.
+  for (const x of [5.65, 9.85]) {
+    b.add('glass', box(2.55, 3.9, 0.16), { p: [x, BASE + 3.55, 3.78] });
+    b.add('marbleD', box(2.95, 0.24, 0.58), { p: [x, BASE + 1.57, 3.9] });
+    b.add('gold', box(0.11, 3.9, 0.12), { p: [x, BASE + 3.55, 3.89] });
+    b.add('gold', box(2.55, 0.1, 0.12), { p: [x, BASE + 4.12, 3.89] });
+  }
+  b.add('timber', box(3.15, 0.45, 0.16), { p: [5.65, BASE + 3.05, 4.03], r: [0, 0, -0.38] });
   // the break: jagged ends where the demolition stopped
   b.add('marble', prism(3.4, 1.4, 1.1), { p: [3.6, BASE + 8.35, 3.4], r: [0, 0, 0.35] }); // a pediment chunk, slipping
   b.add('marble', box(0.9, 5.2, 0.7, 0.08, 1), { p: [1.8, BASE + 2.6, 3.4], r: [0, 0, 0.16] });
@@ -807,6 +815,23 @@ export function ballroomSite() {
   b.add('marble', box(0.9, 6.4, 0.7, 0.08, 1), { p: [1.9, BASE + 3.2, -3.4], r: [0, 0, 0.1] });
   for (const [rx, rz, ry] of [[0.3, 0.4, 2.9], [-0.2, 0.55, 2.2], [0.45, -0.3, 3.4]])     // rebar poking out of the break
     b.add('site', cyl(0.05, 0.05, 1.8, 5), { p: [1.45, BASE + ry, 3.4], r: [rx, 0, rz] });
+  // An open steel bay frames the chandelier. The flanges catch the sun;
+  // the X-bracing and missing walls let the sky show through the new wing.
+  for (const x of [-13, -6.4, 0.2]) {
+    for (const z of [-3.8, 3.8]) {
+      b.add('steel', box(0.32, 8.9, 0.48), { p: [x, BASE + 4.45, z] });
+      for (const d of [-0.28, 0.28]) b.add('steel', box(0.78, 8.9, 0.13), { p: [x, BASE + 4.45, z + d] });
+    }
+    b.add('steel', box(0.45, 0.62, 8.35), { p: [x, BASE + 8.8, 0] });
+  }
+  for (const z of [-3.8, 3.8]) {
+    for (const y of [4.4, 8.8]) b.add('steel', box(14, 0.55, 0.45), { p: [-6.4, BASE + y, z] });
+  }
+  for (const x of [-9.7, -3.1]) {
+    for (const slope of [-1, 1]) b.add('steel', box(8.0, 0.22, 0.24), {
+      p: [x, BASE + 6.6, -3.8], r: [0, 0, slope * 0.59],
+    });
+  }
   // --- the west half: demolished to stubs and rubble ---
   b.add('marbleD', box(13, 1.7, 0.6, 0.1, 1), { p: [-6, BASE + 0.85, 3.4] });             // front wall stub
   b.add('marbleD', box(13, 2.6, 0.6, 0.1, 1), { p: [-6, BASE + 1.3, -3.4] });             // back wall stub
@@ -833,27 +858,51 @@ export function ballroomSite() {
   b.add('crane', box(0.95, 14.5, 0.95, 0.06, 1), { p: [-8, BASE + 1.1 + 7.25, 0.8], r: [0, Math.PI / 4, 0] });
   b.add('crane', box(1.9, 1.7, 1.9, 0.1, 1), { p: [-8, BASE + 16.45, 0.8] });             // cab
   b.add('crane', box(0.35, 2.6, 0.35, 0.05, 1), { p: [-8, BASE + 18.6, 0.8] });           // apex post
-  b.add('crane', box(26, 0.85, 0.85, 0.06, 1), { p: [-3.75, BASE + 17.35, 0.8] });        // jib and counter-jib
-  b.add('site', box(1.8, 2.4, 1.6, 0.06, 1), { p: [-15.8, BASE + 15.9, 0.8] });           // counterweight
-  b.add('gold', cyl(0.045, 0.045, 17.1, 5), { p: [0.5, BASE + 18.2, 0.8], r: [0, 0, -1.47] });   // tie bars
-  b.add('gold', cyl(0.045, 0.045, 8.7, 5), { p: [-12.25, BASE + 18.2, 0.8], r: [0, 0, 1.47] });
-  // the load: a gold chandelier, lifted clear of the demolished half
-  b.add('gold', box(0.8, 0.7, 1.1, 0.08, 1), { p: [-2, BASE + 16.65, 0.8] });             // trolley
-  b.add('gold', cyl(0.05, 0.05, 5.6, 5), { p: [-2, BASE + 13.7, 0.8] });                  // cable
-  b.add('gold', box(0.55, 0.65, 0.55, 0.08, 1), { p: [-2, BASE + 10.75, 0.8] });          // hook block
-  b.add('gold', cyl(0.09, 0.09, 0.9, 6), { p: [-2, BASE + 10.0, 0.8] });                  // chandelier stem
-  b.add('gold', torus(1.9, 0.1, 8, 22), { p: [-2, BASE + 9.5, 0.8], r: [Math.PI / 2, 0, 0] });
-  b.add('gold', torus(1.2, 0.08, 8, 18), { p: [-2, BASE + 10.35, 0.8], r: [Math.PI / 2, 0, 0] });
-  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; b.add('gold', sphere(0.2, 8, 6), { p: [-2 + Math.cos(a) * 1.9, BASE + 9.85, 0.8 + Math.sin(a) * 1.9] }); }
-  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + 0.4; b.add('gold', sphere(0.17, 8, 6), { p: [-2 + Math.cos(a) * 1.2, BASE + 10.65, 0.8 + Math.sin(a) * 1.2] }); }
-  b.add('gold', sphere(0.26, 9, 7), { p: [-2, BASE + 8.95, 0.8] });                       // finial
+  // The jib points out across the fence. Its trolley and the load share the
+  // same axis; the chandelier hangs in front of the steel, clear of the crane mast.
+  const jibYaw = -0.78;
+  const along = (d, y) => [-8 + Math.cos(jibYaw) * d, BASE + y, 0.8 - Math.sin(jibYaw) * d];
+  b.add('crane', box(24, .9, 1.15), { p: along(4, 17.35), r: [0, jibYaw, 0] });
+  b.add('site', box(2.3, 2.8, 2), { p: along(-6.9, 16), r: [0, jibYaw, 0] });
+  for (const d of [-6.9, 14.8]) {
+    b.add('crane', tube([along(0, 19.6), along(d, 17.8)], .14, 1, 5));
+  }
+  const [cx, , cz] = along(10.6, 0);
+  b.add('site', box(1.25, .85, 1.6), { p: along(10.6, 16.6), r: [0, jibYaw, 0] });
+  b.add('site', cyl(.14, .14, 4.25, 6), { p: [cx, BASE + 14.25, cz] });
+  b.add('gold', torus(.53, .17, 6, 12), { p: [cx, BASE + 11.75, cz] });
+  // Blue construction netting ends halfway across one bay. Against it the
+  // gold arms, ivory candles, and cool crystal drops read as three silhouettes.
+  b.add('net', box(12.8, 8.5, .14), { p: [-5.9, BASE + 4.5, -3.35] });
+  const fixture = (r, y, theta) => [cx + Math.cos(theta) * r, BASE + y, cz + Math.sin(theta) * r];
+  b.add('gold', cyl(.36, .49, 5.8, 12), { p: [cx, BASE + 8.55, cz] });
+  for (const [radius, base, count, phase] of [[4.55, 6.2, 8, .15], [2.55, 9.1, 5, .55]]) {
+    for (let k = 0; k < count; k++) {
+      const angle = phase + k * 2 * Math.PI / count;
+      b.add('gold', tube([fixture(.30, base + .65, angle), fixture(radius * .52, base - .48, angle),
+        fixture(radius * .86, base - .33, angle), fixture(radius, base + .93, angle)], .22, 12, 6));
+      b.add('gold', cyl(.65, .26, .41, 10), { p: fixture(radius, base + 1.05, angle) });
+      b.add('ivory', cyl(.22, .29, 1.2, 9), { p: fixture(radius, base + 1.76, angle) });
+      b.add('ivory', sphere(.27, 8, 7), { p: fixture(radius, base + 2.49, angle), s: [.8, 1.55, .8] });
+      b.add('crystal', new THREE.OctahedronGeometry(.55), {
+        p: fixture(radius * .77, base - 1.14, angle), s: [.82, 1.62, .82],
+      });
+    }
+  }
+  b.add('gold', sphere(.78, 12, 8), { p: [cx, BASE + 5.85, cz] });
+  b.add('crystal', new THREE.OctahedronGeometry(.92), { p: [cx, BASE + 4.45, cz], s: [.86, 1.65, .86] });
   // the site board's posts and backing board (in the 'site' bucket, so they cost no extra draw call)
-  for (const x of [6.2, 13.8]) b.add('site', box(0.3, 6.6, 0.3, 0.05, 1), { p: [x, BASE + 2.4, 8.6] });
-  b.add('site', box(9.9, 3.7, 0.14, 0.05, 1), { p: [10, BASE + 5.7, 8.6] });
-  grp.add(b.build({ marble: marble(), marbleD: marbleD(), site: plastic(0x9b968a, 0.9), gold: gold(), crane: paint(0xf5a800, { rough: 0.5, clear: 0.25 }) }));
+  for (const x of [6.2, 13.8]) b.add('site', box(0.3, 4.6, 0.3, 0.05, 1), { p: [x, BASE + 1.8, 8.6] });
+  b.add('site', box(9.9, 3.7, 0.14, 0.05, 1), { p: [10, BASE + 3.8, 8.6] });
+  grp.add(b.build({
+    marble: marble(), marbleD: marbleD(), site: plastic(0x9b968a, 0.9),
+    glass: plastic(0x17304b, .42, .18), timber: plastic(0xb58754), net: plastic(0x142e40),
+    ivory: glow(0xfff1c0, .42), crystal: paint(0xbdf0ff, { rough: .26, metal: .15 }),
+    steel: paint(0x963f28, { rough: 0.72 }), gold: gold(), crane: paint(0xf5a800, { rough: 0.5, clear: 0.25 }),
+  }));
   const tex = ballroomBoardTex();
   const face = new THREE.PlaneGeometry(9.6, 3.4), back = new THREE.PlaneGeometry(9.6, 3.4);
-  face.translate(10, BASE + 5.7, 8.68); back.rotateY(Math.PI); back.translate(10, BASE + 5.7, 8.52);
+  face.translate(10, BASE + 3.8, 8.68); back.rotateY(Math.PI); back.translate(10, BASE + 3.8, 8.52);
   const merged = new THREE.BufferGeometry();   // both faces in one mesh, so the board costs one draw call
   {
     const pos = [], nor = [], uv = [], idx = []; let o = 0;
@@ -1011,25 +1060,18 @@ export function crashedChandelier() {
 
 function fallenBoardTex() {
   return canvasTex(1024, 364, (g, w, h) => {
-    g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h);
-    g.strokeStyle = '#d4af37'; g.lineWidth = 12; g.strokeRect(10, 10, w - 20, h - 20);
-    g.strokeStyle = '#12142b'; g.lineWidth = 3; g.strokeRect(28, 28, w - 56, h - 56);
-    textFit(g, 'COMING SOON', w / 2, 74, w - 140, 62, 62, SITE_SANS, { fill: '#8a6d1f' });
-    textFit(g, 'A BALLROOM', w / 2, 186, w - 110, 138, 138, SITE_FONT, { fill: '#12142b' });
-    textFit(g, 'PAID FOR BY (REDACTED)', w / 2, 298, w - 140, 56, 56, SITE_SANS, { fill: '#b3122a' });
-    // the correction, in spray paint: SOON is crossed out and the verdict scrawled over the middle
-    g.strokeStyle = 'rgba(200,20,30,0.9)'; g.lineWidth = 17; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(w * 0.16, 42); g.lineTo(w * 0.84, 108); g.moveTo(w * 0.16, 108); g.lineTo(w * 0.84, 42); g.stroke();
-    g.save(); g.translate(w / 2, h * 0.56); g.rotate(-0.045);
-    textFit(g, "IT'S GONE", 0, 0, w * 0.8, 120, 120, SITE_FONT, { fill: 'rgba(200,20,30,0.92)' });
-    g.restore();
+    g.fillStyle = '#174775'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#4483a4'; g.lineWidth = 2;
+    for (let x = 0; x < w; x += 36) g.strokeRect(x, 0, 36, h);
+    for (let y = 0; y < h; y += 36) g.strokeRect(0, y, w, 36);
+    g.strokeStyle = '#e9f6fa'; g.lineWidth = 6; g.strokeRect(15, 15, w - 30, h - 30);
+    textFit(g, 'CONCEPTS OF A PLAN', w / 2, h * .42, w - 85, 104, 104, SITE_FONT, { fill: '#ffffff' });
+    textFit(g, 'FLOOR PLAN   /   SHEET 0 OF 0', w / 2, h * .79, w - 115, 42, 42, SITE_SANS, { fill: '#d2e9f0' });
   }, { repeat: false, aniso: 8 });
 }
 
 /**
- * The site board, half fallen: one post snapped, the panel leaning back against the hoarding,
- * its promise corrected in spray paint. In ballroomSite local coordinates; the track adds it
- * to the site group, just in front of the front hoarding.
+ * The half-fallen contractor’s blueprint leans against the front hoarding on a snapped post.
  */
 export function fallenBoard() {
   const grp = new THREE.Group(), b = new ModelBuilder();

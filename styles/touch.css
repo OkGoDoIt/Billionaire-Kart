@@ -41,15 +41,6 @@
 .tc-down::before { content: "▼ "; }
 .tc-right.on .tc-pedal:not(.braking) .tc-down { opacity: 0.9; }
 
-/* first races: say what each half of the screen does */
-.tc-coach { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; opacity: 0; transition: opacity 0.6s; }
-.tc.coaching .tc-coach { opacity: 1; }
-.tc-coach > div { align-self: start; justify-self: center; margin-top: 43vh; text-align: center; background: rgba(11,13,32,0.7); border-radius: calc(var(--b) * 2.4); padding: calc(var(--b) * 1) calc(var(--b) * 2.2) calc(var(--b) * 1.1); max-width: 84%; }
-.tc-coach h2 { font-weight: normal; font-size: calc(var(--b) * 3.6); margin: 0; color: var(--gold); letter-spacing: 0.02em; line-height: 1.1; }
-.tc-coach p { font-family: var(--body); font-weight: 600; font-size: calc(var(--b) * 2.3); margin: calc(var(--b) * 0.2) 0 0; line-height: 1.25; }
-.tc-tip { position: absolute; left: 50%; bottom: calc(var(--b) * 3 + var(--safe-b)); transform: translate(-50%, calc(var(--b) * 2)); font-family: var(--body); font-weight: 600; font-size: calc(var(--b) * 2.4); background: rgba(11,13,32,0.8); border: calc(var(--b) * 0.3) solid rgba(255,255,255,0.8); border-radius: calc(var(--b) * 3); padding: calc(var(--b) * 0.8) calc(var(--b) * 2.4); white-space: nowrap; opacity: 0; transition: opacity 0.25s, transform 0.25s; }
-.tc-tip.show { opacity: 1; transform: translate(-50%, 0); }
-
 /* The pause button sits beside the map, in the HUD's own unit (see hud.css) so the two stay together on any screen.
    Top-centre belongs to the race feed, and at the start line it is where the gantry shows the track's name. */
 .tc-pause { --hu: min(1vh, 0.5625vw); position: absolute; right: calc(max(var(--hu) * 2.4, 10px) + var(--safe-r) + var(--hu) * 28.5); top: calc(max(var(--hu) * 2.4, 10px) + var(--safe-t)); pointer-events: auto; width: calc(var(--hu) * 12); height: calc(var(--hu) * 12); min-width: 44px; min-height: 44px; border-radius: 50%; border: calc(var(--hu) * 0.7) solid var(--ink); background: rgba(255,255,255,0.85); font-family: var(--display); font-size: calc(var(--hu) * 4.6); color: var(--ink); padding: 0; opacity: 0.8; }
@@ -70,6 +61,5 @@
 .hud.hud-touch .hud-time { display: none; }
 .hud.hud-touch .hud-map { top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 27); height: calc(var(--u) * 27); }
 /* the incoming-item warning stays bottom-centre, as on a desktop; a control tip steps aside for it */
-#ui:has(.hud-warn.show) .tc-tip { opacity: 0; }
 /* a rival's speech bubble lands where the "tap to use" reminder floats above the steering control: the reminder waits */
 #ui:has(.hud-talk.show) .tc.has-item .tc-tap { opacity: 0; }

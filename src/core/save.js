@@ -6,8 +6,7 @@ const DEFAULTS = {
   trophies: {},      // `${cupId}:${cc}` -> { rank, points, stars }
   best: {},          // `${trackId}:${cc}` -> { race, lap, racer }
   stats: { races: 0, wins: 0, coins: 0, hitsGiven: 0, hitsTaken: 0 },
-  seenHowTo: false,
-  touchRaces: 0,     // races started with touch controls: the first few name the two halves of the screen
+  drivingGuide: {},    // per-device successes and exposures for each control lesson
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 function merge(base, over) { for (const k in over) { if (over[k] && typeof over[k] === 'object' && !Array.isArray(over[k]) && base[k] && typeof base[k] === 'object') merge(base[k], over[k]); else base[k] = over[k]; } return base; }

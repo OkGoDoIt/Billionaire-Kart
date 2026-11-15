@@ -558,7 +558,7 @@ export class Menus {
   /* ---------- controller buttons ----------
      One diagram, six rows, one name per button (issue #194). Pressing a
      physical button lights it on the diagram and names it in the readout;
-     tapping a row (or focusing it and pressing confirm) makes the row itself
+     tapping a row (or holding controller confirm on it) makes the row itself
      listen for the next press — there are no per-row Remap links. Menus
      derive confirm/back from the Accelerate/Brake buttons, so they are not
      rows of their own. The "also" buttons keep working but are never shown. */
@@ -572,7 +572,9 @@ export class Menus {
     const btnEls = new Map(), txtEls = new Map();
     diagram.querySelectorAll('[data-btn]').forEach(el => btnEls.set(+el.dataset.btn, el));
     diagram.querySelectorAll('[data-txt]').forEach(el => txtEls.set(+el.dataset.txt, el));
-    let capturing = null, capturePad = null, opener = null, releasePad = null;
+    const pedalNote = 'Triggers give you gradual acceleration and braking when set as pedals.';
+    const note = h('p', { class: 'pad-note' }, pedalNote);
+    let capturing = null, capturePad = null, releasePad = null, hold = null;
     let displayPad = input.lastDevice.startsWith('pad') ? Number(input.lastDevice.slice(3)) : null;
     let previous = new Map(), flashN = -1, flashUntil = 0;
     const rows = new Map();
@@ -584,14 +586,15 @@ export class Menus {
       r.name.classList.toggle('listening', capturing === a.id);
     };
     const drawAll = () => { for (const a of PAD_ACTIONS) drawRow(a); };
-    const setFamily = f => {
-      if (f === fam && diagram.classList.contains('fam-set')) return;
+    const setFamily = (f, changedPad) => {
+      if (!changedPad && f === fam && diagram.classList.contains('fam-set')) return;
+      note.textContent = displayPad == null ? pedalNote : `Tap a button to identify it. Hold ${buttonName(0, f)} on a row to change it.`;
       fam = f; diagram.classList.add('fam-set'); diagram.classList.toggle('fam-ps', fam === 'ps');
       for (const [n, el] of txtEls) el.textContent = DIAGRAM_TEXT[fam][n] || el.textContent;
       drawAll();
     };
-    const startCapture = id => {
-      capturing = id; capturePad = opener; releasePad = opener;
+    const startCapture = (id, pad = null) => {
+      hold = null; capturing = id; capturePad = pad; releasePad = pad;
       readout.textContent = `Press a button for ${labelOf(id)}.`;
       drawAll();
     };
@@ -629,13 +632,19 @@ export class Menus {
         if (n != null && !fresh) fresh = { n, gp };
       }
       const shown = fresh?.gp || (active.has(displayPad) ? gps[displayPad] : connected);
-      if (displayPad !== (shown?.index ?? null)) {
+      const changedPad = displayPad !== (shown?.index ?? null);
+      if (changedPad) {
         flashN = -1;
         if (!capturing) readout.textContent = idlePrompt;
       }
       displayPad = shown?.index ?? null;
-      setFamily(padFamily(shown?.id));
+      setFamily(padFamily(shown?.id), changedPad);
       const pressed = active.get(displayPad) || [];
+      if (hold) {
+        const down = active.get(hold.pad);
+        if (down?.length !== 1 || down[0] !== 0 || this.focusEl !== rows.get(hold.action).el) hold = null;
+        else if (performance.now() - hold.start >= 600) startCapture(hold.action, hold.pad);
+      }
       const block = !!capturing || releasePad != null;
       if (capturing && capturePad != null && !active.has(capturePad)) endCapture('Controller disconnected.');
       if (releasePad != null) {
@@ -650,7 +659,7 @@ export class Menus {
     };
     const list = h('div', { class: 'pad-rows' }, PAD_ACTIONS.map(a => {
       const name = h('span', { class: 'bind-name' });
-      const el = h('button', { class: 'pad-row', 'data-f': true, 'data-default': a === PAD_ACTIONS[0], onclick: () => { if (capturing === a.id) endCapture('Binding canceled.'); else if (!capturing) startCapture(a.id); } },
+      const el = h('button', { class: 'pad-row', 'data-f': true, 'data-default': a === PAD_ACTIONS[0], 'data-action': a.id, onclick: () => { if (capturing === a.id) endCapture('Binding canceled.'); else if (!capturing) startCapture(a.id); } },
         h('span', { class: 'pad-label' }, a.label), name);
       rows.set(a.id, { el, name });
       return el;
@@ -667,7 +676,7 @@ export class Menus {
       h('div', { class: 'seg' }, STEER_CHOICES.map(([id, label]) => { const b = h('button', { class: 'seg-btn', 'data-f': true, onclick: () => { input.padSteer = id; persist(); drawSteer(); A.audio?.ui('move'); } }, label); segBtns.set(id, b); return b; })));
     const el = h('div', {}, this.header('Controller'),
       h('div', { class: 'panel pad' }, diagram, readout, list, steerRow,
-        h('p', { class: 'pad-note' }, 'Triggers give you gradual acceleration and braking when set as pedals.'),
+        note,
         h('div', { class: 'foot' }, this.btn('Reset to defaults', () => { input.padBinds = defaultPadBindings(); input.padSteer = 'both'; drawSteer(); persist(); endCapture('Back to the standard layout.'); A.audio?.ui('back'); }), this.btn('Done', () => this.back(), { cls: 'go' }))));
     drawAll(); drawSteer();
     return {
@@ -680,9 +689,7 @@ export class Menus {
           return true;
         }
         if (a === 'confirm' && String(dev).startsWith('pad') && this.focusEl?.classList.contains('pad-row')) {
-          opener = Number(dev.slice(3));
-          this.focusEl.click();
-          opener = null;
+          hold = { action: this.focusEl.dataset.action, pad: Number(dev.slice(3)), start: performance.now() };
           return true;
         }
         return false;

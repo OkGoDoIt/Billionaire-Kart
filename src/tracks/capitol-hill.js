@@ -18,6 +18,7 @@ export const CAPITOL = { x: -85, z: 147, y: 27, ax: 66, az: 34 };   // plateau (
 export const POOL = { x0: 165.5, x1: 192.5, z0: 48, z1: 224, floor: -0.3, water: 0.6, coping: 164.2 };
 export const AXIS = (POOL.x0 + POOL.x1) / 2;
 export const OBELISK = { x: AXIS, z: 278, h: 65, w: 8.4 };              // the monument, hero scale, at the foot of the pool's axis
+const CAFE_CP = 15.7;
 const MEMORIAL = { x: AXIS + 35, z: 12 };                                     // the memorial at the head of the pool, dead ahead down the Avenue
 
 // The Filibuster's legs (z of the centreline, and the road's height at its two ends) and the terrace lines between
@@ -257,45 +258,42 @@ export default {
       taken.push([cx, cz, 30], [cx + (track.px[i1] - cx) * 0.7, cz, 26], [cx - (track.px[i1] - cx) * 0.7, cz, 26]);
     }
 
-    // the ballroom construction zone (#113), ROUND 2 (#140): from the road, #113's demolished wing
-    // hid behind the Avenue grandstands — only the board and the crane jib read — so round 2 takes
-    // the destruction to skyline scale. The site grows 1.25x; a collapsed roof slab crashes across
-    // the standing wing with a gold chandelier wrecked on it; gold BALLROOM letters fail along a
-    // rooftop rail (one O slumped, one down, the M face-up on the ledge); the second site board
-    // has fallen against the hoarding, corrected in spray paint; rubble spills across the slab;
-    // and a 27 m wrecking-ball crane west of the site swings its ball over the ruins while
-    // demolition dust drifts over the scene. Dressing only: nothing here touches the road.
+    // Put the construction site in the vanishing point of the Avenue. Its
+    // open steel and chandelier now introduce turn one from the starting grid.
     {
-      const SX = -24, SZ = -40, SY = sc.y(SX, SZ) - 0.35;
+      const SX = 174, SZ = -30, SY = sc.y(SX, SZ) - 0.30, scale = 1.65;
+      const yaw = -1.28, cyw = Math.cos(yaw), syw = Math.sin(yaw);
+      const sitePoint = (x, z) => [SX + scale * (cyw * x + syw * z), SZ + scale * (-syw * x + cyw * z)];
       const site = C.ballroomSite();
       site.add(C.ballroomRoofLetters());
       site.add(C.collapsedRoof());
       const chand = C.crashedChandelier(); chand.position.set(2.6, 9.0, 1.9); chand.rotation.set(0.4, 0.5, 0.25); site.add(chand);
       const fb = C.fallenBoard(); fb.position.set(-3, 0.55, 10.1); site.add(fb);
-      sc.place(site, SX, SZ, { yaw: -0.38, y: SY, scale: 1.25 });
+      sc.place(site, SX, SZ, { yaw, y: SY, scale });
       civicStone.add(site, false);
-      taken.push([SX, SZ, 26]);
+      taken.push([SX, SZ, 32]);
       // the wrecking crane, west of the site, its jib reaching over the demolished half
       const wc = C.wreckCrane(), swing = wc.userData.swing;
-      sc.place(wc, -53, -35, { yaw: 0.14, y: sc.y(-53, -35) - 0.3 });
-      taken.push([-53, -35, 10]);
-      // rubble spill across the slab, in site world space (rotY -0.38, scale 1.25 about SX,SZ)
-      const cyw = Math.cos(-0.38), syw = Math.sin(-0.38);
+      const [cx, cz] = sitePoint(-17, -6);
+      sc.place(wc, cx, cz, { yaw: yaw + 0.25, y: sc.y(cx, cz) - 0.3 });
+      taken.push([cx, cz, 10]);
       const rubble = [];
       for (let k = 0; k < 26; k++) {
         const lx = k < 15 ? rng.range(-12.5, 12.5) : rng.range(-12.5, -0.5), lz = k < 15 ? rng.range(4.4, 6.9) : rng.range(-3, 3);
-        rubble.push({ x: SX + 1.25 * (cyw * lx + syw * lz), z: SZ + 1.25 * (-syw * lx + cyw * lz), y: SY + 0.78, yaw: rng.range(0, 6.28) });
+        const [x, z] = sitePoint(lx, lz);
+        rubble.push({ x, z, y: SY + scale * 0.62, yaw: rng.range(0, 6.28) });
       }
       sc.instances(partsOf(C.rubbleChunk()), rubble, { scale: [0.7, 1.7] });
       // the swing, and dust: two tan puffs a frame, one at the ball, one over the ruins
-      const dustA = [SX + 1.25 * (cyw * -6 + syw * 0), SY + 9, SZ + 1.25 * (-syw * -6 + cyw * 0)];
+      const [dustX, dustZ] = sitePoint(-6, 0);
+      const dustA = [dustX, SY + 4, dustZ], dustB = [cx, SY + 3, cz];
       anim.push((dt, time) => {
         swing.rotation.z = Math.sin(time * 0.55) * 0.32;
         swing.rotation.x = Math.sin(time * 0.37 + 1.0) * 0.09;
         if (view.fx) {
           let n = view.fx.count(22, dt);
           while (n-- > 0) {
-            const at = n % 2 ? dustA : [-36.7, 11.5, -37.3];
+            const at = n % 2 ? dustA : dustB;
             view.fx.spark(at[0] + rng.range(-3, 3), at[1] + rng.range(-1.5, 1.5), at[2] + rng.range(-3, 3),
               rng.range(-0.5, 0.5), rng.range(0.25, 0.8), rng.range(-0.5, 0.5), [0.84, 0.78, 0.64], rng.range(1.6, 2.8), 2.6);
           }
@@ -402,10 +400,14 @@ export default {
       ...sc.along({ from: 10.2, to: 11.6, side: 1, offset: 13.5, spacing: 8, jitter: 1 }),
     ];
     cherrySpots.push(...sc.scatter({ count: 60, min: 14, max: 70, maxSlope: 0.5, minGap: 7, where: (x, z) => (onPlateau(x, z, 1.6) && !onPlateau(x, z, 1.02)) || (x > -60 && x < 100 && z > 20 && z < 95) }));
+    const cafe = sc.beside(CAFE_CP, -1, 19);
+    taken.push([cafe.x, cafe.z, 9]);
     const sightlines = BOARDS.map(([cp, side, offset]) => {
       const board = sc.beside(cp, side, offset), i = track.indexAtCp(cp);
       return [board.x, board.z, track.px[i] - track.tx[i] * 29, track.pz[i] - track.tz[i] * 29];
     });
+    const cafeApproach = track.indexAtCp(14.05);
+    sightlines.push([cafe.x, cafe.z, track.px[cafeApproach], track.pz[cafeApproach]]);
     const blocksBoard = (x, z) => sightlines.some(([bx, bz, ax, az]) => segDist(x, z, ax, az, bx, bz) < 7.4);
     const cherries = cherrySpots.filter(p => ok(p.x, p.z, 1.5) && !blocksBoard(p.x, p.z)).map(p => ({ ...p, y: sc.y(p.x, p.z) }));
     const chA = partsOf(C.cherryTree(1, { h: 6.5 })), chB = partsOf(C.cherryTree(4, { h: 7.2, pinkA: 0xf9c7da, pinkB: 0xf2a2c2 })), chC = partsOf(C.cherryTree(7, { h: 5.8, pinkA: 0xf4a6c4, pinkB: 0xe57aa6 }));
@@ -499,13 +501,14 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(waterPos, 3));
     g.setIndex(waterFaces);
-    const waterTime = { value: 0 };
+    const waterTime = { value: 0 }, bloom = { value: 0 };
     const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
     m.onBeforeCompile = shader => {
       shader.uniforms.waterTime = waterTime;
+      shader.uniforms.bloom = bloom;
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 poolPoint;')
         .replace('#include <project_vertex>', '#include <project_vertex>\npoolPoint = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 poolPoint; uniform float waterTime;')
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 poolPoint; uniform float waterTime; uniform float bloom;')
         .replace('#include <color_fragment>', `#include <color_fragment>
           vec3 eyeRay = normalize(poolPoint - cameraPosition);
           float across = (poolPoint.x - ${POOL.x0}) / ${(POOL.x1 - POOL.x0).toFixed(1)};
@@ -517,6 +520,15 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
           float depthFresnel = pow(1.0 - clamp(-eyeRay.y, 0.0, 1.0), 9.0);
           water = mix(water, vec3(.23, .28, .24), depthFresnel * .57);
           water += ripple * vec3(.065, .085, .09);
+          // Wind gathers the bloom in streaks. Keep the broken reflection visible through it.
+          vec2 flow = poolPoint.xz * vec2(.52, .28);
+          flow += vec2(sin(flow.y * .73 + waterTime * .12), sin(flow.x * .41)) * 1.8;
+          float streak = sin(flow.x + .8 * sin(flow.y)) * .6 + sin(flow.y + flow.x * .7) * .4;
+          float flecks = sin(poolPoint.z * 1.8 + poolPoint.x * 2.3 + streak * 2.);
+          float slick = smoothstep(-.8, .7, streak + .32 * flecks);
+          vec3 algae = mix(vec3(.054, .19, .035), vec3(.24, .42, .063), slick);
+          water = mix(water, algae, mix(.30, .95, bloom));
+          water += ripple * vec3(.032, .042, .025) * bloom;
           vec3 ray = vec3(eyeRay.x + .002 * swell, -eyeRay.y + .0024 * swell, eyeRay.z);
           float distanceToMonument = (${OBELISK.z.toFixed(1)} - poolPoint.z) / max(.001, ray.z);
           vec3 atMonument = poolPoint + distanceToMonument * ray;
@@ -526,12 +538,16 @@ function reflectingPool(ctx, sc, { taken, free, reach }) {
           float dx = atMonument.x - ${AXIS.toFixed(1)};
           float shaft = (1.0 - smoothstep(halfWidth - .35, halfWidth + .35, abs(dx)))
                       * step(0.0, height) * step(height, 1.15) * step(.01, ray.z);
-          water = mix(water, mix(vec3(.51, .46, .30), vec3(.88, .79, .60), smoothstep(-.2, .2, dx)), shaft * .86);
+          water = mix(water, mix(vec3(.51, .46, .30), vec3(.88, .79, .60), smoothstep(-.2, .2, dx)), shaft * mix(.86, .55, bloom));
           diffuseColor.rgb = water;
         `);
     };
     const w = new THREE.Mesh(g, m); group.add(w);
-    anim.push((dt, time) => { waterTime.value = time; });
+    anim.push((dt, time) => {
+      waterTime.value = time;
+      const growing = ctx.view.race?.karts.some(k => k.lap >= 2) ? 1 : 0;
+      bloom.value += (growing - bloom.value) * (1 - Math.exp(-dt * 2));
+    });
   }
   // granite coping round the rim (tall enough to wall the water in), and the gravel walk on the far side
   const cop = partsOf(C.coping(8)), copSpots = [];
@@ -814,11 +830,9 @@ const LECTERN = { x: -167, z: 122.5 };    // in the infield of hairpin one: you 
 const MAZE = { x: -222, z: 18 };
 const PERMIT = { x: -146, z: 24.5 };      // in the infield of hairpin three: the red tape, at the scale it is really issued          // beyond hairpin three
 const BOARDS = [
-  [2.3, 1, 20, 'DEMOLITION VIEWING: NEXT LEFT', '#d4af37', '#12142b'],
-  [1.3, 1, 24, 'THOUGHTS AND PRAYERS (AND NOTHING ELSE)', '#1f3f8a', '#ffffff'], [3.4, 1, 22, 'YOUR CALL IS IMPORTANT TO OUR DONORS', '#ffffff', '#b3122a'],
-  [4.2, -1, 18, 'TERM LIMITS: STILL IN COMMITTEE', '#d4af37', '#12142b'], [8.6, 1, 20, 'BIPARTISAN AGREEMENT: NAP TIME', '#b3122a', '#ffffff'],
+  [4.2, -1, 18, 'TERM LIMITS: STILL IN COMMITTEE', '#d4af37', '#12142b'],
   [9.8, 1, 24, 'DOES TIKTOK USE WIFI?', '#12142b', '#ffd23c'], [12.9, -1, 22, 'THE INTERNET IS A SERIES OF TUBES', '#ffffff', '#1f3f8a'],
-  [14.6, 1, 18, 'THIS HEARING BROUGHT TO YOU BY THE WITNESS', '#f2efe6', '#12142b'], [16.8, -1, 18, 'I YIELD MY TIME TO MY DONORS', '#1f3f8a', '#ffd23c'],
+  [16.8, -1, 18, 'I YIELD MY TIME TO MY DONORS', '#1f3f8a', '#ffd23c'],
   [24.0, 1, 22, 'INSIDER TRADING: MEMBERS ONLY', '#16a34a', '#ffffff'], [28.0, 1, 16, 'BILL: 4,000 PAGES. READ: 0', '#ffffff', '#12142b'],
   [31.5, -1, 20, 'PASS IT. READ IT LATER.', '#b3122a', '#ffffff'], [31.8, -1, 19, 'SHUTDOWN SEASON TICKETS ON SALE', '#ffd23c', '#12142b'],
   [37.5, -1, 22, 'NEW TARIFF? CHECK YOUR NOTIFICATIONS', '#12142b', '#ffffff'], [42.0, 1, 18, 'CAMPAIGN PROMISES RECYCLED HERE', '#16a34a', '#ffffff'],
@@ -836,6 +850,42 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
   const posts = new ModelBuilder();
   const pole = (x, z, y0, y1, r = 0.22) => posts.add('pole', cyl(r, r, Math.max(0.1, y1 - y0), 8), { p: [x, (y0 + y1) / 2, z] });
   const leaderLap = () => { const race = view.race; let lap = 1; if (race?.karts) for (const k of race.karts) if (Number.isFinite(k.lap)) lap = Math.max(lap, Math.min(k.lap, (race.laps ?? 3) + 1)); return lap; };
+
+  // After the pool, a coffee concession serves the Fed's 2021 forecast. The
+  // same small coffee costs more on each return; share the marquee's lap update.
+  const lapSigns = C.makeAtlas(group, 1024);
+  let displayLap = 1;
+  {
+    const p = sc.beside(CAFE_CP, -1, 19), yaw = yawTo(p, roadPt(14.1));
+    // The ground falls steeply outside the Climb. The concession sits on
+    // its own piled terrace level with the avenue; the hill cannot hide the menu.
+    const stand = new ModelBuilder(), cup = { x: p.x, y: Math.max(p.y, p.roadY) + 0.6, z: p.z, yaw };
+    for (const x of [-5.5, 5.5]) for (const z of [-2.25, 2.25]) {
+      const [wx, , wz] = toWorld(cup, [x, 0, z]);
+      const height = Math.max(0.3, cup.y - sc.y(wx, wz) + 0.4);
+      stand.add('sleeve', box(.8, height, .8), { p: [x, -height / 2, z] });
+    }
+    stand.add('green', box(12.4, .45, 5.8, .05), { p: [0, -.2, 0] });
+    stand.add('green', box(11.8, 4.8, 5.3, .22), { p: [0, 2.4, 0] });
+    stand.add('cream', box(12.5, .5, 5.9, .1), { p: [0, 4.95, 0] });
+    stand.add('cream', cyl(2.9, 2.1, 6.0, 20), { p: [-3.1, 8.15, 0], r: [0, 0, .1] });
+    stand.add('sleeve', cyl(2.7, 2.45, 2.6, 20), { p: [-3.1, 8.1, 0], r: [0, 0, .1] });
+    stand.add('green', cyl(3.04, 3.11, .55, 20), { p: [-3.41, 11.34, 0], r: [0, 0, .1] });
+    stand.add('green', box(13.4, 6.1, .28, .15), { p: [1.7, 5.3, 3.05] });
+    const kiosk = stand.build({ green: plastic(0x17443d), cream: plastic(0xffeed5), sleeve: plastic(0xbd804d) });
+    sc.place(kiosk, p.x, p.z, { yaw, y: cup.y }); bake.add(kiosk);
+    const menu = lapSigns.add(768, 352, (g, w, h) => {
+      g.fillStyle = '#123e39'; g.fillRect(0, 0, w, h);
+      fitText(g, 'FED CAFÉ', w / 2, h * .18, w * .9, 64, F, '#f3dd99', { lines: 1 });
+      fitText(g, 'COFFEE  $' + [2, 5, 9][displayLap - 1], w / 2, h * .51, w * .94, 118, F, '#ffffff', { lines: 1 });
+      fitText(g, '“TRANSITORY”', w / 2, h * .84, w * .92, 70, SANS, '#f3dd99', { lines: 1 });
+    });
+    lapSigns.place(menu, toWorld(cup, [1.7, 5.3, 3.215]), yaw, 13.25, 5.98);
+  }
+  anim.push(() => {
+    const lap = Math.min(3, leaderLap());
+    if (lap !== displayLap) { displayLap = lap; lapSigns.paint(); }
+  });
 
   /* ---- 1. the centerpiece: the revolving door between REGULATOR and INDUSTRY, built over the Mall leg ----
      The two towers stand either side of the climb and a glass skybridge joins them with the revolving door on it:
@@ -868,7 +918,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
   const Ms = new THREE.Matrix4(), Qs = new THREE.Quaternion(), Ps = new THREE.Vector3(), Ss = new THREE.Vector3(2.5, 2.5, 2.5), Ys = new THREE.Vector3(0, 1, 0);
 
   /* ---- 2. the Avenue: the congressional portfolio, on a stock ticker you cannot miss ---- */
-  const tickAt = sc.beside(2.0, 1, 23), tickYaw = yawTo(tickAt, { x: 45, z: 0 }), tickY = tickAt.y + 13;
+  const tickAt = sc.beside(44.15, -1, 23), tickYaw = yawTo(tickAt, roadPt(43.05)), tickY = tickAt.y + 13;
   const ticker = C.ledPanel(group, 1024, 300, [{ c: [tickAt.x, tickY, tickAt.z], yaw: tickYaw }], 36, 10.5);
   for (const d of [-12, 12]) pole(tickAt.x + Math.cos(tickYaw) * d - Math.sin(tickYaw) * 0.4, tickAt.z - Math.sin(tickYaw) * d - Math.cos(tickYaw) * 0.4, tickAt.y - 0.5, tickY - 4, 0.45);
   const TAPE = 'BOUGHT DEFENSE STOCK ▲ DAY BEFORE THE VOTE ▲ SOLD EVERYTHING ▲ DAY BEFORE THE CRASH ▲ STOCK ACT? NEVER HEARD OF IT ▲ DISCLOSURE FILED 2 YEARS LATE ▲ ';
@@ -939,14 +989,20 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
     const mq = new ModelBuilder(), mc = toWorld(o, [0, 13.3, -(L + 2.2)]);
     mq.add('box', box(26, 4.6, 2.4, 0.3, 2), { p: mc, r: [0, yaw, 0] });
     bake.builder(mq, { box: plastic(0x12142b, 0.5, 0.3) }, false);
-    const s = atlas.add(1024, 200, (g, w, h) => {
+
+    const hearings = [
+      ['NOW IN SESSION', '“SENATOR, WE RUN ADS”'],
+      ['IMPEACHMENT TRIAL II', '57 GUILTY · 43 NOT GUILTY'],
+      ['IMPEACHMENT TRIAL II', '67 NEEDED · ACQUITTED'],
+    ];
+    const s = lapSigns.add(1020, 200, (g, w, h) => {
       g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff1b8';
       for (let x = 14; x < w; x += 30) { g.beginPath(); g.arc(x, 12, 6, 0, 7); g.fill(); g.beginPath(); g.arc(x, h - 12, 6, 0, 7); g.fill(); }
       g.fillStyle = '#ffffff'; g.fillRect(30, 30, w - 60, h - 60);
-      fitText(g, 'NOW IN SESSION', w / 2, h * 0.33, w * 0.6, 40, SANS, '#b3122a', { lines: 1 });
-      fitText(g, '"SENATOR, WE RUN ADS"', w / 2, h * 0.62, w * 0.86, 90, F, '#12142b', { lines: 1 });
+      fitText(g, hearings[displayLap - 1][0], w / 2, h * 0.33, w * 0.78, 43, SANS, '#b3122a', { lines: 1 });
+      fitText(g, hearings[displayLap - 1][1], w / 2, h * 0.62, w * 0.86, 90, F, '#12142b', { lines: 1 });
     });
-    atlas.place(s, [mc[0] + Math.sin(yaw + Math.PI) * 1.22, mc[1], mc[2] + Math.cos(yaw + Math.PI) * 1.22], yaw + Math.PI, 25.4, 4.96);
+    lapSigns.place(s, [mc[0] + Math.sin(yaw + Math.PI) * 1.22, mc[1], mc[2] + Math.cos(yaw + Math.PI) * 1.22], yaw + Math.PI, 25.4, 4.96);
     // the price tag, hung from the lantern down the south-east face of the dome
     const tagYaw = 3 * Math.PI / 4, dirX = Math.sin(tagYaw), dirZ = Math.cos(tagYaw), tc = [x0 + dirX * 13.2, track.py[i0] + 37.5, z0 + dirZ * 13.2];
     const t = atlas.add(560, 360, (g, w, h) => {
@@ -967,11 +1023,11 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
     const dark = inside.add(32, 32, g => { g.fillStyle = '#1a1d29'; g.fillRect(0, 0, 32, 32); });
     const at = (i, lat, up) => [track.px[i] + track.lx[i] * lat + track.ux[i] * up, track.py[i] + track.ly[i] * lat + track.uy[i] * up, track.pz[i] + track.lz[i] * lat + track.uz[i] * up];
     // banners across the ceiling, facing the karts coming in
-    ['THIS TUNNEL BROUGHT TO YOU BY BIG KART', 'HEARING IN PROGRESS: PLEASE HONK', 'THIS TUNNEL BROUGHT TO YOU BY A SUPER PAC', 'NO QUESTIONS PAST THIS POINT', 'EXIT VIA THE REVOLVING DOOR'].forEach((t, k) => {
+    ['JANUARY 6, 2021', 'ELECTORAL COUNT', 'SESSION RESUMED', 'COUNT FINISHED', 'FINAL GAVEL: 3:44 A.M.'].forEach((t, k) => {
       const i = track.indexAtCp(20.15 + k * 0.4), yaw = Math.atan2(-track.tx[i], -track.tz[i]), c = at(i, 0, 5.6);
       const r = inside.add(1024, 256, signDraw(t, { bg: ['#b3122a', '#12142b', '#1f3f8a', '#d4af37', '#12142b'][k], fg: ['#ffffff', '#ffd23c', '#ffffff', '#12142b', '#ffffff'][k], size: 120, lines: 2, border: '#d4af37' }));
-      inside.place(r, c, yaw, 7.6, 1.9);
-      inside.place(dark, [c[0] - Math.sin(yaw) * 0.04, c[1], c[2] - Math.cos(yaw) * 0.04], yaw + Math.PI, 7.6, 1.9);
+      inside.place(r, c, yaw, 9.0, 2.0);
+      inside.place(dark, [c[0] - Math.sin(yaw) * 0.04, c[1], c[2] - Math.cos(yaw) * 0.04], yaw + Math.PI, 9.0, 2.0);
     });
     // framed panels down both walls: hearing-room notices and lobbyist cutouts, leaning with the arch
     const NOTES = ['HEARING ROOM B', 'QUIET: SENATOR NAPPING', 'MEMBERS-ONLY STOCK TIPS', 'NO PHONES (FLIP PHONES OK)', 'COMMITTEE ON COMMITTEES', 'TAKE A NUMBER (AND A CHECK)', 'RECESS THIS WAY', 'SPEAK SLOWLY: SENATORS PRESENT'];
@@ -1065,8 +1121,8 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
   {
     const s = atlas.add(1024, 150, signDraw('PAID FOR BY CITIZENS FOR MORE KARTS', { bg: '#1f3f8a', fg: '#ffffff', size: 90, lines: 1 }));
     atlas.place2(s, [gantryAt.x, gantryAt.roadY + 11.4, gantryAt.z], gantryAt.along, 18, 2.64);
-    const lines = ["LOBBYISTS' BOX", 'DONOR SEATING ONLY'].map((t, k) => atlas.add(1024, 80, signDraw(t, { bg: k ? '#d4af37' : '#f2efe6', fg: '#12142b', font: SANS, size: 60, lines: 1 })));
-    stands.forEach((o, k) => atlas.place(lines[k % 2], toWorld(o, [0, 6.75, -8.28]), o.yaw, 28, 2.2));
+    const lines = ["LOBBYISTS' BOX", 'DONOR SEATING ONLY', 'PLEASE CLAP'].map((t, k) => atlas.add(1024, 80, signDraw(t, { bg: k ? '#d4af37' : '#f2efe6', fg: '#12142b', font: SANS, size: 60, lines: 1 })));
+    stands.forEach((o, k) => atlas.place(lines[k % lines.length], toWorld(o, [0, 6.75, -8.28]), o.yaw, 28, 2.2));
     const crowd = CROWD.map((t, k) => atlas.add(256, 150, signDraw(t, { bg: ['#ffffff', '#ffd23c', '#f7b8d0', '#e9f4ff', '#f2efe6'][k % 5], fg: ['#b3122a', '#1f3f8a', '#12142b'][k % 3], size: 64, border: '#12142b' })));
     const sticks = new ModelBuilder();
     seats.forEach((st, k) => {
@@ -1078,7 +1134,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
   }
 
   bake.builder(posts, { pole: plastic(0x2a2d36, 0.5, 0.3) }, false);
-  bake.flush(); atlas.flush();
+  bake.flush(); atlas.flush(); lapSigns.flush();
 
   /* ---- motion ---- */
   const T = { tick: 0, ceilShown: -1 };

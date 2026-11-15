@@ -41,8 +41,10 @@
    description stay rendered and readable. The race feed and the banners have their own lanes at the top of the
    screen; they do not borrow this one, and neither does a timer. hud-check guards this: it fails if any rule
    hides .hud-item-info span again. */
-/* first races on a phone: the coaching cards have the middle of the screen, so a rival's speech bubble waits */
-#ui:has(.tc.coaching) .hud-talk { visibility: hidden; }
+/* Control reminders belong to each racer's bottom lane. The item warning takes precedence. */
+.hint-card { position: absolute; bottom: calc(var(--edge) + var(--safe-b)); left: 50%; transform: translateX(-50%); width: max-content; max-width: 60%; box-sizing: border-box; padding: 0.3em 0.7em; border-radius: 1em; border: 0.1em solid rgba(255,255,255,0.72); background: rgba(18,20,43,0.88); font: 600 clamp(11px, calc(var(--u) * 2.9), 23px)/1.45 var(--body); text-align: center; text-wrap: balance; }
+.hint-card[hidden], .hud:has(.hud-warn.show) .hint-card { display: none; }
+.hint-card kbd { display: inline-block; line-height: 1.15; white-space: nowrap; }
 /* coins and lap, bottom-left */
 .hud-bl { position: absolute; left: calc(var(--edge) + var(--safe-l)); bottom: calc(var(--edge) + var(--safe-b)); display: flex; gap: calc(var(--u) * 1.6); align-items: center; }
 .hud-pill { display: flex; align-items: center; gap: calc(var(--u) * 1); font-size: calc(var(--u) * 6); line-height: 1; background: rgba(11,13,32,0.6); border-radius: calc(var(--u) * 5); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.2) calc(var(--u) * 0.5) calc(var(--u) * 1.3); }

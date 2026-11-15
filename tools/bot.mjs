@@ -113,17 +113,24 @@ try {
   // skip the flyover, hand the kart to the autopilot, shorten to one lap
   await page.evaluate('BK.session.skipIntro()');
   await page.waitForFunction('BK.session.phase !== "intro"', null, { timeout: 10000 });
-  await page.waitForTimeout(1200); await shot('09-countdown');
-  if (!mobile) {
-    // the first-race key hint must not sit on any corner of the HUD
-    const clash = await page.evaluate(() => {
-      const h = document.querySelector('.hint-card'); if (!h) return 'did not appear';
-      const a = h.getBoundingClientRect();
-      const hit = ['.hud-rank', '.hud-bl', '.hud-item', '.hud-map', '.hud-time'].filter(sel => { const e = document.querySelector(sel); if (!e) return false; const b = e.getBoundingClientRect(); return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom; });
-      return hit.length ? 'overlaps ' + hit.join(', ') : '';
+  // Check the first actionable frame, before a slow screenshot can consume the countdown.
+  const guide = page.locator('.hud .hint-card:visible');
+  try {
+    await guide.waitFor({ state: 'visible', timeout: 4000 });
+    const hint = await guide.evaluate(h => {
+      const a = h.getBoundingClientRect(), hud = h.closest('.hud');
+      const corners = ['.hud-rank', '.hud-bl', '.hud-item', '.hud-map', '.hud-time'];
+      const overlaps = corners.filter(sel => {
+        const b = hud.querySelector(sel)?.getBoundingClientRect();
+        return b?.width && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      });
+      return { text: h.textContent, overlaps };
     });
-    if (clash) fails.push(`first-race hint ${clash}`);
-  }
+    const opener = mobile ? 'Hold right' : '↑';
+    if (!hint.text.includes(opener) || !/steer/i.test(hint.text)) fails.push('unexpected starting controls: ' + hint.text);
+    if (hint.overlaps.length) fails.push('first-race hint overlaps ' + hint.overlaps.join(', '));
+  } catch (err) { fails.push('starting controls did not appear: ' + err.message.split('\n')[0]); }
+  await page.waitForTimeout(1200); await shot('09-countdown');
   await page.waitForFunction('!BK.race.frozen', null, { timeout: 15000 });
   if (!mobile) { await page.keyboard.down('KeyW'); await page.waitForTimeout(2500); await shot('10-driving'); await page.keyboard.down('KeyD'); await page.keyboard.down('ShiftLeft'); await page.waitForTimeout(1300); await shot('11-drifting'); await page.keyboard.up('ShiftLeft'); await page.keyboard.up('KeyD'); await page.keyboard.up('KeyW'); }
   else {

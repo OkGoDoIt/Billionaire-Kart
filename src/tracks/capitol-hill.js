@@ -871,7 +871,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
     stand.add('cream', cyl(2.9, 2.1, 6.0, 20), { p: [-3.1, 8.15, 0], r: [0, 0, .1] });
     stand.add('sleeve', cyl(2.7, 2.45, 2.6, 20), { p: [-3.1, 8.1, 0], r: [0, 0, .1] });
     stand.add('green', cyl(3.04, 3.11, .55, 20), { p: [-3.41, 11.34, 0], r: [0, 0, .1] });
-    stand.add('green', box(13.4, 6.1, .28, .15), { p: [1.7, 5.3, 2.74] });
+    stand.add('green', box(13.4, 6.1, .28, .15), { p: [1.7, 5.3, 3.05] });
     const kiosk = stand.build({ green: plastic(0x17443d), cream: plastic(0xffeed5), sleeve: plastic(0xbd804d) });
     sc.place(kiosk, p.x, p.z, { yaw, y: cup.y }); bake.add(kiosk);
     const menu = lapSigns.add(768, 352, (g, w, h) => {
@@ -880,7 +880,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
       fitText(g, 'COFFEE  $' + [2, 5, 9][displayLap - 1], w / 2, h * .51, w * .94, 118, F, '#ffffff', { lines: 1 });
       fitText(g, '“TRANSITORY”', w / 2, h * .84, w * .92, 70, SANS, '#f3dd99', { lines: 1 });
     });
-    lapSigns.place(menu, toWorld(cup, [1.7, 5.3, 2.90]), yaw, 13.25, 5.98);
+    lapSigns.place(menu, toWorld(cup, [1.7, 5.3, 3.215]), yaw, 13.25, 5.98);
   }
   anim.push(() => {
     const lap = Math.min(3, leaderLap());

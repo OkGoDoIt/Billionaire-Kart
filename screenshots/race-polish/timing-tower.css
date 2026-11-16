@@ -1,0 +1,9 @@
+/* An alternate treatment for review. Applied to the same real results panel in the browser. */
+.panel.trial-results { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:calc(var(--u) * 2); }
+.trial-results .trial-class, .trial-results h1, .trial-results .res-strip, .trial-results .foot { grid-column:1/-1; }
+.trial-results .trial-finish { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; border-left:0; border-top:calc(var(--u)*.75) solid var(--gold); padding:calc(var(--u)*1.7); }
+.trial-results .trial-finish strong { font-size:calc(var(--u)*5.5); }
+.trial-results .trial-laps { display:flex; flex-direction:column; gap:calc(var(--u)*.5); }
+.trial-results .trial-laps li { display:grid; grid-template-columns:1fr auto; align-items:center; padding:calc(var(--u)*.7) calc(var(--u)*1.25); }
+.trial-results .trial-laps li.fastest { background:#183932; }
+.trial-results .trial-laps small { grid-column:1/-1; text-align:right; }

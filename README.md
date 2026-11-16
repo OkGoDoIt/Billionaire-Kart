@@ -64,7 +64,8 @@ On a phone there are no buttons to find: the left half of the screen steers and 
 - Hold accelerate just after the **2** appears in the countdown for a rocket start.
 - Press drift as you leave a ramp for a trick boost when you land.
 - Each coin makes you a little faster, up to ten. Getting hit costs three.
-- Sit right behind another kart for a moment to slingshot past.
+- Hold one kart’s slipstream to slingshot past. Pull clear before setting up the next pass.
+- If an Antitrust Suit circles overhead, save a funding boost for its dive.
 
 ## Tracks
 
@@ -90,6 +91,8 @@ Then open http://localhost:8765. Development tools need Node and `npm install` o
 ```bash
 node tools/sim.mjs            # headless AI races on every track: timing, incidents, item balance
 node tools/bot.mjs            # drives the real game in headless Chrome, menus to results; add --mobile for phone size
+node tools/traffic.mjs                          # human-slot races: crowding, drafts, and box access
+node tools/audio-check.mjs                      # actual browser audio routing and playback
 node tools/track-shots.mjs silicon-valley out.jpg   # contact sheet of a whole track
 ```
 
@@ -104,6 +107,6 @@ node tools/track-shots.mjs silicon-valley out.jpg   # contact sheet of a whole t
 | `src/tracks` | One file per track. See [docs/track-authoring.md](docs/track-authoring.md). |
 | `src/ui`, `src/game`, `src/audio` | HUD, menus, touch controls, the app shell, and the audio engine. |
 
-Faces, backdrops, the icon, sound effects, announcer lines, and music were generated with OpenAI's image model and ElevenLabs; the scripts and every prompt are in `tools/gen-*.mjs`. Design research is in `docs/research/`.
+Faces, backdrops, the icon, sampled effects, announcer lines, and the original music assets use OpenAI’s image model and ElevenLabs; their scripts and prompts are in `tools/gen-*.mjs`. The Offshore Cup’s four instrumental arrangements are scored and rendered locally by `tools/score-offshore.mjs`. Design research is in `docs/research/`.
 
 The original single-file version of the game is preserved at the `v1-legacy` tag.

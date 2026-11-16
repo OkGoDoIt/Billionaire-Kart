@@ -369,7 +369,7 @@ export class Menus {
   }
 
   /* ---------- results ---------- */
-  s_results({ results, gp, track, records, best, trialCc }) {
+  s_results({ results, gp, track, records, best, trialCc, trialBest }) {
     const A = this.app;
     // One final screen (#243): a single race's finish wears the podium framing — the place
     // headline and trophy — over this same full table, instead of a separate podium step
@@ -404,16 +404,39 @@ export class Menus {
     const buttons = gp
       ? [this.btn(gp.last ? 'See final standings' : 'Next race', () => A.gpNext(), { cls: 'go', def: true })]
       : [this.btn('Race again', () => A.restartRace(), { cls: 'go', def: true }), this.btn('Choose another track', () => A.backToTracks()), this.btn('Quit to menu', () => A.quitToMenu())];
+    if (trialCc) {
+      const run = humans[0], laps = run.kart.lapTimes;
+      const difference = trialBest == null ? null : Math.round(run.time * 1000) - Math.round(trialBest * 1000);
+      const improved = difference < 0;
+      const delta = difference == null ? null : difference === 0 ? 'Matched your best' :
+        `${(Math.abs(difference) / 1000).toFixed(3)} s ${improved ? 'faster' : 'off your best'}`;
+      const quickest = laps.indexOf(Math.min(...laps));
+      return { onBack: () => false, el: h('div', {}, h('div', { class: 'panel results trial-results' },
+        h('p', { class: 'trial-class' }, `Time Trial · ${CLASSES[trialCc].label}`),
+        h('h1', {}, track.name),
+        h('div', { class: 'trial-finish' }, h('div', {}, h('span', { class: 'trial-caption' }, improved ? 'New personal best' : trialBest == null ? 'First finish' : 'Finish time'), h('strong', {}, fmtTime(run.time))),
+          delta && h('div', { class: 'trial-compare' }, h('b', { class: improved ? 'faster' : '' }, delta), difference !== 0 && h('span', {}, `${improved ? 'Previous best' : 'Personal best'} ${fmtTime(trialBest)}`))),
+        h('ol', { class: 'trial-laps' }, laps.map((lap, i) => h('li', { class: i === quickest ? 'fastest' : '' },
+          h('span', {}, `Lap ${i + 1}`), h('b', {}, fmtTime(lap)), i === quickest && h('small', {}, records?.newBestLap && trialBest != null ? 'New best lap' : 'Fastest lap')))),
+        ...strips, h('div', { class: 'foot' }, buttons))) };
+    }
+    // A close finish is about the two karts that actually crossed. Estimates can't make a photo finish.
+    const measured = results.filter(r => !r.estimated);
+    let photo = null;
+    for (let i = 1; i < measured.length; i++) {
+      const ahead = measured[i - 1], behind = measured[i], gap = behind.time - ahead.time;
+      if ((ahead.isPlayer || behind.isPlayer) && gap >= 0 && gap <= 0.30 && (!photo || gap < photo.gap)) photo = { ahead, behind, gap };
+    }
     const el = h('div', {}, h('div', { class: 'panel results' + (head ? ' podium' : '') },
       head
         ? h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, track.name)))
         : h('h1', {}, track.name),
-      trialCc && h('p', { class: 'res-sub' }, `Time Trial · ${CLASSES[trialCc].label}`),
       gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
       strips.length && h('div', { class: 'res-strips' }, strips),
       // the winner's line and the last finisher's: each stays in one piece, side by side when both fit
+      photo ? h('p', { class: 'res-photo' }, h('b', {}, 'Photo finish'), ` ${photo.ahead.racer.name} edged ${photo.behind.racer.name} by ${photo.gap < 0.001 ? 'less than 0.001' : photo.gap.toFixed(3)} s`) :
       h('p', { class: 'res-quote' }, h('span', {}, h('b', {}, results[0].racer.name + ': '), `“${results[0].racer.barks.win}”`),
         results.length > 2 && h('span', {}, h('b', {}, results[results.length - 1].racer.name + ': '), `“${results[results.length - 1].racer.barks.lose}”`)),
       h('div', { class: 'foot' }, buttons)));

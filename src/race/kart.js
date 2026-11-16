@@ -111,12 +111,13 @@ export class Kart {
     this.grounded = true; this.airT = 0; this.landed = 0;
     this.pitch = 0; this.roll = 0; this.gy = 0;
     this.drifting = false; this.driftDir = 0; this.driftCharge = 0; this.driftTier = 0; this.driftPaused = false; this.hopping = false; this.driftArmed = false;
-    this.boostT = 0; this.boostMul = 1; this.boostKind = '';
+    this.boostT = 0; this.boostMul = 1; this.boostKind = ''; this.lastBoostPad = null;
     this.coins = 0; this.item = null; this.itemUses = 0; this.rouletteT = 0; this.nextItem = null;
     this.hitT = 0; this.hitKind = ''; this.hitDur = 1; this.invulnT = 0; this.starT = 0; this.shrinkT = 0; this.ghostT = 0; this.inkT = 0; this.bulletT = 0; this.goldenT = 0;
-    this.squashT = 0;
+    this.squashT = 0; this.landingSpeedKeep = 1;
     this.trickArmT = 0; this.trick = false; this.trickSpin = 0; this.offRampT = 9; this.lastRamp = null;
-    this.draftT = 0; this.drafting = false;
+    this.draftT = 0; this.drafting = false; this.draftTarget = null;
+    this.draftSpent = false; this.draftAway = 0; this.draftReadyAt = 0;
     this.hint = 0; this.s = 0; this.circuit = -1; this.lap = 0; this.cpNext = 4; this.rank = 1; this.finished = false; this.finishTime = 0; this.finishRank = 0;
     this.lastSafeI = 0; this.safeT = 0; this.rescueT = 0; this.wrongWayT = 0; this.stuckT = 0;
     this.lapTimes = []; this.lapStart = 0; this.bestLap = Infinity;
@@ -172,6 +173,18 @@ export class Kart {
     if (n > 0) { this.stats.coins += n; this.emit('coin', this.coins - before); }
   }
 
+  /** A hit still spins the kart and costs coins on a jump. Once committed to
+      a gap, carry its horizontal momentum to the landing before losing speed. */
+  slowFromHit(keep) {
+    const tr = this.race.track, h = this.hit;
+    const forward = this.vx * h.tx + this.vz * h.tz;
+    if (tr.gapLaunch[h.i] && h.onRoad && forward > 10) {
+      this.landingSpeedKeep = Math.min(this.landingSpeedKeep, keep);
+    } else {
+      this.vx *= keep; this.vz *= keep;
+    }
+  }
+
   /** Apply a hit. kinds: spin | tumble | squash. Returns true if it landed. */
   hurt(kind, from = null) {
     if (!this.vulnerable || this.hitT > 0) return false;
@@ -179,10 +192,9 @@ export class Kart {
     this.streak = 0;                                                                                                          // special: a hit resets a charging streak
     this.hitKind = kind;
     this.hitDur = this.hitT = (kind === 'tumble' ? TUNE.tumbleT : kind === 'squash' ? TUNE.squashT : TUNE.spinT) * this.stunMul;
-    if (kind === 'tumble') { this.vy = 11; this.grounded = false; this.airT = 0.2; }
+    this.slowFromHit(kind === 'tumble' ? 0.18 : kind === 'squash' ? 0.2 : 0.42);
+    if (kind === 'tumble' && this.landingSpeedKeep === 1) { this.vy = 11; this.grounded = false; this.airT = 0.2; }
     if (kind === 'squash') this.squashT = 2.4;
-    const keep = kind === 'tumble' ? 0.18 : kind === 'squash' ? 0.2 : 0.42;
-    this.vx *= keep; this.vz *= keep;
     this.endDrift(false); this.boostT = 0; this.boostMul = 1; this.trick = false; this.draftT = 0;
     const lost = Math.min(this.coins, 3);
     if (lost) { this.coins -= lost; this.emit('dropCoins', lost); }
@@ -342,7 +354,7 @@ export class Kart {
     let vl = this.vx * cy - this.vz * sy;           // left
 
     // ----- throttle / brake
-    if (!airborne) {
+    if (!airborne && !(stunned && this.landingSpeedKeep < 1)) {
       // Both analog pedals can be down. A squeeze reduces the drive force while
       // the service brake acts independently; brake alone can reverse from rest.
       const drive = 1 - brake;
@@ -377,7 +389,7 @@ export class Kart {
     this.vx = sy * vf + cy * vl; this.vz = cy * vf - sy * vl;
     // never exceed the allowed speed through the vector sum
     const lim = Math.max(topBoost, 4) * 1.02, mag = Math.hypot(this.vx, this.vz);
-    if (mag > lim && !airborne) { const k = approach(mag, lim, 60 * dt) / mag; this.vx *= k; this.vz *= k; }
+    if (mag > lim && !airborne && this.landingSpeedKeep === 1) { const k = approach(mag, lim, 60 * dt) / mag; this.vx *= k; this.vz *= k; }
     this.fwd = vf; this.lat = vl; this.speed = Math.hypot(this.vx, this.vz);
     if (this.speed > this.stats.topSpeed) this.stats.topSpeed = this.speed;
 
@@ -435,6 +447,11 @@ export class Kart {
     }
     this.lastRamp = hit.ramp;
     this.gy = gy;
+    if (this.landingSpeedKeep < 1 && this.grounded && !tr.gapLaunch[hit.i]) {
+      this.vx *= this.landingSpeedKeep; this.vz *= this.landingSpeedKeep;
+      this.speed *= this.landingSpeedKeep; this.fwd *= this.landingSpeedKeep; this.lat *= this.landingSpeedKeep;
+      this.landingSpeedKeep = 1;
+    }
     // a draining lake (opt-in, track.def.lake): deep water is a rescue, the track decides the surface of shallows and bed
     const lake = tr.def.lake;
     if (lake && this.race.lakeY != null && !hit.onRoad && lake.inside(this.x, this.z)) {
@@ -443,7 +460,17 @@ export class Kart {
       hit.surface = lake.surface(depth, this.race) || hit.surface;
     }
     this.surface = this.grounded || this.airT < 0.1 ? hit.surface : this.surface;
-    if (this.grounded && hit.boost) { if (this.boostKind !== 'pad' || this.boostT < T.pad.t - 0.2) { this.boost('pad'); } }
+    // One camera, sound, and rumble cue per strip. The strip keeps supplying
+    // thrust under the wheels; hold its exit boost through long launch ramps.
+    if (!hit.boost || !controllable) this.lastBoostPad = null;
+    else if (this.grounded && !this.finished && this.rescueT <= 0) {
+      if (hit.boost !== this.lastBoostPad) {
+        this.boost('pad');
+        this.lastBoostPad = hit.boost;
+      } else if (this.boostKind === 'pad') {
+        this.boostT = Math.max(this.boostT, T.pad.t * (this.sp.boostDur || 1));
+      }
+    }
     if (this.trick) this.trickSpin += dt;
 
     // ----- orientation from the ground under the wheels
@@ -540,7 +567,7 @@ export class Kart {
 
   _progress(hit, dt, px, pz) {
     const tr = this.race.track, L = tr.length;
-    const prevCircuit = this.circuit;
+    const prevCircuit = this.circuit, prevS = this.s;
     if (this.finished) { this.s = hit.s; return; }
     this._setCoursePosition(hit.s);
     const sector = Math.min(3, Math.floor((this.s / L) * 4));
@@ -548,8 +575,12 @@ export class Kart {
     if (this.circuit > prevCircuit && this.circuit === this.lap) {
       if (this.cpNext >= 4) {
         this.lap++; this.cpNext = 1;
-        if (this.lap > 1) { const t = this.race.time - this.lapStart; this.lapTimes.push(t); if (t < this.bestLap) this.bestLap = t; }
-        this.lapStart = this.race.time;
+        // Time the stripe between the two physics samples. Two noses can
+        // cross in the same frame, and the faster kart can be ahead by its end.
+        const travelled = L - prevS + this.s;
+        const crossedAt = travelled > 0 ? Math.max(0, this.race.time - dt * this.s / travelled) : this.race.time;
+        if (this.lap > 1) { const t = crossedAt - this.lapStart; this.lapTimes.push(t); if (t < this.bestLap) this.bestLap = t; }
+        this.lapStart = crossedAt;
         this.emit('lap', this.lap);
       } else {
         // A shortcut skipped a checkpoint. Start this lap again from the line.
@@ -572,7 +603,7 @@ export class Kart {
 
   startRescue() {
     if (this.rescueT > 0) return;
-    this.rescueT = 2.1; this.endDrift(false); this.boostT = 0; this.boostMul = 1; this.trick = false; this.hitT = 0;
+    this.rescueT = 2.1; this.landingSpeedKeep = 1; this.endDrift(false); this.boostT = 0; this.boostMul = 1; this.trick = false; this.hitT = 0;
     const lost = Math.min(this.coins, 2); if (lost) this.coins -= lost;
     this.emit('rescue');
   }
@@ -603,23 +634,35 @@ export class Kart {
     }
   }
 
-  /** Slipstream: follow close behind another kart to charge a draft boost. */
+  /** Earn a slingshot by holding one kart's wake. Pull clear to earn another. */
   _drafting(dt) {
-    const T = TUNE; let behind = false;
-    if (this.grounded && this.speed > this.top * 0.75 && this.hitT <= 0) {
+    const T = TUNE;
+    let target = null, nearest = T.draftDist;
+    if (this.grounded && this.fwd > this.top * 0.75 && this.hitT <= 0 && !this.finished) {
       const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
       for (const o of this.race.karts) {
-        if (o === this || o.rescueT > 0 || o.speed < 8) continue;
-        const dx = o.x - this.x, dz = o.z - this.z;
-        const f = dx * sy + dz * cy; if (f < 2.5 || f > T.draftDist) continue;
-        const l = dx * cy - dz * sy; if (Math.abs(l) > T.draftWidth) continue;
-        if (Math.abs(o.y - this.y) > 2) continue;
-        behind = true; break;
+        if (o === this || o.rescueT > 0 || o.finished || Math.abs(o.y - this.y) > 2) continue;
+        const dx = o.x - this.x, dz = o.z - this.z, forward = dx * sy + dz * cy;
+        if (forward < 2.5 || forward > nearest || Math.abs(dx * cy - dz * sy) > T.draftWidth) continue;
+        // Crossing or oncoming traffic has no usable wake in our direction.
+        if (o.vx * sy + o.vz * cy < Math.max(8, o.speed * 0.7)) continue;
+        target = o; nearest = forward;
       }
     }
-    this.drafting = behind;
-    if (behind) { this.draftT += dt; if (this.draftT >= T.draftTime) { this.draftT = 0; this.boost('draft'); this.emit('draft'); } }
-    else this.draftT = Math.max(0, this.draftT - dt * 1.5);
+    if (target) {
+      if (target !== this.draftTarget) { this.draftTarget = target; this.draftSpent = false; this.draftT = 0; }
+      this.draftAway = 0;
+    } else {
+      this.draftAway += dt;
+      if (this.draftAway >= 0.4) { this.draftTarget = null; this.draftSpent = false; }
+    }
+    this.drafting = !!target && !this.draftSpent && this.time >= this.draftReadyAt;
+    if (!this.drafting) { this.draftT = Math.max(0, this.draftT - dt * 1.5); return; }
+    this.draftT += dt;
+    if (this.draftT < T.draftTime) return;
+    this.boost('draft'); this.emit('draft');
+    this.draftSpent = true; this.drafting = false; this.draftT = 0;
+    this.draftReadyAt = this.time + T.draft.t * (this.sp.boostDur || 1);
   }
 
   /** During the countdown: hold accelerate at the right moment for a rocket start. */

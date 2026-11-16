@@ -9,18 +9,20 @@ import { clamp, lerp, wrapAngle, mod, loopDelta } from '../core/util.js';
 import { TUNE } from './kart.js';
 
 // cuts: chance per lap of taking a shortcut the driver qualifies for (the easiest level never does)
-// form: half-range of the per-race form spread dealt across the AI field (see assignFieldForm)
+// startChance: grid position and an individual reaction decide which drivers nail the lights.
+// Let front runners launch well on Easy and leave a few ordinary starts on Hard.
+// form: fastest per-race pace advantage. The slower end has a wider range (see assignFieldForm).
 export const AI_LEVELS = {
-  easy:   { skill: 0.45, speed: 0.93, band: 0.05, driftChance: 0.35, startChance: 0.15, itemDelay: [1.5, 5], line: 0.5, cuts: 0, form: 0.025 },
+  easy:   { skill: 0.45, speed: 0.93, band: 0.05, driftChance: 0.35, startChance: 0.40, itemDelay: [1.5, 5], line: 0.5, cuts: 0, form: 0.025 },
   normal: { skill: 0.7,  speed: 0.975, band: 0.045, driftChance: 0.7,  startChance: 0.45, itemDelay: [0.8, 3.5], line: 0.75, cuts: 0.45, form: 0.04 },
-  hard:   { skill: 0.92, speed: 1.0,  band: 0.04, driftChance: 0.95, startChance: 0.8,  itemDelay: [0.4, 2.2], line: 0.95, cuts: 0.8, form: 0.045 },
+  hard:   { skill: 0.92, speed: 1.0,  band: 0.04, driftChance: 0.95, startChance: 0.64,  itemDelay: [0.4, 2.2], line: 0.95, cuts: 0.8, form: 0.045 },
 };
 
 /* Per-race form for a whole AI field, dealt at race setup. Mario Kart has never run its
    computer drivers at one uniform level: Super Mario Kart assigns them a performance
    order (one very fast, one fast, one medium, the rest slow), and from Mario Kart 64 on,
    one or two randomly chosen opponents are designated rivals of much greater skill. The
-   equivalent here: pace offsets (top-speed fractions) stratified from +form to -form with
+   equivalent here: pace offsets (top-speed fractions) stratified from +form to -2.5×form with
    a little jitter, the best draw reserved for one randomly chosen designated rival — the
    race's pace-setter — and the rest shuffled, so every race has a front, a middle, and a
    tail instead of a single touring pack. Draws come from the race RNG, so a race and its
@@ -30,7 +32,9 @@ export function assignFieldForm(aiCount, maxForm, rng) {
   if (aiCount <= 0) return { forms: [], rival: -1 };
   const rival = Math.floor(rng() * aiCount);
   if (aiCount === 1) return { forms: [maxForm * 0.7], rival: 0 };
-  const step = 2 * maxForm / (aiCount - 1);
+  // Keep the pace-setter beatable. Spread the midfield and tail by giving
+  // the slower draws more room, instead of making pole disappear up the road.
+  const step = 3.5 * maxForm / (aiCount - 1);
   const draws = [];
   for (let i = 0; i < aiCount; i++) draws.push(maxForm - i * step + rng.range(-0.3, 0.3) * step);
   draws.sort((a, b) => b - a);
@@ -80,13 +84,23 @@ export class AIDriver {
     this.form = personality.form != null ? personality.form : rng.range(-1, 1) * (this.lv.form ?? 0.04);
     this.paceMul = 1 + this.form;
     this.rival = !!personality.rival;
+    this.lane = personality.lane || 0;
     this.skill = clamp(this.lv.skill + (personality.skill || 0) + rng.range(-0.08, 0.08) + this.form * 1.5, 0.2, 1);
     this.aggr = clamp(0.5 + (personality.aggression || 0) + rng.range(-0.2, 0.2), 0, 1);
     this.bias = rng.range(-1, 1) * 1.6 * (1 - this.skill * 0.6);       // habitual lateral offset
     this.wanderPhase = rng() * 10; this.wanderRate = rng.range(0.25, 0.6);
     this.input = { steer: 0, throttle: 1, brake: 0, drift: false, item: false };
     this.driftPlan = null; this.stuckT = 0; this.reverseT = 0; this.bestProg = null; this.progT = 0; this.itemT = rng.range(...this.lv.itemDelay);
-    this.willRocket = rng() < this.lv.startChance; this.avoid = 0; this.mistakeT = rng.range(6, 20); this.wobble = 0;
+    // Front rows have clean road; the rear rows have traffic in both lanes.
+    // A good or bad individual reaction can still change the launch.
+    const reactionDraw = rng();
+    const launch = lerp(reactionDraw, personality.gridDepth ?? reactionDraw, 0.6);
+    this.willRocket = launch < this.lv.startChance;
+    // A practiced launch can hit either rocket tier. The rest react to green
+    // and roll onto the gas at their own pace during the opening seconds.
+    this.launchAt = this.willRocket ? lerp(0.95, 2, launch / this.lv.startChance) : 0;
+    this.reaction = this.willRocket ? 0 : lerp(0.08, 0.72, (launch - this.lv.startChance) / (1 - this.lv.startChance));
+    this.avoid = 0; this.mistakeT = rng.range(6, 20); this.wobble = 0;
     kart.autoTrick = rng() < 0.55 + this.skill * 0.45;
     this.cut = null; this.cutPlan = null; this._cutLap = {};
   }
@@ -97,25 +111,30 @@ export class AIDriver {
     // countdown: skilled drivers time a rocket start
     if (race.frozen) {
       inp.steer = 0; inp.brake = 0; inp.drift = false;
-      inp.throttle = this.willRocket && race.countdown < 1.9 - (1 - this.skill) * 0.6 ? 1 : 0;
+      inp.throttle = this.willRocket && race.countdown < this.launchAt ? 1 : 0;
       return inp;
     }
     if (k.finished) { return this._follow(dt, 0.6); }
 
+    // A tow can move the kart back a full ramp approach. Take a new progress
+    // reading on landing so driving that stretch again never requests another tow.
+    if (k.rescueT > 0) {
+      this.bestProg = null; this.progT = 0; this.stuckT = 0; this.reverseT = 0; this.driftPlan = null;
+      inp.steer = 0; inp.throttle = 0; inp.brake = 0; inp.drift = false;
+      return inp;
+    }
     // stuck recovery
-    if (k.speed < 2.5 && k.hitT <= 0 && k.rescueT <= 0) this.stuckT += dt; else this.stuckT = Math.max(0, this.stuckT - dt * 2);
+    if (k.speed < 2.5 && k.hitT <= 0) this.stuckT += dt; else this.stuckT = Math.max(0, this.stuckT - dt * 2);
     if (this.stuckT > 1.6 && this.reverseT <= 0) { this.reverseT = 1.0; }
     if (this.stuckT > 5) { k.startRescue(); this.stuckT = 0; }
     // progress rescue: the speed timer above limit-cycles against a bump obstacle (reverse,
     // roll forward, bump again — stuckT drains while moving and never reaches 5), so also
     // watch the kart's best distance. No gain of 2 m in 6 s of live racing means it is
-    // wedged somewhere; rescue it outright. A rescue may set the kart back a little, so
-    // bestProg follows it down instead of counting the setback against the kart.
+    // wedged somewhere; rescue it outright.
     const prog = k.raceDistance;
     if (this.bestProg === null) this.bestProg = prog;
     if (prog > this.bestProg + 2) { this.bestProg = prog; this.progT = 0; }
-    else if (k.rescueT <= 0) this.progT += dt;
-    else this.bestProg = Math.min(this.bestProg, prog);
+    else this.progT += dt;
     if (this.progT > 6) { k.startRescue(); this.progT = 0; this.stuckT = 0; }
     if (this.reverseT > 0) {
       this.reverseT -= dt; inp.throttle = 0; inp.brake = 1; inp.drift = false;
@@ -125,6 +144,10 @@ export class AIDriver {
 
     this._shortcuts();
     if (this.cut) this._cutFollow(dt); else this._follow(dt, 1);
+    if (!this.willRocket && race.time < 4) {
+      if (race.time < this.reaction) inp.throttle = 0;
+      else inp.throttle *= 1 - this.reaction * (4 - race.time) / 4;
+    }
     this._items(dt);
     return inp;
   }
@@ -264,6 +287,17 @@ export class AIDriver {
     this.wanderPhase += dt * this.wanderRate;
     const hwA = Math.min(tr.hwL[iAhead], tr.hwR[iAhead]) - 1.6;
     let lat = tr.lineLat[iAhead] * this.lv.line + this.bias + Math.sin(this.wanderPhase) * 1.2 * (1 - this.skill * 0.5);
+    // Spread out on broad straights. On an apex, a narrow bridge, or a yacht
+    // deck, tuck back onto the authored line so the pass does not miss a landing.
+    if (this.lane && k.grounded && !tr.bridge[iAhead] && tr.respawn[iAhead] === iAhead) {
+      const bend = Math.max(Math.abs(tr.curv[hit.i]), Math.abs(tr.curv[iAhead]));
+      let room = clamp(1 - bend * 40, 0, 1);
+      for (const r of tr.ramps) {
+        const ahead = loopDelta(k.s + look, r.s0, tr.length);
+        if (ahead >= -r.len - 3 && ahead < 25) room = Math.min(room, clamp((ahead - 4) / 21, 0, 1));
+      }
+      lat += this.lane * Math.min(4.8, hwA * 0.65) * room;
+    }
     // occasional small mistakes keep them human
     this.mistakeT -= dt;
     if (this.mistakeT <= 0) { this.wobble = this.rng.range(-1, 1) * (1.15 - this.skill) * 5; this.mistakeT = this.rng.range(7, 22); this.wobbleT = 1.2; }
@@ -362,7 +396,9 @@ export function rubberBand(race) {
     if (!k.ai) continue;
     const d = k.raceDistance - leadP;        // + = ahead of the human
     const band = k.ai.lv.band;
-    const adj = d > 0 ? -band * clamp(d / 110, 0, 1) : band * 1.25 * clamp(-d / 150, 0, 1);
+    // A couple of seconds of clean air is a race lead, not a reason to tow
+    // the rest of the field toward the player. Distant rivals still ease up.
+    const adj = d > 0 ? -band * clamp((d - 42) / 100, 0, 1) : band * clamp((-d - 42) / 155, 0, 1);
     k.aiSpeedMul = k.ai.lv.speed * (k.ai.paceMul || 1) * (1 + adj) * (race.cls.ai || 1);
   }
 }

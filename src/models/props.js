@@ -28,15 +28,54 @@ function blob(r, seed = 1, lump = 0.22, detail = 2) {
 }
 
 /* ---------- plants ---------- */
+const oakLeaves = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, envMapIntensity: 0.35 });
+
 export function roundTree(seed = 1, { h = 7, leafA = 0x4fae3f, leafB = 0x6fc94a } = {}) {
   const rng = makeRng(seed), b = new ModelBuilder();
-  b.add('bark', cyl(0.28, 0.42, h * 0.5, 9), { p: [0, h * 0.25, 0] });
-  const crowns = 3 + Math.floor(rng() * 2);
-  for (let i = 0; i < crowns; i++) {
-    const a = rng() * Math.PI * 2, d = i === 0 ? 0 : h * 0.16, r = h * (0.26 + rng() * 0.08) * (i === 0 ? 1.15 : 0.9);
-    b.add(i % 2 ? 'leafB' : 'leafA', blob(r, seed * 7 + i, 0.25, 2), { p: [Math.cos(a) * d, h * (0.62 + rng() * 0.16), Math.sin(a) * d], s: [1, 0.86, 1] });
+  const branch = (from, to, base, tip) => {
+    const axis = new THREE.Vector3().subVectors(to, from);
+    const wood = cyl(tip * h, base * h, axis.length(), 7, true);
+    wood.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize()));
+    b.add('bark', wood, { p: from.clone().lerp(to, 0.5).toArray() });
+  };
+  const joint = new THREE.Vector3(h * 0.055, h * 0.32, -h * 0.025);
+  branch(new THREE.Vector3(), joint, 0.061, 0.038);
+  // Oaks spread sideways from a low fork. Stagger the boughs vertically; the
+  // gaps between the lower crowns let the branches and the sky show through.
+  const phase = rng() * Math.PI * 2;
+  for (let i = 0; i < 4; i++) {
+    const angle = phase + i * 2.40, reach = h * (0.25 + rng() * 0.09);
+    const x = Math.cos(angle) * reach, z = Math.sin(angle) * reach;
+    const height = h * (0.54 + i * 0.055 + rng() * 0.04);
+    const elbow = new THREE.Vector3(x * 0.64, joint.y + h * 0.08, z * 0.64);
+    branch(joint, elbow, 0.031, 0.025);
+    branch(elbow, new THREE.Vector3(x, height, z), 0.025, 0.013);
+    b.add('canopy', blob(h * (0.23 + rng() * 0.035), seed * 7 + i, 0.38, 1),
+      { p: [x, height, z], s: [1.12, 0.69, 1.02], r: [0, angle, 0.08] });
+    // Small sprays interrupt the long outside edges of the foliage silhouette.
+    for (const side of [-1, 1]) {
+      const tip = angle + side * 0.92;
+      b.add('canopy', blob(h * 0.123, seed * 9 + i + side, 0.3, 0), {
+        p: [x + Math.cos(tip) * h * 0.19, height + h * (side > 0 ? 0.06 : -0.035), z + Math.sin(tip) * h * 0.19],
+        s: [1.04, 0.78, 1],
+      });
+    }
   }
-  return b.build({ bark: BARK, leafA: leaf(leafA), leafB: leaf(leafB) });
+  b.add('canopy', blob(h * 0.285, seed + 31, 0.38, 1),
+    { p: [h * 0.064, h * 0.78, 0], s: [1.16, 0.75, 1] });
+  const tree = b.build({ bark: BARK, canopy: oakLeaves });
+  // Bake the authored palette into the foliage. The darker undersides and lit
+  // branch tips read at racing distance without a separate material or texture.
+  const geo = tree.getObjectByName('canopy').geometry;
+  const pos = geo.attributes.position, normals = geo.attributes.normal;
+  const shade = new THREE.Color(leafA).lerp(new THREE.Color(0x304e42), 0.54);
+  const lit = new THREE.Color(leafB), c = new THREE.Color(), colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const sun = 1.6 * (pos.getY(i) / h - 0.40) + normals.getY(i) * 0.23;
+    c.copy(shade).lerp(lit, Math.max(0, Math.min(1, sun))).toArray(colors, i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return tree;
 }
 
 export function cypress(seed = 1, { h = 11, color = 0x2f7d3a } = {}) {
@@ -131,35 +170,76 @@ export function billboard(map, { w = 14, h = 7, legs = 7, frame = 0x23252c } = {
 }
 
 /** Start/finish gantry spanning `span` metres, with a sign and start lights. */
-export function gantry(span = 20, title = 'BILLIONAIRE KART', { color = 0xe23b3b, color2 = 0xffd23c } = {}) {
+export function gantry(span = 20, title = 'BILLIONAIRE KART', { color = 0xe23b3b, color2 = 0xffd23c, gridOffset = 0 } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder(), H = 9.2;
   for (const sx of [1, -1]) {
-    b.add('tower', box(1.8, H, 1.8, 0.25, 3), { p: [sx * (span / 2 + 1.4), H / 2, 0] });
-    b.add('trim', box(2.3, 0.7, 2.3, 0.2, 2), { p: [sx * (span / 2 + 1.4), 0.35, 0] });
-    b.add('trim', box(2.2, 0.5, 2.2, 0.2, 2), { p: [sx * (span / 2 + 1.4), H + 0.2, 0] });
-    b.add('cap', sphere(0.9, 14, 10), { p: [sx * (span / 2 + 1.4), H + 0.9, 0] });
+    const x = sx * (span / 2 + 1.4);
+    // Paired uprights and diagonal cross-braces leave the track behind them visible.
+    for (const edge of [-1, 1]) {
+      b.add('tower', box(0.51, H, 1.38, 0.11, 1), { p: [x + edge * 0.68, H / 2, 0] });
+    }
+    for (let i = 0; i < 3; i++) {
+      b.add('tower', box(0.31, 2.64, 0.7, 0.07, 1), { p: [x, 2.45 + i * 2.13, 0], r: [0, 0, (i % 2 ? 1 : -1) * 0.55] });
+    }
+    b.add('trim', box(2.3, 0.7, 2.3, 0.2, 2), { p: [x, 0.35, 0] });
+    b.add('cap', box(1.94, 0.26, 1.66, 0.08, 1), { p: [x, 1.0, 0] });
+    b.add('tower', box(1.94, 0.65, 1.59, 0.12, 1), { p: [x, H + 0.55, 0] });
+    b.add('cap', box(2.23, 0.29, 1.78, 0.1, 1), { p: [x, H + 0.96, 0] });
   }
   b.add('beam', box(span + 5.6, 2.6, 1.3, 0.3, 3), { p: [0, H - 0.6, 0] });
   b.add('trim', box(span + 6, 0.35, 1.6, 0.1, 2), { p: [0, H - 2.0, 0] });
   b.add('trim', box(span + 6, 0.35, 1.6, 0.1, 2), { p: [0, H + 0.8, 0] });
   // start light pod
-  b.add('dark', box(5.2, 1.0, 0.7, 0.2, 2), { p: [0, H - 2.9, 0.1] });
+  b.add('dark', box(5.2, 1.0, 0.7, 0.2, 2), { p: [gridOffset, H - 2.9, 0.1] });
   grp.add(b.build({ tower: paint(color, { rough: 0.45, clear: 0.3 }), trim: plastic(0xf4f4f0, 0.5), cap: paint(color2, { rough: 0.3, clear: 0.5 }), beam: plastic(0x1d2030, 0.5), dark: MAT.dark }));
   // The sign fills the gap between the towers and no more: any wider and its ends are buried in them, which cut the
   // first and last letters off a long name. The canvas has the sign's own shape, so the letters are not stretched.
   const signW = span + 0.9, signH = 2.2, th = 128, tw = Math.round(th * signW / signH);
-  const tex = canvasTex(tw, th, (g, w, h) => {
-    g.fillStyle = '#1d2030'; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 16; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#ffffff' : '#12142b'; g.fillRect(i * 16, j * 16, 16, 16); g.fillRect(w - 256 + i * 16, j * 16 + 96, 16, 16); }
-    fitText(g, title, w / 2, h / 2 + 6, w - 70, h, 92, SIGN_FONT, { fill: '#' + new THREE.Color(color2).getHexString(), stroke: '#12142b', lw: 10 });
-  }, { repeat: false, aniso: 8 });
+  const drawSign = (g, w, h) => {
+    const accent = '#' + new THREE.Color(color2).getHexString();
+    const bg = g.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#243549'); bg.addColorStop(1, '#10182b');
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    // The approach face looks toward -Z. Keep the name and signal over the
+    // starting grid even when an extra lane widens one end of the structure.
+    const cx = w * (0.5 - gridOffset / signW);
+    const size = fitText(g, title, cx, h / 2 + 6, 2 * Math.min(cx, w - cx) - 64, h, 99, SIGN_FONT, { fill: accent, stroke: '#101625', lw: 9 });
+    // Let the length of the name determine how much chequered silk fits at each end.
+    g.font = `${size}px ${SIGN_FONT}`;
+    const halfTitle = g.measureText(title).width / 2;
+    for (const side of [0, 1]) {
+      const flagW = Math.min(w * 0.22, (side ? w - cx : cx) - halfTitle - 26);
+      g.save();
+      if (side) { g.translate(w, 0); g.scale(-1, 1); }
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(flagW, 0);
+      g.lineTo(flagW - 0.37 * h, h); g.lineTo(0, h); g.clip();
+      const cell = h / 4;
+      for (let row = 0; row < 4; row++) for (let col = -1; col * cell < flagW; col++) {
+        if ((col + row) % 2 === 0) {
+          g.fillStyle = '#e7eef4'; g.fillRect(col * cell, row * cell, cell + 0.5, cell + 0.5);
+        }
+      }
+      g.strokeStyle = accent; g.lineWidth = 18;
+      g.beginPath(); g.moveTo(flagW, 0); g.lineTo(flagW - 0.37 * h, h); g.stroke();
+      g.restore();
+    }
+  };
+  const tex = canvasTex(tw, th, drawSign, { repeat: false, aniso: 8 });
+  grp.userData.setTitle = next => {
+    if (next === title) return;
+    title = next;
+    drawSign(tex.image.getContext('2d'), tw, th); tex.needsUpdate = true;
+  };
+  const face = new THREE.PlaneGeometry(signW, signH);
+  const faceMat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex,
+    emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 });
   for (const s of [1, -1]) {
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(signW, signH), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 }));
+    const sign = new THREE.Mesh(face, faceMat);
     sign.position.set(0, H - 0.6, s * 0.67); sign.rotation.y = s > 0 ? 0 : Math.PI; grp.add(sign);
   }
   // five start lights facing the grid (-Z side is where karts line up, looking +Z)
   const lights = [];
-  for (let i = 0; i < 5; i++) { const m = new THREE.Mesh(sphere(0.34, 12, 10), new THREE.MeshStandardMaterial({ color: 0x220808, emissive: 0xff2a2a, emissiveIntensity: 0, roughness: 0.3 })); m.position.set((i - 2) * 0.95, H - 2.9, -0.32); grp.add(m); lights.push(m); }
+  for (let i = 0; i < 5; i++) { const m = new THREE.Mesh(sphere(0.34, 12, 10), new THREE.MeshStandardMaterial({ color: 0x220808, emissive: 0xff2a2a, emissiveIntensity: 0, roughness: 0.3 })); m.position.set(gridOffset + (i - 2) * 0.95, H - 2.9, -0.32); grp.add(m); lights.push(m); }
   grp.userData.lights = lights;
   return grp;
 }

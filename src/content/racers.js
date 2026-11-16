@@ -93,6 +93,27 @@ export const RACERS = [
     { hit: ['That story will not run.', 'My editors will bury this.'], boost: ['Extra! Extra! Overtake all about it!', 'Tabloid turbo!'], taunt: ['That’s tomorrow’s front page.', 'Fair and balanced!'], pass: ['Breaking news: I passed you.', 'We report. You lose.'], win: 'Lachlan inherits this trophy in 2050.', lose: 'Retraction on page forty.' }),
 ];
 
+// A few grudges worth hearing from the driver's seat. The key is who passed whom.
+export const RIVAL_PASS = {
+  elon: { bezos: 'Nice rocket. Where’s the rest of it?', zuck: 'The cage match has a qualifying round.' },
+  bezos: { elon: 'Free two-day shipping. Still got here first.' },
+  zuck: { elon: 'Send location. Actually, I have it.' },
+  dario: { sam: 'Your alignment is off. Front left.' },
+  demis: { jensen: 'Move 37. Outside line.' },
+  cook: { bill: 'I’m a kart. You’re a PC.' },
+  bill: { cook: 'It looks like you’re trying to pass me.' },
+  thiel: { sam: 'Zero to one. Lane one is taken.' },
+};
+
+// Item-specific replies use the existing speech bubble, once per line per human driver per race.
+export const HIT_REPLY = {
+  antitrust: { bill: 'Again? I unbundled the browser!', cook: 'There was a gate in my walled garden?', larrysergey: 'What if we paid to be the default winner?' },
+  subpoena: { zuck: 'Senator, we run laps.', holmes: 'Can I just send you one drop of evidence?', bezos: 'Does this need a signature?' },
+  tweet: { elon: 'Who put the bird back?', murdoch: 'That story was behind a paywall!', sam: 'Please disregard my earlier prediction.' },
+  pinkslip: { ellison: 'I’m keeping the island.', cook: 'I was already at the retirement party!' },
+  leak: { dario: 'That was the load-bearing guardrail.', sam: 'Call it a research preview.' },
+};
+
 /* Specials: one per racer, and it applies to whoever drives them, you or a rival. `text` is what the racer card
    says, written for the player. Everything else is a number the race code reads (src/race/kart.js and items.js);
    a number is a multiplier unless noted. Each is modest and most carry a cost. The slate is the one Roger

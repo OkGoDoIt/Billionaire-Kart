@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { EDGE, KERB_W, KERB_H } from './track.js';
 import { clamp, lerp, smoothstep, mod, fbm, noise2 } from '../core/util.js';
-import { roadSkin, kerbTexture, detailTexture, meadowTexture, checkerTexture, bannerTexture, DEFAULT_ADS } from '../render/textures.js';
+import { roadSkin, kerbTexture, detailTexture, meadowTexture, checkerTexture, gridPaintTexture, bannerTexture, DEFAULT_ADS } from '../render/textures.js';
 
 /* ---------- tiny geometry builder ---------- */
 export class Geo {
@@ -397,11 +397,34 @@ export function buildTrackMesh(track, look = {}) {
   /* ----- start line ----- */
   {
     const g = new Geo(); const P = new THREE.Vector3();
-    const hw = Math.min(hwL[0], hwR[0]);
-    for (const [s, v] of [[-1.6, 0], [1.6, 0.25]]) for (const [lat, u] of [[-hw, 0], [hw, hw / 3.2]]) { track.pointAt(s, lat, P, 0.03); g.v(P.x, P.y, P.z, 0, 1, 0, u, v); }
+    // An asymmetric road can have a second legal lane beyond the narrower half.
+    for (const [s, v] of [[-1.6, 0], [1.6, 0.5]]) for (const lat of [-hwR[0], hwL[0]]) {
+      track.pointAt(s, lat, P, 0.03);
+      g.v(P.x, P.y, P.z, 0, 1, 0, (lat + hwR[0]) / 6.4, v);
+    }
     g.quad(0, 1, 2, 3);
     mats.checker = new THREE.MeshStandardMaterial({ map: checkerTexture(8), roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     add('startline', g.build(), mats.checker, { order: 2 });
+  }
+
+  // One sheet of paint for the eight staggered boxes. Sample the road for every corner so
+  // the markings bank with the grid. U increases to the driver's right on the numbered stamps.
+  {
+    const g = new Geo(), p = new THREE.Vector3(), slots = 8;
+    for (let k = 0; k < slots; k++) {
+      const { s, lat } = track.gridSlot(k), first = g.count;
+      const col = k % 4, row = Math.floor(k / 4);
+      for (const [ds, v] of [[-1.55, 0], [1.9, 1]]) {
+        for (const [dl, u] of [[-1.45, 1], [1.45, 0]]) {
+          track.pointAt(s + ds, lat + dl, p, 0.024);
+          g.v(p.x, p.y, p.z, 0, 1, 0, (col + u) / 4, (1 - row + v) / 2);
+        }
+      }
+      g.quad(first, first + 1, first + 2, first + 3);
+    }
+    const paint = new THREE.MeshStandardMaterial({ map: gridPaintTexture(), roughness: 0.94,
+      alphaTest: 0.3, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    add('grid-boxes', g.build(), paint, { order: 1 });
   }
 
   group.userData.mats = mats;
@@ -435,14 +458,21 @@ export function makeChevronMaterial({ a = 0xff7a00, b = 0xfff06a, speed = 3, glo
       #include <common>
       #include <fog_pars_fragment>
       void main() {
+        // V increases down the course. Keeping the arrowheads fixed in the deck makes their
+        // direction visible in a still frame; the light runs through them towards the exit.
         float x = abs(vUv.x - 0.5) * 2.0;
-        float v = vUv.y * 1.0 - uTime * uSpeed * 0.5 - x * 0.55;
-        float band = fract(v);
-        float chev = smoothstep(0.0, 0.08, band) * smoothstep(0.62, 0.5, band);
-        float pulse = 0.75 + 0.25 * sin(uTime * 9.0 - vUv.y * 4.0);
-        vec3 c = mix(uA, uB, chev) * (0.55 + chev * (0.45 + uGlow * pulse));
-        float edge = smoothstep(0.86, 1.0, x);
-        c = mix(c, uB * (1.0 + uGlow), edge);
+        float arrowCoord = vUv.y + x * 0.53;
+        float aa = clamp(fwidth(arrowCoord), 0.005, 0.12);
+        float band = abs(fract(arrowCoord) - 0.5);
+        float arrows = 1.0 - smoothstep(0.16 - aa, 0.16 + aa, band);
+        float panel = 1.0 - smoothstep(0.77, 0.81, x);
+        float chase = 0.5 + 0.5 * cos(6.28318 * (vUv.y * 0.5 - uTime * uSpeed * 0.35));
+        vec3 deck = mix(vec3(0.023, 0.031, 0.052), uA, 0.30) * (1.0 - x * 0.2);
+        vec3 light = mix(uA, uB, 0.68 + 0.32 * chase) * (1.0 + uGlow * 0.36 * chase);
+        vec3 c = mix(deck, light, arrows * panel);
+        // Edge rails show the usable width even when the centre is hidden by another kart.
+        float rail = smoothstep(0.83, 0.87, x) * (1.0 - smoothstep(0.95, 0.99, x));
+        c = mix(c, mix(uA, uB, chase * 0.68), rail);
         gl_FragColor = vec4(c, 1.0);
         #include <fog_fragment>
       }`,

@@ -177,3 +177,12 @@
   .hud-rank.up, .hud-rank.down, .hud-banner.out { animation: none; }
   .hud-banner.count.show, .hud-banner.go.show, .hud-banner.final.show, .hud-banner.finish.show, .hud-banner.finish.win.show { animation: hud-banner 0.2s ease-out forwards; }
 }
+
+/* A trial has no opponents to rank. Give the clock that corner instead. */
+.hud-trial .hud-time, .hud-trial .hud-rank { display: none; }
+.trial-clock { position: absolute; right: calc(var(--edge) + var(--safe-r)); bottom: calc(var(--edge) + var(--safe-b)); display: grid; justify-items: end; color: var(--paper); font-variant-numeric: tabular-nums; text-shadow: 0 2px 3px var(--ink); }
+.trial-clock-time { font: normal calc(var(--u) * 8)/1 var(--display); color: var(--gold); paint-order: stroke fill; -webkit-text-stroke: .1em var(--ink); }
+.trial-clock-label, .trial-clock-mark { font: 650 max(11px, calc(var(--u) * 2.1))/1.25 var(--body); padding: .12em .55em; border-radius: .4em; background: rgba(16,19,37,.9); }
+.trial-clock-label { text-transform: uppercase; letter-spacing: .09em; margin-bottom: .25em; }
+.trial-clock-mark:empty { display: none; }
+.hud-touch .trial-clock { right: auto; bottom: auto; top: calc(var(--edge) + var(--safe-t) + var(--u) * 25); left: calc(var(--edge) + var(--safe-l)); justify-items: start; }

@@ -30,8 +30,8 @@ const BOOST_PUNCH = { mushroom: 0.85, pad: 0.7, start: 0.9, trick: 0.5, draft: 0
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3(), _e = new THREE.Euler();
 
 export class RaceView {
-  constructor(gfx, race, def, { onEvent = null, tv = false } = {}) {
-    this.gfx = gfx; this.race = race; this.def = def; this.onEvent = onEvent; this.tv = tv;
+  constructor(gfx, race, def, { onEvent = null, tv = false, trialBest = null } = {}) {
+    this.gfx = gfx; this.race = race; this.def = def; this.onEvent = onEvent; this.tv = tv; this.trialBest = trialBest;
     const scene = gfx.scene, track = race.track;
     this.root = new THREE.Group(); this.root.name = 'race'; scene.add(this.root);
     this.sky = gfx.setSky(def.sky || 'day', def.skyOverrides || {});
@@ -208,7 +208,7 @@ export class RaceView {
           case 'itemUse': { if (e.data === 'bailout') cam?.punch(1); const f = ITEM_FX[e.data]; fx.ring(p.x, p.y + 0.6, p.z, 14, f ? f.rgb : [1, 1, 1], 8, 0.4, 0.35); if (f?.muzzle) fx.burst(p.x + Math.sin(k.yaw) * 1.7, p.y + 0.7, p.z + Math.cos(k.yaw) * 1.7, 10, f.rgb, 3, 0.3, 0.25, 1); break; }
           case 'shieldBlock': fx.burst(p.x, p.y + 0.6, p.z, 16, [0.6, 1, 0.8], 8, 0.3, 0.4); break;
           case 'finish': {
-            const top = e.data <= 3;
+            const top = race.mode === 'timetrial' ? this.trialBest == null || k.finishTime < this.trialBest : e.data <= 3;
             fx.confetti(p.x, p.y + 2, p.z, top ? 160 : 90, CONFETTI, top ? 13 : 10, p.y);
             if (cam) { // the line: a white pop, a gold rim on a podium finish, fireworks over the kart
               cam.punch(0.8);
@@ -237,7 +237,7 @@ export class RaceView {
         case 'count': this._startLights(e.data); for (const c of this.cams) if (c.kart?.isPlayer) c.punch(0.15); break;   // a small kick per beat (#222); no timing hint, the rocket start stays secret (#169)
         case 'go': this._startLights(0); for (const c of this.cams) if (c.kart?.isPlayer) c.punch(0.35); break;
         case 'lightning': this.flash = 1; this.gfx.post.flashColor.setRGB(0.85, 0.9, 1); for (const v of this.karts) if (v.kart !== d.by) fx.burst(v.pos.x, v.pos.y + 1.5, v.pos.z, 14, [0.7, 0.85, 1], 10, 0.4, 0.5); for (const c of this.cams) c.addShake(0.5); break;
-        case 'shotGone': case 'hazardGone': { const t = this.things.get(d.id); if (t) { fx.burst(d.x, d.y + 0.4, d.z, 10, [1, 1, 1], 6, 0.25, 0.3); this.root.remove(t); this.things.delete(d.id); } break; }
+        case 'shotGone': case 'hazardGone': if (this.things.has(d.id)) fx.burst(d.x, d.y + 0.4, d.z, 10, [1, 1, 1], 6, 0.25, 0.3); break;
         case 'shotBounce': fx.burst(d.x, d.y, d.z, 6, [1, 0.9, 0.6], 5, 0.2, 0.25, 1); break;
         case 'kartHit': { // a hit lands visibly on the victim, in the item's colour — before this, hits had no effect at all here
           const v = this.viewOf.get(d.victim); if (!v) break; const f = ITEM_FX[d.with];
@@ -400,6 +400,7 @@ export class RaceView {
             ring.visible = hovering;
             if (hovering) {
               const f = o.phase === 'dive' ? 1 : (o.hoverFrac || 0);
+              ring.material.color.setHex(o.fundingWindow ? 0xffd23e : 0x4d8dff);
               ring.scale.setScalar((7.5 - 4.9 * f) * (1 + Math.sin(this.time * 10) * 0.05));
               ring.position.set(o.mx ?? o.x, (o.my ?? o.y) + 0.15, o.mz ?? o.z);
             }
@@ -416,7 +417,11 @@ export class RaceView {
     };
     for (const h of items.hazards) sync(h, 'hazard');
     for (const s of items.shots) sync(s, 'shot');
-    for (const [id, m] of this.things) if (!seen.has(id)) { this.root.remove(m); if (m.userData.ring) this.root.remove(m.userData.ring); this.things.delete(id); }
+    for (const [id, m] of this.things) if (!seen.has(id)) {
+      const ring = m.userData.ring;
+      if (ring) { this.root.remove(ring); ring.geometry.dispose(); ring.material.dispose(); }
+      this.root.remove(m); this.things.delete(id);
+    }
   }
 
   dispose() {

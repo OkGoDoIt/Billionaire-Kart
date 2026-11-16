@@ -6,9 +6,10 @@ import { RaceView } from '../render/raceview.js';
 import { DrivingGuide } from '../ui/driving-guide.js';
 import { Hud } from '../ui/hud.js';
 import { TouchControls, isTouchDevice } from '../ui/touch.js';
-import { ITEMS, HIT_LINES } from '../race/items.js';
+import { ITEMS, HIT_LINES, isFundingBoost } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
-import { RACERS, RACER_BY_ID } from '../content/racers.js';
+import { RACERS, RACER_BY_ID, RIVAL_PASS, HIT_REPLY } from '../content/racers.js';
+import { trialKey } from '../core/save.js';
 import { makeRng } from '../core/util.js';
 
 export const STEP = 1 / 60;
@@ -35,12 +36,13 @@ export class RaceSession {
     const entries = [...pool.map(racer => ({ racer, player: -1, level: config.level || 'normal' })), ...humans.map((racer, i) => ({ racer, player: i, autoTrick: config.players[i].autoTrick, assist: { steer: config.mode !== 'timetrial' && config.players[i].smartSteer ? 1 : 0 } }))];
     if (config.order) entries.sort((a, b) => config.order.indexOf(a.racer.id) - config.order.indexOf(b.racer.id));
     this.race = new Race({ track, cc: config.cc || 150, laps: config.laps, seed: (config.seed ?? 1) + 17, entries, mode: config.mode, countdown: config.countdown });
-    this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k), tv: !!config.tv });
+    this.trialBest = config.mode === 'timetrial' ? app.save?.bestFor(config.trackId, trialKey(config.cc || 150))?.race : null;
+    this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k), tv: !!config.tv, trialBest: this.trialBest });
     app.input.assign = config.players.length === 1 ? ['any'] : config.players.map(p => p.device);
     this.autopilots = config.auto ? this.race.players.map(k => new AIDriver(k, 'hard', makeRng(99))) : null;
     // HUD per player
     const n = this.race.players.length;
-    this.huds = this.race.players.map((k, i) => new Hud(app.ui, this.race, k, this.view.views[i].rect, { compact: n > 2, showMap: true }));
+    this.huds = this.race.players.map((k, i) => new Hud(app.ui, this.race, k, this.view.views[i].rect, { compact: n > 2, showMap: true, trialBest: this.trialBest }));
     this.hudOf = new Map(this.race.players.map((k, i) => [k, this.huds[i]]));
     // touch controls for a solo player on a touch screen
     this.touch = null;
@@ -74,6 +76,13 @@ export class RaceSession {
 
   skipIntro() { if (this.phase === 'intro') { this.view.intro.done = true; } }
 
+  _rivalLine(hud, racer, special, lines, ms) {
+    const heard = hud.heardLines || (hud.heardLines = new Set());
+    if (special && !heard.has(special)) {
+      if (hud.talk(racer, special, ms)) heard.add(special);
+    } else hud.talk(racer, lines[Math.floor(Math.random() * lines.length)], ms);
+  }
+
   _onEvent(kind, e, kart) {
     const app = this.app, pick = list => list[Math.floor(Math.random() * list.length)];
     if (kind === 'kart') {
@@ -82,7 +91,7 @@ export class RaceSession {
         hud.onKartEvent(e);
         // a track can have something to say as each lap starts (the reservoir at Datacenter Dash, for one)
         // overtaken: the one who just went by has a word, now and then
-        if (e.type === 'rankDown' && this.race.time > 6 && !kart.finished && Math.random() < 0.45) { const passer = this.race.order[kart.rank - 2]; if (passer && !passer.isPlayer) hud.talk(passer.racer, pick(passer.racer.barks.pass), 2600); }
+        if (e.type === 'rankDown' && this.race.time > 6 && !kart.finished && Math.random() < 0.45) { const passer = this.race.order[kart.rank - 2]; if (passer && !passer.isPlayer) this._rivalLine(hud, passer.racer, RIVAL_PASS[passer.racer.id]?.[kart.racer.id], passer.racer.barks.pass, 2600); }
         if (e.type === 'lap' && e.data > 1 && e.data <= this.race.laps && this.def.lapNotes?.[e.data - 2]) hud.feed(this.def.lapNotes[e.data - 2], 4200);
         const p = kart.playerIndex;
         const guide = !this.autopilots && this.guides[p];
@@ -116,10 +125,16 @@ export class RaceSession {
         const hv = this.hudOf.get(victim), hb = by && this.hudOf.get(by);
         // the one who got hit sees it shouted across the screen, then hears about it from whoever did it
         if (hv) { hv.banner(ITEMS[w]?.hit || HIT_LINES[w] || 'HIT!', 'bad small', 1300, 2); if (by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer) hv.talk(by.racer, pick(by.racer.barks.taunt)); } }
-        if (hb && by !== victim) { this._hitStop(0.05); hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer) hb.talk(victim.racer, pick(victim.racer.barks.hit)); }
+        if (hb && by !== victim) { this._hitStop(0.05); hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer) this._rivalLine(hb, victim.racer, HIT_REPLY[w]?.[victim.racer.id], victim.racer.barks.hit); }
       } else if (e.type === 'steal') { const h = this.hudOf.get(e.data.by); if (h) h.feed(`You stole ${ITEMS[e.data.id].name} from <b>${e.data.from.racer.name}</b>`); }
       // the suit has arrived over the leader: their feed says so, in terms — the hover is the warning window
-      else if (e.type === 'blueArrive') { const h = this.hudOf.get(e.data.target); if (h) h.feed('<b>ANTITRUST SUIT</b> — INBOUND! It is circling you…', 3400); }
+      else if (e.type === 'blueArrive') {
+        const target = e.data.target, h = this.hudOf.get(target);
+        if (h) {
+          const row = h.feed(isFundingBoost(target.item) ? '<b>ANTITRUST SUIT</b> · Boost as it dives.' : '<b>ANTITRUST SUIT</b> · Incoming!', 1600);
+          h.suitNotice = { row, shot: e.data.shot };
+        }
+      }
       app.audio?.raceEvent(e, this.race);
     }
   }

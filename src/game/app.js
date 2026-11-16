@@ -235,8 +235,8 @@ export class App {
     session.touch?.setVisible(false); this._lockLandscape(false); document.body.classList.remove('must-turn');
     // a single race gets the cup's finish framing on the one results screen (#243)
     if (!gp && cfg.mode === 'race') this._raceFinish({ results, track: def, records });
-    else this.menus.reset('results', { results, gp, track: def, records, trialCc: cfg.mode === 'timetrial' ? cfg.cc : null });
-    this.audio?.event?.('results', mine?.rank);
+    else this.menus.reset('results', { results, gp, track: def, records, trialCc: cfg.mode === 'timetrial' ? cfg.cc : null, trialBest: session.trialBest });
+    this.audio?.event?.('results', cfg.mode === 'timetrial' ? null : mine?.rank);
     this.audio?.music?.('results');
   }
   /* A Quick Race's one final screen (#243): the showroom podium stands behind the full
@@ -252,7 +252,6 @@ export class App {
       this.showroom = new Showroom(this.gfx);
       this.showroom.setPodium(top3.map(r => r.racer));
       this.menus.reset('results', { results, gp: null, track, records, best });
-      this.audio?.event?.('podium', best);
     });
   }
   gpNext() {

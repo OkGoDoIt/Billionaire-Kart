@@ -30,7 +30,12 @@ export class Race {
     if (aiSlots.length) {
       const lv0 = AI_LEVELS[opts.entries[aiSlots[0]].level || 'normal'] || AI_LEVELS.normal;
       const field = assignFieldForm(aiSlots.length, lv0.form ?? 0.04, this.rng);
-      aiSlots.forEach((entryIdx, j) => formOf.set(entryIdx, { form: field.forms[j], rival: j === field.rival }));
+      // Deal distinct straightaway lanes across the available road. Alternating
+      // slots start on opposite sides of the grid, so nobody must cross a pack.
+      aiSlots.forEach((entryIdx, j) => {
+        const width = aiSlots.length > 1 ? 1 - 2 * Math.floor(j / 2) / (aiSlots.length - 1) : 0;
+        formOf.set(entryIdx, { form: field.forms[j], rival: j === field.rival, lane: j % 2 ? -width : width, gridDepth: entryIdx / Math.max(1, opts.entries.length - 1) });
+      });
     }
     opts.entries.forEach((e, slot) => {
       const kart = new Kart(this, { racer: e.racer, slot, isPlayer: e.player >= 0, playerIndex: e.player });
@@ -156,7 +161,12 @@ export class Race {
   _rank() {
     for (const k of this.karts) k.progress = k.finished ? 1e9 - k.finishRank : k.raceDistance;
     const order = this._order || (this._order = this.karts.slice());
-    order.sort((a, b) => b.progress - a.progress);
+    order.sort((a, b) => {
+      if (!a.finished && !b.finished && a.lap > this.laps && b.lap > this.laps) {
+        return a.lapStart - b.lapStart || b.progress - a.progress;
+      }
+      return b.progress - a.progress;
+    });
     for (let i = 0; i < order.length; i++) {
       const k = order[i], r = i + 1;
       if (!k.finished && k.rank !== r && !this.frozen) { if (r < k.rank) { k.stats.overtakes++; k.emit('rankUp', r); } else k.emit('rankDown', r); }
@@ -167,9 +177,9 @@ export class Race {
 
   _finish(dt) {
     if (this.state === 'countdown') return;
-    for (const k of this.karts) {
+    for (const k of this.order) {
       if (!k.finished && k.lap > this.laps) {
-        k.finished = true; k.finishTime = this.time; k.finishRank = this.finishOrder.length + 1; k.rank = k.finishRank;
+        k.finished = true; k.finishTime = k.lapStart; k.finishRank = this.finishOrder.length + 1; k.rank = k.finishRank;
         this.finishOrder.push(k); k.endDrift(false);
         k.emit('finish', k.finishRank); this.emit('finish', k);
       }

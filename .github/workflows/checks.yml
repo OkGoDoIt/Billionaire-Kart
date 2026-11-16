@@ -36,8 +36,11 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Sim
-        run: node tools/sim.mjs --quick
+      - name: Race behavior and all-track simulation
+        run: npm run test:race
+
+      - name: Audio playback
+        run: node tools/audio-check.mjs
 
       # The bot races in real time; a GPU-less runner renders too slowly for its timing asserts, so on CI it is
       # advisory (screenshots always uploaded). The full bot gate runs locally before every push (CONTRIBUTING.md).

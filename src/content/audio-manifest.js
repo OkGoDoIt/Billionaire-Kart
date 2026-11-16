@@ -73,13 +73,17 @@ export const VOICE = {
 };
 export const MUSIC = {
   "bliss-hills": "assets/audio/music/bliss-hills.mp3",
+  "boring-tunnel": "assets/audio/music/boring-tunnel.mp3",
   "burning-circuit": "assets/audio/music/burning-circuit.mp3",
   "capitol-hill": "assets/audio/music/capitol-hill.mp3",
   "crypto-cove": "assets/audio/music/crypto-cove.mp3",
   "datacenter-dash": "assets/audio/music/datacenter-dash.mp3",
+  "davos": "assets/audio/music/davos.mp3",
+  "international-waters": "assets/audio/music/international-waters.mp3",
   "mars-colony": "assets/audio/music/mars-colony.mp3",
   "menu": "assets/audio/music/menu.mp3",
   "results": "assets/audio/music/results.mp3",
   "silicon-valley": "assets/audio/music/silicon-valley.mp3",
-  "singularity-speedway": "assets/audio/music/singularity-speedway.mp3"
+  "singularity-speedway": "assets/audio/music/singularity-speedway.mp3",
+  "wework-memorial": "assets/audio/music/wework-memorial.mp3"
 };

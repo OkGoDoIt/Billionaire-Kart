@@ -23,4 +23,33 @@ for (const cp of [17, 20, 27.5, 33.5, 39.3]) {
   assert.equal(track.gap[k.hint], 0);
   assert.equal(k.events.filter(e => e.type === 'bulletEnd').length, 1);
 }
+// A hit after committing to the quay jump still costs control and speed.
+// Carry its horizontal momentum over the channel and take the loss on deck.
+for (const impact of ['pad', 'air']) {
+  const race = new Race({ track, cc: 150, countdown: 0, items: false, coins: false,
+    entries: [{ racer: RACERS[0], player: 0 }] });
+  const k = race.players[0], ramp = track.ramps[0], s = ramp.s0 - 15;
+  const p = track.pointAt(s, 0, {});
+  k.place(p.x, p.y, p.z, track.yawAt(s), Math.floor(s / track.ds));
+  k.coins = 5; k.fwd = k.speed = 34;
+  k.vx = Math.sin(k.yaw) * k.speed; k.vz = Math.cos(k.yaw) * k.speed;
+  let hit = false, landed = false;
+  for (let i = 0; i < 210 && !landed; i++) {
+    if (!hit && (impact === 'air' ? track.gap[k.hint] && !k.grounded : k.hit.boost && track.gapLaunch[k.hint])) {
+      const speed = Math.hypot(k.vx, k.vz);
+      assert.ok(k.hurt('tumble'));
+      assert.equal(k.coins, 2);
+      assert.ok(k.hitT > 0);
+      assert.equal(Math.hypot(k.vx, k.vz), speed, 'incoming item keeps the jump trajectory');
+      hit = true;
+    }
+    race.step(dt, [{ throttle: 1 }]);
+    assert.equal(k.rescueT, 0);
+    if (hit && k.grounded && k.landingSpeedKeep === 1 && k.s > ramp.s1) {
+      assert.ok(k.speed < 14, 'the hit was paid for on landing');
+      landed = true;
+    }
+  }
+  assert.ok(hit && landed, impact + ': reach the real landing and pay the slowdown');
+}
 console.log('bailout-gap-check: ok');

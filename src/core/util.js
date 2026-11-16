@@ -87,8 +87,8 @@ export function ridged(x, z, octaves = 4, seed = 0) {
 
 export const fmtTime = t => {
   if (t == null || !isFinite(t)) return '-:--.---';
-  const m = Math.floor(t / 60), s = t - m * 60;
-  return `${m}:${s.toFixed(3).padStart(6, '0')}`;
+  const ms = Math.round(t * 1000);
+  return `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`;
 };
 export const ordinal = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
 export const ordinalSuffix = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return s[(v - 20) % 10] || s[v] || s[0]; };

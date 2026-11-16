@@ -32,7 +32,7 @@ export function makeGroundHit() {
   return {
     i: 0, s: 0, lat: 0, y: 0, planeY: 0, surface: SURFACES.road,
     hwL: 0, hwR: 0, edgeL: 0, edgeR: 0, outside: 0, side: 0,
-    boost: false, ramp: null, onRoad: true, nx: 0, nz: 0, // nx/nz: horizontal unit "left" at this sample
+    boost: null, ramp: null, onRoad: true, nx: 0, nz: 0, // nx/nz: horizontal unit "left" at this sample
     tx: 0, tz: 0, upx: 0, upy: 1, upz: 0, dist2: 0,
   };
 }
@@ -233,14 +233,24 @@ export class Track {
     }
     // Rescue points: never put a kart back so close to a gap that it cannot build speed to clear it.
     const N = this.N, runup = Math.round(70 / this.ds);
+    this.gapLaunch = new Uint8Array(N);
     this.respawn = new Int32Array(N); for (let i = 0; i < N; i++) this.respawn[i] = i;
     for (let i = 0; i < N; i++) {
       if (this.gap[i] && !this.gap[mod(i - 1, N)]) {                 // first sample of a gap
         let first = i; for (const r of this.ramps) { const d = mod(i - r.i0, N); if (d < Math.round(30 / this.ds)) first = r.i0; }
         // the run-up stops short of an earlier gap (a chain of jumps): respawn on that gap's landing instead of in it
         let safe = first; for (let k = 1; k <= runup; k++) { const j = mod(first - k, N); if (this.gap[j]) break; safe = j; }
-        let j = safe; while (j !== i) { this.respawn[j] = safe; j = (j + 1) % N; }
-        j = i; while (this.gap[j]) { this.respawn[j] = safe; j = (j + 1) % N; }
+        // The final approach and open gap are one jump. A hit here carries
+        // momentum through to the landing, where its usual speed loss applies.
+        let commit = Math.ceil(8 / this.ds);
+        for (const pad of this.boosts) {
+          const beforeRamp = mod(first - pad.i0, N);
+          if (beforeRamp * this.ds <= 25) commit = Math.max(commit, beforeRamp);
+        }
+        let j = mod(first - Math.min(commit, mod(first - safe, N)), N);
+        while (j !== i) { this.gapLaunch[j] = 1; j = (j + 1) % N; }
+        j = safe; while (j !== i) { this.respawn[j] = safe; j = (j + 1) % N; }
+        j = i; while (this.gap[j]) { this.respawn[j] = safe; this.gapLaunch[j] = 1; j = (j + 1) % N; }
       }
     }
     void L;
@@ -260,14 +270,14 @@ export class Track {
     }
     return 0;
   }
-  _onBoost(s, lat) {
+  _boostAt(s, lat) {
     const L = this.length;
     for (let k = 0; k < this.boosts.length; k++) {
       const b = this.boosts[k];
       let d = s - b.s0; if (d < -L / 2) d += L; else if (d > L / 2) d -= L;
-      if (d >= 0 && d <= b.len && Math.abs(lat - b.lat) <= b.half) return true;
+      if (d >= 0 && d <= b.len && Math.abs(lat - b.lat) <= b.half) return b;
     }
-    return false;
+    return null;
   }
 
   /* ---------- locating a point on the track ---------- */
@@ -332,7 +342,7 @@ export class Track {
 
     hit.i = i; hit.s = s; hit.lat = lat; hit.planeY = planeY; hit.hwL = hwL; hit.hwR = hwR;
     hit.edgeL = this.edgeL[i]; hit.edgeR = this.edgeR[i];
-    hit.boost = false; hit.ramp = null; hit.outside = 0; hit.side = 0;
+    hit.boost = null; hit.ramp = null; hit.outside = 0; hit.side = 0;
     const nl = Math.hypot(this.lx[i], this.lz[i]) || 1;
     hit.nx = this.lx[i] / nl; hit.nz = this.lz[i] / nl;
     const tl = Math.hypot(this.tx[i], this.tz[i]) || 1;
@@ -344,7 +354,7 @@ export class Track {
       if (this.gap[i]) { hit.surface = SURFACES.void; hit.y = this._below(x, z); return hit; }
       hit.surface = this.surf[i];
       hit.y = planeY + (this.ramps.length ? this._rampHeight(s, lat, hit) : 0);
-      if (this.boosts.length) hit.boost = this._onBoost(s, lat);
+      if (this.boosts.length) hit.boost = this._boostAt(s, lat);
       return hit;
     }
     hit.onRoad = false;

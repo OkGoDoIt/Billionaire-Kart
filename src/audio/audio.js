@@ -6,6 +6,12 @@
 import { SAMPLES, MUSIC, VOICE } from '../content/audio-manifest.js';
 import { clamp, makeRng, hashString } from '../core/util.js';
 
+// Relative trims for especially sustained or hot source recordings. Short pickups and
+// incoming warnings keep their transient, while the long boost/rocket tails sit under them.
+const SAMPLE_TRIM = {
+  boost: .47, rocket: .29, siren: .50, hit_big: .61, shock: .64, count: .57, go: .49,
+  crowd: .56, burnout: .63, lap: .66, finish: .66, finish_good: .72, ui_move: .65,
+};
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
 /* A tenth of a second of silence as a WAV file, for the iPhone playback-category workaround. */
 const SILENT_WAV = (() => {
@@ -20,7 +26,7 @@ export class AudioEngine {
   constructor(save) {
     this.save = save; this.ctx = null; this.muted = false; this.buffers = new Map(); this.loading = new Map();
     this.vol = { music: save.settings.music, sfx: save.settings.sfx };
-    this.loops = []; this.musicId = null; this.musicNodes = []; this.musicRate = 1; this.seq = null; this.lastVoiceT = 0; this.cool = new Map();
+    this.loops = []; this.musicId = null; this.musicNode = null; this.musicRate = 1; this.seq = null; this.lastVoiceT = -Infinity; this.voiceRequest = 0; this.cool = new Map();
     this.playingId = null; this.musicGen = 0;
     this.baseMusicId = null; this.starOn = false;   // the track's own music, and whether the star theme has taken it over
   }
@@ -38,14 +44,26 @@ export class AudioEngine {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     const ctx = this.ctx = new AC({ latencyHint: 'interactive' });
     this.master = ctx.createGain(); this.comp = ctx.createDynamicsCompressor();
-    this.comp.threshold.value = -14; this.comp.ratio.value = 5; this.comp.attack.value = 0.004; this.comp.release.value = 0.18;
-    this.master.connect(this.comp); this.comp.connect(ctx.destination);
-    this.sfx = ctx.createGain(); this.mus = ctx.createGain(); this.sfx.connect(this.master); this.mus.connect(this.master);
+    this.comp.threshold.value = -10; this.comp.knee.value = 10; this.comp.ratio.value = 6;
+    this.comp.attack.value = .006; this.comp.release.value = .14;
+    // The compressor still passes a transient when a full grid finishes under lightning.
+    // Shape only the loudest peaks and leave a decibel for peaks between samples.
+    const ceiling = ctx.createWaveShaper();
+    ceiling.curve = Float32Array.from({ length: 1025 }, (_, i) => {
+      const x = i / 512 - 1, magnitude = Math.abs(x);
+      const limited = magnitude <= .8 ? x : Math.sign(x) * (.8 + .14 * Math.tanh((magnitude - .8) / .14));
+      return limited * .87;
+    });
+    this.master.connect(this.comp); this.comp.connect(ceiling); ceiling.connect(ctx.destination);
+    this.sfx = ctx.createGain(); this.sfx.connect(this.master);
+    this.motors = ctx.createGain(); this.motors.gain.value = .72; this.motors.connect(this.sfx);
+    this.mus = ctx.createGain(); this.musicDuck = ctx.createGain();
+    this.mus.connect(this.musicDuck); this.musicDuck.connect(this.master);
     // one second of white noise shared by every noise-based sound
     const nb = this.noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    this.setVolumes(this.vol.music, this.vol.sfx);
-    for (const name of ['ui_move', 'ui_select', 'coin', 'item_box', 'boost', 'hit', 'count', 'go', 'crowd']) this.load(name);
+    this.setVolumes(this.vol.music, this.vol.sfx, true);
+    for (const name of ['ui_move', 'ui_select', 'coin', 'item_box', 'boost', 'hit', 'count', 'go', 'crowd', 'voice:title']) this.load(name);
     if (ctx.state !== 'running') ctx.resume?.().catch(() => {});
     ctx.addEventListener?.('statechange', () => { if (ctx.state === 'running' && !this.kicked) this._kick(); });
     this._kick();
@@ -74,26 +92,36 @@ export class AudioEngine {
   /** The tab went to the background: stop making sound until it is back. */
   suspend() { if (this.ctx?.state === 'running') this.ctx.suspend?.().catch(() => {}); this.silent?.pause?.(); }
   get t() { return this.ctx.currentTime; }
-  setVolumes(music, sfx) {
+  setVolumes(music, sfx, immediate = false) {
     this.vol.music = music; this.vol.sfx = sfx;
     if (!this.ctx) return;
-    this.sfx.gain.value = this.muted ? 0 : sfx;
-    // Replace any recovery ramp left by a hit, including the last scheduled dip value.
     const t = this.t;
-    this.mus.gain.cancelScheduledValues(t);
-    this.mus.gain.setValueAtTime(this.muted ? 0 : music * 0.55, t);
+    const musicGain = this.muted ? 0 : music * (this.pausedLoops ? .32 : .92);
+    const fxGain = this.muted ? 0 : sfx * .8;
+    for (const [gain, value] of [[this.mus.gain, musicGain], [this.sfx.gain, fxGain]]) {
+      gain.cancelScheduledValues(t);
+      if (immediate) gain.setValueAtTime(value, t);
+      else gain.setTargetAtTime(value, t, .012);
+    }
+    if (!fxGain) {
+      this.musicDuck.gain.cancelScheduledValues(t);
+      this.musicDuck.gain.setValueAtTime(1, t);
+    }
   }
   toggleMute() { this.muted = !this.muted; this.setVolumes(this.vol.music, this.vol.sfx); }
-  /** Pull the music down for a beat (a hit lands) and bring it back: the hit owns the moment. */
-  duck(sec = 0.45) {
-    if (!this.ctx || this.muted || this.pausedLoops) return;
-    const g = this.mus.gain, t = this.t, full = this.vol.music * 0.55;
-    g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(full * 0.3, t + 0.03); g.setValueAtTime(full * 0.3, t + sec * 0.5); g.linearRampToValueAtTime(full, t + sec);
+  /** Music makes space for the announcer and for local impacts without changing the slider. */
+  duck(sec = .45, depth = .55, delay = 0) {
+    if (!this.ctx || this.muted || !this.vol.sfx || this.pausedLoops) return;
+    const g = this.musicDuck.gain, t = this.t + delay;
+    if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(t);
+    else { const held = g.value; g.cancelScheduledValues(t); g.setValueAtTime(held, t); }
+    g.linearRampToValueAtTime(depth, t + .028); g.setValueAtTime(depth, t + Math.max(.04, sec - .16));
+    g.linearRampToValueAtTime(1, t + sec);
   }
 
   /* ---------- samples ---------- */
   load(name) {
-    const url = SAMPLES[name] || VOICE[name]; if (!url || !this.ctx) return Promise.resolve(null);
+    const url = name.startsWith('voice:') ? VOICE[name.slice(6)] : SAMPLES[name]; if (!url || !this.ctx) return Promise.resolve(null);
     if (this.buffers.has(name)) return Promise.resolve(this.buffers.get(name));
     if (!this.loading.has(name)) {
       const p = fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); }).then(b => this.ctx.decodeAudioData(b)).then(buf => { this.buffers.set(name, buf); return buf; }).catch(() => null);
@@ -141,20 +169,40 @@ export class AudioEngine {
   play(name, o = {}) {
     if (!this.ctx || this.muted) return;
     // per-sound cooldown so eight karts cannot stack the same effect in one frame
-    const now = this.t, last = this.cool.get(name) || 0, gap = o.gap ?? 0.04;
+    const now = this.t, last = this.cool.get(name) ?? -Infinity, gap = o.gap ?? 0.04;
     if (now - last < gap) return; this.cool.set(name, now);
     const vol = o.vol ?? 1, pan = o.pan ?? 0;
-    if (this.sample(name, { vol: vol * (o.sampleVol ?? 0.9), rate: o.rate ?? 1, pan })) return;
+    if (this.sample(name, { vol: vol * (o.sampleVol ?? .9) * (SAMPLE_TRIM[name] ?? 1), rate: o.rate ?? 1, pan })) return;
     const S = SYNTH[name]; if (S) S(this, vol, pan, o);
   }
   ui(kind) { this.play('ui_' + kind, { vol: 0.8 }); }
 
   /* ---------- announcer ---------- */
   say(line, { delay = 0, force = false } = {}) {
-    if (!this.ctx || this.muted || !VOICE[line]) return;
+    if (!this.ctx || this.muted || !this.vol.sfx || !VOICE[line]) return;
     if (!force && this.t - this.lastVoiceT < 1.2) return;
-    this.lastVoiceT = this.t + delay;
-    if (!this.sample(line, { vol: 1.15, delay })) this.load(line).then(b => { if (b && this.t - this.lastVoiceT < 0.6) this.sample(line, { vol: 1.15 }); });
+    const when = this.t + delay, request = ++this.voiceRequest, key = 'voice:' + line;
+    this.lastVoiceT = when;
+    const speak = buf => {
+      if (!buf || request !== this.voiceRequest || this.muted || !this.vol.sfx || this.t > when + .4) return;
+      const wait = Math.max(0, when - this.t);
+      const start = this.t + wait;
+      if (this.voice) {
+        this.voice.g.gain.setTargetAtTime(0, start, .009);
+        this.voice.source.stop(start + .04);
+      }
+      const source = this.ctx.createBufferSource(), g = this.ctx.createGain();
+      source.buffer = buf; g.gain.value = 1.04; source.connect(g); g.connect(this.sfx);
+      this.voice = { source, g };
+      source.onended = () => {
+        source.disconnect(); g.disconnect();
+        if (this.voice?.source === source) this.voice = null;
+      };
+      source.start(start);
+      this.duck(buf.duration + .18, .49, wait);
+    };
+    if (this.buffers.has(key)) speak(this.buffers.get(key));
+    else this.load(key).then(speak);
   }
 
   /* ---------- continuous kart loops ---------- */
@@ -163,7 +211,7 @@ export class AudioEngine {
     // a stereo panner per loop: frame() parks each split-screen engine on its own side
     let panNode = null, tail = out;
     if (c.createStereoPanner) { panNode = c.createStereoPanner(); out.connect(panNode); tail = panNode; }
-    tail.connect(this.sfx);
+    tail.connect(this.motors);
     // engine: two detuned saws and a sub, through a low-pass that opens with revs, chopped by a "putt" tremolo
     const o1 = c.createOscillator(), o2 = c.createOscillator(), sub = c.createOscillator(), lp = c.createBiquadFilter(), eg = c.createGain(), trem = c.createOscillator(), tg = c.createGain();
     o1.type = 'sawtooth'; o2.type = 'sawtooth'; sub.type = 'square'; lp.type = 'lowpass'; lp.Q.value = 2.5; eg.gain.value = 0.5;
@@ -171,7 +219,7 @@ export class AudioEngine {
     const sg = c.createGain(); sg.gain.value = 0.5;
     o1.connect(lp); o2.connect(lp); sub.connect(sg); sg.connect(lp); lp.connect(eg); eg.connect(out);
     // tyres: band-passed noise for drifting; low rumble off the road; wind at speed; jet for boosts
-    const mkNoise = (type, f, q) => { const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(this.sfx); s.start(0, Math.random()); return { s, fl, g }; };
+    const mkNoise = (type, f, q) => { const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = c.createGain(); g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(this.motors); s.start(0, Math.random()); return { s, fl, g }; };
     const L = { out, panNode, o1, o2, sub, lp, trem, drift: mkNoise('bandpass', 2400, 5), rumble: mkNoise('lowpass', 220, 0.7), wind: mkNoise('highpass', 2600, 0.5), jet: mkNoise('bandpass', 700, 0.8), rev: 0 };
     for (const o of [o1, o2, sub, trem]) o.start();
     return L;
@@ -212,8 +260,7 @@ export class AudioEngine {
     const anyStar = race.state !== 'done' && players.some(k => k.starT > 0 && !k.finished);
     this.setStarTheme(anyStar);
     // final-lap lift on the music (suspended while the star theme owns it; it lands when the star ends)
-    const lead = players[0];
-    const want = lead && !lead.finished && lead.lap >= race.laps && race.laps > 1 ? 1.1 : 1;
+    const want = race.laps > 1 && players.some(k => !k.finished && k.lap >= race.laps) ? 1.1 : 1;
     if (!anyStar && want !== this.musicRate) this.setMusicRate(want);
     this._updateRivals(dt, race, quiet);
     this._crowdTick(dt, race);
@@ -230,7 +277,7 @@ export class AudioEngine {
     const c = this.ctx, out = c.createGain(); out.gain.value = 0;
     let panNode = null, tail = out;
     if (c.createStereoPanner) { panNode = c.createStereoPanner(); out.connect(panNode); tail = panNode; }
-    tail.connect(this.sfx);
+    tail.connect(this.motors);
     // the local engine recipe, minus the tyre, wind, and boost noise chains
     const o1 = c.createOscillator(), o2 = c.createOscillator(), sub = c.createOscillator(), lp = c.createBiquadFilter(), eg = c.createGain(), trem = c.createOscillator(), tg = c.createGain(), sg = c.createGain();
     o1.type = 'sawtooth'; o2.type = 'sawtooth'; sub.type = 'square'; lp.type = 'lowpass'; lp.Q.value = 2.5; eg.gain.value = 0.5;
@@ -310,7 +357,7 @@ export class AudioEngine {
     this.crowdDuck = false;   // a pause in some earlier race must not mute this one
     if (!this.ctx) return;
     const B = this._crowdBed();
-    if (!B.gain) { this.load('crowd').then(() => { if (this.crowd?.gain && this.crowdModeWanted === mode) this._crowdMode(mode); }); return; }
+    if (!B.gain) { this.load('crowd').then(buf => { if (buf && this.crowdModeWanted === mode && !this.pausedLoops) this._crowdMode(mode); }); return; }
     if (mode === 'ambient') B.gain.gain.setTargetAtTime(0.15, this.t, 0.9);
     else if (mode === 'off') B.gain.gain.setTargetAtTime(0, this.t, 0.4);
     if (mode !== 'race') B.excite = 0;
@@ -347,26 +394,31 @@ export class AudioEngine {
       case 'land': if (local && e.data > 5) { this.play('land', { vol: clamp(e.data / 18, 0.3, 1) }); if (e.data > 12) this.play('thud', { vol: clamp((e.data - 10) / 10, 0.3, 0.8) }); } break;
       case 'driftTier': if (local && e.data > 0) this.play('tier' + e.data); break;
       case 'miniTurbo': this.play('miniturbo', { vol: v, rate: 0.9 + e.data * 0.1 }); if (local) this.play('mt_pop' + clamp(e.data, 1, 3)); break;
-      case 'boost': if (e.data !== 'mini') this.play('boost', { vol: v * 0.9 }); break;
+      case 'boost': if (e.data !== 'mini') this.play('boost', { vol: v * (e.data === 'draft' ? .6 : .9), rate: e.data === 'draft' ? 1.2 : 1 }); break;
       case 'trick': if (local) this.play('trick'); break;
-      case 'rocketStart': if (local) { this.play('boost'); this.say(e.data >= 1 ? 'rocket_start' : 'nice_start'); } break;
+      case 'rocketStart': if (local) { this.say(e.data >= 1 ? 'rocket_start' : 'nice_start'); } break;
       case 'burnout': if (local) this.play('burnout'); break;
       case 'hit': this.play(e.data.kind === 'tumble' ? 'hit_big' : e.data.kind === 'zap' ? 'zap' : 'hit', { vol: v }); if (local) { this.play('spin', { vol: 0.7 }); this.play('thud', { vol: e.data.kind === 'tumble' ? 1 : 0.7 }); this.duck(e.data.kind === 'tumble' ? 0.7 : 0.45); } break;
       case 'wall': this.play('wall', { vol: v * clamp(e.data.v / 14, 0.3, 1) }); break;
       case 'bump': this.play('bump', { vol: v * clamp(e.data.v / 10, 0.3, 1) }); break;
       case 'roulette': if (local) this.play('roulette'); break;
       case 'itemReady': if (local) this.play('item_ready'); break;
-      case 'itemUse': this.play(USE_SOUND[e.data] || 'item_use', { vol: v }); break;
+      case 'itemUse': if (!['boost', 'boost3', 'golden'].includes(e.data)) this.play(USE_SOUND[e.data] || 'item_use', { vol: v }); break;
       case 'shieldBlock': this.play('block', { vol: v }); break;
+      case 'dodged': if (local) this.play('block', { vol: .72, rate: 1.22 }); break;
       case 'incoming': if (local) this.play('warning', { gap: 0.8 }); break;
       case 'rescue': if (local) this.play('rescue'); break;
       case 'inked': if (local) this.play('ink'); break;
       case 'robbed': if (local) this.play('steal'); break;
       case 'lap': if (local) { if (e.data === kart.race.laps && kart.race.laps > 1) { this._exciteCrowd(0.55); this.play('crowd', { vol: 0.55, gap: 0.6 }); } else if (e.data > 1) this._exciteCrowd(0.3); if (e.data > 1 && e.data <= kart.race.laps) { if (e.data === kart.race.laps) { this.play('final_sting'); this.say('final_lap', { force: true, delay: 0.35 }); } else this.play('lap'); } } break;
-      case 'finish': if (local) { this.play('line'); this.play(e.data <= 3 ? 'finish_good' : 'finish'); this.say(e.data === 1 ? 'winner' : 'finish', { force: true, delay: 0.4 }); this._exciteCrowd(1); this.play('crowd', { vol: e.data <= 3 ? 0.85 : 0.6, gap: 0.6 }); } break;
-      case 'rankUp': if (local && kart.race.time > 4) { this.play(e.data === 1 ? 'rank_first' : 'rank_up', { vol: e.data === 1 ? 0.8 : 0.5 }); if (e.data === 1) this.say('first_place'); } break;
-      case 'rankDown': if (local && kart.race.time > 4) this.play('rank_down', { vol: 0.4 }); break;
-      case 'draft': if (local) this.play('boost', { vol: 0.6, rate: 1.2 }); break;
+      case 'finish': if (local) {
+        const podium = kart.race.mode !== 'timetrial' && e.data <= 3;
+        this.play('line'); this.play(podium ? 'finish_good' : 'finish');
+        this.say(podium && e.data === 1 ? 'winner' : 'finish', { force: true, delay: .4 });
+        this._exciteCrowd(1); this.play('crowd', { vol: podium ? .85 : .6, gap: .6 });
+      } break;
+      case 'rankUp': if (local && kart.race.mode !== 'timetrial' && kart.race.time > 4) { this.play(e.data === 1 ? 'rank_first' : 'rank_up', { vol: e.data === 1 ? 0.8 : 0.5 }); if (e.data === 1) this.say('first_place'); } break;
+      case 'rankDown': if (local && kart.race.mode !== 'timetrial' && kart.race.time > 4) this.play('rank_down', { vol: 0.4 }); break;
     }
   }
   raceEvent(e, race) {
@@ -392,12 +444,27 @@ export class AudioEngine {
   }
   event(name, data) {
     if (!this.ctx) return;
-    if (name === 'pause') { this.pausedLoops = true; this.crowdDuck = true; if (this.crowd?.gain) this.crowd.gain.gain.setTargetAtTime(0, this.t, 0.12); this.play('ui_back'); this.mus.gain.cancelScheduledValues(this.t); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.2, this.t, 0.1); }
-    else if (name === 'resume') { this.pausedLoops = false; this.crowdDuck = false; this.mus.gain.cancelScheduledValues(this.t); this.mus.gain.setTargetAtTime(this.muted ? 0 : this.vol.music * 0.55, this.t, 0.1); }
-    else if (name === 'results') { this.stopLoops(); this.setMusicRate(1); if (data === 1) this.say('you_win', { delay: 0.3 }); this._crowdMode('ambient'); }
-    else if (name === 'podium') { this.play('finish_good'); this.say(data === 1 ? 'champion' : 'cup_over', { force: true, delay: 0.5 }); this._crowdMode('ambient'); }
-    else if (name === 'introStart') { this.stopLoops(); this.pausedLoops = false; this._crowdMode('race'); }
-    else if (name === 'countdownStart') { this.pausedLoops = false; this._crowdMode('race'); }
+    if (name === 'pause' || name === 'resume') {
+      this._pauseMix(name === 'pause');
+      if (this.pausedLoops) this.play('ui_back');
+    } else if (name === 'results') {
+      this.stopLoops(); this.setMusicRate(1);
+      if (data === 1) this.say('you_win', { delay: .3 });
+      this._crowdMode('ambient');
+    } else if (name === 'podium') {
+      this.play('finish_good'); this.say(data === 1 ? 'champion' : 'cup_over', { force: true, delay: .5 }); this._crowdMode('ambient');
+    } else if (name === 'introStart' || name === 'countdownStart') {
+      if (name === 'introStart') this.stopLoops();
+      this._pauseMix(false); this._crowdMode('race');
+      this.preload(['voice:count_3', 'voice:count_2', 'voice:count_1', 'voice:go', 'voice:finish', 'voice:winner', 'voice:final_lap']);
+    }
+  }
+  _pauseMix(paused) {
+    this.pausedLoops = paused; this.crowdDuck = paused;
+    if (paused && this.crowd?.gain) this.crowd.gain.gain.setTargetAtTime(0, this.t, .08);
+    // Race.frame() stops entirely in the pause menu; fade all ongoing engines and tyres here.
+    this.motors.gain.setTargetAtTime(paused ? 0 : .72, this.t, .035);
+    this.setVolumes(this.vol.music, this.vol.sfx);
   }
   racerPicked(r) { this.play('ui_select'); void r; }
   _nearness(kart) { const race = kart.race; return this._nearPoint(race, kart.x, kart.z, 45); }
@@ -416,65 +483,96 @@ export class AudioEngine {
   /** Ask for a theme (a track id, 'menu', 'results', or 'star' via setStarTheme).
       The request is remembered even before the audio context exists. */
   music(id) {
-    if (id === 'menu') this._crowdMode('off');   // back in the menus, the grandstand goes home (#163)
+    if (id === 'menu') { if (this.ctx) this._pauseMix(false); this._crowdMode('off'); }   // back in the menus, the grandstand goes home (#163)
     if (id && id !== 'star') this.baseMusicId = id;   // the music the race/menu asked for; the star theme borrows the slot, it does not replace this (#134)
     this.musicId = id;
     if (!this.ctx) { this.pendingMusic = id; return; }
     this._play(id);
   }
   _play(id) {
-    if (id === this.playingId && (this.seq || this.musicNodes.length)) return;   // already on its way or playing: do not stack a second copy
+    if (id === this.playingId) return;
     this.playingId = id; this.musicRate = 1;
-    const gen = ++this.musicGen;   // completions from an older request must never start music
+    const gen = ++this.musicGen, t = this.t;
     if (this.ctx.state === 'suspended') this.ctx.resume?.().catch(() => {});
-    const old = this.musicNodes, t = this.t;
-    for (const n of old) { n.g.gain.cancelScheduledValues(t); n.g.gain.setTargetAtTime(0, t, 0.25); setTimeout(() => { try { n.s.stop(); } catch { /* done */ } }, 1500); }
-    this.musicNodes = []; this.seq?.stop(); this.seq = null; clearTimeout(this.loopTimer); clearTimeout(this.musicWatchdog);
+    clearTimeout(this.musicWatchdog);
+    this.seq?.stop(); this.seq = null;
+    if (this.musicNode) {
+      const old = this.musicNode;
+      old.g.gain.cancelScheduledValues(t); old.g.gain.setTargetAtTime(0, t, .065);
+      if (id === 'star' && old.id === this.baseMusicId) this.parkedTheme = old;
+      else old.s.stop(t + .4);
+      this.musicNode = null;
+    }
+    if (this.parkedTheme) {
+      const parked = this.parkedTheme;
+      if (id === parked.id) {
+        this.parkedTheme = null; this.musicNode = parked;
+        parked.g.gain.cancelScheduledValues(t); parked.g.gain.setTargetAtTime(1, t, .065);
+        this.setMusicRate(1); return;
+      }
+      if (id !== 'star') { parked.s.stop(t + .4); this.parkedTheme = null; }
+    }
     if (!id) return;
     const url = MUSIC[id];
-    if (!url) { this.seq = id === 'star' ? new StarSequencer(this) : new Sequencer(this, id); this.seq.start(); return; }
-    const key = 'music:' + id;
-    let bufStarted = false, seqStarted = false;
-    const startSeq = () => { if (bufStarted || seqStarted || gen !== this.musicGen) return; seqStarted = true; this.seq = new Sequencer(this, id); this.seq.start(); };
-    const startBuf = buf => { if (bufStarted || gen !== this.musicGen) return; bufStarted = true; clearTimeout(this.musicWatchdog); if (seqStarted) { this.seq?.stop(); this.seq = null; } this._loopMusic(buf, id); };
-    // If the theme file hangs — stalled network, a service worker that never
-    // answers — the race must not stay silent: after a few seconds the
-    // sequencer covers for it, and the real theme takes over if it ever lands.
-    this.musicWatchdog = setTimeout(startSeq, 6000);
-    if (this.buffers.has(key)) { clearTimeout(this.musicWatchdog); startBuf(this.buffers.get(key)); }
-    else fetch(url).then(r => r.arrayBuffer()).then(b => this.ctx.decodeAudioData(b)).then(buf => { this.buffers.set(key, buf); for (const k of [...this.buffers.keys()]) if (k.startsWith('music:') && k !== key && k !== 'music:menu') this.buffers.delete(k); startBuf(buf); }).catch(() => { clearTimeout(this.musicWatchdog); startSeq(); });
-  }
-  /** Loop a buffer with a short crossfade at the seam, so any piece of music loops cleanly. */
-  _loopMusic(buf, id) {
-    const XF = 1.2, c = this.ctx;
-    const playOnce = when => {
-      if (this.playingId !== id) return;
-      const s = c.createBufferSource(), g = c.createGain(); s.buffer = buf; s.playbackRate.value = this.musicRate;
-      const len = buf.duration / this.musicRate;
-      g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(1, when + XF * 0.6);
-      g.gain.setValueAtTime(1, when + len - XF); g.gain.linearRampToValueAtTime(0, when + len);
-      s.connect(g); g.connect(this.mus); s.start(when);
-      const node = { s, g, when, len }; this.musicNodes.push(node); if (this.musicNodes.length > 3) this.musicNodes.shift();
-      this.loopTimer = setTimeout(() => playOnce(when + len - XF), Math.max(50, (when + len - XF - c.currentTime - 0.6) * 1000));
+    const startSeq = () => {
+      if (this.seq || this.musicNode || gen !== this.musicGen) return;
+      this.seq = id === 'star' ? new StarSequencer(this) : new Sequencer(this, id);
+      this.seq.rate = this.musicRate; this.seq.start();
     };
-    playOnce(this.t + 0.05);
-  }
-  setMusicRate(r) {
-    this.musicRate = r; if (!this.ctx) return;
-    for (const n of this.musicNodes) n.s.playbackRate.setTargetAtTime(r, this.t, 0.3);
-    if (this.seq) this.seq.rate = r;
-    // re-time the next loop: simplest is to restart the scheduling from the current node
-    const cur = this.musicNodes[this.musicNodes.length - 1];
-    if (cur && this.playingId && this.buffers.has('music:' + this.playingId)) {
-      clearTimeout(this.loopTimer);
-      const played = (this.t - cur.when) * 1, remain = Math.max(0.5, (cur.s.buffer.duration - played) / r), id = this.playingId, buf = cur.s.buffer;
-      cur.g.gain.cancelScheduledValues(this.t); cur.g.gain.setValueAtTime(1, this.t); cur.g.gain.setValueAtTime(1, this.t + remain - 1.2); cur.g.gain.linearRampToValueAtTime(0, this.t + remain);
-      this.loopTimer = setTimeout(() => { if (this.playingId === id) this._loopMusic(buf, id); }, Math.max(50, (remain - 1.2 - 0.3) * 1000));
+    if (!url) { startSeq(); return; }
+    const key = 'music:' + id;
+    const startBuf = buf => {
+      if (gen !== this.musicGen) return;
+      clearTimeout(this.musicWatchdog);
+      this.seq?.stop(); this.seq = null;
+      this._loopMusic(buf, id);
+    };
+    if (this.buffers.has(key)) { startBuf(this.buffers.get(key)); return; }
+    // Cached files start directly. If the network stalls, the in-browser band takes over.
+    this.musicWatchdog = setTimeout(startSeq, 1200);
+    if (!this.loading.has(key)) {
+      const pending = fetch(url).then(r => { if (!r.ok) throw Error('HTTP ' + r.status); return r.arrayBuffer(); })
+        .then(bytes => this.ctx.decodeAudioData(bytes)).then(buf => {
+          // The older recordings have free-time endings. Fold their heads into their tails
+          // once; the audio clock can now own the seam at any playback speed, even in a stalled tab.
+          if (!THEMES[id]) this._prepareSeam(buf);
+          return buf;
+        }).finally(() => this.loading.delete(key));
+      this.loading.set(key, pending);
     }
+    this.loading.get(key).then(buf => {
+      if (gen !== this.musicGen) return;
+      for (const k of this.buffers.keys()) if (k.startsWith('music:') && k !== 'music:menu') this.buffers.delete(k);
+      this.buffers.set(key, buf); startBuf(buf);
+    }).catch(() => { if (gen === this.musicGen) { clearTimeout(this.musicWatchdog); startSeq(); } });
+  }
+  _prepareSeam(buf) {
+    const frames = Math.min(Math.round(buf.sampleRate * 1.2), Math.floor(buf.length / 4));
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+      const data = buf.getChannelData(ch), tail = buf.length - frames;
+      for (let i = 0; i < frames; i++) {
+        const fade = i / frames;
+        data[tail + i] = data[tail + i] * (1 - fade) + data[i] * fade;
+      }
+    }
+  }
+  _loopMusic(buf, id) {
+    const c = this.ctx, t = this.t, s = c.createBufferSource(), g = c.createGain();
+    s.buffer = buf; s.loop = true;
+    s.loopStart = THEMES[id] ? 0 : Math.min(1.2, buf.duration / 4);
+    s.playbackRate.value = this.musicRate;
+    g.gain.setValueAtTime(0, t); g.gain.setTargetAtTime(1, t, .055);
+    s.connect(g); g.connect(this.mus); s.onended = () => { s.disconnect(); g.disconnect(); };
+    this.musicNode = { id, s, g }; s.start(t);
+  }
+  setMusicRate(rate) {
+    this.musicRate = rate;
+    if (this.musicNode) this.musicNode.s.playbackRate.setTargetAtTime(rate, this.t, .22);
+    if (this.seq) this.seq.rate = rate;
   }
 }
 
-const USE_SOUND = { boost: 'boost', boost3: 'boost', golden: 'boost', leak: 'leak', pinkslip: 'lob', subpoena: 'serve', subpoena3: 'serve', tweet: 'tweet', antitrust: 'siren', star: 'star', crash: 'lightning', pr: 'shock', smear: 'ink', insider: 'ghost', bailout: 'rocket', dividend: 'coin' };
+const USE_SOUND = { leak: 'leak', pinkslip: 'lob', subpoena: 'serve', subpoena3: 'serve', tweet: 'tweet', antitrust: 'siren', star: 'star', crash: 'lightning', pr: 'shock', smear: 'ink', insider: 'ghost', bailout: 'rocket', dividend: 'coin' };
 
 /* Synthesized versions of every effect, used until a generated sample exists (and as a fallback offline). */
 const SYNTH = {
@@ -547,13 +645,8 @@ const SYNTH = {
   rank_down: a => a.tone({ type: 'triangle', f: 600, f1: 380, dur: 0.12, vol: 0.12 }),
 };
 
-/* Authored sequencer themes. Tracks without a generated MP3 (the whole third
-   cup, for now) used to get the same hash-seeded house band with a different
-   random tune — same instruments, same shape, nothing to recognise a track
-   by. These give each one its own hook, tempo, and band. lead/bass entries
-   are semitone offsets from the root (null = rest); lead spans 4 bars of
-   eighth notes (32 steps), bass one bar (8). A generated MP3, when one is
-   made for the track, still wins — this is the floor, not the ceiling. */
+/* The lightweight offline versions retain the four Offshore Cup hooks. These tracks'
+   recorded arrangements have exact bar-length loops (tools/score-offshore.mjs). */
 const THEMES = {
   /* Davos: mock-heroic alpine fanfare — brass-ish saw lead, oom-pah bass. */
   'davos': {
@@ -623,6 +716,7 @@ class Sequencer {
   tick() {
     if (this.stopped) return;
     const a = this.a, c = a.ctx, spb = 60 / (this.bpm * this.rate) / 2;   // eighth notes
+    if (this.next < c.currentTime) { const missed = Math.ceil((c.currentTime - this.next) / spb); this.step += missed; this.next += missed * spb; }
     while (this.next < c.currentTime + 0.25) {
       const s = this.step, bar = Math.floor(s / 8) % 4, beat = s % 8, t = this.next, root = this.root + this.prog[bar];
       const voice = (type, f, dur, vol, cut) => { const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter(); o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = cut; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(fl); fl.connect(g); g.connect(a.mus); o.start(t); o.stop(t + dur + 0.02); };
@@ -656,6 +750,7 @@ class StarSequencer {
   tick() {
     if (this.stopped) return;
     const a = this.a, c = a.ctx, s16 = 60 / this.bpm / 4;   // sixteenth notes
+    if (this.next < c.currentTime) { const missed = Math.ceil((c.currentTime - this.next) / s16); this.step += missed; this.next += missed * s16; }
     while (this.next < c.currentTime + 0.25) {
       const s = this.step, bar = Math.floor(s / 16) % 4, six = s % 16, t = this.next;
       const voice = (type, f, dur, vol, cut) => { const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter(); o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = cut; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(fl); fl.connect(g); g.connect(a.mus); o.start(t); o.stop(t + dur + 0.02); };

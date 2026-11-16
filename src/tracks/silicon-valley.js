@@ -215,17 +215,27 @@ export default {
     const legs = (p, w, top, color = 0x3a414c, base = null) => { for (const u of [-w * 0.32, w * 0.32]) { const [x, , z] = local(p, u, -0.4, 0); const g = (base ? base(x, z) : track.terrainHeight(x, z)) - 0.35; const q = S.post(Math.max(0.6, p.y + top - 0.3 - g), 0.3, color); sc.place(q, x, z, { y: g }); bake.add(q, false); } };
 
     // start/finish gantry and grandstands along the main straight
-    const g0 = sc.beside(0, 1, -track.hwL[0]);                         // centre of the road at the line
-    const gantry = P.gantry(track.hwL[0] + track.hwR[0] + 1.5, 'START-UP LINE');
+    // The VC fork widens the left side. Centre the structure across both lanes,
+    // otherwise its left support and footing sit on the playable asphalt.
+    const span = track.hwL[0] + track.hwR[0];
+    const mid = (track.hwL[0] - track.hwR[0]) / 2;
+    const g0 = sc.beside(0, 1, -span / 2);
+    g0.roadY += track.ly[0] * mid;
+    const gantry = P.gantry(span + 1.5, 'START-UP LINE', { gridOffset: -mid });
     sc.place(gantry, g0.x, g0.z, { yaw: g0.along, y: g0.roadY });
     view.startLights = gantry.userData.lights;
+    // The same line is a startup's entire funding history, with a literal bridge before the exit.
+    anim.push(() => {
+      const title = view.showLap <= 1 ? 'START-UP LINE' : view.finalLap ? 'EXIT STRATEGY' : 'BRIDGE ROUND';
+      gantry.userData.setTitle(title);
+    });
     gantry.updateMatrixWorld(true);
     for (const child of [...gantry.children]) if (!view.startLights.includes(child)) bake.add(child);
     // a concrete footing under each gantry tower (#242): the Peninsula Run rotation moved the
     // line onto the Sand Hill hillside, where the ground falls ~2 m from the road on the downhill
     // side — the rigid gantry, seated at the road's centre height, left that tower standing on air
     for (const sx of [-1, 1]) {
-      const [tx, , tz] = local({ ...g0, yaw: g0.along }, sx * ((track.hwL[0] + track.hwR[0] + 1.5) / 2 + 1.4), 0, 0);
+      const [tx, , tz] = local({ ...g0, yaw: g0.along }, sx * ((span + 1.5) / 2 + 1.4), 0, 0);
       const drop = g0.roadY - track.terrainHeight(tx, tz);
       if (drop > 0.05) {
         const foot = new THREE.Mesh(new THREE.BoxGeometry(2.8, drop + 0.4, 2.8), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.85 }));

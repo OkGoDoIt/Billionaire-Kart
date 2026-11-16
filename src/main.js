@@ -53,6 +53,7 @@ if (q.get('view') === 'kart') {
       players: (q.get('r') || 'elon').split(',').map((racerId, i, a) => ({ racerId, device: a.length === 1 ? 'any' : ['kb1', 'kb2', 'pad0', 'pad1'][i] })),
       seed: q.get('seed') ? +q.get('seed') : undefined, auto: q.get('auto') === '1', intro: q.get('intro') !== '0', laps: q.get('laps') ? +q.get('laps') : undefined,
     });
+    app.audio.music(app.session.def.music || app.session.def.id);
   };
   app.onRaceDone = () => setTimeout(start, 5000);
   app.pause = () => app.session.setPaused(!app.session.paused);

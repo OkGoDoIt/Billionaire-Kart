@@ -14,7 +14,7 @@ export const itemIcon = id => { const d = ITEMS[id]; return d ? `assets/items/${
 const ROULETTE = ['boost', 'leak', 'subpoena', 'tweet', 'star', 'pr', 'pinkslip', 'golden', 'crash', 'insider', 'smear', 'antitrust'];
 
 export class Hud {
-  constructor(parent, race, kart, rect = [0, 0, 1, 1], { compact = false, showMap = true } = {}) {
+  constructor(parent, race, kart, rect = [0, 0, 1, 1], { compact = false, showMap = true, trialBest = null } = {}) {
     this.race = race; this.kart = kart; this.t = 0; this.mapT = 0; this.lastRank = 0; this.lastCoins = -1; this.lastLap = -1; this.lastItem = undefined; this.rouletteI = 0; this.rouletteT = 0;
     const root = this.root = el('div', 'hud' + (compact ? ' hud-compact' : ''));
     // rect is [x, y(from bottom), w, h] in screen fractions
@@ -38,6 +38,17 @@ export class Hud {
     this.$ = { item: q('.hud-item'), img: q('.hud-item-img'), coinFallback: q('.hud-item-coin'), count: q('.hud-item-count'), info: q('.hud-item-info'), itemName: q('.hud-item-info b'), itemDesc: q('.hud-item-info span'), coins: q('.hud-coins b'), coinsPill: q('.hud-coins'), lap: q('.hud-lap b'), lapPill: q('.hud-lap'),
       rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed'), speedN: q('.hud-speed b'), coinPop: q('.hud-coin-pop'),
     };
+    if (race.mode === 'timetrial') {
+      // The rank corner is free in a solo trial, including on touch where the ordinary clock is hidden.
+      root.classList.add('hud-trial');
+      const clock = el('div', 'trial-clock');
+      this.trialLabel = el('span', 'trial-clock-label', 'Race time');
+      this.trialTime = el('b', 'trial-clock-time');
+      this.trialMark = el('span', 'trial-clock-mark');
+      this.trialTarget = trialBest == null ? '' : 'Best ' + fmtTime(trialBest);
+      this.trialMark.textContent = this.trialTarget;
+      clock.append(this.trialLabel, this.trialTime, this.trialMark); root.append(clock);
+    }
     if (showMap) this._buildMap();
     for (const id of ROULETTE) { const i = new Image(); i.src = itemIcon(id); }
     this.update(0);
@@ -141,6 +152,7 @@ export class Hud {
     const f = el('div', 'hud-feed-row', html); this.$.feed.prepend(f);
     while (this.$.feed.children.length > 2) this.$.feed.lastChild.remove();   // two lines at most: a third reaches down into the banners
     setTimeout(() => { f.classList.add('out'); setTimeout(() => f.remove(), 350); }, ms);
+    return f;
   }
   /** A rival has something to say: their face, their name, and the line in a speech bubble. Returns false if one is already up. */
   talk(racer, line, ms = 3000) {
@@ -164,8 +176,8 @@ export class Hud {
   onKartEvent(e) {
     switch (e.type) {
       case 'lap': if (e.data > 1 && e.data <= this.race.laps) { if (e.data === this.race.laps) this.banner('FINAL LAP!', 'final', 2200, 3); else this.banner(`LAP ${e.data}`, 'lap', 1300, 2); } break;
-      case 'finish': this.banner(e.data === 1 ? 'WINNER!' : 'FINISH!', 'finish' + (e.data === 1 ? ' win' : ''), 3000, 4); this.$.talk.classList.remove('show'); this.$.rank.classList.remove('up', 'down'); this.$.rank.classList.add('done'); this.pop(this.$.rank); break;
-      case 'incoming': this.warn(e.data.type); break;
+      case 'finish': { const win = e.data === 1 && this.race.mode !== 'timetrial'; this.banner(win ? 'WINNER!' : 'FINISH!', 'finish' + (win ? ' win' : ''), 3000, 4); } this.$.talk.classList.remove('show'); this.$.rank.classList.remove('up', 'down'); this.$.rank.classList.add('done'); this.pop(this.$.rank); break;
+      case 'incoming': this.warningShot = e.data; this.warn(e.data.type); break;
       case 'itemReady': this.pop(this.$.item); break;
       case 'miniTurbo': break;
       case 'hit':
@@ -180,6 +192,7 @@ export class Hud {
       case 'robbed': this.banner(ITEMS.insider.hit, 'bad small', 1300, 2); this.feed(`<b>${e.data.racer.name}</b> stole your item`); break;
       case 'itemUse': { const line = ITEMS[e.data]?.use; if (line) this.banner(line, 'good small', 1000); break; }
       case 'inked': this.banner(ITEMS.smear.hit, 'bad small', 1200, 2); break;
+      case 'dodged': if (e.data === 'antitrust') this.banner('CASE DISMISSED!', 'good small', 1200, 2); break;
       case 'shieldBlock': this.banner('BLOCKED!', 'good small', 700); break;
     }
   }
@@ -188,6 +201,10 @@ export class Hud {
   update(dt) {
     const k = this.kart, $ = this.$, race = this.race;
     this.t += dt;
+    if (this.warningShot?.dead) { $.warn.classList.remove('show'); this.warningShot = null; }
+    if (this.suitNotice && (this.suitNotice.shot.dead || this.suitNotice.shot.hoverTarget !== k)) {
+      this.suitNotice.row.remove(); this.suitNotice = null;
+    }
     // rank
     if (k.rank !== this.lastRank) {
       const up = this.lastRank && k.rank < this.lastRank, down = this.lastRank && k.rank > this.lastRank;
@@ -237,7 +254,16 @@ export class Hud {
     }
     $.item.classList.toggle('golden', k.goldenActive === true && k.goldenT > 0);
     // timer
-    if (Math.floor(race.time * 10) !== this._tt) { this._tt = Math.floor(race.time * 10); $.time.textContent = fmtTime(k.finished ? k.finishTime : race.time).slice(0, -2); }
+    const time = k.finished ? k.finishTime : race.time;
+    if (Math.floor(time * 10) !== this._tt || k.finished !== this._clockDone) {
+      this._tt = Math.floor(time * 10); this._clockDone = k.finished;
+      (this.trialTime || $.time).textContent = k.finished && this.trialTime ? fmtTime(time) : fmtTime(time).slice(0, -2);
+      if (this.trialMark) {
+        const laps = k.lapTimes, split = laps.length && time - k.lapStart < 4;
+        const mark = split ? `Lap ${laps.length} · ${fmtTime(laps[laps.length - 1])}` : this.trialTarget;
+        if (mark !== this.trialMark.textContent) this.trialMark.textContent = mark;
+      }
+    }
     $.wrong.classList.toggle('show', k.wrongWayT > 1 && !k.finished);
     $.ink.classList.toggle('show', k.inkT > 0);
     $.speedN.textContent = Math.round(k.speed * MPH_PER_MS);

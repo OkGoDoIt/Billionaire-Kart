@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* Generate sound effects, announcer lines, and music with ElevenLabs, then
    write src/content/audio-manifest.js listing what exists. Skips files that are
-   already there, and reports credits used.
+   already there, and reports credits used. The four Offshore Cup arrangements
+   are rendered locally by tools/score-offshore.mjs.
    Usage: node tools/gen-audio.mjs [sfx|voice|music|manifest] [--only name,name] [--force] [--dry] [--voice <voice_id>] */
 import { readFile, writeFile, mkdir, access, readdir, stat } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';

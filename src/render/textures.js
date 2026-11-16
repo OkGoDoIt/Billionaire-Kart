@@ -153,6 +153,25 @@ export function checkerTexture(n = 8, a = '#111318', b = '#f5f5f0') {
   }, { aniso: 8 });
 }
 
+// A single atlas keeps the whole starting grid in one draw. A thin dark keyline lets the
+// off-white paint read on the pale concrete and snow courses as well as on asphalt.
+export function gridPaintTexture() {
+  return canvasTex(512, 256, g => {
+    for (let slot = 0; slot < 8; slot++) {
+      g.save(); g.translate((slot % 4) * 128, Math.floor(slot / 4) * 128);
+      const paint = slot === 0 ? '#ffd05d' : '#efece0';
+      for (const [ink, width] of [['#3b4248', 9], [paint, 6]]) {
+        g.strokeStyle = ink; g.lineWidth = width; g.lineJoin = 'round';
+        g.beginPath(); g.moveTo(9, 72); g.lineTo(9, 17); g.lineTo(119, 17); g.lineTo(119, 72); g.stroke();
+      }
+      // The number is beside the nose, still visible as the kart pulls off its mark.
+      fitText(g, String(slot + 1), 24, 35, 19, 27, 25, '"Luckiest Guy", "Arial Black", sans-serif',
+        { fill: paint, stroke: '#303a42', lw: 3 });
+      g.restore();
+    }
+  }, { repeat: false, aniso: 8 });
+}
+
 /** Soft round sprite for particles. */
 export function glowTexture(size = 64, hard = 0.0) {
   return canvasTex(size, size, (g, w) => {
@@ -180,7 +199,7 @@ export function puffTexture(size = 128, seed = 5) {
 export const AD_IMAGES = 24;
 const adImageCache = new Map();
 /** Tracks with their own set of boards in assets/ads/<track id>/ (ad-1.webp ...), and how many each has. */
-export const AD_SETS = { 'silicon-valley': 8, 'bliss-hills': 8, 'crypto-cove': 8, 'datacenter-dash': 8, 'capitol-hill': 8, 'burning-circuit': 8, 'mars-colony': 8, 'singularity-speedway': 8, 'boring-tunnel': 8, 'wework-memorial': 8, 'davos': 8 };
+export const AD_SETS = { 'silicon-valley': 8, 'bliss-hills': 8, 'crypto-cove': 8, 'datacenter-dash': 8, 'capitol-hill': 8, 'burning-circuit': 8, 'mars-colony': 8, 'singularity-speedway': 8, 'boring-tunnel': 8, 'international-waters': 8, 'wework-memorial': 8, 'davos': 8 };
 function adImage(n, set = '') {
   const src = set ? `assets/ads/${set}/ad-${n}.webp` : `assets/ads/ad-${String(n).padStart(2, '0')}.webp`;
   if (!adImageCache.has(src)) adImageCache.set(src, new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; }));

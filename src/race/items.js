@@ -15,7 +15,7 @@ export const ITEMS = {
   subpoena:  { id: 'subpoena',  name: 'Subpoena',           img: 'green',     shield: true, hit: 'YOU’VE BEEN SERVED!', desc: 'Fires straight ahead and bounces off walls until it serves somebody.' },
   subpoena3: { id: 'subpoena3', name: 'Class Action',       img: 'green',     uses: 3, base: 'subpoena', shield: true, hit: 'YOU’VE BEEN SERVED!', desc: 'Three subpoenas circle your kart. Fire them one at a time. Settle for nothing.' },
   tweet:     { id: 'tweet',     name: 'Viral Tweet',        img: 'red',       shield: true, hit: 'RATIOED!', desc: 'Homes in on the racer ahead of you and ratios them.' },
-  antitrust: { id: 'antitrust', name: 'Antitrust Suit',     img: 'blue',      hit: 'BROKEN UP!', use: 'SEE YOU IN COURT!', desc: 'Flies to first place, circles its victim twice, then breaks them up. Regulators hate a winner.' },
+  antitrust: { id: 'antitrust', name: 'Antitrust Suit',     img: 'blue',      hit: 'BROKEN UP!', use: 'SEE YOU IN COURT!', desc: 'Circles first place twice, then dives. A funding boost at the last instant can beat the suit.' },
   star:      { id: 'star',      name: 'Hype Cycle',         img: 'star',      hit: 'RUN OVER BY THE HYPE!', use: 'PEAK HYPE!', desc: 'Invincible and faster for a few seconds. Bump rivals to spin them out. Do not ask about revenue.' },
   crash:     { id: 'crash',     name: 'Market Crash',       img: 'lightning', hit: 'MARKET CRASH! −40%', use: 'SOLD THE TOP!', desc: 'Shrinks and slows every rival and shakes loose their items. You sold yesterday.' },
   pr:        { id: 'pr',        name: 'PR Blitz',           img: 'horn',      hit: 'SPUN!', use: 'WE TAKE THIS VERY SERIOUSLY!', desc: 'A shockwave of spin. Nearby rivals spin out and incoming items vanish.' },
@@ -25,6 +25,8 @@ export const ITEMS = {
   bailout:   { id: 'bailout',   name: 'Government Bailout', img: 'bailout',   hit: 'FLATTENED BY A BAILOUT!', use: 'TOO BIG TO FAIL!', desc: 'Autopilot at ludicrous speed, flattening anyone in the way. Too big to fail.' },
   dividend:  { id: 'dividend',  name: 'Dividend',           img: 'coin',      use: 'PASSIVE INCOME!', desc: 'Two coins, for doing nothing. A little more top speed.' },
 };
+export const isFundingBoost = id => id === 'boost' || id === 'boost3' || id === 'golden';
+
 /* Shouts for hits that are not an item landing. */
 export const HIT_LINES = { squash: 'SQUASHED!', star: ITEMS.star.hit, bailout: ITEMS.bailout.hit };
 
@@ -41,6 +43,7 @@ const TABLE = [
 ];
 
 const SHOT_R = 0.75;
+const BOX_RESPAWN = 0.85;   // Seconds: the immediate pursuer contests the row, the next group gets another shot.
 /* The Antitrust Suit's strike telegraph (MK8's Spiny Shell): once it arrives it
    ORBITS its victim twice over BLUE_HOVER_T seconds before slamming down, so
    first place always gets a fair, unmissable warning. */
@@ -106,11 +109,11 @@ export class ItemSystem {
     for (const b of this.boxes) {
       if (!b.active) { b.t -= dt; if (b.t <= 0) { b.active = true; race.emit('boxBack', b); } continue; }
       for (const k of karts) {
-        if (k.rescueT > 0 || k.finished) continue;
+        if (k.rescueT > 0 || k.finished || k.item || k.rouletteT > 0 || k.goldenT > 0) continue;
         const dx = k.x - b.x, dz = k.z - b.z;
         if (dx * dx + dz * dz < 2.9 && Math.abs(k.y + 0.6 - b.y) < 2.2) {
-          b.active = false; b.t = 1.6; race.emit('boxBreak', { box: b, kart: k });
-          if (!k.item && k.rouletteT <= 0 && k.goldenT <= 0) { k.rouletteT = 1.25; k.emit('roulette'); }
+          b.active = false; b.t = BOX_RESPAWN; race.emit('boxBreak', { box: b, kart: k });
+          k.rouletteT = 1.25; k.emit('roulette');
           break;
         }
       }
@@ -162,6 +165,11 @@ export class ItemSystem {
       case 'bailout': kart.bulletT = [3.2, 3.2, 3.4, 3.8, 4.4, 5, 5.6, 6.2][clamp(Math.round(((kart.rank - 1) / Math.max(1, race.karts.length - 1)) * 7), 0, 7)] * (kart.sp.bailout || 1); kart.endDrift(false); kart.hitT = 0; kart.shrinkT = 0; break;
       case 'dividend': kart.addCoins(2); break;
     }
+    if (isFundingBoost(id)) {
+      for (const shot of this.shots) {
+        if (!shot.dead && shot.hoverTarget === kart && shot.fundingWindow) shot.dodgedBy = kart;
+      }
+    }
     kart.stats.items++;
     kart.emit('itemUse', id);
     race.emit('itemUse', { kart, id: base });
@@ -209,7 +217,7 @@ export class ItemSystem {
       const front = 1 - (k.rank - 1) / Math.max(1, n - 1);
       k.shrinkT = lerp(3.4, 6.5, front) * (k.sp.shrinkTake || 1);
       k.hitKind = 'zap'; k.hitDur = k.hitT = 0.55; k.endDrift(false); k.boostT = 0; k.boostMul = 1;
-      k.vx *= 0.6; k.vz *= 0.6;
+      k.slowFromHit(0.6);
       if (k.item) { k.item = null; k.itemUses = 0; k.goldenActive = false; k.goldenT = 0; k.emit('itemGone'); }
       k.rouletteT = 0; k.stats.hitsTaken++; user.stats.hitsGiven++;
       k.emit('hit', { kind: 'zap', from: user });
@@ -283,11 +291,11 @@ export class ItemSystem {
     }
   }
 
-  _explode(x, y, z, owner, withItem = 'pinkslip') {
+  _explode(x, y, z, owner, withItem = 'pinkslip', escaped = null) {
     const race = this.race, R = 7;
     race.emit('explosion', { x, y, z, r: R, by: owner });
     for (const k of race.karts) {
-      if (k.rescueT > 0 || k.ghostT > 0 || k.invincible) continue;
+      if (k === escaped || k.rescueT > 0 || k.ghostT > 0 || k.invincible) continue;
       const d = Math.hypot(k.x - x, k.z - z);
       if (d < R && Math.abs(k.y - y) < 5 && k.hurt(d < R * 0.6 ? 'tumble' : 'spin', owner)) race.emit('kartHit', { by: owner, victim: k, with: withItem });
     }
@@ -407,6 +415,7 @@ export class ItemSystem {
       // arrival: commit to this leader and open the telegraph — the orbit, the
       // target ring (raceview reads s.m*), the feed callout (session, on blueArrive)
       s.phase = 'hover'; s.t = BLUE_HOVER_T; s.hoverTarget = t; s.hoverFrac = 0; s.locked = false;
+      s.fundingWindow = false; s.dodgedBy = null;
       s.hx = t.x; s.hz = t.z; s.hy = t.y; s.ang = Math.atan2(s.x - t.x, s.z - t.z);
       s.r0 = Math.max(BLUE_ORBIT_R, Math.hypot(s.x - t.x, s.z - t.z));   // spirals in from wherever it arrived, never inside the orbit radius
       s.ey = s.y; s.mx = t.x; s.mz = t.z; s.my = t.y;
@@ -426,6 +435,9 @@ export class ItemSystem {
         return;
       }
       s.t -= dt;
+      // The closing ring turns gold just before the dive, leaving about a third
+      // of a second to spend a funding item. A pad or an earlier boost cannot dodge.
+      s.fundingWindow = s.t <= 0.13;
       const el = BLUE_HOVER_T - s.t;
       s.hoverFrac = clamp(el / BLUE_HOVER_T, 0, 1);
       // circle the victim twice; the circle's centre tracks their movement,
@@ -453,7 +465,9 @@ export class ItemSystem {
       s.x += (s.lx - s.x) * k; s.z += (s.lz - s.z) * k; s.y += (s.ly + 0.4 - s.y) * k;
       if (s.t <= 0) {
         const hitsBefore = t && !t.finished ? t.stats.hitsTaken : -1;
-        this._explode(s.lx, s.ly, s.lz, s.owner, 'antitrust');
+        const escaped = s.dodgedBy === t && !t.finished && t.rescueT <= 0 ? t : null;
+        this._explode(s.lx, s.ly, s.lz, s.owner, 'antitrust', escaped);
+        if (escaped) escaped.emit('dodged', 'antitrust');
         race.emit('blueHit', { x: s.lx, y: s.ly, z: s.lz });
         // MK8: the victim's held item is destroyed by the strike. Nearby racers
         // only take the blast, exactly as before — their items survive it.

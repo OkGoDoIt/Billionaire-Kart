@@ -1,5 +1,6 @@
-# Runs the headless sim and the browser bot on every pull request to main and every push to main (#91).
-# The bot walks the menus, races on autopilot, and fails on page errors, unrendered text, or screens that overflow.
+# Runs the headless sim, a short blocking boot check, and the browser bot on every pull request to main and every
+# push to main (#91). A push to main publishes the game to GitHub Pages only after every blocking check passes, and
+# it publishes only the folder tools/build-site.mjs assembles (no docs, tools, or PR screenshots).
 # Bot screenshots are uploaded as an artifact when anything fails, so a red check can be diagnosed from the run page.
 name: Checks
 
@@ -42,6 +43,23 @@ jobs:
       - name: Audio playback
         run: node tools/audio-check.mjs
 
+      # Blocking: the page boots to the title, reaches the main menu, and a race runs, with no page errors or 404s.
+      - name: Page boots
+        run: node tools/boot-check.mjs
+
+      - name: Service worker updates and offline start
+        run: node tools/sw-check.mjs --out bot-shots/sw
+
+      # The exact folder that will be published, booted the same way, so a file left out of the site fails here.
+      - name: Assemble and boot the site
+        run: npm run site && node tools/boot-check.mjs --root _site
+
+      - name: Upload the site for Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
       # The bot races in real time; a GPU-less runner renders too slowly for its timing asserts, so on CI it is
       # advisory (screenshots always uploaded). The full bot gate runs locally before every push (CONTRIBUTING.md).
       - name: Bot, desktop (advisory)
@@ -62,3 +80,20 @@ jobs:
           path: bot-shots/
           if-no-files-found: ignore
           retention-days: 14
+
+  deploy:
+    needs: sim-and-bot
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

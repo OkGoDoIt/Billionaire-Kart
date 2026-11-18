@@ -75,18 +75,6 @@ export function signBuoy(title = 'INTERNATIONAL WATERS', sub = 'NO JURISDICTION 
 }
 
 /* ---------- signs that stand on the deck ---------- */
-/** A harbour sign on two posts, board centre about 3.4 m up. */
-export function flagSign(lines, { w = 9 } = {}) {
-  const grp = new THREE.Group(), b = new ModelBuilder();
-  for (const s of [1, -1]) b.add('post', cyl(0.11, 0.14, 4.6, 8), { p: [s * (w / 2 - 0.5), 2.3, 0] });
-  b.add('lamp', sphere(0.15, 10, 8), { p: [-(w / 2 - 0.5), 4.75, 0] });
-  b.add('lamp', sphere(0.15, 10, 8), { p: [w / 2 - 0.5, 4.75, 0] });
-  grp.add(b.build({ post: MAT.dark, lamp: glow(0xffd9a0, 2) }));
-  const board = boardMesh(lines, w, w * 0.24);
-  board.position.set(0, 3.35, 0); grp.add(board);
-  return grp;
-}
-
 /* ---------- lantern strings (the water frame's big dressing move) ---------- */
 /** Two poles and a sagging cable of paper lanterns, spanning the road. */
 export function lanternString(span = 26) {
@@ -1050,16 +1038,3 @@ export function pileBand() {
   return b.build({ band: plastic(0x2f4a33, 0.95) });
 }
 
-/** A drink cart crossing the teak: a gold trolley, an umbrella, champagne on ice. ~1.2 m radius. */
-export function drinkCart() {
-  const grp = new THREE.Group(), b = new ModelBuilder();
-  b.add('gold', box(1.8, 0.12, 1.1, 0.05, 1), { p: [0, 0.95, 0] });
-  b.add('gold', box(1.8, 0.1, 1.1, 0.05, 1), { p: [0, 0.4, 0] });
-  for (const sx of [-0.8, 0.8]) for (const sz of [-0.45, 0.45]) { b.add('gold', cyl(0.04, 0.04, 0.9, 6), { p: [sx, 0.67, sz] }); b.add('dark', sphere(0.12, 8, 6), { p: [sx, 0.12, sz] }); }
-  b.add('ice', cyl(0.3, 0.24, 0.4, 12), { p: [-0.4, 1.2, 0] });
-  for (const k of [-0.1, 0.1]) b.add('bottle', cyl(0.07, 0.09, 0.6, 8), { p: [-0.4 + k, 1.45, k] });
-  b.add('pole', cyl(0.03, 0.03, 1.8, 6), { p: [0.5, 1.9, 0] });
-  b.add('shade', cone(1.25, 0.5, 12), { p: [0.5, 2.85, 0] });
-  grp.add(b.build({ gold: GOLDP, dark: MAT.dark, ice: plastic(0xdfe8ee, 0.2, 0.6), bottle: plastic(0x1f5a32, 0.3), pole: MAT.chrome, shade: paint(0xe2603d, { rough: 0.6 }) }));
-  return grp;
-}

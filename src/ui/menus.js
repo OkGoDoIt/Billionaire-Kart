@@ -53,7 +53,7 @@ const starRow = n => h('span', { class: 'star-row', role: 'img', 'aria-label': `
 /* The larger of the two areas a panel leaves free: beside it (landscape) or above it (portrait). The 3D scene is framed there. */
 const freeRect = panel => { const r = panel.getBoundingClientRect(), W = innerWidth, H = innerHeight; return r.left * H >= W * r.top ? { left: 0, top: 0, width: r.left, height: H } : { left: 0, top: 0, width: W, height: r.top }; };
 const PLAYER_COLORS = ['#ff4d6d', '#38b6ff', '#ffd23c', '#2ee6a6'];
-const LEVELS = [['easy', 'Relaxed', 'Rivals top out at 93% speed, hold a loose line, and sit on their items. They never take a shortcut.'], ['normal', 'Competitive', 'Rivals run at nearly full speed, hold a tidy line, and use their items in good time. Now and then, one takes a shortcut.'], ['hard', 'Ruthless', 'Rivals run at full speed, hold the tightest line, take shortcuts, and fire items the moment they land.']];
+const LEVELS = [['easy', 'Relaxed', 'Rivals cruise, sit on their items, and stay on the main road.'], ['normal', 'Competitive', 'Rivals race hard, use their items well, and know a shortcut or two.'], ['hard', 'Ruthless', 'Rivals drive the perfect line, take every shortcut, and fire items the moment they land.']];
 const CC_LIST = [50, 100, 150, 200];
 const STAT_LABELS = [['speed', 'Speed'], ['accel', 'Acceleration'], ['handling', 'Handling'], ['weight', 'Weight']];
 
@@ -318,7 +318,7 @@ export class Menus {
     const lvBtns = LEVELS.map(([id, label]) => { const b = h('button', { class: 'chip', 'data-f': true, onclick: () => { flow.level = id; mark(); } }, label); b.dataset.lv = id; return b; });
     const lvDesc = h('p', { class: 'lv-desc' });
     const mark = () => { for (const b of ccBtns) b.classList.toggle('sel', +b.dataset.cc === flow.cc); for (const b of lvBtns) b.classList.toggle('sel', b.dataset.lv === flow.level); lvDesc.textContent = LEVELS.find(l => l[0] === flow.level)[2]; };
-    const next = this.btn('Next', () => { last.cc = flow.cc; last.level = flow.level; A.save.write(); this.open(flow.mode === 'gp' ? 'cups' : 'tracks'); }, { cls: 'go' });
+    const next = this.btn(flow.mode === 'gp' ? 'Choose a cup' : 'Choose a track', () => { last.cc = flow.cc; last.level = flow.level; A.save.write(); this.open(flow.mode === 'gp' ? 'cups' : 'tracks'); }, { cls: 'go' });
     mark();
     const el = h('div', {}, this.header('Engine class'), h('div', { class: 'cards four' }, ccBtns), h('h3', { class: 'sub-h' }, 'Rivals'), h('div', { class: 'chips' }, lvBtns), lvDesc, h('div', { class: 'foot' }, next));
     return { el };
@@ -453,7 +453,7 @@ export class Menus {
     const el = h('div', {}, h('div', { class: 'panel cupres' },
       h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
-      h('div', { class: 'foot' }, this.btn('Race this cup again', () => A.restartCup(), { cls: 'go', def: true }), this.btn('Change racer', () => A.backToRacers()), this.btn('Continue', () => A.quitToMenu()))));
+      h('div', { class: 'foot' }, this.btn('Race this cup again', () => A.restartCup(), { cls: 'go', def: true }), this.btn('Change racer', () => A.backToRacers()), this.btn('Main menu', () => A.quitToMenu()))));
     return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 
@@ -769,7 +769,7 @@ export class Menus {
       controls,
       h('div', { class: 'panel' }, h('h3', {}, 'Go faster'), h('ul', { class: 'tips' }, tips.map(t => h('li', {}, h('b', {}, t[0]), h('span', {}, t[1]))))),
       installPanel()),
-      h('div', { class: 'foot' }, this.btn('Got it', () => this.back(), { cls: 'go', def: true }), this.btn('Controller buttons', () => this.open('pad')), this.btn('See the items', () => this.open('items'))));
+      h('div', { class: 'foot' }, this.btn('Done', () => this.back(), { cls: 'go', def: true }), this.btn('Controller buttons', () => this.open('pad')), this.btn('See the items', () => this.open('items'))));
     return { el };
   }
 

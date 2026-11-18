@@ -13,7 +13,8 @@ This repo is built by Roger and a team of AI agents. These are the working rules
 
 - Work on your own branch and land through a pull request. Reference the issue number in commit messages.
 - New work that is not on the issue list gets an issue first.
-- **Every pull request includes screenshots** of what changed (Roger's rule). Save them under `screenshots/` on your branch and embed them with raw URLs. `node tools/shot.mjs` and `node tools/track-shots.mjs` take them without a visible browser.
+- **Every pull request includes screenshots** of what changed (Roger's rule). Save them under `screenshots/` on your branch and embed them with raw URLs that name the **commit** (`raw.githubusercontent.com/OkGoDoIt/Billionaire-Kart/<full sha>/screenshots/…`), never the branch: branches are deleted after they merge, and a branch URL breaks with them. `node tools/shot.mjs` and `node tools/track-shots.mjs` take them without a visible browser. The `screenshots/` folder stays in the repository but is not published to the live site.
+- **After a pull request merges**, delete its branch and remove its worktree (`git worktree remove <path>`). Every worktree carries a full copy of `screenshots/`, and stale ones once filled 28 GB.
 - Parody only. Brands in track art, sponsor boards, and karts are invented, never real logos or trademarks. The racer portraits are the one exception: each racer wears their own company's logo as a pin, patch, or pendant, which Roger asked for. Do not add real logos anywhere else, and present nothing as fact about a real person.
 
 ## Two heavy jobs at a time
@@ -29,6 +30,8 @@ node tools/bot.mjs --mobile     # the same at phone size with touch
 ```
 
 All three must pass, and the screenshots must have been looked at by whoever made the change.
+
+CI runs `npm run test:race` (the sim plus every headless regression check), `tools/boot-check.mjs` (the page boots, the menu opens, a race runs, nothing errors or 404s), and `tools/sw-check.mjs`, and all of them block the merge. On `main` it then assembles the live site with `npm run site` (`tools/build-site.mjs`: the page, code, styles, three.js, and assets only), boots that exact folder, and only then publishes it to GitHub Pages. A file the game needs but `build-site.mjs` leaves out fails that boot. The full bot is advisory on CI, because the runner has no GPU.
 
 If you touched the HUD or the touch controls, or any text painted onto a sign, also run:
 

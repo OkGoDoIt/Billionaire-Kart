@@ -32,38 +32,6 @@ function cutterFace(r = 3.3) {
   });
 }
 
-/**
- * The Boring Machine. Built facing +Z: the cutter face is at the front,
- * chewing into whatever wall it is pointed at; the hull sits behind it and
- * is meant to disappear into the tunnel wall. userData.spin is the cutter
- * group — rotate it around Z. Origin at road level under the disc centre
- * (disc centre is 3.1 m up).
- */
-export function boringMachine() {
-  const grp = new THREE.Group(), b = new ModelBuilder();
-  b.add('hull', box(6.6, 4.6, 3.0, 0.25, 2), { p: [0, 3.0, -1.9] });
-  b.add('collar', box(7.3, 5.6, 0.7, 0.2, 2), { p: [0, 3.05, -0.55] });
-  b.add('stripe', box(6.7, 0.7, 3.1, 0.08, 1), { p: [0, 4.85, -1.9] });
-  b.add('skid', box(1.1, 0.7, 4.6, 0.1, 1), { p: [-2.5, 0.35, -1.4] });
-  b.add('skid', box(1.1, 0.7, 4.6, 0.1, 1), { p: [2.5, 0.35, -1.4] });
-  b.add('stack', cyl(0.42, 0.5, 2.6, 10), { p: [-2.9, 6.2, -2.6], r: [0.25, 0, 0.15] });
-  b.add('lamp', box(0.55, 0.32, 0.16, 0.04, 1), { p: [-2.6, 5.6, -0.35] });
-  b.add('lamp', box(0.55, 0.32, 0.16, 0.04, 1), { p: [2.6, 5.6, -0.35] });
-  grp.add(b.build({
-    hull: paint(YELLOW, { rough: 0.42, metal: 0.25 }),
-    collar: MAT.dark,
-    stripe: paint(0xe23b3b, { rough: 0.5 }),
-    skid: MAT.dark,
-    stack: MAT.steel,
-    lamp: glow(0xffe9b0, 3),
-  }));
-  const face = cutterFace(3.3);
-  face.position.set(0, 3.1, 0.55);
-  grp.add(face);
-  grp.userData.spin = face;
-  return grp;
-}
-
 /** Cutter blocks follow five swept arms. The outer rollers stay circular in silhouette
  * while alternating teeth and amber marker lights reveal the rotation from the kart. */
 export function tbmChamber() {

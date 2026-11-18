@@ -583,47 +583,6 @@ export function suit() {
 export const SUIT_TINTS = [0x23262e, 0x1f2a44, 0x2e2e2e, 0x3a3f4b, 0x14161c];
 
 /**
- * The revolving door between two towers: REGULATOR (classical, on -X) and INDUSTRY (glass, on +X).
- * The towers are TW wide and TH tall, their centres ±off from the door. Faces ±Z. userData.door is the
- * part that spins (about Y); userData.signs: the board centres on each roof and over the door, in local space.
- */
-export function revolvingDoorComplex({ TW = 15, TH = 36, off = 20, R = 9.5, DH = 24 } = {}) {
-  const grp = new THREE.Group(), b = new ModelBuilder();
-  // REGULATOR: marble with pilasters, a cornice and a pediment
-  const rx = -off;
-  b.add('marble', box(TW + 3, 2.4, TW + 3, 0.2, 2), { p: [rx, 1.2, 0] });
-  b.add('marble', box(TW, TH, TW, 0.2, 2), { p: [rx, 2.4 + TH / 2, 0] });
-  for (const s of [1, -1]) for (let k = 0; k < 5; k++) { const u = -TW / 2 + 1.2 + k * (TW - 2.4) / 4; b.add('col', box(0.9, TH - 3, 0.6, 0.1, 1), { p: [rx + u, 2.4 + (TH - 3) / 2 + 0.5, s * (TW / 2 + 0.2)] }); }
-  for (const s of [1, -1]) for (let f = 0; f < 8; f++) for (let k = 0; k < 4; k++) b.add('win', box(1.6, 2.4, 0.2, 0.05, 1), { p: [rx - TW / 2 + 2.6 + k * (TW - 5.2) / 3, 6 + f * 4, s * (TW / 2 + 0.05)] });
-  b.add('gold', box(TW + 1.2, 1.2, TW + 1.2, 0.1, 1), { p: [rx, 2.4 + TH + 0.6, 0] });
-  b.add('marbleD', box(TW + 0.4, 2.2, TW + 0.4, 0.2, 2), { p: [rx, 2.4 + TH + 2.3, 0] });
-  // INDUSTRY: a blue glass tower with a dark crown
-  const ix = off;
-  b.add('dark', box(TW + 3, 2.4, TW + 3, 0.2, 2), { p: [ix, 1.2, 0] });
-  b.add('glass', box(TW, TH + 4, TW, 0.2, 2), { p: [ix, 2.4 + (TH + 4) / 2, 0] });
-  for (let f = 1; f < 11; f++) b.add('mull', box(TW + 0.15, 0.25, TW + 0.15, 0.05, 1), { p: [ix, 2.4 + f * (TH + 4) / 11, 0] });
-  for (const u of [-TW / 4, 0, TW / 4]) for (const s of [1, -1]) { b.add('mull', box(0.25, TH + 4, 0.2, 0.05, 1), { p: [ix + u, 2.4 + (TH + 4) / 2, s * (TW / 2 + 0.05)] }); b.add('mull', box(0.2, TH + 4, 0.25, 0.05, 1), { p: [ix + s * (TW / 2 + 0.05), 2.4 + (TH + 4) / 2, u] }); }
-  b.add('dark', box(TW + 0.6, 2.4, TW + 0.6, 0.2, 2), { p: [ix, 2.4 + TH + 4 + 1.2, 0] });
-  // the drum: a floor, a crown with a gold band, two curved glass walls left open toward ±Z
-  b.add('dark', cyl(R + 0.6, R + 0.8, 0.8, 40), { p: [0, 0.4, 0] });
-  b.add('dark', cyl(R + 0.8, R + 0.8, 2.6, 40), { p: [0, DH + 1.3, 0] });
-  b.add('gold', cyl(R + 0.85, R + 0.85, 0.5, 40, true), { p: [0, DH + 0.4, 0] });
-  for (const s of [1, -1]) for (let k = 0; k <= 4; k++) { const a = s * Math.PI / 2 + (k - 2) * 0.42; b.add('dark', cyl(0.28, 0.28, DH, 8), { p: [Math.sin(a) * R, DH / 2 + 0.8, Math.cos(a) * R] }); }
-  grp.add(b.build({ marble: plastic(0xf2efe6, 0.55), marbleD: plastic(0xe0d9c8, 0.62), col: plastic(0xfaf8f2, 0.45), win: plastic(0x3a3f4a, 0.4, 0.2), gold: paint(0xd4af37, { rough: 0.3, metal: 0.65, clear: 0.4 }), dark: plastic(0x23262e, 0.45, 0.4), glass: new THREE.MeshStandardMaterial({ color: 0x5aa2d8, roughness: 0.12, metalness: 0.55, envMapIntensity: 1.4 }), mull: plastic(0x1b2533, 0.4, 0.5) }));
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xbfe2ff, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.3, depthWrite: false, side: THREE.DoubleSide });
-  { const wb = new ModelBuilder(); for (const s of [1, -1]) wb.add('w', new THREE.CylinderGeometry(R, R, DH, 24, 1, true, s * Math.PI / 2 - 0.95, 1.9), { p: [0, DH / 2 + 0.8, 0] }); grp.add(wb.build({ w: wallMat }, { cast: false })); }
-  // the door: four glass wings on a post, spinning
-  const door = new THREE.Group(), d = new ModelBuilder();
-  d.add('frame', cyl(0.5, 0.5, DH, 12), { p: [0, DH / 2 + 0.8, 0] });
-  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; d.add('frame', box(R - 0.6, 0.5, 0.4, 0.1, 1), { p: [Math.cos(a) * (R / 2), DH + 0.4, -Math.sin(a) * (R / 2)], r: [0, a, 0] }); d.add('frame', box(R - 0.6, 0.5, 0.4, 0.1, 1), { p: [Math.cos(a) * (R / 2), 1.2, -Math.sin(a) * (R / 2)], r: [0, a, 0] }); d.add('frame', box(0.4, DH, 0.4, 0.1, 1), { p: [Math.cos(a) * (R - 0.5), DH / 2 + 0.8, -Math.sin(a) * (R - 0.5)] }); d.add('pane', box(R - 1, DH - 1.4, 0.15, 0.05, 1), { p: [Math.cos(a) * (R / 2), DH / 2 + 0.8, -Math.sin(a) * (R / 2)], r: [0, a, 0] }); }
-  door.add(d.build({ frame: paint(0xd4af37, { rough: 0.3, metal: 0.65 }), pane: new THREE.MeshStandardMaterial({ color: 0xd8f0ff, transparent: true, opacity: 0.35, roughness: 0.05, depthWrite: false }) }, { cast: false }));
-  grp.add(door);
-  grp.userData.door = door;
-  grp.userData.signs = { reg: [rx, 2.4 + TH + 7.6, 0], ind: [ix, 2.4 + TH + 4 + 7.4, 0], door: [0, TH + 21, 0], tw: TW };
-  return grp;
-}
-
-/**
  * The revolving door, built over the road: REGULATOR (marble, -X) and INDUSTRY (glass, +X) either side, joined by a
  * glass skybridge at deckY with the revolving door itself standing on it, so the suits go round over the karts' heads.
  * Local Z runs along the road. userData.door: the part that spins (about Y, at the drum's centre); userData.drum: the

@@ -10,7 +10,7 @@ const inScope = address => address.startsWith(scope);
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    await cache.addAll(SHELL.map(path => new Request(new URL(path, scope), { cache: 'reload' })));
+    await cache.addAll(SHELL.map(path => new Request(new URL(path, scope), { cache: 'no-cache' })));
     await self.skipWaiting();
   })());
 });

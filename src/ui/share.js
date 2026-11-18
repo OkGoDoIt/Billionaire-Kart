@@ -1,15 +1,19 @@
-/* The share card: the race result as a poster (the track behind, a huge place number, the racer's portrait, the
-   trophy) with a business-news headline from content/snark.js, then the phone's share sheet. Loaded on demand from
-   the results screens; the online results reuse it.
+/* Sharing a result. What a friend receives is one link, billionaire-kart.okgodoit.com/s/<id>, whose preview is the
+   card: the race as a poster (the track behind, a huge place number, the racer's portrait, the trophy) with a
+   business-news headline from content/snark.js. The preview's title is the challenge ("Beat my 1:57.650 on Silicon
+   Valley Circuit"), and opening the link races that track against that time (src/ui/challenge.js). The server side
+   is server/src/BillionaireKart.Server/Web/Shares.cs. Loaded on demand from the results screens.
 
-   prepareShare(result) draws the card straight away, so a later tap can hand the finished file to the share sheet
-   inside the tap itself (Safari refuses navigator.share() once a tap's moment has passed).
+   prepareShare(result) picks the words, makes the link's id, and draws the card straight away. The tap then shares
+   the link at once (Safari refuses navigator.share() once a tap's moment has passed) and uploads the card beside it;
+   the server holds a previewer's request until the upload lands. Without the race server (a plain file server, or
+   offline) the tap shares the picture itself.
    result: { racer, rank, fieldSize, track: {id, name}, time, estimated, stats, cc, mode: 'race'|'gp'|'trial'|'cup',
-             trial: 'best'|'first'|'slower', delta, cup } */
-import { HEADLINES, headline, bucketFor, statLines } from '../content/snark.js';
+             trial: 'best'|'first'|'slower'|'matched', delta, cup, points } */
+import { HEADLINES, headline, bucketFor } from '../content/snark.js';
 import { fmtTime, ordinal } from '../core/util.js';
 
-const W = 1200, H = 675;
+const W = 1200, H = 630;                            // the link-preview shape every app shows uncropped
 const INK = '#12142b', GOLD = '#ffd23c', HOT = '#ff4d6d', SKY = '#38b6ff', MINT = '#2ee6a6';
 const PLACE_COLOR = { 1: GOLD, 2: '#dfe6f2', 3: '#f0a865' };
 const TROPHY = { 1: 'gold', 2: 'silver', 3: 'bronze' };
@@ -57,6 +61,15 @@ function stroked(ctx, text, x, y, fill, stroke = INK, width = 0.14) {
   ctx.fillStyle = fill; ctx.fillText(text, x, y);
 }
 
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/** The preview's title: the challenge, in the sharer's voice. */
+export function challengeTitle(r) {
+  if (r.mode === 'cup') return `Beat my ${plural(r.points, 'point', 'points')} in the ${r.cup.name}`;
+  if (r.estimated) return `Can you finish ${r.track.name}?`;
+  return `Beat my ${fmtTime(r.time)} on ${r.track.name}`;
+}
+
 /** Choose the words for a result. Exported for the review sheet and tests. */
 export function cardWords(r, rng = Math.random) {
   const vars = { name: r.racer.name, track: r.track?.name || '', place: r.rank, n: r.fieldSize, cup: r.cup?.name || '', delta: r.delta || '' };
@@ -64,15 +77,14 @@ export function cardWords(r, rng = Math.random) {
   const head = headline(bucket, vars, rng);
   const quote = r.mode === 'trial' ? null : r.rank === 1 ? r.racer.barks?.win : r.racer.barks?.lose;
   const where = r.mode === 'cup' ? r.cup?.name : r.track?.name;
-  const timeBit = r.mode === 'cup' ? `${r.points} points` : r.estimated ? 'Did not finish' : fmtTime(r.time);
-  const facts = [r.racer.name, where, timeBit, r.cc ? `${r.cc}cc` : null].filter(Boolean).join('  ·  ');
-  return { bucket, head, quote, facts, stats: statLines(r.stats).slice(0, 2) };
+  const timeBit = r.mode === 'cup' ? plural(r.points, 'point', 'points') : r.estimated ? 'Did not finish' : fmtTime(r.time);
+  const facts = [where, timeBit, r.cc ? `${r.cc}cc` : null].filter(Boolean).join('  ·  ');
+  return { bucket, head, quote, facts, title: challengeTitle(r) };
 }
 
-/** Draw the card. Returns a canvas of W x H. */
-export async function drawCard(r, rng = Math.random) {
+/** Draw the card with the given words (cardWords). Returns a canvas of W x H. */
+export async function drawCard(r, words = cardWords(r)) {
   await Promise.all([document.fonts.load(`80px ${DISPLAY}`), document.fonts.load(`600 30px ${BODY}`)]).catch(() => {});
-  const words = cardWords(r, rng);
   const [bg, face, trophy] = await Promise.all([
     loadImage(r.track?.id ? `assets/tracks/${r.track.id}.webp` : null),
     loadImage(r.racer.portrait),
@@ -125,16 +137,14 @@ export async function drawCard(r, rng = Math.random) {
 
   // the headline, then the facts and two numbers
   ctx.textBaseline = 'top';
-  const hl = fitLines(ctx, words.head, s => `${s}px ${DISPLAY}`, colW, 3, 58, 34);
-  let y = 248;
+  const hl = fitLines(ctx, words.head, s => `${s}px ${DISPLAY}`, colW, 3, 60, 36);
+  let y = 250;
   ctx.font = `${hl.size}px ${DISPLAY}`;
   for (const l of hl.lines) { stroked(ctx, l, L, y, '#fff', INK, 0.12); y += hl.size * 1.08; }
   y += 14;
   ctx.font = `600 26px ${BODY}`; ctx.fillStyle = MINT;
   ctx.shadowColor = 'rgba(0,0,0,0.75)'; ctx.shadowBlur = 8;
-  ctx.fillText(words.facts, L, y, colW); y += 40;
-  ctx.fillStyle = '#fffdf5'; ctx.font = `600 24px ${BODY}`;
-  for (const s of words.stats) { if (y > H - 120) break; ctx.fillStyle = GOLD; ctx.fillText('▸', L, y); ctx.fillStyle = '#fffdf5'; ctx.fillText(s, L + 26, y, colW - 26); y += 34; }
+  ctx.fillText(words.facts, L, y, colW);
   ctx.shadowBlur = 0;
 
   // the game's mark and where to play
@@ -149,28 +159,86 @@ export async function drawCard(r, rng = Math.random) {
   return { canvas: cv, words };
 }
 
-/** Draw the card and pack it for the share sheet. */
-export async function prepareShare(r) {
-  const { canvas, words } = await drawCard(r);
-  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
-  canvas.width = canvas.height = 1;                 // hand the pixels back now: Safari caps total canvas memory
-  const name = `billionaire-kart-${(r.track?.id || r.cup?.id || 'race')}.jpg`;
-  const file = new File([blob], name, { type: 'image/jpeg' });
-  return { file, blob, text: words.head, url: gameAddress(), words };
+/** A link id: twelve letters and digits, made here so the link exists before the upload does. */
+function newId() {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789', bytes = crypto.getRandomValues(new Uint8Array(12));
+  return Array.from(bytes, b => abc[b % abc.length]).join('');
 }
 
-/** Share a prepared card. Call it straight from the tap. Returns 'shared', 'cancelled', 'copied', or 'saved'. */
+/** Draw the card and pack it as a JPEG. Rejects rather than hand over an empty picture. */
+async function pack(r, words) {
+  const { canvas } = await drawCard(r, words);
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.84));
+  canvas.width = canvas.height = 1;                 // hand the pixels back now: Safari caps total canvas memory
+  if (!blob?.size) throw new Error('The card could not be drawn');
+  const name = `billionaire-kart-${(r.track?.id || r.cup?.id || 'race')}.jpg`;
+  return { blob, file: new File([blob], name, { type: 'image/jpeg' }) };
+}
+
+/** The card, drawn once; a failed drawing is tried again on the next ask. */
+function card(p) {
+  if (!p.card) {
+    p.card = pack(p.result, p.words).then(c => (p.ready = c));
+    p.card.catch(() => { p.card = null; });
+  }
+  return p.card;
+}
+
+/** Start sharing a result: the words, the link (when base, the race server's origin, is given), and the card.
+    Call it when the results open, so the tap that shares has everything to hand. */
+export function prepareShare(result, { base = null } = {}) {
+  const words = cardWords(result), id = newId();
+  const p = { result, words, id, url: base ? `${base.replace(/\/$/, '')}/s/${id}` : null, card: null, ready: null, upload: null };
+  card(p).catch(() => {});
+  return p;
+}
+
+/** Send the card and its words to the race server (once; a failure is tried again on the next tap). */
+function upload(p) {
+  if (!p.upload) {
+    p.upload = (async () => {
+      const { blob } = await card(p), r = p.result;
+      await fetch('/api/session', { method: 'POST', credentials: 'same-origin' });   // the player cookie the upload is checked against
+      const f = new FormData(), put = (k, v) => { if (v != null && v !== '') f.set(k, String(v)); };
+      put('id', p.id); put('mode', r.mode); put('racer', r.racer.id); put('cc', r.cc);
+      if (r.mode === 'cup') { put('cup', r.cup?.id); put('points', r.points); } else put('track', r.track?.id);
+      put('rank', r.rank); put('fieldSize', r.fieldSize);
+      if (r.mode !== 'cup' && !r.estimated && isFinite(r.time)) put('timeMs', Math.round(r.time * 1000));
+      put('title', p.words.title); put('description', p.words.head);
+      f.set('image', blob, 'card.jpg');
+      const res = await fetch('/api/shares', { method: 'POST', body: f, credentials: 'same-origin' });
+      if (!res.ok && res.status !== 409) throw new Error(`The share upload failed (${res.status})`);
+    })();
+    p.upload.catch(() => { p.upload = null; });
+  }
+  return p.upload;
+}
+
+/** Share a prepared result. Call it straight from the tap. Returns 'shared', 'cancelled', 'copied' (the link is on the
+    clipboard), 'saved' (the picture was downloaded), 'preparing' (the picture is not drawn yet: tap again in a
+    moment), 'again' (the browser wants a fresh tap), or 'failed'. */
 export async function sharePrepared(p) {
-  const data = { files: [p.file], title: 'Billionaire Kart', text: `${p.text} Beat that: ${p.url}` };
+  if (p.url) {
+    upload(p).catch(() => {});
+    if (navigator.share) {
+      try { await navigator.share({ url: p.url }); return 'shared'; }
+      catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
+    }
+    // a computer without a share sheet: the link goes on the clipboard, where a chat app will unfurl it
+    try { await navigator.clipboard.writeText(p.url); return 'copied'; } catch { return 'failed'; }
+  }
+  // no race server to hold the link: the picture itself
+  if (!p.ready) { card(p).catch(() => {}); return 'preparing'; }
+  const data = { files: [p.ready.file] };
   if (navigator.canShare?.(data)) {
     try { await navigator.share(data); return 'shared'; }
-    catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
+    catch (e) { if (e?.name === 'AbortError') return 'cancelled'; if (e?.name === 'NotAllowedError') return 'again'; }
   }
-  // a computer: save the picture and copy the words with the link
+  // no file sharing at all (a computer, or a phone browser without it): save the picture
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(p.blob); a.download = p.file.name; document.body.appendChild(a); a.click(); a.remove();
+  a.href = URL.createObjectURL(p.ready.blob); a.download = p.ready.file.name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-  try { await navigator.clipboard.writeText(data.text); return 'copied'; } catch { return 'saved'; }
+  return 'saved';
 }
 
 export { HEADLINES };

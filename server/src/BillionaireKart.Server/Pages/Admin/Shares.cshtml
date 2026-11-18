@@ -1,0 +1,22 @@
+@page "/admin/shares"
+@model SharesModel
+@{ ViewData["Title"] = "Shares"; }
+<h1>Shared results</h1>
+<p class="lede">@(Model.Total > Model.Rows.Count ? $"The latest {Model.Rows.Count} of {Model.Total}. " : "")Each is a link whose preview is the picture shown. Delete one that should not be out there.</p>
+@if (Model.Rows.Count == 0) { <p class="empty">No shares yet.</p> }
+<div class="shares">
+@foreach (var s in Model.Rows)
+{
+  var p = Model.Players.GetValueOrDefault(s.PlayerId);
+  <article class="share">
+    <a href="/s/@s.Id" target="_blank" rel="noopener"><img src="/s/@(s.Id).jpg" width="1200" height="630" alt="" loading="lazy"></a>
+    <div>
+      <h2>@s.Title</h2>
+      <p>@s.Description</p>
+      <p class="sub">@Fmt.When(s.CreatedAt) · @(s.TrackId ?? s.CupId) · @s.Racer · @s.Cc cc · @(s.Bytes / 1024) KB
+        @if (p != null) { <text> · </text><a href="/admin/players?number=@p.HandleNumber">@Fmt.Handle(p.HandleTitle, p.HandleNumber)</a> }</p>
+      <form method="post" asp-page-handler="Delete"><input type="hidden" name="id" value="@s.Id"><button type="submit" class="danger">Delete</button></form>
+    </div>
+  </article>
+}
+</div>

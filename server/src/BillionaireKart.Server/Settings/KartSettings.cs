@@ -34,6 +34,9 @@ public sealed record KartSettings
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Cups { get; init; } = new Dictionary<string, IReadOnlyList<string>>();
     public IReadOnlyList<string> Racers { get; init; } = [];
     public IReadOnlyDictionary<string, double> TrackMinRaceSeconds { get; init; } = new Dictionary<string, double>();
+    public int ShareKeepDays { get; init; }
+    public int SharesPerHour { get; init; }
+    public int ShareMaxKilobytes { get; init; }
 
     public double CpuMu(CpuLevel level) => level switch
     {
@@ -94,6 +97,10 @@ public sealed record SettingDef(
         new("CpuMuHard", "Ratings", "Hard CPU rating", "The fixed skill a hard CPU counts as.", SettingKind.Number, "27", 0, 50),
         new("CpuSigma", "Ratings", "CPU uncertainty", "How unsure the rating is about a CPU. Smaller is surer.", SettingKind.Number, "1.5", 0.1, 10),
         new("TrackMinRaceSeconds", "Ratings", "Fastest believable race", "A finish faster than this on a track is left out of the rating. Leave a track empty for no check.", SettingKind.TrackSeconds, "", Unit: "seconds"),
+
+        new("ShareKeepDays", "Sharing", "Share link lifetime", "A shared result's link and picture are kept this long. Older links open the game's home.", SettingKind.Integer, "60", 1, 3650, Unit: "days"),
+        new("SharesPerHour", "Sharing", "Shares per player per hour", "More shares than this from one player in an hour are refused.", SettingKind.Integer, "30", 1, 10000),
+        new("ShareMaxKilobytes", "Sharing", "Largest share picture", "Bigger pictures are refused. The game sends about 120 KB.", SettingKind.Integer, "400", 50, 5000, Unit: "KB"),
 
         new("Tracks", "Content", "Tracks", "Track ids, separated by commas. Used for random picks and public offers.", SettingKind.List, string.Join(", ", AllTracks)),
         new("Cups", "Content", "Cups", "One cup per line: the cup id, a colon, and its four track ids.", SettingKind.Map,
@@ -213,6 +220,9 @@ public sealed record SettingDef(
             Tracks = SplitList(S("Tracks")),
             Cups = ParseMap(S("Cups"), out _).ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value),
             Racers = SplitList(S("Racers")),
+            ShareKeepDays = I("ShareKeepDays"),
+            SharesPerHour = I("SharesPerHour"),
+            ShareMaxKilobytes = I("ShareMaxKilobytes"),
             TrackMinRaceSeconds = ParseMap(S("TrackMinRaceSeconds"), out _)
                 .ToDictionary(kv => kv.Key, kv => double.Parse(kv.Value[0], Inv)),
         };

@@ -111,3 +111,12 @@ td.actions form { margin: 0; }
 
 /* phones: the links take their own row instead of stacking beside the name */
 @media (max-width: 600px) { .top { flex-wrap: wrap; } .top nav { order: 3; flex-basis: 100%; } }
+
+/* shares */
+.shares { display: grid; gap: 14px; }
+.share { display: grid; grid-template-columns: minmax(0, 240px) 1fr; gap: 14px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.share img { display: block; width: 100%; height: auto; border-radius: 6px; }
+.share h2 { margin: 0 0 4px; font-size: 16px; }
+.share p { margin: 0 0 6px; }
+.share form { margin-top: 8px; }
+@media (max-width: 560px) { .share { grid-template-columns: 1fr; } }

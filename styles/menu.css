@@ -46,6 +46,20 @@
 .screen-title .logo { margin-top: 0; }
 .press { font-family: var(--display); font-size: calc(var(--u) * 3.6); margin-top: calc(var(--u) * 6); paint-order: stroke fill; -webkit-text-stroke: 0.16em var(--ink); animation: press 1.1s ease-in-out infinite alternate; }
 @keyframes press { from { opacity: 0.55; transform: scale(0.97); } to { opacity: 1; transform: scale(1.03); } }
+/* a friend's challenge, from a shared result's link (ui/challenge.js) */
+.challenge { display: flex; align-items: center; gap: calc(var(--u) * 1.6); margin-top: calc(var(--u) * 3.4); padding: calc(var(--u) * 1.1) calc(var(--u) * 2.8) calc(var(--u) * 1.1) calc(var(--u) * 1.1); background: rgba(18,20,43,0.9); border: calc(var(--u) * 0.4) solid var(--gold); border-radius: calc(var(--u) * 2.4); box-shadow: 0 calc(var(--u) * 0.8) calc(var(--u) * 2.4) rgba(0,0,0,0.45); text-align: left; animation: hud-pop 0.45s cubic-bezier(.2,1.7,.4,1) both; }
+.challenge[hidden] { display: none; }
+.challenge img { flex: none; width: calc(var(--u) * 8); height: calc(var(--u) * 8); border-radius: 50%; object-fit: cover; object-position: 50% 18%; background: var(--rc); border: calc(var(--u) * 0.35) solid var(--ink); }
+.challenge small { display: block; font-weight: 700; font-size: calc(var(--u) * 1.6); color: var(--gold); text-transform: uppercase; letter-spacing: 0.06em; }
+.challenge b { display: block; font-family: var(--display); font-weight: normal; font-size: calc(var(--u) * 4.2); line-height: 1.05; margin-top: 0.1em; }
+.challenge span { display: block; font-weight: 600; font-size: calc(var(--u) * 1.9); opacity: 0.85; }
+.challenge:not([hidden]) + .press { margin-top: calc(var(--u) * 3.6); }
+/* a phone on its side: the card takes the tagline's place so the prompt stays clear of the fine print */
+@media (max-height: 500px) and (orientation: landscape) {
+  .screen-title:has(.challenge:not([hidden])) .logo-tag { display: none; }
+  .challenge { margin-top: calc(var(--u) * 2.2); }
+  .challenge:not([hidden]) + .press { margin-top: calc(var(--u) * 2.4); }
+}
 .fine { position: absolute; bottom: calc(var(--u) * 2 + var(--safe-b)); font-size: calc(var(--u) * 1.5); opacity: 0.75; text-shadow: 0 1px 3px #000; }
 
 /* main menu */
@@ -202,6 +216,8 @@
 .panel.results, .panel.cupres { width: min(100%, calc(var(--u) * 70)); margin: auto 0; padding: calc(var(--u) * 1.8) calc(var(--u) * 2.4); }
 .panel.results h1, .panel.cupres h1 { font-size: calc(var(--u) * 3.6); }
 .panel.cupres { width: min(100%, calc(var(--u) * 50)); padding: calc(var(--u) * 2.2) calc(var(--u) * 2.6); }
+.res-vs { font-family: var(--display); font-size: calc(var(--u) * 2.5); margin: calc(var(--u) * 0.8) 0; color: #fffdf5; }
+.res-vs.beat { color: var(--mint); }
 .res-sub { font-weight: 600; opacity: 0.85; font-size: calc(var(--u) * 2); }
 .badge { display: inline-block; background: var(--gold); color: var(--ink); font-family: var(--display); font-size: calc(var(--u) * 2.2); border-radius: 2em; padding: 0.25em 1em 0.1em; margin-top: calc(var(--u) * 1); animation: hud-pop 0.4s cubic-bezier(.2,1.7,.4,1); }
 .res-table { display: flex; flex-direction: column; gap: calc(var(--u) * 0.4); margin-top: calc(var(--u) * 1); }

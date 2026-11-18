@@ -11,6 +11,7 @@ import { installButton, installPanel, onInstallChange, autoInstall } from './ins
 import { KEY_LAYOUTS, KEY_ACTIONS, keyName, bindKey, resetKeys } from '../core/keyboard.js';
 import { trialKey } from '../core/save.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
+import { loadChallenge, challengeLines, verdict } from './challenge.js';
 
 const h = (tag, attrs = {}, ...kids) => {
   const e = document.createElement(tag);
@@ -166,22 +167,21 @@ export class Menus {
   }
   header(title, sub) { return h('header', { class: 'menu-head' }, h('button', { class: 'back', 'data-f': true, 'aria-label': 'Back', onclick: () => this.back(), html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4.5 7.5 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>' }), h('div', {}, h('h1', {}, title), sub && h('p', {}, sub))); }
 
-  /** A Share button for a result. The card is drawn as soon as the screen opens, so the tap itself can open the
-      share sheet (Safari only allows that inside the tap). */
+  /** A Share button for a result. The words, the link, and the card are made as soon as the screen opens, so the tap
+      itself can open the share sheet (Safari only allows that inside the tap). With the race server there, what is
+      shared is one link whose preview is the card (see ui/share.js). */
   shareButton(result) {
-    let ready = null;
-    const pending = import('./share.js').then(m => m.prepareShare(result).then(p => (ready = { m, p })));
-    pending.catch(() => {});
+    const A = this.app, base = A.onlineState === 'ok' || A.onlineState === 'old' ? location.origin : null;
+    let mod = null, p = null;
+    const prepare = () => import('./share.js').then(m => { mod = m; p = m.prepareShare(result, { base }); });
+    let pending = prepare().catch(() => { pending = null; });
+    const SAY = { copied: 'Link copied', saved: 'Picture saved', preparing: 'One moment…', again: 'Tap again to share', failed: 'Try again' };
     const b = this.btn('Share', async () => {
       const label = b.querySelector('.btn-label');
-      try {
-        const { m, p } = ready || await pending;
-        const how = await m.sharePrepared(p);
-        if (how === 'copied' || how === 'saved') {
-          label.textContent = how === 'copied' ? 'Link copied' : 'Picture saved';
-          setTimeout(() => { label.textContent = 'Share'; }, 2600);
-        }
-      } catch { label.textContent = 'Try again'; setTimeout(() => { label.textContent = 'Share'; }, 2600); }
+      let how;
+      if (!p) { pending ||= prepare().catch(() => { pending = null; }); how = 'preparing'; }
+      else how = await mod.sharePrepared(p);
+      if (SAY[how]) { label.textContent = SAY[how]; clearTimeout(b.t); b.t = setTimeout(() => { label.textContent = 'Share'; }, how === 'preparing' ? 1200 : 2600); }
     });
     b.classList.add('share');
     return b;
@@ -196,19 +196,44 @@ export class Menus {
   /* ---------- title ---------- */
   s_title() {
     // a shared room link (?room=CODE) goes straight on into that room after this first tap
+    // a friend's challenge (?c=ID, from a shared result's link) shows under the logo, and the tap goes to race it
+    const A = this.app, coarse = matchMedia('(pointer: coarse)').matches;
     const roomNow = () => (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
-    const go = () => { if (this.screen?.el !== el) return; if (matchMedia('(pointer: coarse)').matches) this.app.fullscreen(true); this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); const room = roomNow(); if (room) this.app.goOnline({ room }); };
-    const coarse = matchMedia('(pointer: coarse)').matches;
-    const press = h('div', { class: 'press' });
-    const label = () => { const room = roomNow(); press.textContent = room ? `${coarse ? 'Tap' : 'Press any button'} to join room ${room}` : coarse ? 'Tap to start' : 'Press any button'; };
+    const cid = new URLSearchParams(location.search).get('c');
+    if (cid && !A.challengeAsk) A.challengeAsk = loadChallenge(cid);
+    let challenge = null;
+    const go = () => {
+      if (this.screen?.el !== el) return;
+      if (coarse) A.fullscreen(true); A.audio?.unlock?.(); A.audio?.ui('start'); A.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main');
+      const room = roomNow(); if (room) return A.goOnline({ room });
+      if (challenge) { A.challengeAsk = Promise.resolve(null); const q = new URLSearchParams(location.search); q.delete('c'); history.replaceState(null, '', location.pathname + (q.size ? `?${q}` : '')); this.raceChallenge(challenge); }
+    };
+    const card = h('div', { class: 'challenge', hidden: true }), press = h('div', { class: 'press' });
+    const label = () => {
+      const room = roomNow(), tap = coarse ? 'Tap' : 'Press any button';
+      press.textContent = room ? `${tap} to join room ${room}` : challenge ? `${tap} to race` : coarse ? 'Tap to start' : 'Press any button';
+    };
+    A.challengeAsk?.then(c => {
+      if (!c || !card.isConnected) return;
+      challenge = c;
+      const [goal, where] = challengeLines(c);
+      card.replaceChildren(h('img', { src: c.racer.portrait, alt: '', style: `--rc:${hex(c.racer.color)}` }), h('div', {}, h('small', {}, 'A friend’s challenge'), h('b', {}, goal), h('span', {}, where)));
+      card.hidden = false; label();
+    });
     const el = h('div', { onclick: go },
       h('div', { class: 'logo' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c))), h('div', { class: 'logo-tag' }, 'Eight egos. One trophy.')),
-      press,
+      card, press,
       h('div', { class: 'fine' }, 'A parody. Not affiliated with, or endorsed by, anyone in it.'));
     label();
     // in a phone browser the get-the-app sheet comes first; its "Play in Safari" is this same first tap
     autoInstall({ room: roomNow() || null, onPlay: go, when: () => this.screen?.el === el });
     return { el, onAction: a => { if (a !== 'mute') go(); return true; }, onBack: () => false, onRoomLink: label };
+  }
+  /** Race a friend's challenge: pick a racer, then straight onto its track (or into its cup) at its engine class. */
+  raceChallenge(c) {
+    const A = this.app, mode = c.mode === 'trial' ? 'timetrial' : c.mode === 'cup' ? 'gp' : 'vs';
+    A.flow = { mode, players: 1, devices: ['any'], cc: c.cc, level: A.save.data.last.level || 'normal', challenge: c };
+    this.open('racers', { player: 0 });
   }
 
   /* ---------- main menu ---------- */
@@ -320,7 +345,8 @@ export class Menus {
       flow.racers[player] = r.id; A.save.data.last.racer[player] = r.id; A.save.write();
       A.audio?.racerPicked?.(r);
       if (onChoose) onChoose(r);
-      else if (player + 1 < n) this.open('racers', { player: player + 1 }); else this.open('setup');
+      else if (player + 1 < n) this.open('racers', { player: player + 1 });
+      else if (flow.challenge) A.startChallenge(); else this.open('setup');
     };
     // Looking and choosing are separate: a tile shows the racer, the button under the card picks them.
     const go = this.btn('', () => choose(current), { cls: 'go r-go' }), goLabel = go.querySelector('.btn-label');
@@ -455,14 +481,17 @@ export class Menus {
       let trial = null, delta = null;
       if (trialCc) {
         const diff = trialBest == null ? null : Math.round(me.time * 1000) - Math.round(trialBest * 1000);
-        trial = diff == null ? 'first' : diff < 0 ? 'best' : 'slower';
-        if (diff > 0) delta = `${(diff / 1000).toFixed(2)}\u00a0s`;
+        trial = diff == null ? 'first' : diff < 0 ? 'best' : diff === 0 ? 'matched' : 'slower';
+        if (diff > 0) delta = diff < 10 ? `${diff}\u00a0ms` : `${(diff / 1000).toFixed(2)}\u00a0s`;
       }
       buttons.splice(1, 0, this.shareButton({
         racer: me.racer, rank: me.rank, fieldSize: results.length, track, time: me.time, estimated: me.estimated, stats: me.stats,
         cc: trialCc || A.gp?.cc || A.flow?.cc || A.save.data.last?.cc, mode: trialCc ? 'trial' : gp ? 'gp' : 'race', trial, delta,
       }));
     }
+    // racing a friend's challenge: how this run did against it
+    const vs = me && verdict(A.flow?.challenge, { mode: trialCc ? 'trial' : 'race', trackId: track.id, time: me.time, estimated: me.estimated });
+    const vsLine = vs && h('p', { class: 'res-vs' + (vs.beat ? ' beat' : '') }, vs.text);
     if (trialCc) {
       const run = humans[0], laps = run.kart.lapTimes;
       const difference = trialBest == null ? null : Math.round(run.time * 1000) - Math.round(trialBest * 1000);
@@ -477,7 +506,7 @@ export class Menus {
           delta && h('div', { class: 'trial-compare' }, h('b', { class: improved ? 'faster' : '' }, delta), difference !== 0 && h('span', {}, `${improved ? 'Previous best' : 'Personal best'} ${fmtTime(trialBest)}`))),
         h('ol', { class: 'trial-laps' }, laps.map((lap, i) => h('li', { class: i === quickest ? 'fastest' : '' },
           h('span', {}, `Lap ${i + 1}`), h('b', {}, fmtTime(lap)), i === quickest && h('small', {}, records?.newBestLap && trialBest != null ? 'New best lap' : 'Fastest lap')))),
-        ...strips, h('div', { class: 'foot' }, buttons))) };
+        vsLine, ...strips, h('div', { class: 'foot' }, buttons))) };
     }
     // A close finish is about the two karts that actually crossed. Estimates can't make a photo finish.
     const measured = results.filter(r => !r.estimated);
@@ -492,6 +521,7 @@ export class Menus {
         : h('h1', {}, track.name),
       gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
       records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
+      !gp && vsLine,
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
       strips.length && h('div', { class: 'res-strips' }, strips),
       // the winner's line and the last finisher's: each stays in one piece, side by side when both fit
@@ -508,9 +538,12 @@ export class Menus {
 
   s_cupResults({ cup, standings, playerRanks, stars }) {
     const A = this.app, best = Math.min(...playerRanks);
+    const mine = standings.find(s => s.isPlayer && standings.indexOf(s) + 1 === best);
+    const vs = mine && verdict(A.flow?.challenge, { cupId: cup.id, points: mine.points });
     const head = best === 1 ? 'Champion!' : best === 2 ? 'Second place' : best === 3 ? 'Third place' : `${best}${ordinalSuffix(best)} place`;
     const el = h('div', {}, h('div', { class: 'panel cupres' },
       h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
+      vs && h('p', { class: 'res-vs' + (vs.beat ? ' beat' : '') }, vs.text),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
       // four equal exits: after a whole cup, no one of them is the obvious next step
       h('div', { class: 'foot' }, this.btn('Replay cup', () => A.restartCup(), { def: true }), this.cupShare(cup, standings, best), this.btn('Change racer', () => A.backToRacers()), this.btn('Main menu', () => A.quitToMenu()))));

@@ -83,6 +83,11 @@ export const HEADLINES = {
     '{name} opens the books at {track}. Now beat it.',
     '{name} sets the bar at {track}. The bar is a ghost now.',
   ],
+  trialMatched: [
+    '{name} ties a personal best at {track} to the millisecond. The ghost demands a recount.',
+    '{name} matches own record at {track}. Flat quarter, says the board.',
+    '{name} exactly repeats a personal best. Analysts call it "consistent."',
+  ],
   trialSlower: [
     '{name} finishes {delta} off a personal best. The ghost sends regards.',
     '{name} chases own ghost at {track}, loses',
@@ -108,21 +113,6 @@ export const HEADLINES = {
   ],
 };
 
-/** The number lines on the card, best first. Each is [priority, text]; the card shows the top two. */
-export function statLines(stats = {}) {
-  const s = stats, out = [];
-  if (s.hitsGiven >= 3) out.push([9, `Hostile takeovers: ${s.hitsGiven} served`]);
-  if (s.hitsTaken >= 4) out.push([8, `Lawsuits weathered: ${s.hitsTaken}. Settled out of court.`]);
-  if (s.overtakes >= 8) out.push([7, `Overtakes: ${s.overtakes}. Moved fast, broke things.`]);
-  if (s.coins >= 10) out.push([6, 'Coins banked: 10. Fully vested.']);
-  if (s.drifts >= 15) out.push([5, `Drifts: ${s.drifts}. Never once went straight.`]);
-  if (s.hitsTaken === 0) out.push([4, 'Untouched by regulators']);
-  if (s.hitsGiven > 0 && s.hitsGiven < 3) out.push([3, `Hostile takeovers: ${s.hitsGiven} served`]);
-  if (s.topSpeed) out.push([2, `Top speed: ${Math.round(s.topSpeed * 2.23694)} mph`]);
-  return out.sort((a, b) => b[0] - a[0]).map(l => l[1]);
-}
-
-
 /** Pick a headline. bucket is a key of HEADLINES; vars fills the placeholders. rng is a 0..1 function. */
 export function headline(bucket, vars, rng = Math.random) {
   const list = HEADLINES[bucket] || HEADLINES.mid;
@@ -132,7 +122,7 @@ export function headline(bucket, vars, rng = Math.random) {
 
 /** Which bucket a finish belongs to. */
 export function bucketFor({ mode, rank, fieldSize, estimated, trial }) {
-  if (mode === 'trial') return trial === 'best' ? 'trialBest' : trial === 'first' ? 'trialFirst' : 'trialSlower';
+  if (mode === 'trial') return trial === 'best' ? 'trialBest' : trial === 'first' ? 'trialFirst' : trial === 'matched' ? 'trialMatched' : 'trialSlower';
   if (mode === 'cup') return rank === 1 ? 'cupWin' : rank <= 3 ? 'cupPodium' : 'cupLoss';
   if (estimated) return 'dnf';
   if (rank === 1) return 'win';

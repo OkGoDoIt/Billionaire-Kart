@@ -41,7 +41,6 @@ try {
   const page = await ctx.newPage();
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  const screen = () => page.evaluate(() => window.BK?.app?.menus?.screen?.spec.name || null);
   const t0 = Date.now();
   await page.goto(base, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(() => window.BK?.app?.menus?.screen?.spec.name === 'title', null, { timeout: 120000 });
@@ -53,11 +52,10 @@ try {
   console.log('boot-check: main menu');
   await page.goto(base + '?track=silicon-valley&r=elon&auto=1&intro=0&seed=4', { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(() => window.BK?.app?.session?.race, null, { timeout: 120000 });
-  await page.waitForTimeout(6000);
-  const racing = await page.evaluate(() => window.BK.app.session.race.time > 0);
-  if (!racing) throw new Error('the race never started');
-  console.log('boot-check: race running');
-  if (await screen() === null && !racing) throw new Error('nothing on screen');
+  // CI's software renderer runs the countdown far slower than real time, so wait on the race clock, not the wall clock
+  const started = Date.now();
+  await page.waitForFunction(() => window.BK.app.session.race.time > 0.5, null, { timeout: 150000 }).catch(() => { throw new Error('the race never started'); });
+  console.log(`boot-check: race running after ${((Date.now() - started) / 1000).toFixed(1)} s`);
 } catch (e) { failed = true; console.error('boot-check: FAIL', e.message); }
 await browser.close(); server.close();
 // a favicon or an optional probe may 404 in a dev server; anything the game itself asked for may not

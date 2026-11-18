@@ -2,7 +2,7 @@
 
 **Eight egos. One trophy.** A parody party kart racer that runs in your browser.
 
-### [Play it now](https://okgodoit.github.io/Billionaire-Kart/)
+### [Play it now](https://billionaire-kart.okgodoit.com/)
 
 No install. Works on a computer with a keyboard or controllers, and on a phone with touch. Add it to your home screen for full screen; tracks you have already played keep working offline.
 

@@ -40,6 +40,7 @@ const SHELL = [
   'src/models/props-singularity-speedway.js',
   'src/models/props-wework-memorial.js',
   'src/models/props.js',
+  'src/moved.js',
   'src/race/ai.js',
   'src/race/items.js',
   'src/race/kart.js',

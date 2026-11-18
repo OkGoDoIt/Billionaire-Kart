@@ -24,6 +24,7 @@
 .back.focus, .opt-ctl button.focus, .btn.focus, .card.focus, .racer-tile.focus, .chip.focus, .opt.focus, .pad-row.focus, .seg-btn.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.35); transform: scale(1.045); z-index: 2; }
 .btn:active { transform: translateY(calc(var(--u) * 0.5)) scale(1); box-shadow: 0 calc(var(--u) * 0.25) 0 rgba(0,0,0,0.42); }
 .btn.go { background: linear-gradient(180deg, #7dffc9, #2ee6a6); }
+.btn.share { background: linear-gradient(180deg, #ffe58a, #ffd23c); }
 .btn.danger { background: linear-gradient(180deg, #ffb0be, #ff6f8a); }
 .btn.small { font-size: calc(var(--u) * 1.9); min-width: 0; padding: calc(var(--u) * 1.1) calc(var(--u) * 1) calc(var(--u) * 0.8); flex: 1; white-space: nowrap; }
 .btn.big { font-size: calc(var(--u) * 3.7); align-items: flex-start; padding: calc(var(--u) * 1.15) calc(var(--u) * 3) calc(var(--u) * 0.95); }

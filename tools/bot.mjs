@@ -30,7 +30,7 @@ if (process.env.CI || process.platform === 'linux') browser = await chromium.lau
 else try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] }); }
 catch { browser = await chromium.launch(swiftshader); }
 const mobile = !!opt.mobile, CI = !!process.env.CI;
-const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1280, height: 720 }, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
+const ctx = await browser.newContext({ viewport: mobile ? { width: 844, height: 390 } : { width: 1280, height: 720 }, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block', acceptDownloads: true });
 // This test drives a keyboard or a touch screen. A connected controller on the
 // host can otherwise move the menu or disable touch while the bot is playing.
 await ctx.addInitScript(() => {
@@ -203,6 +203,21 @@ try {
   if (!(await page.evaluate("!!BK.app.showroom?.podium && BK.app.showroom.slots.length === 3"))) fails.push('quick race finish: the showroom is not showing a three-kart podium');
   const res = await page.evaluate('[...document.querySelectorAll(".screen-results .res-row")].map(r => r.textContent.trim().replace(/\\s+/g, " ")).join(" | ")');
   console.log('results:', res);
+  // Share: with no share sheet in a headless browser, the card is saved as a picture and the button says so
+  {
+    const share = await page.$('.screen-results .foot .btn.share');
+    if (!share) fails.push('results: no Share button');
+    else {
+      await page.waitForTimeout(1200);                                   // the card is drawn while the screen opens
+      const [download] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }).catch(() => null), share.click()]);
+      if (!download) fails.push('results: Share did not produce a picture');
+      else if (!/^billionaire-kart-.+\.jpg$/.test(download.suggestedFilename())) fails.push(`results: share picture named ${download.suggestedFilename()}`);
+      else await download.saveAs(join(out, '14-share-card.jpg'));
+      await page.waitForTimeout(300);
+      const label = await page.evaluate(() => document.querySelector('.screen-results .foot .btn.share .btn-label')?.textContent);
+      if (!['Link copied', 'Picture saved'].includes(label)) fails.push(`results: Share button reads "${label}" after sharing`);
+    }
+  }
 
   if (opt.gp) {
     // a whole Grand Prix on autopilot with one-lap races, through to the podium
@@ -231,7 +246,7 @@ try {
     console.log('cup totals:', await page.evaluate('JSON.stringify(BK.app.gp.totals)'));
     // the podium screen offers a way back in, not just a way out (#146): the default button runs the same cup again from race 1
     const exits = await page.evaluate(`[...document.querySelectorAll('.screen-cupResults .foot .btn .btn-label')].map(e => e.textContent)`);
-    if (JSON.stringify(exits) !== JSON.stringify(['Race this cup again', 'Change racer', 'Main menu'])) fails.push(`cup results exits: ${exits.join(' / ')}`);
+    if (JSON.stringify(exits) !== JSON.stringify(['Race this cup again', 'Share', 'Change racer', 'Main menu'])) fails.push(`cup results exits: ${exits.join(' / ')}`);
     await key('Enter', 1200);
     await page.waitForFunction('BK.app.gp && BK.app.gp.index === 0 && BK.session && !BK.app.menus.screen', null, { timeout: 30000 }).catch(() => fails.push('Race this cup again did not start a fresh cup'));
     const fresh = await page.evaluate('JSON.stringify(BK.app.gp.totals)');

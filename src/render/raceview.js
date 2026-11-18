@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { buildTrackMesh, trackUniforms } from '../track/trackmesh.js';
 import { simplifyScenery } from './splitgeometry.js';
 import { splitScenery } from './splitcull.js';
+import { splitLayout } from './splitlayout.js';
 import { KartView } from './kartview.js';
 import { ChaseCam, IntroCam, TvCam } from './chasecam.js';
 import { Particles, rgbOf } from './particles.js';
@@ -27,6 +28,8 @@ const TIER_FX = [[0.25, 0.65, 1], [1, 0.55, 0.1], [0.95, 0.3, 1]];
 const HIT_SEV = { zap: 0.45, spin: 0.6, squash: 0.7, tumble: 1 };
 /** Camera punch per boost kind (mini-turbos punch by tier on release instead). */
 const BOOST_PUNCH = { mushroom: 0.85, pad: 0.7, start: 0.9, trick: 0.5, draft: 0.45 };
+/** Seconds the screen takes to divide into panes after the flyover. */
+const SPLIT_IN = 0.7;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3(), _e = new THREE.Euler();
 
 export class RaceView {
@@ -81,6 +84,8 @@ export class RaceView {
     this.cams = race.players.map((k, i) => new ChaseCam(k, track, i));
     this.intro = null; this.time = 0; this.flash = 0;
     this.layout();
+    // a resize while paused has no update() to catch it, so listen for it as well
+    this._onResize = () => this.relayout(); gfx.resizeHooks?.add(this._onResize);
   }
 
   _water(track, def) {
@@ -90,19 +95,59 @@ export class RaceView {
     this.water = w;
   }
 
-  /** Split the screen between local players. */
+  /** Share the screen between local players: the grid follows the window's shape (see splitlayout.js) and is
+      worked out again whenever the window changes. The opening flyover is one camera on the whole screen; when it
+      ends, that picture shrinks into player one's pane while the others slide in from the edges (see _splitIn), and
+      the countdown waits for them to land. onLayout hears each change. */
   layout() {
     const n = this.cams.length;
-    const rects = n <= 1 ? [[0, 0, 1, 1]] : n === 2 ? [[0, 0.5, 1, 0.5], [0, 0, 1, 0.5]] : [[0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5], [0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5]];
-    this.views = this.cams.map((c, i) => ({ camera: c.camera, rect: rects[i], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v), onAfterRender: () => this.cull?.after() }));
-    if (!n) { // spectator: follow the leader
-      const c = this.tv ? new TvCam(this.race.karts[0], this.race.track) : new ChaseCam(this.race.karts[0], this.race.track, 9); this.cams = [c]; this.spectate = true;
-      this.views = [{ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v), onAfterRender: () => this.cull?.after() }];
+    if (!this.views) {
+      const hooks = { onBeforeRender: v => this._beforeView(v), onAfterRender: () => this.cull?.after() };
+      this.views = this.cams.map(c => ({ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, ...hooks }));
+      if (!n) { // spectator: follow the leader
+        const c = this.tv ? new TvCam(this.race.karts[0], this.race.track) : new ChaseCam(this.race.karts[0], this.race.track, 9); this.cams = [c]; this.spectate = true;
+        this.views = [{ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, ...hooks }];
+      }
+      this.soloView = { ...this.views[0], rect: [0, 0, 1, 1] };
+      this.spare = []; this.splitT = SPLIT_IN;
     }
-    this.gfx.setViews(this.views);
+    const W = this.gfx.width, H = this.gfx.height, solo = n > 1 && !!this.intro && !this.intro.done;
+    // the flyover just ended: divide the screen, starting from where the cameras will be for the countdown
+    if (!solo && this._layoutKey?.endsWith(' solo')) { this.splitT = matchMedia('(prefers-reduced-motion: reduce)').matches ? SPLIT_IN : 0; for (const c of this.cams) c.snap(); }
+    this._layoutKey = W + 'x' + H + (solo ? ' solo' : '');
+    if (n > 1) {
+      this.split = splitLayout(n, W, H, { prev: this.split });
+      this.views.forEach((v, i) => { v.rect = this.split.rects[i]; });
+      this.spare = solo ? [] : this.split.spare;
+    }
+    this.gfx.setViews(solo ? [this.soloView] : this.views);
+    this.onLayout?.(this);
+  }
+  /** True while a split race is still on its flyover or dividing the screen afterwards: the countdown waits. */
+  get splitting() { return this.cams.length > 1 && !this.spectate && (this.splitT < SPLIT_IN || !!this._layoutKey?.endsWith(' solo') || (!!this.intro && !this.intro.done)); }
+  /** The screen dividing after the flyover: player one's picture shrinks into its pane, drawn first, and every other
+      pane slides in over it from the outside edge nearest its cell (from the right on player one's row, from below
+      otherwise). Each pane is drawn at its in-between size, so nothing stretches; the cameras frame for the final pane. */
+  _splitIn(dt) {
+    if (!(this.splitT < SPLIT_IN)) return;
+    this.splitT += dt;
+    const t = Math.min(1, this.splitT / SPLIT_IN), e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+    const top = this.views[0].rect[1];
+    this.views.forEach((v, i) => {
+      if (t >= 1) { v.drawRect = null; return; }
+      const [x, y, w, h] = v.rect;
+      const from = i === 0 ? [0, 0, 1, 1] : Math.abs(y - top) < 1e-6 ? [1, y, w, h] : [x, -h, w, h];
+      v.drawRect = (v.drawRect || [0, 0, 0, 0]).map((_, k) => from[k] + (v.rect[k] - from[k]) * e);
+    });
+  }
+  /** Lay out again if the window or the flyover state has changed since the last layout. */
+  relayout() {
+    if (this.cams.length < 2 || this.disposed) return;
+    const solo = !!this.intro && !this.intro.done;
+    if (this._layoutKey !== this.gfx.width + 'x' + this.gfx.height + (solo ? ' solo' : '')) this.layout();
   }
   _beforeView(v) {
-    const h = this.gfx.renderer.domElement.height * v.rect[3];
+    const h = this.gfx.renderer.domElement.height * (v.drawRect || v.rect)[3];
     this.fx.setViewport(h, v.camera.fov);
     // The light sees some casters behind the driver. Keep their geometry in this pane's batch.
     const sun = this.gfx.sun, shadow = this.cull && sun.castShadow ? sun.shadow : null;
@@ -148,6 +193,7 @@ export class RaceView {
       shots = shots.map(shot => typeof shot === 'function' ? shot(grid) : shot);
     }
     this.intro = new IntroCam(this.race.track, camera, shots);
+    this.relayout();
   }
 
   /** Time trial: show a translucent replay of the best run. ghost: { racer, step, time, d: [x,y,z,yaw,...] } */
@@ -303,6 +349,8 @@ export class RaceView {
   /** Per rendered frame. alpha: interpolation between the last two sim steps. */
   update(dt, alpha) {
     const race = this.race, gfx = this.gfx;
+    this.relayout();   // the flyover just ended, or the window changed
+    this._splitIn(dt);
     this.time += dt;
     trackUniforms.uTime.value = this.time;
     this._show();
@@ -429,6 +477,7 @@ export class RaceView {
 
   dispose() {
     const scene = this.gfx.scene;
+    this.disposed = true; this.gfx.resizeHooks?.delete(this._onResize); this.onLayout = null;
     scene.remove(this.root);
     this.cull?.dispose();
     this.root.traverse(o => { if (o.userData?.dispose) o.userData.dispose(); else if (o.isMesh || o.isPoints || o.isSprite) { o.geometry?.dispose?.(); } });

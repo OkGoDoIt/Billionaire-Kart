@@ -60,6 +60,7 @@ const SHELL = [
   'src/render/sky.js',
   'src/render/splitcull.js',
   'src/render/splitgeometry.js',
+  'src/render/splitlayout.js',
   'src/render/textures.js',
   'src/track/track.js',
   'src/track/trackmesh.js',

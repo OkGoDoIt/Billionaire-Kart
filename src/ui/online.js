@@ -280,6 +280,8 @@ export class Online {
 
   /** The other humans' karts wear their handle on the name tag over the kart, in place of the racer's name. */
   tagHumans(session, room) {
+    // what the after-the-line board and card call each human: the same name and color as their tag
+    session.names = new Map(room.race.slots.filter(s => s.member).map(s => [s.slot, { name: s.member === this.you ? 'You' : this.nameOf(s.member, room), color: this.colorOf(s.member, room) }]));
     for (const kv of session.view.karts) {
       const k = kv.kart, slot = room.race.slots.find(s => s.slot === k.slot);
       if (!k.human || k.isPlayer || !slot?.member || !kv.tag) continue;

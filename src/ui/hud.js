@@ -121,11 +121,11 @@ export class Hud {
     g.clearRect(0, 0, this.map.width, this.map.height);
     g.drawImage(this.mapBg, 0, 0);
     const order = this.race.order;
-    for (let i = order.length - 1; i >= 0; i--) {
-      const k = order[i]; if (k === this.kart) continue;
+    for (let i = order.length - 1; i >= -1; i--) {
+      const k = i < 0 ? this.mapWatch : order[i]; if (!k || k === this.kart || (i >= 0 && k === this.mapWatch)) continue;   // the watched kart is drawn last, on top
       const [x, y] = this.mapXY(k.x, k.z);
       const face = this.mapFaces?.get(k.racer.portrait), hasFace = !!(face?.complete && face.naturalWidth);
-      if (hasFace) this._mapFace(g, face, x, y, 15);
+      if (hasFace) this._mapFace(g, face, x, y, k === this.mapWatch ? 18 : 15, k === this.mapWatch ? '#ffd23c' : undefined);   // after the line: the one you are watching wears gold
       else { g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill(); g.fillStyle = hex(k.racer.color); g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill(); }
       // Total Awareness (Thiel's special): what each rival is holding, beside their marker
       if (this.kart.sp.seeItems && k.item) {

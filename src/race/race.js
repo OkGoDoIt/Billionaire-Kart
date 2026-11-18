@@ -82,7 +82,7 @@ export class Race {
     rubberBand(this);
     for (const k of this.karts) {
       if (k.puppet) continue;   // online: another device steps this kart
-      const inp = k.ai ? k.ai.think(dt) : (inputs[k.playerIndex] || NO_INPUT);
+      const inp = k.ai ? k.ai.think(dt) : k.finished ? this._cruise(k).think(dt) : (inputs[k.playerIndex] || NO_INPUT);
       k.step(dt, inp);
       if (inp.item && !k.prevItem && !this.frozen) this.items.use(k, inp);
       k.prevItem = !!inp.item;
@@ -93,6 +93,12 @@ export class Race {
     this._rank();
     this._finish(dt);
     this.net?.post(dt);
+  }
+
+  /** Past the line, a player's kart is driven for them: a cool-down lap on the racing line until the next
+      screen, never into the wall. Its own RNG, so the field's random draws are the same either way. */
+  _cruise(k) {
+    return k.cruise || (k.cruise = new AIDriver(k, 'normal', makeRng(((this.track.N * 31 + k.slot * 7919) >>> 0) || 1), { lane: 0 }));
   }
 
   _collide() {

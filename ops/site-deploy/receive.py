@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 """Forced SSH command for the billionaire-kart-deploy account (GitHub Actions' key).
 
-The key can do exactly two things: upload one release with rsync into its own incoming folder, and ask
-for a 40-character commit SHA to be installed. It cannot open a shell, delete anything, or touch the
+The key can do exactly two things: upload one release (the game files, and the online server when the commit
+has one) with rsync into its own incoming folder, and ask for a 40-character commit SHA to be installed. It cannot open a shell, delete anything, or touch the
 public folder. The root-owned installer (install.py, run by billionaire-kart-site.path) does the rest
 and writes a result this command waits for. Installed as /usr/local/libexec/billionaire-kart-site-ssh."""
 import json, os, pathlib, re, sys, time
@@ -17,14 +17,11 @@ if not match:
 sha = match.group(1)
 result = BASE / 'results' / f'{sha}.json'
 previous = None
-if result.exists():
-    value = json.loads(result.read_text())
-    if value.get('success'):
-        print(json.dumps(value)); sys.exit(0)          # each commit installs once; a repeat is a no-op
+if result.exists():                                     # the installer skips parts already live, so a repeat is harmless
     info = result.stat(); previous = (info.st_ino, info.st_mtime_ns)
 request = BASE / 'requests' / f'{sha}.json'
 temporary = request.with_suffix('.tmp'); temporary.write_text('{}'); temporary.replace(request)
-for _ in range(180):
+for _ in range(480):                                   # migrations and a server restart can take a few minutes
     if result.exists():
         info = result.stat()
         if (info.st_ino, info.st_mtime_ns) != previous:

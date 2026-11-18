@@ -4,7 +4,7 @@ import { Race } from '../race/race.js';
 import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
 import { DrivingGuide } from '../ui/driving-guide.js';
-import { Hud } from '../ui/hud.js';
+import { Hud, FieldBoard } from '../ui/hud.js';
 import { TouchControls, isTouchDevice } from '../ui/touch.js';
 import { ITEMS, HIT_LINES, isFundingBoost } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
@@ -57,6 +57,16 @@ export class RaceSession {
     const n = this.race.players.length;
     this.huds = this.race.players.map((k, i) => new Hud(app.ui, this.race, k, this.view.views[i].rect, { compact: n > 2, showMap: true, trialBest: this.trialBest }));
     this.hudOf = new Map(this.race.players.map((k, i) => [k, this.huds[i]]));
+    // three players on a two-by-two grid leave a cell empty: the whole field goes there
+    this.board = n === 3 ? new FieldBoard(app.ui, this.race) : null;
+    // the split follows the window's shape, so the HUDs and the board move whenever it is laid out again
+    this.view.onLayout = view => {
+      const board = !!(this.board && view.spare.length);
+      this.board?.setRect(view.spare[0] || null);
+      // with the board up, the panes' own minimaps repeat it; Thiel keeps his, where his special shows rivals' items
+      this.huds.forEach((h, i) => { h.setRect(view.views[i].rect); h.root.classList.toggle('hud-nomap', board && !h.kart.sp?.seeItems); });
+    };
+    this.view.onLayout(this.view);
     // touch controls for a solo player on a touch screen
     this.touch = null;
     if (n === 1 && isTouchDevice() && !config.auto) {
@@ -78,7 +88,7 @@ export class RaceSession {
       this.rec = { racer: this.race.players[0].racer.id, step: 0.1, d: [], next: 0 };
     }
     this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;
-    if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); this.touch?.setVisible(false); app.audio?.event('introStart', def); }
+    if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); this.board?.setVisible(false); this.touch?.setVisible(false); app.audio?.event('introStart', def); }
     else app.audio?.event('countdownStart', def);
   }
 
@@ -105,6 +115,17 @@ export class RaceSession {
     if (special && !heard.has(special)) {
       if (hud.talk(racer, special, ms)) heard.add(special);
     } else hud.talk(racer, lines[Math.floor(Math.random() * lines.length)], ms);
+  }
+
+  /** Split screen, first count: each player hears from the rival nearest them on the grid, a different rival for each
+      player where the field allows, so every pane gets its own line from someone actually beside them. */
+  _gridLines() {
+    const rivals = this.race.karts.filter(k => !k.isPlayer && !k.human), taken = new Set();   // online, other people's karts are not rivals with lines
+    for (const [k, hud] of this.hudOf) {
+      const near = rivals.filter(r => !taken.has(r)).sort((a, b) => Math.hypot(a.x - k.x, a.z - k.z) - Math.hypot(b.x - k.x, b.z - k.z))[0];
+      if (!near) continue;
+      taken.add(near); hud.talk(near.racer, near.racer.quote, 3200);
+    }
   }
 
   _onEvent(kind, e, kart) {
@@ -141,7 +162,7 @@ export class RaceSession {
       if (e.type === 'count') {
         for (const h of this.huds) h.countdown(e.data);
         // on the first count, whoever starts on pole says their piece
-        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (pole && !pole.isPlayer && !pole.human) for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); }
+        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (this.huds.length > 1) this._gridLines(); else if (pole && !pole.isPlayer && !pole.human) for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); }
       }
       else if (e.type === 'go') for (const h of this.huds) h.countdown(0);
       else if (e.type === 'kartHit') {
@@ -169,7 +190,8 @@ export class RaceSession {
     const { race, view, app } = this;
     if (this.paused) { app.gfx.render(0); return; }
     if (this.phase === 'intro') {
-      if (view.intro.done) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) h.setVisible(true); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
+      // in split screen the countdown waits for the screen to finish dividing, and the HUDs fade in as it lands
+      if (view.intro.done && !view.splitting) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) { h.setVisible(true); if (this.huds.length > 1) h.root.classList.add('hud-enter'); } this.board?.setVisible(true); this.board?.root.classList.add('hud-enter'); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
     } else {
       const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
       // hit pause: the world holds still for a few frames when a hit lands, so it feels heavy
@@ -190,6 +212,7 @@ export class RaceSession {
       for (const [i, guide] of this.guides.entries()) {
         if (this.autopilots) guide.hide(); else guide.update(dt, inputs[i]);
       }
+      this.board?.update(dt);
       for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
       if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
     }
@@ -218,6 +241,7 @@ export class RaceSession {
     if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
     this.touch?.sync(dt);
     for (const [i, guide] of this.guides.entries()) { if (this.autopilots) guide.hide(); else guide.update(dt, inputs[i]); }
+    this.board?.update(dt);
     for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
     if (!this.reported && net.phase === 'results' && net.room.last) { this.reported = true; app.onRaceDone?.(this, this.onlineResults()); }
     view.update(dt, net.stepFraction());
@@ -241,5 +265,5 @@ export class RaceSession {
     if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume');
   }
 
-  dispose() { this.net?.dispose(); this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.touch?.dispose(); this.view.dispose(); }
+  dispose() { this.net?.dispose(); this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

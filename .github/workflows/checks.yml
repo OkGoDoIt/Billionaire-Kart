@@ -9,6 +9,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -55,7 +56,7 @@ jobs:
         run: npm run site && node tools/boot-check.mjs --root _site
 
       - name: Upload the site for Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
@@ -83,7 +84,7 @@ jobs:
 
   deploy:
     needs: sim-and-bot
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -97,3 +98,44 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # The game's home, billionaire-kart.okgodoit.com, gets the same tested folder. GitHub's key there can only upload
+  # a release and ask for a commit to be installed (ops/site-deploy/). The server app is still deployed by hand.
+  deploy-okgodoit:
+    needs: sim-and-bot
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: okgodoit-deploy
+      cancel-in-progress: false
+    environment:
+      name: okgodoit
+      url: https://billionaire-kart.okgodoit.com/
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Deploy to billionaire-kart.okgodoit.com
+        env:
+          DEPLOY_KEY: ${{ secrets.OKGODOIT_DEPLOY_KEY }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then echo "::warning::OKGODOIT_DEPLOY_KEY is not set, so billionaire-kart.okgodoit.com was not updated"; exit 0; fi
+          # a newer push to main is already on its way: let that one deploy instead of rolling back
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" != "$SHA" ]; then echo "main has moved on to $head; skipping $SHA"; exit 0; fi
+          node tools/build-site.mjs _site && echo "$SHA" > _site/version.txt
+          install -m 600 /dev/null ~/deploy_key && printf '%s\n' "$DEPLOY_KEY" > ~/deploy_key
+          ssh_cmd="ssh -i $HOME/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PWD/ops/site-deploy/known_hosts"
+          rsync -rt --chmod=D755,F644 -e "$ssh_cmd" _site/ "billionaire-kart-deploy@178.128.11.103:$SHA/"
+          $ssh_cmd billionaire-kart-deploy@178.128.11.103 "activate $SHA"
+          for i in 1 2 3 4 5 6; do
+            live=$(curl -fsS https://billionaire-kart.okgodoit.com/version.txt || true)
+            [ "$live" = "$SHA" ] && { echo "live at https://billionaire-kart.okgodoit.com/ ($SHA)"; exit 0; }
+            sleep 5
+          done
+          echo "::error::the site still reports ${live:-nothing} instead of $SHA"; exit 1

@@ -31,7 +31,7 @@ node tools/bot.mjs --mobile     # the same at phone size with touch
 
 All three must pass, and the screenshots must have been looked at by whoever made the change.
 
-CI runs `npm run test:race` (the sim plus every headless regression check), `tools/boot-check.mjs` (the page boots, the menu opens, a race runs, nothing errors or 404s), and `tools/sw-check.mjs`, and all of them block the merge. On `main` it then assembles the live site with `npm run site` (`tools/build-site.mjs`: the page, code, styles, three.js, and assets only), boots that exact folder, and only then publishes it to GitHub Pages. A file the game needs but `build-site.mjs` leaves out fails that boot. The full bot is advisory on CI, because the runner has no GPU.
+CI runs `npm run test:race` (the sim plus every headless regression check), `tools/boot-check.mjs` (the page boots, the menu opens, a race runs, nothing errors or 404s), and `tools/sw-check.mjs`, and all of them block the merge. On `main` it then assembles the live site with `npm run site` (`tools/build-site.mjs`: the page, code, styles, three.js, and assets only), boots that exact folder, and only then publishes it to GitHub Pages and to the game's home, billionaire-kart.okgodoit.com (see `ops/site-deploy/README.md`). A file the game needs but `build-site.mjs` leaves out fails that boot. The full bot is advisory on CI, because the runner has no GPU.
 
 If you touched the HUD or the touch controls, or any text painted onto a sign, also run:
 

@@ -1,0 +1,7 @@
+[Unit]
+Description=Watch for Billionaire Kart game releases uploaded by CI
+[Path]
+PathExistsGlob=/var/lib/billionaire-kart-deploy/requests/*.json
+Unit=billionaire-kart-site.service
+[Install]
+WantedBy=multi-user.target

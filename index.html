@@ -36,11 +36,75 @@
 <script type="importmap">
 { "imports": { "three": "./vendor/three/build/three.module.js", "three/addons/": "./vendor/three/addons/" } }
 </script>
+<style>
+/* The loading screen: plain HTML, so it paints with the first byte of the page instead of after the whole game has
+   downloaded. Same logo as the title. Five start lights fill as the game loads; the grid pops in face by face. */
+#boot { --u: min(1vw, 1.78vh); position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 4.5); background: radial-gradient(ellipse at 50% 38%, #1d2a6b 0%, #0b1026 62%); color: #fff; transition: opacity 0.45s ease; user-select: none; -webkit-user-select: none; }
+#boot.out { opacity: 0; pointer-events: none; }
+#boot .logo { margin-top: 0; }
+#boot .logo-main span { animation-delay: calc(var(--i) * 90ms + 60ms); }
+.boot-lights { display: flex; gap: calc(var(--u) * 1.6); padding: calc(var(--u) * 1.1) calc(var(--u) * 1.8); background: #12142b; border: calc(var(--u) * 0.45) solid #05081a; border-radius: calc(var(--u) * 99); box-shadow: 0 calc(var(--u) * 0.7) 0 rgba(0,0,0,0.4); }
+.boot-lights i { width: calc(var(--u) * 3.4); height: calc(var(--u) * 3.4); border-radius: 50%; background: #2a2e4d; box-shadow: inset 0 calc(var(--u) * -0.4) 0 rgba(0,0,0,0.35); transition: background 0.18s, box-shadow 0.18s; }
+.boot-lights i.on { background: #ff3b4e; box-shadow: 0 0 calc(var(--u) * 2.2) #ff3b4ecc, inset 0 calc(var(--u) * -0.4) 0 rgba(0,0,0,0.25); }
+#boot.go .boot-lights i { background: #2ee6a6; box-shadow: 0 0 calc(var(--u) * 2.4) #2ee6a6cc, inset 0 calc(var(--u) * -0.4) 0 rgba(0,0,0,0.2); }
+.boot-grid { display: grid; grid-template-columns: repeat(8, calc(var(--u) * 7.4)); gap: calc(var(--u) * 1.1); }
+.boot-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; object-position: 50% 26%; border-radius: calc(var(--u) * 1.4); border: calc(var(--u) * 0.35) solid #12142b; background: var(--rc); box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0,0,0,0.4); opacity: 0; transform: scale(0.4) translateY(30%); }
+.boot-grid img.in { animation: boot-pop 0.42s cubic-bezier(.2,1.7,.4,1) both; }
+@keyframes boot-pop { from { opacity: 0; transform: scale(0.4) translateY(30%); } to { opacity: 1; transform: none; } }
+@media (orientation: landscape) and (min-aspect-ratio: 16/10) { .boot-grid { grid-template-columns: repeat(16, calc(var(--u) * 4.9)); gap: calc(var(--u) * 0.9); } }
+.boot-fail { display: none; flex-direction: column; align-items: center; gap: calc(var(--u) * 2); font-family: var(--body); font-weight: 600; font-size: calc(var(--u) * 2.8); text-align: center; }
+#boot.failed .boot-fail { display: flex; } #boot.failed .boot-lights, #boot.failed .boot-grid { display: none; }
+.boot-fail button { font: inherit; font-family: var(--display); font-size: calc(var(--u) * 3.2); color: #12142b; background: #2ee6a6; border: calc(var(--u) * 0.45) solid #12142b; border-radius: calc(var(--u) * 99); padding: calc(var(--u) * 1) calc(var(--u) * 4); cursor: pointer; }
+@media (orientation: portrait) { #boot { --u: min(1.78vw, 1vh); } .boot-grid { grid-template-columns: repeat(8, calc(var(--u) * 5.2)); gap: calc(var(--u) * 0.9); } }
+@media (prefers-reduced-motion: reduce) { #boot .logo-main span, .boot-grid img.in { animation: none; opacity: 1; transform: none; } }
+</style>
 </head>
 <body>
 <div id="stage"><canvas id="game"></canvas></div>
 <div id="ui"></div>
-<script type="module" src="src/main.js"></script>
+<div id="boot" role="progressbar" aria-label="Loading Billionaire Kart" aria-valuemin="0" aria-valuemax="5" aria-valuenow="1">
+  <div class="logo" aria-hidden="true"><div class="logo-top">BILLIONAIRE</div><div class="logo-main"><span style="--i:0">K</span><span style="--i:1">A</span><span style="--i:2">R</span><span style="--i:3">T</span></div></div>
+  <div class="boot-lights"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+  <div class="boot-grid"></div>
+  <div class="boot-fail"><span>The game didn't load.</span><button type="button" onclick="location.reload()">Reload</button></div>
+</div>
+<script src="offline-shell.js"></script>
+<script>
+/* Loading screen progress. The first three lights follow the download of the startup files (the same list the
+   service worker keeps for offline play); main.js lights the fourth when the faces are ready and the fifth once the
+   title's track is built, then calls BKBoot.done() after the title has drawn. The portraits are the racer-select
+   art, so the racer screen later finds them cached. */
+window.BKBoot = (() => {
+  const root = document.getElementById('boot'), lights = root.querySelectorAll('.boot-lights i');
+  const grid = root.querySelector('.boot-grid');
+  const racers = [['elon', 'd8322a'], ['sam', '10a37f'], ['zuck', '1877f2'], ['bezos', 'ff9900'], ['jensen', '76b900'], ['satya', '00a4ef'], ['dario', 'd97757'], ['demis', '7b4fd0'],
+    ['trump', 'f2b01e'], ['cook', 'c7ccd4'], ['larrysergey', '4285f4'], ['bill', '00adef'], ['thiel', '3a3d48'], ['holmes', 'f2f2f0'], ['ellison', 'c8222a'], ['murdoch', '7a1626']];
+  let shown = 0, lit = 1, over = false;
+  for (const [id, color] of racers) {
+    const img = new Image();
+    img.alt = ''; img.decoding = 'async'; img.fetchPriority = 'low'; img.style.setProperty('--rc', '#' + color);
+    img.onload = () => { img.style.animationDelay = Math.max(0, shown++ * 45 - 30) + 'ms'; img.classList.add('in'); };
+    img.src = 'assets/portraits/' + id + '.webp';
+    grid.appendChild(img);
+  }
+  const step = n => { lit = Math.max(lit, Math.min(5, n)); lights.forEach((l, i) => l.classList.toggle('on', i < lit)); root.setAttribute('aria-valuenow', lit); };
+  try {
+    const want = new Set((typeof SHELL !== 'undefined' ? SHELL : []).filter(p => /\.(js|css|woff2)$/.test(p)).map(p => new URL(p, location.href).href));
+    const got = new Set(), total = want.size;
+    const count = list => { for (const e of list) if (want.has(e.name)) got.add(e.name); if (total) step(1 + Math.floor(got.size / total * 2.999)); };
+    if (total) { count(performance.getEntriesByType('resource')); new PerformanceObserver(l => count(l.getEntries())).observe({ type: 'resource', buffered: true }); }
+  } catch {}
+  return {
+    step,
+    done() {
+      if (over) return; over = true; step(5);
+      setTimeout(() => { root.classList.add('go'); setTimeout(() => { root.classList.add('out'); setTimeout(() => root.remove(), 500); }, 260); }, 140);
+    },
+    fail() { if (!over) root.classList.add('failed'); },
+  };
+})();
+</script>
+<script type="module" src="src/main.js" onerror="BKBoot.fail()"></script>
 <script>
 // Offline support on the live site. Left off on localhost so development never sees a stale file.
 if ('serviceWorker' in navigator) {

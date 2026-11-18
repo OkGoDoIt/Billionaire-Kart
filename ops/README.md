@@ -2,7 +2,7 @@
 
 The game is served at **https://billionaire-kart.okgodoit.com** from Roger's shared side-projects host (DigitalOcean `side-projects-2026`, `178.128.11.103`), beside his other sites. That host's own rules are in the `rogerpincombe.com` repository (`docs/OPERATIONS.md`): one nginx and one PostgreSQL shared by every project, and each project gets its own Unix accounts, database, port, directories, and service. No containers.
 
-GitHub Pages still serves the same game at okgodoit.github.io/Billionaire-Kart from `main`. Online play only works on the okgodoit.com address, because that is where the server is.
+The old address, okgodoit.github.io/Billionaire-Kart, is still published from `main` by CI, but `src/moved.js` forwards everyone who opens it to the new address and carries their saved progress along. Both addresses serve the folder `tools/build-site.mjs` assembles. Online play only works on the okgodoit.com address, because that is where the server is.
 
 | This project's | Is |
 |---|---|

@@ -10,7 +10,11 @@
    Prints PASS/FAIL per check and exits 1 on any failure.
 
    Latency in the tracking table is one-way device to device (each device-to-server link carries half). */
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { execSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { takeSlot } from './slot.mjs';
 import { Race } from '../src/race/race.js';
 import { AIDriver } from '../src/race/ai.js';
@@ -490,14 +494,18 @@ function checkFullRace() {
   }
 }
 
-/* ---------- offline unchanged ---------- */
-function checkOffline() {
-  const file = process.env.BK_OFFLINE_BASELINE || new URL('./net-offline-baseline.json', import.meta.url);
-  let base; try { base = JSON.parse(readFileSync(file, 'utf8')); } catch { result(false, 'offline unchanged', `no baseline at ${file}`); return; }
+/* ---------- offline unchanged ----------
+   The same seeded offline races, run with this checkout's simulation and with the simulation at a git ref
+   (default origin/main, or --offline-ref <ref>), must match step for step: the online hooks do nothing
+   when race.net is null. Once the hooks are on main this compares main with itself on main, and still
+   guards any branch that touches them. */
+async function offlineRuns(root) {
+  const at = p => new URL(p, root).href;
+  const [{ Race }, { AIDriver }, { getTrack }, { RACERS }, { makeRng }] = await Promise.all([import(at('src/race/race.js')), import(at('src/race/ai.js')), import(at('src/content/tracks.js')), import(at('src/content/racers.js')), import(at('src/core/util.js'))]);
   const f64 = new Float64Array(1), u32 = new Uint32Array(f64.buffer);
   const mix = (h, v) => { f64[0] = v; h = Math.imul(h ^ u32[0], 16777619); return Math.imul(h ^ u32[1], 16777619); };
-  for (const key of Object.keys(base)) {
-    const [trackId, hs] = key.split('/'), humans = +hs;
+  const out = {};
+  for (const trackId of ['silicon-valley', 'mars-colony']) for (const humans of [0, 2]) {
     const track = getTrack(trackId), rng = makeRng(4242);
     const fieldR = rng.shuffle(RACERS.slice()).slice(0, 8);
     const entries = fieldR.map((racer, i) => i >= 8 - humans ? { racer, player: i - (8 - humans), assist: {} } : { racer, player: -1, level: 'normal' });
@@ -509,22 +517,35 @@ function checkOffline() {
       let h = 2166136261;
       for (const k of race.karts) { h = mix(h, k.x); h = mix(h, k.y); h = mix(h, k.z); h = mix(h, k.yaw); }
       for (const k of race.karts) k.events.length = 0; race.events.length = 0;
-      hashes.push((h >>> 0).toString(16));
+      hashes.push(h >>> 0);
     }
-    const got = { steps, final: hashes[hashes.length - 1], every30: hashes.filter((_, i) => i % 30 === 29), results: race.results().map(r => r.racer.id + ':' + r.time.toFixed(3)) };
-    const b = base[key];
-    const firstDiff = b.every30.findIndex((h, i) => got.every30[i] !== h);
-    const same = JSON.stringify(got) === JSON.stringify(b);
-    result(same, `offline unchanged: ${trackId}, ${humans} players`, same ? `${steps} steps, identical per-step hashes` : `first difference near step ${(firstDiff + 1) * 30}`);
+    out[`${trackId}, ${humans} players`] = { steps, hashes, results: race.results().map(r => r.racer.id + ':' + r.time.toFixed(3)).join(' ') };
   }
+  return out;
+}
+async function checkOffline() {
+  const ref = typeof opt['offline-ref'] === 'string' ? opt['offline-ref'] : 'origin/main';
+  const here = new URL('../', import.meta.url), dir = mkdtempSync(join(tmpdir(), 'bk-offline-'));
+  try {
+    try {
+      execSync(`git archive ${ref} src | tar -x -C "${dir}"`, { cwd: fileURLToPath(here), stdio: ['ignore', 'ignore', 'pipe'] });
+      symlinkSync(fileURLToPath(new URL('node_modules', here)), join(dir, 'node_modules'));
+    } catch (e) { console.log(`SKIP  offline unchanged: could not read the simulation at ${ref} (${String(e.message).split('\n')[0]})`); return; }
+    const theirs = await offlineRuns(pathToFileURL(dir + '/')), mine = await offlineRuns(here);
+    for (const key of Object.keys(mine)) {
+      const a = mine[key], b = theirs[key], diff = a.hashes.findIndex((h, i) => h !== b.hashes[i]);
+      const same = diff < 0 && a.steps === b.steps && a.results === b.results;
+      result(same, `offline unchanged: ${key}`, same ? `${a.steps} steps, identical to ${ref} at every step` : `first differs from ${ref} at step ${diff < 0 ? Math.min(a.steps, b.steps) : diff}`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-const run = (name, fn) => { if (!only || only.has(name)) fn(); };
-run('codec', checkCodec);
-run('offline', checkOffline);
-run('items', checkItems);
-run('ownership', checkOwnership);
-run('tracking', checkTracking);
-run('race', checkFullRace);
+const run = async (name, fn) => { if (!only || only.has(name)) await fn(); };
+await run('codec', checkCodec);
+await run('offline', checkOffline);
+await run('items', checkItems);
+await run('ownership', checkOwnership);
+await run('tracking', checkTracking);
+await run('race', checkFullRace);
 console.log(failures ? `\nnet-check: ${failures} FAILED` : '\nnet-check: ok');
 process.exit(failures ? 1 : 0);

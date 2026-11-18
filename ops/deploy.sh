@@ -48,9 +48,10 @@ SHA=$(git rev-parse --verify "$REF^{commit}")
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 echo "deploying $SHA ($REF) to $HOST"
 
-# --- the game: plain files, exactly as committed --------------------------------------------
-mkdir -p "$WORK/site"
-git archive "$SHA" index.html manifest.webmanifest offline-shell.js sw.js src styles assets vendor | tar -x -C "$WORK/site"
+# --- the game: the same folder GitHub Pages publishes (tools/build-site.mjs), from that commit ----
+mkdir -p "$WORK/tree"
+git archive "$SHA" index.html manifest.webmanifest offline-shell.js sw.js src styles assets vendor tools/build-site.mjs | tar -x -C "$WORK/tree"
+node "$WORK/tree/tools/build-site.mjs" "$WORK/site" >/dev/null
 printf '%s\n' "$SHA" > "$WORK/site/version.txt"
 "${SSH[@]}" "mkdir -p /srv/$APP/releases/$SHA"
 rsync -a --delete -e 'ssh -o BatchMode=yes' "$WORK/site/" "$HOST:/srv/$APP/releases/$SHA/"

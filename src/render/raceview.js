@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { buildTrackMesh, trackUniforms } from '../track/trackmesh.js';
 import { simplifyScenery } from './splitgeometry.js';
 import { splitScenery } from './splitcull.js';
+import { splitLayout } from './splitlayout.js';
 import { KartView } from './kartview.js';
 import { ChaseCam, IntroCam, TvCam } from './chasecam.js';
 import { Particles, rgbOf } from './particles.js';
@@ -81,6 +82,8 @@ export class RaceView {
     this.cams = race.players.map((k, i) => new ChaseCam(k, track, i));
     this.intro = null; this.time = 0; this.flash = 0;
     this.layout();
+    // a resize while paused has no update() to catch it, so listen for it as well
+    this._onResize = () => this.relayout(); gfx.resizeHooks?.add(this._onResize);
   }
 
   _water(track, def) {
@@ -90,16 +93,36 @@ export class RaceView {
     this.water = w;
   }
 
-  /** Split the screen between local players. */
+  /** Share the screen between local players: the grid follows the window's shape (see splitlayout.js) and is
+      worked out again whenever the window changes. During the opening flyover player one's camera has the whole
+      screen, since that is the only camera flying it; the split comes in with the countdown. onLayout hears each change. */
   layout() {
     const n = this.cams.length;
-    const rects = n <= 1 ? [[0, 0, 1, 1]] : n === 2 ? [[0, 0.5, 1, 0.5], [0, 0, 1, 0.5]] : [[0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5], [0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5]];
-    this.views = this.cams.map((c, i) => ({ camera: c.camera, rect: rects[i], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v), onAfterRender: () => this.cull?.after() }));
-    if (!n) { // spectator: follow the leader
-      const c = this.tv ? new TvCam(this.race.karts[0], this.race.track) : new ChaseCam(this.race.karts[0], this.race.track, 9); this.cams = [c]; this.spectate = true;
-      this.views = [{ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, onBeforeRender: v => this._beforeView(v), onAfterRender: () => this.cull?.after() }];
+    if (!this.views) {
+      const hooks = { onBeforeRender: v => this._beforeView(v), onAfterRender: () => this.cull?.after() };
+      this.views = this.cams.map(c => ({ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, ...hooks }));
+      if (!n) { // spectator: follow the leader
+        const c = this.tv ? new TvCam(this.race.karts[0], this.race.track) : new ChaseCam(this.race.karts[0], this.race.track, 9); this.cams = [c]; this.spectate = true;
+        this.views = [{ camera: c.camera, rect: [0, 0, 1, 1], focus: c.focus, cam: c, ...hooks }];
+      }
+      this.soloView = { ...this.views[0], rect: [0, 0, 1, 1] };
+      this.spare = [];
     }
-    this.gfx.setViews(this.views);
+    const W = this.gfx.width, H = this.gfx.height, solo = n > 1 && !!this.intro && !this.intro.done;
+    this._layoutKey = W + 'x' + H + (solo ? ' solo' : '');
+    if (n > 1) {
+      this.split = splitLayout(n, W, H, { prev: this.split });
+      this.views.forEach((v, i) => { v.rect = this.split.rects[i]; });
+      this.spare = solo ? [] : this.split.spare;
+    }
+    this.gfx.setViews(solo ? [this.soloView] : this.views);
+    this.onLayout?.(this);
+  }
+  /** Lay out again if the window or the flyover state has changed since the last layout. */
+  relayout() {
+    if (this.cams.length < 2 || this.disposed) return;
+    const solo = !!this.intro && !this.intro.done;
+    if (this._layoutKey !== this.gfx.width + 'x' + this.gfx.height + (solo ? ' solo' : '')) this.layout();
   }
   _beforeView(v) {
     const h = this.gfx.renderer.domElement.height * v.rect[3];
@@ -145,6 +168,7 @@ export class RaceView {
       shots = shots.map(shot => typeof shot === 'function' ? shot(grid) : shot);
     }
     this.intro = new IntroCam(this.race.track, camera, shots);
+    this.relayout();
   }
 
   /** Time trial: show a translucent replay of the best run. ghost: { racer, step, time, d: [x,y,z,yaw,...] } */
@@ -300,6 +324,7 @@ export class RaceView {
   /** Per rendered frame. alpha: interpolation between the last two sim steps. */
   update(dt, alpha) {
     const race = this.race, gfx = this.gfx;
+    this.relayout();   // the flyover just ended, or the window changed
     this.time += dt;
     trackUniforms.uTime.value = this.time;
     this._show();
@@ -426,6 +451,7 @@ export class RaceView {
 
   dispose() {
     const scene = this.gfx.scene;
+    this.disposed = true; this.gfx.resizeHooks?.delete(this._onResize); this.onLayout = null;
     scene.remove(this.root);
     this.cull?.dispose();
     this.root.traverse(o => { if (o.userData?.dispose) o.userData.dispose(); else if (o.isMesh || o.isPoints || o.isSprite) { o.geometry?.dispose?.(); } });

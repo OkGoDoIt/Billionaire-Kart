@@ -4,7 +4,7 @@ import { Race } from '../race/race.js';
 import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
 import { DrivingGuide } from '../ui/driving-guide.js';
-import { Hud } from '../ui/hud.js';
+import { Hud, FieldBoard } from '../ui/hud.js';
 import { TouchControls, isTouchDevice } from '../ui/touch.js';
 import { ITEMS, HIT_LINES, isFundingBoost } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
@@ -44,6 +44,11 @@ export class RaceSession {
     const n = this.race.players.length;
     this.huds = this.race.players.map((k, i) => new Hud(app.ui, this.race, k, this.view.views[i].rect, { compact: n > 2, showMap: true, trialBest: this.trialBest }));
     this.hudOf = new Map(this.race.players.map((k, i) => [k, this.huds[i]]));
+    // three players on a two-by-two grid leave a cell empty: the whole field goes there
+    this.board = n === 3 ? new FieldBoard(app.ui, this.race) : null;
+    // the split follows the window's shape, so the HUDs and the board move whenever it is laid out again
+    this.view.onLayout = view => { this.huds.forEach((h, i) => h.setRect(view.views[i].rect)); this.board?.setRect(view.spare[0] || null); };
+    this.view.onLayout(this.view);
     // touch controls for a solo player on a touch screen
     this.touch = null;
     if (n === 1 && isTouchDevice() && !config.auto) {
@@ -65,7 +70,7 @@ export class RaceSession {
       this.rec = { racer: this.race.players[0].racer.id, step: 0.1, d: [], next: 0 };
     }
     this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;
-    if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); this.touch?.setVisible(false); app.audio?.event('introStart', def); }
+    if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); this.board?.setVisible(false); this.touch?.setVisible(false); app.audio?.event('introStart', def); }
     else app.audio?.event('countdownStart', def);
   }
 
@@ -144,7 +149,7 @@ export class RaceSession {
     const { race, view, app } = this;
     if (this.paused) { app.gfx.render(0); return; }
     if (this.phase === 'intro') {
-      if (view.intro.done) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) h.setVisible(true); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
+      if (view.intro.done) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) h.setVisible(true); this.board?.setVisible(true); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
     } else {
       const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
       // hit pause: the world holds still for a few frames when a hit lands, so it feels heavy
@@ -165,6 +170,7 @@ export class RaceSession {
       for (const [i, guide] of this.guides.entries()) {
         if (this.autopilots) guide.hide(); else guide.update(dt, inputs[i]);
       }
+      this.board?.update(dt);
       for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
       if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
     }
@@ -176,5 +182,5 @@ export class RaceSession {
 
   setPaused(p) { if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
 
-  dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.touch?.dispose(); this.view.dispose(); }
+  dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

@@ -132,6 +132,7 @@ export class Gfx {
     this.maxAniso = renderer.capabilities.getMaxAnisotropy();
     this.scene = new THREE.Scene();
     this.views = [];
+    this.resizeHooks = new Set();   // called after the canvas changes size (the race lays its split screen out again)
     this.time = 0; this.scale = 1; this._ft = 16; this._scaleCooldown = 2; this._vsync = 16.7; this._raisedAgo = 99; this._bounces = 0;
     this.post = { blur: 0, lines: 0, edge: 0, edgeColor: new THREE.Color(1, 0.2, 0.3), flash: 0, flashColor: new THREE.Color(1, 1, 1), vignette: 0.26, sat: 1.18, contrast: 1.08 };
 
@@ -190,6 +191,7 @@ export class Gfx {
     this.renderer.setSize(w, h, false);
     this.composer.setPixelRatio(pr);
     this.composer.setSize(w, h);
+    for (const hook of this.resizeHooks || []) hook();
   }
 
   /** Configure sky, lights, fog, and environment for a track. Returns the Sky. */

@@ -12,9 +12,13 @@ import { buildKart } from './models/kart.js';
 import { RACERS, RACER_BY_ID } from './content/racers.js';
 import { TRACKS, TRACK_BY_ID, registerTrack } from './content/tracks.js';
 
+const boot = window.BKBoot || { step() {}, done() {}, fail() {} };
+boot.step(3);                                                   // the code has arrived
+addEventListener('error', () => boot.fail(), { once: true });   // anything thrown before the title still says so
 await document.fonts.load('40px "Luckiest Guy"').catch(() => {});
 await document.fonts.load('600 20px "Fredoka"').catch(() => {});
 await preloadFaces();
+boot.step(4);
 const q = new URLSearchParams(location.search);
 const app = new App(document.getElementById('game'), document.getElementById('ui'), { quality: q.get('q') });
 const gfx = app.gfx;
@@ -42,6 +46,7 @@ if (q.get('view') === 'kart') {
     cam.lookAt(st.x, st.y, 0); focus.set(st.x, 0, 0); gfx.render(dt); requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
+  boot.done();
 } else if (q.get('track') || q.get('auto') || q.get('r') || q.get('fly')) {
   // development: straight into a race
   const wanted = q.get('track');
@@ -72,7 +77,11 @@ if (q.get('view') === 'kart') {
   }
   start();
   app.run();
+  boot.done();
 } else {
   app.toTitle();
+  boot.step(5);
   app.run();
+  // the title's first frame compiles the track's shaders; lift the loading screen once it has drawn
+  requestAnimationFrame(() => requestAnimationFrame(() => boot.done()));
 }

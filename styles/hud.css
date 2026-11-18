@@ -9,8 +9,14 @@
    - top-right: timer and map (and on touch screens the pause button beside the map)
    - below the feed: banners, one at a time
    - left, lower: a rival's speech bubble
-   - bottom corners: coins and lap, position (touch screens move these up, out from under the thumbs) */
-.hud { position: absolute; container-type: size; pointer-events: none; overflow: hidden; font-family: var(--display); color: #fff; --u: min(1cqh, 0.5625cqw); --edge: max(calc(var(--u) * 2.4), 10px); --side: calc(var(--u) * 53.5); }
+   - bottom corners: coins and lap, position (touch screens move these up, out from under the thumbs) 
+   The edge margin is at least 10px, except in a tiny split-screen pane (four on a phone), where it is 3 units: the pane
+   already sits inside the safe area (hud.js placePane), and a fixed 10px there is five units of a 100-unit pane. */
+.hud { position: absolute; container-type: size; pointer-events: none; overflow: hidden; font-family: var(--display); color: #fff; --u: min(1cqh, 0.5625cqw); --edge: max(calc(var(--u) * 2.4), min(10px, calc(var(--u) * 3))); 
+  /* One boundary between the held-item card on the left and the centre lane (feed and banners): 50.5 units in on a 16:9
+     pane, and on a wider pane 41.5 units left of centre, which clears the widest banner. The card ends there wherever it
+     starts (a notch moves it right; it never squeezes it), the feed keeps 3 units clear of it, and no banner reaches it. */
+  --card-r: max(calc(var(--u) * 50.5), calc(50cqw - var(--u) * 41.5)); --side: calc(var(--card-r) + var(--u) * 3); }
 .hud.hidden { visibility: hidden; }
 .hud * { pointer-events: none; }
 .hud b { font-weight: normal; }
@@ -31,12 +37,15 @@
 .hud-item.has .hud-item-coin { display: block; }
 .hud-item-count { position: absolute; right: calc(var(--u) * -1); bottom: calc(var(--u) * -0.6); font-size: calc(var(--u) * 6.2); color: var(--gold); }
 .hud-item.pop { animation: hud-pop 0.32s cubic-bezier(.2,1.6,.4,1); }
-.hud-item-info { position: absolute; left: calc(var(--edge) + var(--safe-l) + calc(var(--u) * 19.5)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 1.5)); max-width: calc(var(--u) * 31 - var(--edge) - var(--safe-l)); font-family: var(--body); background: rgba(11,13,32,0.78); padding: calc(var(--u) * 0.9) calc(var(--u) * 2) calc(var(--u) * 1.1); border-radius: calc(var(--u) * 2.4); opacity: 0; transform: translateX(calc(var(--u) * -1.5)); transition: opacity 0.2s, transform 0.2s; }
+.hud-item-info { position: absolute; left: calc(var(--edge) + var(--safe-l) + calc(var(--u) * 19.5)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 1.5)); max-width: max(calc(var(--u) * 24), calc(var(--card-r) - var(--edge) - var(--safe-l) - var(--u) * 19.5)); font-family: var(--body); background: rgba(11,13,32,0.78); padding: calc(var(--u) * 0.9) calc(var(--u) * 2) calc(var(--u) * 1.1); border-radius: calc(var(--u) * 2.4); opacity: 0; transform: translateX(calc(var(--u) * -1.5)); transition: opacity 0.2s, transform 0.2s; }
 .hud-item-info.show { opacity: 1; transform: none; }
 .hud-item-info b { display: block; font-weight: 700; font-size: calc(var(--u) * 3.5); line-height: 1.15; color: var(--gold); max-width: calc(var(--u) * 26); }
 .hud-item-info span { display: block; font-weight: 500; font-size: calc(var(--u) * 3); line-height: 1.22; }
-/* The card's right edge stops at 50.5u from the pane's left, short of the centre lane (banners start at 51u, the feed at
-   53.5u), so the item card, the feed, and every banner can all be up at once without touching, at any screen shape. */
+/* The card's right edge stops at --card-r: 50.5u from the pane's left on a 16:9 pane, short of the centre lane (banners
+   start at 51u, the feed at 53.5u), and further right on a wider pane, where the centre lane sits further right too. So
+   the item card, the feed, and every banner can all be up at once without touching, at any screen shape. Its width is
+   measured from where it starts, so a notch moves it right instead of squeezing it to a word a line (Roger's iPhone,
+   18 Nov), and it is never narrower than 24 units. */
 /* The held item's description is never folded away (issue #132): while an item is held, its name and its full
    description stay rendered and readable. The race feed and the banners have their own lanes at the top of the
    screen; they do not borrow this one, and neither does a timer. hud-check guards this: it fails if any rule
@@ -94,7 +103,7 @@
 .hud.hud-touch .hud-speed { top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 28.5)); }
 
 /* banners (countdown, final lap, finish): brief, upper-centre */
-.hud-banner { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%) scale(0.6); font-size: calc(var(--u) * 11); width: max-content; max-width: calc(100cqw - calc(var(--u) * 102)); line-height: 1.02; text-wrap: balance; opacity: 0; color: #fff; text-align: center; filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)); }
+.hud-banner { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%) scale(0.6); font-size: calc(var(--u) * 11); width: max-content; max-width: calc(100cqw - var(--card-r) * 2 - var(--u)); line-height: 1.02; text-wrap: balance; opacity: 0; color: #fff; text-align: center; filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)); }
 .hud-banner.show { animation: hud-banner 0.28s cubic-bezier(.2,1.6,.4,1) forwards; }
 /* the countdown sits under the start gantry's sign, not on it: the track name stays readable through 3, 2, 1 */
 .hud-banner.count { font-size: calc(var(--u) * 24); top: 37.5%; color: var(--gold); }
@@ -215,3 +224,48 @@
   .board-map { width: min(100cqw - var(--pad) * 2, 42cqh); }
   .board-list { width: 100%; max-width: none; height: auto; flex: 1 1 0; min-height: 0; }
 }
+
+/* After the line (src/game/afterfinish.js). Racing is over for this player, so what was for driving goes: the item,
+   coins and lap, speed, rivals' bubbles, and control reminders. The place, the time, the map, and the feed stay. */
+.hud-after .hud-item, .hud-after .hud-item-info, .hud-after .hud-bl, .hud-after .hud-speed, .hud-after .hud-draft, .hud-after .hud-talk, .hud-after .hint-card, .hud-after .hud-warn, .hud-after .hud-wrong, .hud-after .hud-ink { display: none; }
+/* online: who is on screen, bottom-centre, with arrows to switch (the arrows are real buttons: tap or click) */
+.wa-card { position: absolute; left: 50%; bottom: calc(var(--edge) + var(--safe-b)); transform: translate(-50%, calc(var(--u) * 3)); display: flex; align-items: center; gap: calc(var(--u) * 1.4); padding: calc(var(--u) * 0.9); border-radius: calc(var(--u) * 6); background: rgba(11,13,32,0.78); box-shadow: inset 0 0 0 calc(var(--u) * 0.45) rgba(255,255,255,0.75), 0 calc(var(--u) * 1) 0 rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.25s, transform 0.3s cubic-bezier(.2,1.6,.4,1); max-width: calc(100cqw - var(--u) * 70); }
+.wa-card.show { opacity: 1; transform: translate(-50%, 0); }
+.hud .wa-card.show .wa-step { pointer-events: auto; }
+.wa-step { flex: none; width: max(40px, calc(var(--u) * 8.5)); height: max(40px, calc(var(--u) * 8.5)); border-radius: 50%; border: none; background: rgba(255,255,255,0.14); color: #fff; font: normal calc(var(--u) * 3.4)/1 var(--display); cursor: pointer; display: grid; place-items: center; touch-action: manipulation; transition: background 0.15s, transform 0.1s; }
+.wa-step:hover { background: rgba(255,255,255,0.28); }
+.wa-step:active { transform: scale(0.9); background: var(--gold); color: var(--ink); }
+.wa-card.solo .wa-step { visibility: hidden; }
+.wa-face { flex: none; width: calc(var(--u) * 10); height: calc(var(--u) * 10); border-radius: 50%; object-fit: cover; object-position: 50% 20%; background: var(--wc, #444); box-shadow: 0 0 0 calc(var(--u) * 0.5) var(--ink), 0 0 0 calc(var(--u) * 1) var(--wc, #fff); }
+.wa-who { min-width: 0; padding: 0 calc(var(--u) * 1.2) 0 calc(var(--u) * 0.6); line-height: 1.05; }
+.wa-who > small { display: block; font: 700 max(10px, calc(var(--u) * 2.1))/1.2 var(--body); letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.75; }
+.wa-who b { display: block; font-size: calc(var(--u) * 4.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--wc, #fff); paint-order: stroke fill; -webkit-text-stroke: 0.14em var(--ink); padding-top: calc(var(--u) * 0.3); }
+.wa-who span { display: block; font-size: calc(var(--u) * 3.6); color: #fff; white-space: nowrap; }
+.wa-who span small, .wa-rank small { font-size: 0.7em; }
+/* online: every human's race, top-left where the item slot was. Place, face, name, and a bar for how far through the
+   race they are (their time once they are home). The one on screen is lit; tap or click a row to watch them. */
+.wa-board { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 60); opacity: 0; transform: translateX(calc(var(--u) * -3)); transition: opacity 0.25s, transform 0.3s ease-out; }
+.wa-board.show { opacity: 1; transform: none; }
+.wa-list { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--u) * 0.8); }
+.wa-row { display: grid; grid-template-columns: calc(var(--u) * 4.4) calc(var(--u) * 6) minmax(0, 1fr) calc(var(--u) * 14); align-items: center; gap: calc(var(--u) * 1.2); height: calc(var(--u) * 7); padding: 0 calc(var(--u) * 1.6) 0 calc(var(--u) * 1); border-radius: calc(var(--u) * 3.5); background: rgba(11,13,32,0.72); box-shadow: inset calc(var(--u) * 0.9) 0 0 var(--wc, #fff); cursor: pointer; transition: background 0.2s, box-shadow 0.2s; }
+.hud .wa-board.show .wa-row { pointer-events: auto; }
+.wa-row:hover { background: rgba(30,34,70,0.85); }
+.wa-row.on { background: rgba(11,13,32,0.9); box-shadow: inset calc(var(--u) * 0.9) 0 0 var(--wc, #fff), 0 0 0 calc(var(--u) * 0.45) var(--gold); }
+.wa-rank { font-style: normal; font-size: calc(var(--u) * 4.4); text-align: center; paint-order: stroke fill; -webkit-text-stroke: 0.14em var(--ink); }
+.wa-rank[data-r="1"] { color: var(--gold); } .wa-rank[data-r="2"] { color: #dfe7f2; } .wa-rank[data-r="3"] { color: #f0a25a; }
+.wa-row img { width: calc(var(--u) * 6); height: calc(var(--u) * 6); border-radius: 50%; object-fit: cover; object-position: 50% 20%; box-shadow: 0 0 0 calc(var(--u) * 0.4) var(--ink); }
+.wa-row b { font: 700 max(11px, calc(var(--u) * 3))/1.1 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wa-row.me b { color: var(--gold); }
+.wa-bar { position: relative; height: calc(var(--u) * 2.6); border-radius: calc(var(--u) * 1.3); background: rgba(255,255,255,0.16); overflow: hidden; }
+/* one segment per lap, so where someone is reads at a glance */
+.wa-bar::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--laps, 3) - var(--u) * 0.35), rgba(11,13,32,0.85) calc(100% / var(--laps, 3) - var(--u) * 0.35) calc(100% / var(--laps, 3))); }
+.wa-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: inherit; background: var(--wc, #fff); transition: width 0.2s linear; }
+.wa-bar em { position: absolute; z-index: 1; right: calc(var(--u) * 0.8); top: 50%; transform: translateY(-50%); font: normal calc(var(--u) * 2)/1 var(--display); color: #fff; paint-order: stroke fill; -webkit-text-stroke: 0.2em var(--ink); }
+.wa-time { font-size: calc(var(--u) * 3.4); text-align: right; color: #fff; font-variant-numeric: tabular-nums; paint-order: stroke fill; -webkit-text-stroke: 0.14em var(--ink); }
+.wa-row.done .wa-time::before { content: ""; display: inline-block; vertical-align: -0.1em; margin-right: 0.35em; width: 1.05em; height: 0.85em; border-radius: 0.1em; box-shadow: 0 0 0 0.07em var(--ink); background: conic-gradient(#fff 25%, #12142b 0 50%, #fff 0 75%, #12142b 0) 0 0 / 0.52em 0.42em; }
+.wa-until { margin: calc(var(--u) * 1.2) 0 0 calc(var(--u) * 1); font: 700 max(11px, calc(var(--u) * 2.7))/1.2 var(--body); color: #fff; text-shadow: 0 1px 3px var(--ink); }
+.wa-until:empty { display: none; }
+.hud-compact .wa-board { width: calc(var(--u) * 64); }
+/* the board has everyone's time, yours included: the clock in the corner would say it twice */
+.hud-board .hud-time { display: none; }
+@media (prefers-reduced-motion: reduce) { .wa-card, .wa-board { transition: opacity 0.2s; } .wa-bar i { transition: none; } }

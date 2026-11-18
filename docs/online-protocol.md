@@ -52,7 +52,14 @@ All under `/api`, JSON, same origin.
 | `POST /api/session` | Creates the guest player if there is no valid cookie and sets `bk_player` (HttpOnly, Secure, SameSite=Lax, 400 days). Returns `{ id, handle: {title, number}, rating: {valuation, races} }`. |
 | `POST /api/handle` `{title}` | Sets the handle's title index (0 to 199). The number is assigned by the server and never changes. |
 | `GET /api/leaderboard?board=all\|week&limit=50` | `{ rows: [{rank, handle, valuation, current, races, me}], me: {rank, valuation} }`. On the week board `valuation` is the gain over the last 7 days; `current` is always the valuation itself (for the tier name). |
+| `POST /api/handoff` `{code}` | Safari, opened from a room link, leaves the room code for the installed game. 204; 400 if it is not a room code; 404 if no such room is open (then say nothing about the installed game). Replaces any earlier code for this device and expires after HandoffMinutes. |
+| `POST /api/handoff/claim` | The installed game, on start, asks for a code left by the same device. 200 `{code}` once, then 204; also 204 when nothing is waiting or the room has closed. |
+| `DELETE /api/handoff` | Forgets this device's code (the player chose to race in Safari). 204. |
+| `POST /api/app` | The installed game, on every launch and return to the foreground, says it is open. No body, no cookie needed. Records this device, and with a player cookie sets that player's `AppSeenAt` (written at most every 10 minutes). 204. |
+| `GET /api/app` | The phone's browser asks whether the installed game has been opened by this player (cookie) or on this device within AppSeenDays. `{ app: true\|false }`. A room link then says to open the game rather than install it. |
 | `GET /healthz` | `{ ok, sha, protocol, minProtocol, rooms, players }`. The game shows its Online button only when this answers and its own protocol is within `minProtocol..protocol`; a build older than `minProtocol` offers a reload instead. The server accepts the current protocol and the one before it, so a cached game survives a deploy. |
+
+The handoff exists because on iPhone a link always opens in Safari, never in the Home Screen game, and the two keep separate cookies. So the handoff routes take no player cookie: "the same device" means the same network address (an IPv6 address by its /64) and the same hardware and OS version from the User-Agent (`iPhone 18_6`, `iPad 18_6`, `Android 14 Pixel 8`; anything else is a hash of the whole UA), which Safari and the installed game share. Codes wait in memory only and are lost on restart. `/api/app` uses the same device key; since iOS 17.2, adding the game to the Home Screen copies Safari's cookies into it, so the player cookie also ties the two, across networks and restarts.
 
 A handle is `{title: int, number: int}`. The words live in the client (`src/content/handles.js`); the server stores and relays only the two numbers, so there is no free text to moderate.
 
@@ -65,6 +72,17 @@ Client to server is marked →, server to client ←.
 - → `{t:"hello", proto, build}` first message.
 - ← `{t:"welcome", you: playerId, now}` or `{t:"old"}`.
 - → `{t:"ping", c: localMs}` ← `{t:"pong", c, now}`.
+
+### Server updates
+
+- ← `{t:"bye", why:"update", in: seconds}` the server is shutting down for an update and will be back shortly. `in` is the longest it will keep this connection open (whole seconds, 0 when nothing is racing). Sent to every connected device when shutdown begins, and again to any device that connects, or asks to create, join, or find a room, while it lasts. `PROTO` is unchanged: a client that ignores `bye` just sees the socket close later and reconnects, as before.
+
+Shutdown, in order:
+
+1. The server stops making rooms and starting races. `create`, `join`, and `find` are answered with `bye`. Rooms in **lobby**, **track**, or **results** stay where they are; their timers no longer move them on.
+2. Races in progress carry on: snapshots, events, and `finish` work as usual, and a race that ends normally goes to **results** (rated as usual in a public room).
+3. When no race is left, or `ShutdownDrainSeconds` after shutdown began, every socket is closed (status 1001) and the server exits. A race still running at that point ends unrated: rooms live only in memory.
+4. The restarted server has no rooms. A client that was told `bye` reconnects as usual, finds it has no seat (no `room` arrives after `welcome`), and goes to the hub saying the room closed for an update. A client mid-race when its socket closes after `bye` ends the race at once and does the same.
 
 ### Rooms
 
@@ -180,8 +198,11 @@ The winner's valuation never falls and last place's never rises (when at least 3
 | OwnerSilenceSeconds | 2 |
 | SeatHoldSeconds (a disconnected member keeps their place) | 120 |
 | RoomIdleMinutes (empty room is removed) | 5 |
+| HandoffMinutes (a room link opened in Safari waits for the installed game) | 10 |
+| AppSeenDays (how long an opened installed game counts as installed) | 30 |
 | ValuationBaseDollars / ValuationDoublingPoints | 1000000 / 2.5 |
 | CpuMu easy / normal / hard, CpuSigma | 18 / 22 / 26, 1.5 |
 | RaceStartLeadSeconds | 6 |
+| ShutdownDrainSeconds (how long a shutdown waits for races to finish; at most 25, under systemd's `TimeoutStopSec=30`) | 25 |
 | TrackMinRaceSeconds (per track; a rated finish faster than this is not rated) | none |
 | Tracks, Cups, Racers (the ids the server may pick from) | the shipping lists |

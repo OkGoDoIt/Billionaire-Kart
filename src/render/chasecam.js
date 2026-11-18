@@ -48,10 +48,18 @@ export class ChaseCam {
     this.t += dt;
     const p = view.pos;
     if (this.mode === 'orbit') {
-      // victory lap: slow orbit around the kart
-      const a = this.t * 0.55 + k.yaw;
-      _want.set(p.x + Math.sin(a) * 6.5, p.y + 2.3, p.z + Math.cos(a) * 6.5);
-      this.pos.lerp(_want, 1 - Math.exp(-3 * dt));
+      // the finish shot: swing round from behind the kart to its front and stay there, the driver's face in view,
+      // swaying a little. The kart keeps driving (Race._cruise), so the shot rides along with it, on the road ahead,
+      // where scenery never stands; a full circle at this distance went through the roadside signs.
+      const travel = k.speed > 3 ? Math.atan2(k.vx, k.vz) : view.yaw;
+      this.oyaw = this.t <= dt * 1.5 || this.oyaw == null ? this.yaw : dampAngle(this.oyaw, travel, 2.2, dt);
+      const swing = Math.PI * smoothstep(0.15, 1.9, this.t), sway = Math.sin(this.t * 0.45) * 0.38 * smoothstep(1.9, 3.5, this.t);
+      const a = this.oyaw + Math.PI - swing + sway, d = lerp(6.5, 6.2, swing / Math.PI);
+      // lead by the kart's velocity over the follow rate, so the moving kart does not run up into the lens
+      _want.set(p.x + Math.sin(a) * d + k.vx / 6, p.y + lerp(2.3, 1.7, swing / Math.PI), p.z + Math.cos(a) * d + k.vz / 6);
+      const gy = this.track.hasTerrain && !this.track.tunnel[k.hint] && !this.track.bridge[k.hint] ? this.track.terrainHeight(_want.x, _want.z) : -1e3;
+      if (_want.y < gy + 0.9) _want.y = gy + 0.9;
+      this.pos.lerp(_want, 1 - Math.exp(-6 * dt));
       this._clearCeiling(p);
       cam.position.copy(this.pos); _look.set(p.x, p.y + 1.1, p.z); cam.lookAt(_look);
       this.fov = damp(this.fov, 48, 3, dt); cam.fov = this.fov; cam.updateProjectionMatrix();

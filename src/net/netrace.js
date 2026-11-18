@@ -1,8 +1,11 @@
 /* race.net: the online side of one race (docs/online-protocol.md, "Race").
    Every device runs the whole Race. This device steps the karts it owns and
    broadcasts them; every other kart is a puppet placed from buffered snapshots,
-   drawn `delay` steps in the past, with a short capped extrapolation when data
-   is late. Events that happen TO a kart are decided by its owner only.
+   drawn some steps in the past, with a short capped extrapolation when data is
+   late. How far in the past adapts per sending device: at least `delay` steps,
+   more when that device's snapshots arrive late (a slow or stalling link), eased
+   in and out by playing its karts slightly slower or faster, never by a jump.
+   Events that happen TO a kart are decided by its owner only.
 
    The Race calls pre() at the start of each step and post() at the end; the
    items and karts call spawn/gone/boom/commit at the few places they need to.
@@ -20,9 +23,18 @@ const LIFE = { antitrust: 40, tweet: 14, subpoena: 11, pinkslip: 6 };
 const BOX_RESPAWN = 0.85, COIN_RESPAWN = 7;
 const SNAP_KEEP = 90;              // snapshots kept per kart (3 s at 30 Hz)
 const SMOOTH_TAU = 0.12;           // seconds for a correction to fade
-const SMOOTH_MIN = 0.15;           // metres per step of surprise before it counts as a correction
+const SMOOTH_MIN = 0.01;           // metres: new data moved the shown pose by more than this, so it is a correction
+const SMOOTH_SLACK = 0.3;          // metres per step a puppet may move beyond its own speed before the excess is eased in
 const SMOOTH_SNAP = 20;            // metres: further than this is a teleport, not a correction
 const SMOOTH_RATE = 0.6;           // metres per step at most that a correction fades by
+// adaptive delay, per sending device (all its karts share one link, so they share one delay)
+const LAG_WINDOW = 240;            // steps of lateness history kept (4 s)
+const LAG_PCT = 0.8;               // the share of recent snapshots the delay should cover
+const LAG_MAX = 24;                // steps: the delay never grows past this (400 ms)
+const LAG_FALL = 1.5 / 60;         // steps per step the wanted delay falls by once the link is calm (1.5 steps a second)
+const SLEW_UP = 0.2;               // steps per step the delay grows by at most (puppets play at 0.8x for a moment)
+const SLEW_DOWN = 0.04;            // steps per step the delay shrinks by at most (puppets play at 1.04x)
+const EXTRAP_TURN = 3;             // radians a second at most that a guessed path may turn
 const TIMER_FIELDS = ['hitT', 'starT', 'shrinkT', 'ghostT', 'bulletT', 'invulnT', 'squashT', 'rescueT', 'goldenT', 'inkT', 'boostT', 'rouletteT'];
 
 export class NetRace {
@@ -39,7 +51,8 @@ export class NetRace {
     this.n = 0;                                   // simulation steps taken; step n happens at startAt + n * STEP_MS
     this.buf = race.karts.map(() => []);           // decoded snapshots per slot, oldest first
     this.fresh = race.karts.map(() => false);      // the next snapshot for this slot starts a new owner's stream
-    this.pp = race.karts.map(() => ({ ox: 0, oz: 0, raw: null, last: null }));   // puppet presentation state
+    this.pp = race.karts.map(() => ({ ox: 0, oz: 0, raw: null, last: null, t: null }));   // puppet presentation state; t: the step it was last shown at
+    this.lag = new Map();                          // per sending device: lateness history and the delay its puppets use
     this.inbox = [];                               // room and ev messages in arrival order, applied in pre()
     this.exploded = new Set(); this.seq = 0; this.ids = -1;
     this.ended = false; this.phase = room.phase;
@@ -114,6 +127,7 @@ export class NetRace {
       catch (err) { if (typeof console !== 'undefined') console.warn('net: bad message', m, err); }
     }
     this.applying = false;
+    for (const L of this.lag.values()) this._slew(L);
     for (const k of this.race.karts) if (k.puppet) this._puppet(k, dt);
   }
 
@@ -199,6 +213,7 @@ export class NetRace {
     const d = decodeSnap(data);
     if (!d || d.slot >= this.buf.length || this.heard[d.slot] === this.me) return;   // ours, as of the latest room to arrive
     this.stats.snapsIn++;
+    this._late(this.heard[d.slot], d.step);
     const b = this.buf[d.slot];
     if (this.fresh[d.slot]) {   // a new owner's stream replaces whatever the old one said about the same moments
       this.fresh[d.slot] = false;
@@ -342,6 +357,52 @@ export class NetRace {
     pp.raw = null; pp.cont = { x: k.x, z: k.z, vx: k.vx, vz: k.vz };   // the puppet picks up where the kart is now
   }
 
+  /* ---------- adaptive delay ---------- */
+
+  /** Fractional steps on the shared clock right now (falls back to steps taken before the clock syncs). */
+  _nowStep() { return this.conn.synced === false || !this.conn.now ? this.n : (this.conn.now() - this.startAt) / STEP_MS; }
+
+  /** The lateness record for one sending device. */
+  _lagOf(owner) {
+    let L = this.lag.get(owner);
+    if (!L) {   // a device we start hearing from mid-race (a kart changed hands) starts from the delay already in use, so its puppets do not jump
+      const d = Math.max(this.delay, ...[...this.lag.values()].map(o => o.d));
+      this.lag.set(owner, L = { at: [], late: [], hi: -Infinity, want: d, d });
+    }
+    return L;
+  }
+
+  /** A snapshot of `step` from `owner` arrived now: note how late it is. One sample per packet is plenty. */
+  _late(owner, step) {
+    const L = this._lagOf(owner), now = this._nowStep(), late = now - step;
+    if (step > L.hi) L.hi = step;
+    const i = L.at.length - 1;
+    if (i >= 0 && now - L.at[i] < 0.5) { if (late > L.late[i]) L.late[i] = late; return; }   // same packet
+    L.at.push(now); L.late.push(late);
+    while (L.at.length && now - L.at[0] > LAG_WINDOW) { L.at.shift(); L.late.shift(); }
+  }
+
+  /** Once per step: decide the delay this device's karts want, and move toward it gently. */
+  _slew(L) {
+    const now = this._nowStep(), cover = this.sendEvery;
+    while (L.at.length && now - L.at[0] > LAG_WINDOW) { L.at.shift(); L.late.shift(); }
+    let target = this.delay;
+    if (L.late.length) {
+      const s = L.late.slice().sort((a, b) => a - b);
+      target = Math.max(target, s[Math.min(s.length - 1, Math.floor(LAG_PCT * s.length))] + cover);
+    }
+    target = Math.min(target, LAG_MAX);
+    L.want = target >= L.want ? target : Math.max(target, L.want - LAG_FALL);
+    // a stall in progress (data already later than the delay covers): slow these karts down rather than guess far ahead;
+    // when the burst arrives the wanted delay is back in charge and they catch up a little faster than real time
+    const overdue = L.hi > -Infinity ? Math.min(LAG_MAX, now - L.hi - this.maxExtrap / 2) : 0;
+    const gap = Math.max(L.want, overdue) - L.d;
+    L.d += gap > 0 ? Math.min(gap, SLEW_UP) : Math.max(gap, -SLEW_DOWN);
+  }
+
+  /** The delay, in steps, that a kart's puppet is shown at. */
+  delayOf(k) { const L = this.lag.get(this.heard[k.slot]); return L ? L.d : this.delay; }
+
   /* ---------- puppets ---------- */
 
   /** The state of a slot at step t, interpolated, or extrapolated by at most `cap` steps. Reuses one object. */
@@ -359,8 +420,17 @@ export class NetRace {
       o.vx = lerp(a.vx, next.vx, f); o.vy = lerp(a.vy, next.vy, f); o.vz = lerp(a.vz, next.vz, f);
       o.steer = lerp(a.steer, next.steer, f); o.rd = lerp(a.rd, next.rd, f);
     } else if (t > a.step && a.rescueT <= 0) {
-      ext = Math.min(t - a.step, cap) * STEP;
-      o.x = a.x + a.vx * ext; o.z = a.z + a.vz * ext;
+      ext = Math.min(t - a.step, cap) * STEP;   // at most `cap` steps ahead, then hold
+      // follow the turn the kart was making (from its last two snapshots), so the guess bends with the road
+      const p = i > 0 ? b[i - 1] : null;
+      const w = p && a.step > p.step ? clamp(wrapAngle(a.yaw - p.yaw) / ((a.step - p.step) * STEP), -EXTRAP_TURN, EXTRAP_TURN) : 0;
+      const th = w * ext;
+      if (Math.abs(th) > 1e-4) {
+        const sn = Math.sin(th) / w, cs = (1 - Math.cos(th)) / w;
+        o.x = a.x + a.vx * sn + a.vz * cs; o.z = a.z + a.vz * sn - a.vx * cs;
+        const c = Math.cos(th), si = Math.sin(th);
+        o.vx = a.vx * c + a.vz * si; o.vz = a.vz * c - a.vx * si; o.yaw = a.yaw + th;
+      } else { o.x = a.x + a.vx * ext; o.z = a.z + a.vz * ext; }
       o.y = a.grounded ? a.y : a.y + a.vy * ext - 0.5 * TUNE.gravity * ext * ext;
       if (!a.grounded) o.vy = a.vy - TUNE.gravity * ext;
       const h = this.race.karts[slot].hit;
@@ -373,15 +443,28 @@ export class NetRace {
   }
 
   _puppet(k, dt) {
-    const smp = this._sample(k.slot, this.n - this.delay, this.maxExtrap);
+    const pp = this.pp[k.slot], t = this.n - this.delayOf(k);
+    // presentation: hold the display continuous through corrections, then let the correction fade.
+    // A correction is only what new data changed: the buffer as it is now, asked about the moment shown last step,
+    // against what was shown. A real sudden stop between two snapshots is not a correction and is shown as it is.
+    let ex = 0, ez = 0, wx = 0, wz = 0, wv = 0, was = false;
+    if (pp.raw && pp.t != null) {
+      const w = this._sample(k.slot, pp.t, this.maxExtrap);
+      if (w) { was = true; wx = w.x; wz = w.z; wv = Math.hypot(w.vx, w.vz); ex = wx - pp.raw.x; ez = wz - pp.raw.z; }
+    }
+    const smp = this._sample(k.slot, t, this.maxExtrap);
     if (!smp) return;
-    const race = this.race, tr = race.track, pp = this.pp[k.slot];
+    const race = this.race, tr = race.track;
     this._events(k, smp, pp.last);
-    // presentation: hold the display continuous through corrections, then let the correction fade
     const rescue = smp.rescueT > 0 || k.rescueT > 0;
     if (pp.raw) {
-      const ex = smp.x - (pp.raw.x + pp.raw.vx * dt), ez = smp.z - (pp.raw.z + pp.raw.vz * dt);
       if (ex * ex + ez * ez > SMOOTH_MIN * SMOOTH_MIN) { pp.ox -= ex; pp.oz -= ez; }
+      // the owner's kart itself can be shoved metres in one step (a push-out): ease that rather than show a snap
+      if (was) {
+        const mx = smp.x - wx, mz = smp.z - wz, m = Math.hypot(mx, mz);
+        const ok = Math.max(wv, Math.hypot(smp.vx, smp.vz)) * Math.max(0, t - pp.t) * STEP + SMOOTH_SLACK;
+        if (m > ok) { const f = 1 - ok / m; pp.ox -= mx * f; pp.oz -= mz * f; }
+      }
     } else if (pp.cont) {
       pp.ox = pp.cont.x + pp.cont.vx * dt - smp.x; pp.oz = pp.cont.z + pp.cont.vz * dt - smp.z; pp.cont = null;
     }
@@ -389,8 +472,7 @@ export class NetRace {
     const om = Math.hypot(pp.ox, pp.oz), cut = Math.min(om * (1 - Math.exp(-dt / SMOOTH_TAU)), SMOOTH_RATE);
     if (om > 0) { pp.ox -= pp.ox / om * cut; pp.oz -= pp.oz / om * cut; }
     if (rescue || om > SMOOTH_SNAP) { pp.ox = 0; pp.oz = 0; }
-    const held = smp.held;   // data too late to extrapolate further: the raw pose stands still, so predict it standing still
-    pp.raw = pp.raw || {}; pp.raw.x = smp.x; pp.raw.z = smp.z; pp.raw.vx = held ? 0 : smp.vx; pp.raw.vz = held ? 0 : smp.vz;
+    pp.raw = pp.raw || {}; pp.raw.x = smp.x; pp.raw.z = smp.z; pp.t = t;
 
     const prevYaw = k.yaw;
     k.x = smp.x + pp.ox; k.z = smp.z + pp.oz;
@@ -423,7 +505,7 @@ export class NetRace {
     k.item = smp.item && ITEMS[smp.item] ? smp.item : null; k.itemUses = smp.itemUses; k.coins = smp.coins;
     // progress: the owner's raceDistance is the truth
     if (smp.lap > k.lap) {   // a puppet's lap times, as seen from here (the owner's own are exact)
-      const at = Math.max(0, race.time - this.delay * STEP);
+      const at = Math.max(0, race.time - this.delayOf(k) * STEP);
       if (k.lap >= 1) { const lt = at - k.lapStart; k.lapTimes.push(lt); if (lt < k.bestLap) k.bestLap = lt; }
       k.lapStart = at;
     }

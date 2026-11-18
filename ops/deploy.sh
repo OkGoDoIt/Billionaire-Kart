@@ -48,60 +48,21 @@ SHA=$(git rev-parse --verify "$REF^{commit}")
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 echo "deploying $SHA ($REF) to $HOST"
 
-# --- the game: the same folder GitHub Pages publishes (tools/build-site.mjs), from that commit ----
-mkdir -p "$WORK/tree"
-git archive "$SHA" index.html manifest.webmanifest offline-shell.js sw.js src styles assets vendor tools/build-site.mjs | tar -x -C "$WORK/tree"
-node "$WORK/tree/tools/build-site.mjs" "$WORK/site" >/dev/null
-printf '%s\n' "$SHA" > "$WORK/site/version.txt"
-"${SSH[@]}" "mkdir -p /srv/$APP/releases/$SHA"
-rsync -a --delete -e 'ssh -o BatchMode=yes' "$WORK/site/" "$HOST:/srv/$APP/releases/$SHA/"
-
-# --- the server app: built here from the same commit ------------------------------------------
+# Built here from that exact commit, then handed to the same root-owned installer CI uses (ops/site-deploy/):
+# it dumps the database, migrates, swaps the server and waits for /healthz, puts the old server back if the
+# new one is not healthy, and only then swaps the game files. One go-live path, by hand or from CI.
+mkdir -p "$WORK/tree" "$WORK/up"
+git archive "$SHA" | tar -x -C "$WORK/tree" --exclude screenshots --exclude docs
+node "$WORK/tree/tools/build-site.mjs" "$WORK/up/site" >/dev/null
+printf '%s\n' "$SHA" > "$WORK/up/site/version.txt"
 if [[ $MODE == full ]]; then
-  mkdir -p "$WORK/src"
-  git archive "$SHA" server src/content/handles.js tools/slot.mjs tools/with-slot.mjs | tar -x -C "$WORK/src"
-  ( cd "$WORK/src" && node tools/with-slot.mjs dotnet publish server/src/BillionaireKart.Server -c Release -o "$WORK/app" --nologo -v quiet )
-  printf 'Kart__Sha=%s\n' "$SHA" > "$WORK/app/release.env"
-  "${SSH[@]}" "mkdir -p /opt/$APP/releases/$SHA"
-  rsync -a --delete -e 'ssh -o BatchMode=yes' "$WORK/app/" "$HOST:/opt/$APP/releases/$SHA/"
+  ( cd "$WORK/tree" && node tools/with-slot.mjs dotnet publish server/src/BillionaireKart.Server -c Release -o "$WORK/up/server" --nologo -v quiet )
 fi
 
-# --- go live on the host --------------------------------------------------------------------
-"${SSH[@]}" "APP=$APP SHA=$SHA MODE=$MODE bash -s" <<'REMOTE'
-set -euo pipefail
-exec 9>/run/lock/$APP.lock; flock 9
-prune() { ls -1dt "$1"/*/ 2>/dev/null | tail -n +7 | while read -r d; do [[ "$(readlink -f "$2")" == "$(readlink -f "$d")" ]] || rm -rf "$d"; done; }
-
-chmod -R a+rX "/srv/$APP/releases/$SHA"
-if [[ $MODE == full ]]; then
-  chmod -R a+rX "/opt/$APP/releases/$SHA"
-  previous=$(readlink -f "/opt/$APP/current" 2>/dev/null || true)
-  # a dump before every migration; fourteen days kept by the nightly job's cleanup
-  sudo -u postgres pg_dump -Fc billionaire_kart > "/var/backups/$APP/billionaire_kart-pre-$SHA.dump"
-  runuser -u "$APP-migrate" -- env ASPNETCORE_ENVIRONMENT=Production \
-    "ConnectionStrings__Kart=Host=/var/run/postgresql;Database=billionaire_kart;Username=$APP-migrate" \
-    "Kart__KeyDirectory=/var/lib/$APP-migrate" \
-    dotnet "/opt/$APP/releases/$SHA/BillionaireKart.Server.dll" migrate
-  ln -sfn "/opt/$APP/releases/$SHA" "/opt/$APP/current"
-  systemctl restart "$APP.service"
-  ok=""
-  for i in $(seq 1 30); do
-    if curl -fsS http://127.0.0.1:5105/healthz 2>/dev/null | grep -q "$SHA"; then ok=1; break; fi
-    sleep 1
-  done
-  if [[ -z $ok ]]; then
-    echo "the new server did not come up healthy; putting the previous one back" >&2
-    journalctl -u "$APP.service" -n 30 --no-pager >&2 || true
-    if [[ -n $previous && -d $previous ]]; then ln -sfn "$previous" "/opt/$APP/current"; systemctl restart "$APP.service"; fi
-    exit 1
-  fi
-  prune "/opt/$APP/releases" "/opt/$APP/current"
-fi
-# the game files go live last, so a page never loads code that expects a server that is not there yet
-ln -sfn "/srv/$APP/releases/$SHA" "/srv/$APP/current.new" && mv -T "/srv/$APP/current.new" "/srv/$APP/current"
-prune "/srv/$APP/releases" "/srv/$APP/current"
-echo "live: $SHA"
-REMOTE
+INCOMING=/var/lib/billionaire-kart-deploy/incoming/$SHA
+"${SSH[@]}" "mkdir -p $INCOMING"
+rsync -rt --delete -e 'ssh -o BatchMode=yes' "$WORK/up/" "$HOST:$INCOMING/"
+"${SSH[@]}" "SSH_ORIGINAL_COMMAND='activate $SHA' /usr/local/libexec/billionaire-kart-site-ssh"
 
 # --- check from outside -----------------------------------------------------------------------
 live=$(curl -fsS "$SITE_URL/version.txt" || true)

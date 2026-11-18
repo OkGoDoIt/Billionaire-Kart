@@ -13,11 +13,22 @@ const hex = n => '#' + n.toString(16).padStart(6, '0');
 export const itemIcon = id => { const d = ITEMS[id]; return d ? `assets/items/${d.img}.webp` : ''; };
 const ROULETTE = ['boost', 'leak', 'subpoena', 'tweet', 'star', 'pr', 'pinkslip', 'golden', 'crash', 'insider', 'smear', 'antitrust'];
 
-/** Position a HUD layer over a screen-fraction rect [x, y (from the bottom), w, h]; inner edges lose the safe-area insets. */
-function placePane(root, rect) {
-  const [x, y, w, h] = rect, inner = (cond, side) => root.style.setProperty('--safe-' + side, cond ? '0px' : '');
-  root.style.left = x * 100 + '%'; root.style.bottom = y * 100 + '%'; root.style.width = w * 100 + '%'; root.style.height = h * 100 + '%';
-  inner(x > 0.001, 'l'); inner(x + w < 0.999, 'r'); inner(y > 0.001, 'b'); inner(y + h < 0.999, 't');
+/** Position a layer over a screen-fraction rect [x, y (from the bottom), w, h]. A pane edge inside the screen is not next
+    to a notch or a rounded corner, so it takes no safe-area inset. inset: true (a HUD) puts the layer itself inside the
+    safe area and zeroes its --safe-* values, so every lane, unit, and centre in it is measured on the part of the screen
+    that can be seen; a notch beside a narrow split-screen pane then shrinks the pane's HUD instead of shoving its
+    left-hand blocks into the middle. Without it (the board) the layer fills the cell and pads its own content. */
+function placePane(root, rect, inset = false) {
+  const [x, y, w, h] = rect, edge = { l: x < 0.001, r: x + w > 0.999, b: y < 0.001, t: y + h > 0.999 };
+  const side = k => edge[k] ? `var(--inset-${k})` : '0px';
+  if (inset) {
+    root.style.left = `calc(${x * 100}% + ${side('l')})`; root.style.bottom = `calc(${y * 100}% + ${side('b')})`;
+    root.style.width = `calc(${w * 100}% - ${side('l')} - ${side('r')})`; root.style.height = `calc(${h * 100}% - ${side('b')} - ${side('t')})`;
+    for (const k of 'lrtb') root.style.setProperty('--safe-' + k, '0px');
+  } else {
+    root.style.left = x * 100 + '%'; root.style.bottom = y * 100 + '%'; root.style.width = w * 100 + '%'; root.style.height = h * 100 + '%';
+    for (const k of 'lrtb') root.style.setProperty('--safe-' + k, edge[k] ? '' : '0px');
+  }
 }
 
 /** The track drawn top-down on a size x size canvas (+x right, +z down), and the function that places a world point on it. */
@@ -110,11 +121,11 @@ export class Hud {
     g.clearRect(0, 0, this.map.width, this.map.height);
     g.drawImage(this.mapBg, 0, 0);
     const order = this.race.order;
-    for (let i = order.length - 1; i >= 0; i--) {
-      const k = order[i]; if (k === this.kart) continue;
+    for (let i = order.length - 1; i >= -1; i--) {
+      const k = i < 0 ? this.mapWatch : order[i]; if (!k || k === this.kart || (i >= 0 && k === this.mapWatch)) continue;   // the watched kart is drawn last, on top
       const [x, y] = this.mapXY(k.x, k.z);
       const face = this.mapFaces?.get(k.racer.portrait), hasFace = !!(face?.complete && face.naturalWidth);
-      if (hasFace) this._mapFace(g, face, x, y, 15);
+      if (hasFace) this._mapFace(g, face, x, y, k === this.mapWatch ? 18 : 15, k === this.mapWatch ? '#ffd23c' : undefined);   // after the line: the one you are watching wears gold
       else { g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill(); g.fillStyle = hex(k.racer.color); g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill(); }
       // Total Awareness (Thiel's special): what each rival is holding, beside their marker
       if (this.kart.sp.seeItems && k.item) {
@@ -285,7 +296,7 @@ export class Hud {
 
   /** Place the HUD over its pane: rect is [x, y (from the bottom), w, h] in screen fractions. A pane edge inside the
       screen is not next to a notch or a rounded corner, so it drops that safe-area inset. */
-  setRect(rect) { placePane(this.root, rect); }
+  setRect(rect) { placePane(this.root, rect, true); }
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
   dispose() { this.root.remove(); clearTimeout(this._bt); this._bNext = null; clearTimeout(this._wt); clearTimeout(this._kt); clearTimeout(this._ct); }
 }

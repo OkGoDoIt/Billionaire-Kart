@@ -1,6 +1,6 @@
 /* Menus. --u scales everything to the screen so a phone in landscape and a
    desktop get the same layout. */
-.menu-layer { position: absolute; inset: 0; z-index: 10; pointer-events: none; --u: min(1vw, 1.78vh); font-size: calc(var(--u) * 1.75); color: #fff; }
+.menu-layer { position: absolute; inset: 0; z-index: 10; pointer-events: none; --u: min(1vw, calc(var(--vh) * 1.78)); font-size: calc(var(--u) * 1.75); color: #fff; }
 .menu-screen { position: absolute; inset: 0; pointer-events: auto; display: flex; flex-direction: column; align-items: center; padding: calc(var(--u) * 3 + var(--safe-t)) calc(var(--u) * 4 + var(--safe-r)) calc(var(--u) * 3 + var(--safe-b)) calc(var(--u) * 4 + var(--safe-l)); overflow: hidden auto; animation: menu-in 0.22s ease-out; background: linear-gradient(180deg, rgba(11,13,32,0.78), rgba(11,13,32,0.5) 32%, rgba(11,13,32,0.5) 70%, rgba(11,13,32,0.78)); }   /* dark enough that nothing in the scene behind competes with the words */
 /* while a screen has more below the fold, a fade at its bottom edge says so; menus.js adds the element
    and the more-below class, and takes the class away at the end of the scroll */
@@ -153,8 +153,8 @@
 .screen-racers { background: linear-gradient(90deg, rgba(11,13,32,0.8), rgba(11,13,32,0.4) 50%, rgba(11,13,32,0) 66%); }
 .racer-layout { align-self: stretch; flex: 1; display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto; column-gap: calc(var(--u) * 3); min-height: 0;
   /* four rows of whole, square portraits, as big as the height allows; the name sits on a plate under each one */
-  --vh: 100vh; --plate: calc(var(--u) * 2.15); --side: clamp(calc(var(--u) * 6), calc((var(--vh) - var(--safe-t) - var(--safe-b) - var(--u) * 18) / 4 - var(--plate)), calc(var(--u) * 13)); }
-@supports (height: 100dvh) { .racer-layout { --vh: 100dvh; } }
+  --full-h: 100vh; --plate: calc(var(--u) * 2.15); --side: clamp(calc(var(--u) * 6), calc((var(--full-h) - var(--safe-t) - var(--safe-b) - var(--u) * 18) / 4 - var(--plate)), calc(var(--u) * 13)); }
+@supports (height: 100dvh) { .racer-layout { --full-h: 100dvh; } }
 .racer-grid-box { display: contents; }   /* upright, it becomes the box the portraits are sized to fit */
 .racer-grid { grid-row: 1 / 3; display: grid; grid-template-columns: repeat(4, var(--side)); grid-auto-rows: calc(var(--side) + var(--plate)); gap: calc(var(--u) * 1.05) calc(var(--u) * 1.3); align-content: start; }
 .racer-tile { font: inherit; position: relative; display: flex; flex-direction: column; border: calc(var(--u) * 0.4) solid var(--ink); border-radius: calc(var(--u) * 1.8); background: var(--ink); padding: 0; cursor: pointer; overflow: hidden; min-height: 0; box-shadow: 0 calc(var(--u) * 0.6) 0 rgba(0,0,0,0.42); transition: transform 0.1s; }
@@ -366,7 +366,7 @@ kbd { font-family: var(--body); font-weight: 700; background: #fff; color: var(-
 .records thead th { color: var(--gold); border-bottom: 2px solid rgba(255,255,255,0.25); }
 
 /* loading and track intro card */
-.track-card { position: absolute; left: calc(var(--u) * 5 + var(--safe-l)); bottom: calc(var(--u) * 6 + var(--safe-b)); --u: min(1vw, 1.78vh); pointer-events: none; animation: card-in 0.5s cubic-bezier(.2,1.2,.4,1) both; }
+.track-card { position: absolute; left: calc(var(--u) * 5 + var(--safe-l)); bottom: calc(var(--u) * 6 + var(--safe-b)); --u: min(1vw, calc(var(--vh) * 1.78)); pointer-events: none; animation: card-in 0.5s cubic-bezier(.2,1.2,.4,1) both; }
 .track-card h1 { font-family: var(--display); font-weight: normal; font-size: calc(var(--u) * 8); margin: 0; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 0.13em var(--ink); line-height: 1; filter: drop-shadow(0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.4)); }
 .track-card p { font-family: var(--body); font-weight: 600; font-size: calc(var(--u) * 2.6); margin: calc(var(--u) * 0.8) 0 0; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
 .track-card .cup-line { font-family: var(--display); font-size: calc(var(--u) * 2.8); color: var(--gold); paint-order: stroke fill; -webkit-text-stroke: 0.16em var(--ink); }

@@ -270,7 +270,7 @@ export class Kart {
     // player who is steering: hands off the stick, it fades out entirely (see _assistSteer).
     if (Math.abs(steerIn) > 0.12) this._steerAge = 0; else this._steerAge += dt;
     const aStr = this.assist ? this.assist.steer || 0 : 0;
-    if (aStr > 0 && controllable && !driftHeld && !this.drifting && !this.driftArmed && this.airT <= 0.07 && this.fwd > 1) steerIn = this._assistSteer(steerIn, aStr);
+    if (aStr > 0 && controllable && !this.finished && !driftHeld && !this.drifting && !this.driftArmed && this.airT <= 0.07 && this.fwd > 1) steerIn = this._assistSteer(steerIn, aStr);
     else this.assistOut = 0;
 
     // ----- steering smoothing

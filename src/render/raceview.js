@@ -153,6 +153,7 @@ export class RaceView {
     const sun = this.gfx.sun, shadow = this.cull && sun.castShadow ? sun.shadow : null;
     if (shadow) shadow.updateMatrices(sun);
     this.cull?.before(v.camera, shadow?.camera);
+    if (this.coinMesh && this.views.length > 1) this._coins(v.camera.position);
     // an item box close enough to fill the lens (the finish shot rides ahead of the kart, over the box rows) is left out of this view
     const cp0 = v.camera.position;
     for (const o of this.boxes) if (o.b.active) o.m.visible = (o.m.position.x - cp0.x) ** 2 + (o.m.position.y - cp0.y) ** 2 + (o.m.position.z - cp0.z) ** 2 > 12;
@@ -172,6 +173,17 @@ export class RaceView {
       kv.rig.root.visible = kv.kart === own || (kv.pos.x - cp.x) ** 2 + (kv.pos.y + 0.9 - cp.y) ** 2 + (kv.pos.z - cp.z) ** 2 > 7.3;
       kv.prepareTag(v.camera);
     }
+  }
+  /** Coin instances, leaving out any coin that would fill the lens at `lens` (the finish shot rides over the racing line, where the coins are). */
+  _coins(lens) {
+    const coins = this.race.items.coins;
+    for (let i = 0; i < coins.length; i++) {
+      const c = coins[i], sc = (c.x - lens.x) ** 2 + (c.y - lens.y) ** 2 + (c.z - lens.z) ** 2 < 9 ? 0 : this.coinScale[i] * 0.95;
+      _e.set(0, this.time * 3.2 + i * 0.6, 0); _q.setFromEuler(_e); _s.set(sc, sc, sc);
+      _m.compose(_p.set(c.x, c.y + Math.sin(this.time * 3 + i) * 0.08, c.z), _q, _s);
+      this.coinMesh.setMatrixAt(i, _m);
+    }
+    this.coinMesh.instanceMatrix.needsUpdate = true;
   }
   /** The five lights on the start gantry: red in step with the count, green on go. */
   _startLights(n) {
@@ -369,16 +381,9 @@ export class RaceView {
     }
     // coins
     if (this.coinMesh) {
-      const coins = race.items.coins, lens = this.views.length === 1 ? this.views[0].camera.position : null;   // one view: a coin that would fill the lens is left out
-      for (let i = 0; i < coins.length; i++) {
-        const c = coins[i];
-        this.coinScale[i] += ((c.active ? 1 : 0) - this.coinScale[i]) * Math.min(1, dt * 12);
-        const sc = lens && (c.x - lens.x) ** 2 + (c.y - lens.y) ** 2 + (c.z - lens.z) ** 2 < 9 ? 0 : this.coinScale[i] * 0.95;
-        _e.set(0, this.time * 3.2 + i * 0.6, 0); _q.setFromEuler(_e); _s.set(sc, sc, sc);
-        _m.compose(_p.set(c.x, c.y + Math.sin(this.time * 3 + i) * 0.08, c.z), _q, _s);
-        this.coinMesh.setMatrixAt(i, _m);
-      }
-      this.coinMesh.instanceMatrix.needsUpdate = true;
+      const coins = race.items.coins;
+      for (let i = 0; i < coins.length; i++) this.coinScale[i] += ((coins[i].active ? 1 : 0) - this.coinScale[i]) * Math.min(1, dt * 12);
+      if (this.views.length === 1) this._coins(this.views[0].camera.position);   // split screens place them per view, in _beforeView
     }
     this._things(dt);
     this._ghost();

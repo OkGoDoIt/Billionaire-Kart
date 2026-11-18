@@ -167,6 +167,7 @@ public sealed class RoomManager(SettingsService settings, RatingService rating, 
             switch (t)
             {
                 case "racer": r.SetRacer(id, Str(msg, "id")); break;
+                case "name": r.SetName(id, msg.TryGetProperty("name", out var nm) ? nm : default); break;
                 case "rules": r.SetRules(id, msg.TryGetProperty("rules", out var rl) ? rl : default); break;
                 case "start": r.Start(id, now); break;
                 case "track": await r.PickTrackAsync(id, Str(msg, "id"), now); break;

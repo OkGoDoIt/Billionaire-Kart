@@ -107,7 +107,7 @@ public static class PlayerApi
             var players = await db.Players.AsNoTracking().Where(p => p.Races > 0 && p.BannedAt == null)
                 .Select(p => new { p.Id, p.HandleTitle, p.HandleNumber, p.Mu, p.Sigma, p.Races }).ToListAsync();
 
-            List<(Guid Id, int Title, int Number, long Value, int Races)> rows;
+            List<(Guid Id, int Title, int Number, long Value, int Races, long Current)> rows;
             if (board == "week")
             {
                 // Gain = valuation now minus valuation before their first rated race of the last 7 days.
@@ -118,12 +118,12 @@ public static class PlayerApi
                     .ToListAsync();
                 var firsts = recent.GroupBy(r => r.Id).ToDictionary(g => g.Key, g => g.MinBy(r => r.RaceId)!.Before);
                 rows = players.Where(p => firsts.ContainsKey(p.Id))
-                    .Select(p => (p.Id, p.HandleTitle, p.HandleNumber, s.Valuation(p.Mu, p.Sigma) - firsts[p.Id], p.Races))
+                    .Select(p => (p.Id, p.HandleTitle, p.HandleNumber, s.Valuation(p.Mu, p.Sigma) - firsts[p.Id], p.Races, s.Valuation(p.Mu, p.Sigma)))
                     .ToList();
             }
             else
             {
-                rows = players.Select(p => (p.Id, p.HandleTitle, p.HandleNumber, s.Valuation(p.Mu, p.Sigma), p.Races)).ToList();
+                rows = players.Select(p => { var v = s.Valuation(p.Mu, p.Sigma); return (p.Id, p.HandleTitle, p.HandleNumber, v, p.Races, v); }).ToList();
             }
             rows = rows.OrderByDescending(r => r.Value).ThenBy(r => r.Number).ToList();
 
@@ -143,6 +143,7 @@ public static class PlayerApi
                     rank = i + 1,
                     handle = new { title = r.Title, number = r.Number },
                     valuation = r.Value,
+                    current = r.Current,   // the valuation itself, so the week board (whose figure is the gain) can still name the tier
                     races = r.Races,
                     me = r.Id == me,
                 }),

@@ -74,6 +74,8 @@ public sealed class Member
     public required PlayerInfo Player { get; set; }
     public Guid Id => Player.Id;
     public string? Racer { get; set; }
+    /// <summary>A typed name, private rooms only. In memory only: never stored or logged.</summary>
+    public string? Name { get; set; }
     public bool Ready { get; set; }
     public Connection? Conn { get; set; }
     public bool Connected => Conn != null;

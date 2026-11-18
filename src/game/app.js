@@ -144,7 +144,16 @@ export class App {
   }
   onRaceDone(session, results) {
     if (this.attract) { setTimeout(() => { if (this.attract && this.session === session) this._attract(); }, 2500); return; }
+    if (session.net) { this.online?.raceDone(session); return; }   // online results come from the server: nothing goes in the save
     this._finishRace(session, results);
+  }
+
+  /* ---------- online ---------- */
+  /** Online play is its own module (src/ui/online.js), fetched the first time the player goes online, so the offline game never loads it. */
+  async goOnline(opts) {
+    try { if (!this.online) this.online = new (await import('../ui/online.js')).Online(this); }
+    catch { const sub = this.menus.screen?.el.querySelector('.btn.c4 .btn-sub'); if (sub) sub.textContent = 'Can’t reach the race server.'; return; }
+    this.online.enter(opts);
   }
 
   /* ---------- showroom ---------- */
@@ -207,7 +216,7 @@ export class App {
   quitToMenu() { this.gp = null; this._wake(false); this._lockLandscape(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.audio?.music?.('menu'); }); }
 
   /* ---------- pause ---------- */
-  pause() { if (!this.session || this.attract || this.session.paused) return; this.session.setPaused(true); this.session.touch?.setVisible(false); this.menus.reset('pause'); }
+  pause() { if (!this.session || this.attract || this.session.paused || this.session.menuOpen) return; this.session.setPaused(true); this.session.touch?.setVisible(false); this.menus.reset(this.session.net ? 'onlinePause' : 'pause'); }
   resume() {
     if (this.mustTurn()) this._turnOk = true;   // resuming while upright: race on upright, and do not pause again until the phone has been sideways and back
     this.menus.close(); this.session?.setPaused(false); this.session?.touch?.setVisible(this.session.phase !== 'intro');

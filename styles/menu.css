@@ -51,6 +51,12 @@
 .screen-main { justify-content: center; align-items: flex-start; padding-left: calc(var(--u) * 8 + var(--safe-l)); background: linear-gradient(90deg, rgba(11,13,32,0.72), rgba(11,13,32,0.25) 55%, rgba(11,13,32,0)); }
 .main-nav { display: flex; flex-direction: column; gap: calc(var(--u) * 1.4); margin-top: calc(var(--u) * 2.4); width: calc(var(--u) * 42); }
 .main-nav .btn { width: 100%; }
+/* the fourth mode, Online, wears the logo's fourth color; sideways, the four modes stand two by two so the menu still fits a phone on its side */
+.btn.c4 { background: linear-gradient(180deg, #8dffd6, #2ee6a6); }
+@media (orientation: landscape) {
+  .main-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto; grid-auto-flow: column; width: calc(var(--u) * 74); }   /* down the first column, then the second: Down from Grand Prix is still Quick Race */
+  .main-nav .row { grid-column: 1 / -1; grid-row: 3; }
+}
 
 /* cards */
 .cards { display: grid; gap: calc(var(--u) * 2.2); align-self: stretch; }

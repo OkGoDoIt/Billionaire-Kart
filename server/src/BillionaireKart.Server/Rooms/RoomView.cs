@@ -28,6 +28,7 @@ public static class RoomView
         {
             id = m.Id,
             handle = new { title = m.Player.HandleTitle, number = m.Player.HandleNumber },
+            name = r.IsPublic ? null : m.Name,   // a typed name is only ever seen by the people you invited
             racer = m.Racer,
             ready = m.Ready,
             connected = m.Connected,

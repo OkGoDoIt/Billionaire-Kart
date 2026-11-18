@@ -343,4 +343,41 @@ public sealed class RoomTests(TestApp app)
         Assert.Equal(a.Id.ToString(), slots[7].Str("member"));
         Assert.Equal("bezos", slots[7].Str("racer"));
     }
+
+    [Fact]
+    public async Task Typed_names_show_in_private_rooms_only_cleaned()
+    {
+        var (a, b, code) = await TwoInPrivate();
+        await using var _a = a; await using var _b = b;
+
+        await a.Send(new { t = "name", name = "  Roger \u0007\n\t  the   Great  " });
+        var room = await b.Room(r => !r.MemberOf(a.Id).IsNull("name"));
+        Assert.Equal("Roger the Great", room.MemberOf(a.Id).Str("name"));
+
+        // cut to 16 text elements; an emoji counts as one and is never split
+        await a.Send(new { t = "name", name = "\U0001F680\U0001F680abcdefghijklmnopqrstuvwxyz" });
+        room = await b.Room(r => r.MemberOf(a.Id).Str("name")?.StartsWith("\U0001F680") == true);
+        var cut = room.MemberOf(a.Id).Str("name")!;
+        Assert.Equal(16, new System.Globalization.StringInfo(cut).LengthInTextElements);
+        Assert.Equal("\U0001F680\U0001F680abcdefghijklmn", cut);
+
+        // empty clears it
+        await a.Send(new { t = "name", name = " \u200B " });
+        room = await b.Room(r => r.MemberOf(a.Id).IsNull("name"));
+        Assert.True(room.MemberOf(b.Id).IsNull("name"));
+        Assert.Equal(code, room.Str("code"));
+    }
+
+    [Fact]
+    public async Task Typed_name_in_a_public_room_is_refused_and_never_shown()
+    {
+        await using var a = await app.NewGamer();
+        await a.Send(new { t = "find" });
+        await a.Room(r => r.GetProperty("public").GetBoolean());
+        await a.Send(new { t = "name", name = "Roger" });
+        Assert.Equal("bad", (await a.Next("err")).Str("code"));
+        await a.Send(new { t = "racer", id = "bezos" });
+        var room = await a.Room(r => r.MemberOf(a.Id).Str("racer") == "bezos");
+        Assert.True(room.MemberOf(a.Id).IsNull("name"));
+    }
 }

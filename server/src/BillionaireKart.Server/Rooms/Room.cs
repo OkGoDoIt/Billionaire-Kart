@@ -148,6 +148,49 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
         Broadcast();
     }
 
+    /// <summary>A typed name for this private room (docs/online-protocol.md). Public rooms refuse it.</summary>
+    public void SetName(Guid id, JsonElement name)
+    {
+        var m = Find(id);
+        if (m == null) return;
+        if (IsPublic || name.ValueKind != JsonValueKind.String) { Err(m, "bad"); return; }
+        m.Name = CleanName(name.GetString());
+        Broadcast();
+    }
+
+    public const int NameMaxLength = 16;
+
+    /// <summary>Printable text only, runs of whitespace collapsed, trimmed, and at most 16 text elements (an emoji is never cut in half). Empty means no name.</summary>
+    public static string? CleanName(string? raw)
+    {
+        if (raw == null) return null;
+        var sb = new System.Text.StringBuilder(raw.Length);
+        bool space = false;
+        foreach (var rune in raw.EnumerateRunes())
+        {
+            if (System.Text.Rune.IsWhiteSpace(rune)) { space = sb.Length > 0; continue; }
+            var cat = System.Text.Rune.GetUnicodeCategory(rune);
+            bool printable = cat switch
+            {
+                System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Surrogate or
+                System.Globalization.UnicodeCategory.PrivateUse or System.Globalization.UnicodeCategory.OtherNotAssigned or
+                System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator => false,
+                // format characters are invisible (and can reorder text), except the joiner that holds emoji sequences together
+                System.Globalization.UnicodeCategory.Format => rune.Value == 0x200D,
+                _ => true,
+            };
+            if (!printable) continue;
+            if (space) { sb.Append(' '); space = false; }
+            sb.Append(rune.ToString());
+        }
+        var text = sb.ToString();
+        var e = System.Globalization.StringInfo.GetTextElementEnumerator(text);
+        var outText = new System.Text.StringBuilder();
+        for (int n = 0; n < NameMaxLength && e.MoveNext(); n++) outText.Append(e.GetTextElement());
+        var result = outText.ToString().Trim();
+        return result.Length == 0 ? null : result;
+    }
+
     public void SetRules(Guid id, JsonElement rules)
     {
         var m = Find(id);

@@ -168,7 +168,8 @@ export class Menus {
 
   /* ---------- title ---------- */
   s_title() {
-    const go = () => { if (matchMedia('(pointer: coarse)').matches) this.app.fullscreen(true); this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); };
+    // a shared room link (?room=CODE) goes straight on into that room after this first tap
+    const go = () => { if (matchMedia('(pointer: coarse)').matches) this.app.fullscreen(true); this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); const room = new URLSearchParams(location.search).get('room'); if (room) this.app.goOnline({ room }); };
     const el = h('div', { onclick: go },
       h('div', { class: 'logo' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c))), h('div', { class: 'logo-tag' }, 'Eight egos. One trophy.')),
       h('div', { class: 'press' }, matchMedia('(pointer: coarse)').matches ? 'Tap to start' : 'Press any button'),
@@ -203,6 +204,7 @@ export class Menus {
         this.btn('Grand Prix', () => start('gp'), { cls: 'big c1', def: true, sub: 'Four races, one trophy' }),
         this.btn('Quick Race', () => start('vs'), { cls: 'big c2', sub: 'Any track, your rules' }),
         this.btn('Time Trial', () => { A.flow = { mode: 'timetrial', players: 1, devices: ['any'] }; this.open('racers', { player: 0 }); }, { cls: 'big c3', sub: 'Just you and the clock' }),
+        this.btn('Online', () => A.goOnline(), { cls: 'big c4', sub: 'Friends, strangers, and CPUs' }),
         row),
       slot);
     drawInstall();
@@ -264,18 +266,22 @@ export class Menus {
   }
 
   /* ---------- racer select ---------- */
-  s_racers({ player }) {
+  /* Online (src/ui/online.js) reuses this screen with: takenBy {racerId: color} for racers other members hold,
+     a title, the racer to start on, and onChoose in place of moving on to the next player or the setup. */
+  s_racers({ player, takenBy = null, title: heading = null, current: startOn = null, onChoose = null }) {
     const A = this.app, flow = A.flow, n = flow.players;
     flow.racers = flow.racers || [];
-    const taken = flow.racers.slice(0, player);
-    let current = RACER_BY_ID[A.save.data.last.racer[player]] || RACERS[player];
+    const taken = takenBy ? Object.keys(takenBy) : flow.racers.slice(0, player);
+    const chip = id => takenBy ? h('em', { style: `background:${takenBy[id]}` }, ' ') : h('em', { style: `background:${PLAYER_COLORS[taken.indexOf(id)]}` }, `P${taken.indexOf(id) + 1}`);
+    let current = RACER_BY_ID[startOn] || RACER_BY_ID[A.save.data.last.racer[player]] || RACERS[player];
     if (taken.includes(current.id)) current = RACERS.find(r => !taken.includes(r.id));
     const name = h('h2', {}), title = h('div', { class: 'r-title' }), quote = h('p', { class: 'r-quote' }), bio = h('p', { class: 'r-bio' }), special = h('p', { class: 'r-special' }), stats = h('div', { class: 'r-stats' }), big = h('img', { class: 'r-portrait', alt: '', draggable: 'false' });
     const tiles = new Map();
     const choose = r => {
       flow.racers[player] = r.id; A.save.data.last.racer[player] = r.id; A.save.write();
       A.audio?.racerPicked?.(r);
-      if (player + 1 < n) this.open('racers', { player: player + 1 }); else this.open('setup');
+      if (onChoose) onChoose(r);
+      else if (player + 1 < n) this.open('racers', { player: player + 1 }); else this.open('setup');
     };
     // Looking and choosing are separate: a tile shows the racer, the button under the card picks them.
     const go = this.btn('', () => choose(current), { cls: 'go r-go' }), goLabel = go.querySelector('.btn-label');
@@ -290,11 +296,11 @@ export class Menus {
     const grid = h('div', { class: 'racer-grid' }, RACERS.map(r => {
       // a tap or click only looks; Enter or the controller's confirm button, pressed on a tile, picks straight away
       const t = h('button', { class: 'racer-tile' + (taken.includes(r.id) ? ' taken' : '') + (r.name.length > 9 ? ' long' : ''), 'data-f': true, 'data-nohover': true, 'data-default': r === current, disabled: taken.includes(r.id), style: `--rc:${hex(r.color)}`, onclick: () => { if (this.keyClick) choose(r); else { this.focus(t, false); A.audio?.ui('move'); } } },
-        h('img', { src: r.portrait, alt: '', loading: 'lazy', draggable: 'false' }), h('span', {}, r.name), taken.includes(r.id) && h('em', { style: `background:${PLAYER_COLORS[taken.indexOf(r.id)]}` }, `P${taken.indexOf(r.id) + 1}`));
+        h('img', { src: r.portrait, alt: '', loading: 'lazy', draggable: 'false' }), h('span', {}, r.name), taken.includes(r.id) && chip(r.id));
       t.addEventListener('menufocus', () => show(r)); tiles.set(r.id, t); return t;
     }));
     const stage = h('div', { class: 'r-stage' });
-    const el = h('div', {}, this.header(n > 1 ? `Player ${player + 1}: pick your racer` : 'Pick your racer'),
+    const el = h('div', {}, this.header(heading || (n > 1 ? `Player ${player + 1}: pick your racer` : 'Pick your racer')),
       h('div', { class: 'racer-layout' }, h('div', { class: 'racer-grid-box' }, grid), stage, h('aside', { class: 'racer-card', style: n > 1 ? `--pc:${PLAYER_COLORS[player]}` : '' }, h('div', { class: 'r-top' }, big, h('div', { class: 'r-id' }, h('div', { class: 'r-head' }, name, title), quote)), bio, stats, special, go)));
     return {
       el, onOpen: () => { A.showRoomFor(flow.racers.slice(0, player).map(id => RACER_BY_ID[id]).concat([current])); show(current); },
@@ -809,4 +815,4 @@ export class Menus {
     return { el };
   }
 }
-export { PLAYER_COLORS };
+export { PLAYER_COLORS, LEVELS, CC_LIST, h, hex };

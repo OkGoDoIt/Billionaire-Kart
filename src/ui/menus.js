@@ -430,7 +430,7 @@ export class Menus {
     });
     const buttons = gp
       ? [this.btn(gp.last ? 'See final standings' : 'Next race', () => A.gpNext(), { cls: 'go', def: true })]
-      : [this.btn('Race again', () => A.restartRace(), { cls: 'go', def: true }), this.btn('Choose another track', () => A.backToTracks()), this.btn('Quit to menu', () => A.quitToMenu())];
+      : [this.btn('Race again', () => A.restartRace(), { cls: 'go', def: true }), this.btn('Change track', () => A.backToTracks()), this.btn('Main menu', () => A.quitToMenu())];
     // Share: the best human finish as a poster with a headline, ready before the tap (see ui/share.js)
     const me = humans.slice().sort((a, b) => a.rank - b.rank)[0];
     if (me) {
@@ -494,7 +494,8 @@ export class Menus {
     const el = h('div', {}, h('div', { class: 'panel cupres' },
       h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
-      h('div', { class: 'foot' }, this.btn('Race this cup again', () => A.restartCup(), { cls: 'go', def: true }), this.cupShare(cup, standings, best), this.btn('Change racer', () => A.backToRacers()), this.btn('Main menu', () => A.quitToMenu()))));
+      // four equal exits: after a whole cup, no one of them is the obvious next step
+      h('div', { class: 'foot' }, this.btn('Replay cup', () => A.restartCup(), { def: true }), this.cupShare(cup, standings, best), this.btn('Change racer', () => A.backToRacers()), this.btn('Main menu', () => A.quitToMenu()))));
     return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 

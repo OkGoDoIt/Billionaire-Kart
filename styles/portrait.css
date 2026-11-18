@@ -166,7 +166,8 @@
   .panel.cupres { padding: calc(var(--u) * 1.6) calc(var(--u) * 2); }
   .cupres-head .trophy { width: calc(var(--u) * 7.5); height: calc(var(--u) * 7.5); }
   .panel.cupres .res-row { font-size: calc(var(--u) * 1.9); grid-template-columns: calc(var(--u) * 3.4) calc(var(--u) * 3.4) minmax(0, 1fr) calc(var(--u) * 5); }
-  .panel.cupres .foot .btn { width: 100%; padding: calc(var(--u) * 1.5) calc(var(--u) * 2) calc(var(--u) * 1.1); }
+  .panel.cupres .foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--u) * 1); }
+  .panel.cupres .foot .btn { width: 100%; min-width: 0; padding: calc(var(--u) * 1.5) calc(var(--u) * 1) calc(var(--u) * 1.1); }
 
   /* track intro card and first-race hint */
   .track-card { left: calc(var(--u) * 4 + var(--safe-l)); right: calc(var(--u) * 4 + var(--safe-r)); bottom: calc(var(--u) * 15 + var(--safe-b)); }

@@ -1,0 +1,46 @@
+@page "/admin"
+@model IndexModel
+@{ ViewData["Title"] = "Dashboard"; }
+<h1>Dashboard</h1>
+<div class="tiles">
+  <div class="tile"><span class="big">@Model.RoomCount</span><span>rooms open now</span></div>
+  <div class="tile"><span class="big">@Model.Online</span><span>people online now</span></div>
+  <div class="tile"><span class="big">@Model.RacesDay</span><span>rated races in the last 24 hours</span></div>
+  <div class="tile"><span class="big">@Model.RacesWeek</span><span>rated races in the last 7 days</span></div>
+</div>
+
+<h2>Rooms</h2>
+@if (Model.Rooms.Count == 0) { <p class="empty">No rooms are open.</p> }
+else
+{
+  <table>
+    <thead><tr><th>Code</th><th>Kind</th><th>Phase</th><th class="num">People</th><th class="num">Connected</th></tr></thead>
+    <tbody>
+    @foreach (var r in Model.Rooms)
+    {
+      <tr><td class="mono">@r.Code</td><td>@(r.Public ? "Public" : "Private")</td><td>@r.Phase</td><td class="num">@r.Members</td><td class="num">@r.Connected</td></tr>
+    }
+    </tbody>
+  </table>
+}
+
+<h2>Newest players</h2>
+@if (Model.Newest.Count == 0) { <p class="empty">Nobody has played yet.</p> }
+else
+{
+  <table>
+    <thead><tr><th>Player</th><th class="num">Valuation</th><th class="num">Rated races</th><th>Joined</th><th>Last seen</th></tr></thead>
+    <tbody>
+    @foreach (var p in Model.Newest)
+    {
+      <tr>
+        <td><a href="/admin/players?number=@p.HandleNumber">@Fmt.Handle(p.HandleTitle, p.HandleNumber)</a>@if (p.BannedAt != null) { <span class="tag bad">Banned</span> }</td>
+        <td class="num">@Fmt.Money(Model.Valuation(p))</td>
+        <td class="num">@p.Races</td>
+        <td>@Fmt.When(p.CreatedAt)</td>
+        <td>@Fmt.When(p.LastSeenAt)</td>
+      </tr>
+    }
+    </tbody>
+  </table>
+}

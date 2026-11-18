@@ -1,0 +1,44 @@
+@page "/admin/races"
+@model RacesModel
+@{ ViewData["Title"] = "Races"; }
+<h1>Rated races</h1>
+<p class="lede">The latest 100. Voiding a race takes it off the leaderboard and gives back the rating of anyone whose last rated race it was.</p>
+@if (Model.Rows.Count == 0) { <p class="empty">No rated races yet.</p> }
+@foreach (var race in Model.Rows)
+{
+  <section class="race @(race.VoidedAt != null ? "voided" : "")" id="race-@race.Id">
+    <header>
+      <div>
+        <h2><span class="mono">@race.TrackId</span></h2>
+        <p class="sub">@Fmt.When(race.EndedAt) · room <span class="mono">@race.RoomCode</span> · @race.Cc cc · @Fmt.Level(race.Level) CPUs · race @race.Id</p>
+      </div>
+      @if (race.VoidedAt == null)
+      {
+        <form method="post" asp-page-handler="Void"><input type="hidden" name="id" value="@race.Id"><button type="submit" class="danger">Void race</button></form>
+      }
+      else { <span class="tag bad">Voided @Fmt.When(race.VoidedAt.Value)</span> }
+    </header>
+    <table>
+      <thead><tr><th class="num">Place</th><th>Racer</th><th>Driver</th><th class="num">Time</th><th class="num">Valuation</th><th class="num">Change</th></tr></thead>
+      <tbody>
+      @foreach (var r in race.Results.OrderBy(r => r.Rank))
+      {
+        var p = r.PlayerId is Guid pid ? Model.Players.GetValueOrDefault(pid) : null;
+        <tr class="@(r.PlayerId != null ? "human" : "")">
+          <td class="num">@r.Rank</td>
+          <td>@r.Racer</td>
+          <td>
+            @if (p != null) { <a href="/admin/players?number=@p.HandleNumber">@Fmt.Handle(p.HandleTitle, p.HandleNumber)</a> }
+            else if (r.CpuLevel is { } lvl) { <span class="sub">CPU (@Fmt.Level(lvl).ToLowerInvariant())</span> }
+            @if (r.Absent) { <span class="tag">Left</span> }
+            @if (r.Voided) { <span class="tag bad">Too fast</span> }
+          </td>
+          <td class="num">@Fmt.Time(r.TimeSeconds)@if (r.Estimated) { <span class="sub"> not finished</span> }</td>
+          <td class="num">@(r.ValuationAfter is long a ? Fmt.Money(a) : "")</td>
+          <td class="num @(r.ValuationAfter > r.ValuationBefore ? "up" : r.ValuationAfter < r.ValuationBefore ? "down" : "")">@(r.ValuationAfter is long a2 && r.ValuationBefore is long b ? Fmt.Signed(a2 - b) : "")</td>
+        </tr>
+      }
+      </tbody>
+    </table>
+  </section>
+}

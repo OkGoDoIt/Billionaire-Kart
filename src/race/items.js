@@ -109,7 +109,7 @@ export class ItemSystem {
     for (const b of this.boxes) {
       if (!b.active) { b.t -= dt; if (b.t <= 0) { b.active = true; race.emit('boxBack', b); } continue; }
       for (const k of karts) {
-        if (k.rescueT > 0 || k.finished || k.item || k.rouletteT > 0 || k.goldenT > 0) continue;
+        if (k.puppet || k.rescueT > 0 || k.finished || k.item || k.rouletteT > 0 || k.goldenT > 0) continue;   // online: puppets only touch boxes on their owner's device
         const dx = k.x - b.x, dz = k.z - b.z;
         if (dx * dx + dz * dz < 2.9 && Math.abs(k.y + 0.6 - b.y) < 2.2) {
           b.active = false; b.t = BOX_RESPAWN; race.emit('boxBreak', { box: b, kart: k });
@@ -119,6 +119,7 @@ export class ItemSystem {
       }
     }
     for (const k of karts) {
+      if (k.puppet) continue;   // online: the owner rolls (its item arrives in snapshots)
       if (k.rouletteT > 0) {
         k.rouletteT -= dt;
         if (k.rouletteT <= 0) { k.rouletteT = 0; if (!k.item) this.give(k, this.roll(k)); }
@@ -128,7 +129,7 @@ export class ItemSystem {
     for (const c of this.coins) {
       if (!c.active) { c.t -= dt; if (c.t <= 0) c.active = true; continue; }
       for (const k of karts) {
-        if (k.rescueT > 0) continue;
+        if (k.puppet || k.rescueT > 0) continue;
         const dx = k.x - c.x, dz = k.z - c.z, dy = k.y + 0.7 - c.y;
         if (dx * dx + dz * dz < 2.6 && Math.abs(dy) < 1.9) { c.active = false; c.t = 7; k.addCoins(1); race.emit('coinTaken', { coin: c, kart: k }); break; }
       }
@@ -182,7 +183,7 @@ export class ItemSystem {
     const x = kart.x - sy * 2.3, z = kart.z - cy * 2.3;
     const g = tr.ground(x, z, kart.hint, this.hit, kart.y);
     const h = { id: uid++, type, x, y: g.y, z, radius: type === 'pinkslip' ? 1.3 : 1.15, owner: kart, age: 0, life: type === 'pinkslip' ? 2.6 : 75, hint: g.i };
-    this.hazards.push(h); this.race.emit('hazardSpawn', h);
+    this.hazards.push(h); this.race.net?.spawn(h); this.race.emit('hazardSpawn', h);
     return h;
   }
 
@@ -196,14 +197,14 @@ export class ItemSystem {
     };
     if (type === 'tweet' && !back) { s.target = this._aheadOf(kart); if (s.target?.sp.dodgeTweet && this.race.rng.chance(s.target.sp.dodgeTweet)) s.target = null; }   // special: it loses the thread
     if (type === 'antitrust') { s.target = this.race.order[0] === kart ? null : this.race.order[0]; s.y = kart.y + 3; s.s = kart.s; s.lat = 0; }
-    this.shots.push(s); this.race.emit('shotSpawn', s);
+    this.shots.push(s); this.race.net?.spawn(s); this.race.emit('shotSpawn', s);
     return s;
   }
 
   _throwBomb(kart) {
     const sy = Math.sin(kart.yaw), cy = Math.cos(kart.yaw), sp = kart.speed + 17;
     const s = { id: uid++, type: 'pinkslip', owner: kart, age: 0, life: 6, x: kart.x + sy * 1.5, y: kart.y + 1.3, z: kart.z + cy * 1.5, vx: sy * sp, vz: cy * sp, vy: 10.5, yaw: kart.yaw, hint: kart.hint, phase: 'arc', t: 0 };
-    this.shots.push(s); this.race.emit('shotSpawn', s);
+    this.shots.push(s); this.race.net?.spawn(s); this.race.emit('shotSpawn', s);
   }
 
   _aheadOf(kart) { const o = this.race.order, i = o.indexOf(kart); return i > 0 ? o[i - 1] : null; }
@@ -212,7 +213,7 @@ export class ItemSystem {
     const race = this.race, n = race.karts.length;
     race.emit('lightning', { by: user });
     for (const k of race.karts) {
-      if (k === user || k.finished || k.rescueT > 0) continue;
+      if (k === user || k.puppet || k.finished || k.rescueT > 0) continue;
       if (k.invincible || k.ghostT > 0) { k.emit('dodged', 'crash'); continue; }
       const front = 1 - (k.rank - 1) / Math.max(1, n - 1);
       k.shrinkT = lerp(3.4, 6.5, front) * (k.sp.shrinkTake || 1);
@@ -224,27 +225,27 @@ export class ItemSystem {
     }
   }
 
-  _shock(user) {
+  _shock(user, at = user) {   // at: online, where the user really was when it fired
     const race = this.race, R = 9.5;
-    race.emit('shock', { x: user.x, y: user.y, z: user.z, r: R, by: user });
+    race.emit('shock', { x: at.x, y: at.y, z: at.z, r: R, by: user });
     user.shockT = 0.5;
     for (const k of race.karts) {
       if (k === user) continue;
-      const d = Math.hypot(k.x - user.x, k.z - user.z);
-      if (d < R * 0.85 && Math.abs(k.y - user.y) < 4 && k.hurt('spin', user)) race.emit('kartHit', { by: user, victim: k, with: 'pr' });
+      const d = Math.hypot(k.x - at.x, k.z - at.z);
+      if (d < R * 0.85 && Math.abs(k.y - at.y) < 4 && k.hurt('spin', user)) race.emit('kartHit', { by: user, victim: k, with: 'pr' });
     }
-    this._clearAround(user.x, user.z, R, user);
+    this._clearAround(at.x, at.z, R, user);
   }
   _clearAround(x, z, R, user) {
     for (const s of this.shots) if (Math.hypot(s.x - x, s.z - z) < R + (s.type === 'antitrust' ? 6 : 0)) { s.dead = true; this.race.emit('shotBlocked', { shot: s, by: user }); }
     for (const h of this.hazards) if (Math.hypot(h.x - x, h.z - z) < R) h.dead = true;
   }
 
-  _smear(user) {
+  _smear(user, rank = user.rank) {   // rank: online, the user's rank on its owner's device
     const race = this.race;
     race.emit('ink', { by: user });
     for (const k of race.karts) {
-      if (k === user || k.rank >= user.rank || k.finished) continue;
+      if (k === user || k.puppet || k.rank >= rank || k.finished) continue;
       if (k.invincible || k.ghostT > 0) continue;
       k.inkT = 4.8 * (user.sp.inkGive || 1) * (k.sp.inkTake || 1); k.emit('inked', user);
     }
@@ -275,24 +276,25 @@ export class ItemSystem {
     for (let i = list.length - 1; i >= 0; i--) {
       const h = list[i];
       h.age += dt;
-      if (h.type === 'pinkslip' && h.age >= h.life) { this._explode(h.x, h.y, h.z, h.owner); h.dead = true; }
+      if (h.type === 'pinkslip' && h.age >= h.life) { this._explode(h.x, h.y, h.z, h.owner, 'pinkslip', null, h); h.dead = true; }
       if (!h.dead && h.age > h.life) h.dead = true;
       if (!h.dead) for (const k of race.karts) {
-        if (k.rescueT > 0 || k.ghostT > 0) continue;
+        if (k.puppet || k.rescueT > 0 || k.ghostT > 0) continue;   // online: puppets are never hurt here
         if (h.owner === k && h.age < 0.6) continue;
         const dx = k.x - h.x, dz = k.z - h.z, rr = h.radius + k.radius * 0.8;
         if (dx * dx + dz * dz > rr * rr || Math.abs(k.y - h.y) > 1.6) continue;
-        if (h.type === 'pinkslip') { this._explode(h.x, h.y, h.z, h.owner); h.dead = true; break; }
-        if (k.invincible) { h.dead = true; break; }
+        if (h.type === 'pinkslip') { this._explode(h.x, h.y, h.z, h.owner, 'pinkslip', null, h); h.dead = true; break; }
+        if (k.invincible) { h.dead = true; race.net?.gone(h, 'block'); break; }
         if (k.hurt('spin', h.owner)) race.emit('kartHit', { by: h.owner, victim: k, with: h.type });
-        h.dead = true; break;
+        h.dead = true; race.net?.gone(h, 'hit'); break;
       }
       if (h.dead) { list.splice(i, 1); race.emit('hazardGone', h); }
     }
   }
 
-  _explode(x, y, z, owner, withItem = 'pinkslip', escaped = null) {
+  _explode(x, y, z, owner, withItem = 'pinkslip', escaped = null, src = null) {
     const race = this.race, R = 7;
+    if (race.net && !race.net.boom(src, x, y, z, owner, withItem)) return;   // online: one explosion per shot or hazard
     race.emit('explosion', { x, y, z, r: R, by: owner });
     for (const k of race.karts) {
       if (k === escaped || k.rescueT > 0 || k.ghostT > 0 || k.invincible) continue;
@@ -353,20 +355,20 @@ export class ItemSystem {
       }
       // kart hits
       if (!s.dead && s.type !== 'antitrust' && s.phase !== 'arc') for (const k of race.karts) {
-        if (k.rescueT > 0 || k.ghostT > 0) continue;
+        if (k.puppet || k.rescueT > 0 || k.ghostT > 0) continue;
         if (k === s.owner && s.age < 0.45) continue;
         const dx = k.x - s.x, dz = k.z - s.z, rr = k.radius * (k.sp.targetR || 1) + SHOT_R;
         if (dx * dx + dz * dz > rr * rr || Math.abs(k.y + 0.5 - s.y) > 1.7) continue;
-        if (s.type === 'pinkslip') { this._explode(s.x, s.y, s.z, s.owner); s.dead = true; break; }
-        if (k.invincible) { s.dead = true; race.emit('shotBlocked', { shot: s, by: k }); break; }
-        if (this._shield(k, s.x - s.vx * 0.05, s.z - s.vz * 0.05)) { s.dead = true; race.emit('shotBlocked', { shot: s, by: k }); break; }
+        if (s.type === 'pinkslip') { this._explode(s.x, s.y, s.z, s.owner, 'pinkslip', null, s); s.dead = true; break; }
+        if (k.invincible) { s.dead = true; race.net?.gone(s, 'block'); race.emit('shotBlocked', { shot: s, by: k }); break; }
+        if (this._shield(k, s.x - s.vx * 0.05, s.z - s.vz * 0.05)) { s.dead = true; race.net?.gone(s, 'block'); race.emit('shotBlocked', { shot: s, by: k }); break; }
         if (k.hurt('spin', s.owner)) race.emit('kartHit', { by: s.owner, victim: k, with: s.type });
-        s.dead = true; break;
+        s.dead = true; race.net?.gone(s, 'hit'); break;
       }
       // shots destroy ground hazards they touch
       if (!s.dead && s.type !== 'antitrust') for (const h of this.hazards) {
         if (Math.hypot(h.x - s.x, h.z - s.z) < h.radius + SHOT_R && Math.abs(h.y - s.y) < 1.6) {
-          if (h.type === 'pinkslip' || s.type === 'pinkslip') this._explode(h.x, h.y, h.z, s.owner);
+          if (h.type === 'pinkslip' || s.type === 'pinkslip') this._explode(h.x, h.y, h.z, s.owner, 'pinkslip', null, h.type === 'pinkslip' ? h : s);
           h.dead = true; s.dead = true; break;
         }
       }
@@ -381,10 +383,10 @@ export class ItemSystem {
       const gr = tr.ground(s.x, s.z, s.hint, this.hit, s.y); s.hint = gr.i;
       if (s.y <= gr.y + 0.5) { s.y = gr.y + 0.5; s.phase = 'sit'; s.t = 1.9; s.vx = s.vz = 0; this.race.emit('bombLand', s); }
       // direct hit in the air
-      for (const k of this.race.karts) { if (k === s.owner && s.age < 0.5) continue; if (Math.hypot(k.x - s.x, k.z - s.z) < 1.6 && Math.abs(k.y + 0.6 - s.y) < 1.5) { this._explode(s.x, s.y, s.z, s.owner); s.dead = true; return; } }
+      for (const k of this.race.karts) { if (k.puppet || (k === s.owner && s.age < 0.5)) continue; if (Math.hypot(k.x - s.x, k.z - s.z) < 1.6 && Math.abs(k.y + 0.6 - s.y) < 1.5) { this._explode(s.x, s.y, s.z, s.owner, 'pinkslip', null, s); s.dead = true; return; } }
     } else {
       s.t -= dt;
-      if (s.t <= 0) { this._explode(s.x, s.y, s.z, s.owner); s.dead = true; }
+      if (s.t <= 0) { this._explode(s.x, s.y, s.z, s.owner, 'pinkslip', null, s); s.dead = true; }
     }
   }
 
@@ -412,16 +414,21 @@ export class ItemSystem {
     s.yaw = Math.atan2(s.x - px, s.z - pz);
     const d = loopDelta(s.s, t.s, tr.length);
     if (Math.abs(d) < 26 || (d < 0 && d > -60)) {
-      // arrival: commit to this leader and open the telegraph — the orbit, the
-      // target ring (raceview reads s.m*), the feed callout (session, on blueArrive)
-      s.phase = 'hover'; s.t = BLUE_HOVER_T; s.hoverTarget = t; s.hoverFrac = 0; s.locked = false;
-      s.fundingWindow = false; s.dodgedBy = null;
-      s.hx = t.x; s.hz = t.z; s.hy = t.y; s.ang = Math.atan2(s.x - t.x, s.z - t.z);
-      s.r0 = Math.max(BLUE_ORBIT_R, Math.hypot(s.x - t.x, s.z - t.z));   // spirals in from wherever it arrived, never inside the orbit radius
-      s.ey = s.y; s.mx = t.x; s.mz = t.z; s.my = t.y;
-      t.emit('incoming', s); race.emit('blueArrive', { shot: s, target: t });
+      if (race.net && !race.net.commit(s, t)) return;   // online: the shooter's owner picks the victim and says so
+      this._blueHover(s, t);
     }
     else if (!s.warned && Math.abs(d) < 160) { s.warned = true; t.emit('incoming', s); }
+  }
+
+  /* Arrival: commit to this leader and open the telegraph — the orbit, the
+     target ring (raceview reads s.m*), the feed callout (session, on blueArrive). */
+  _blueHover(s, t) {
+    s.phase = 'hover'; s.t = BLUE_HOVER_T; s.hoverTarget = t; s.hoverFrac = 0; s.locked = false;
+    s.fundingWindow = false; s.dodgedBy = null;
+    s.hx = t.x; s.hz = t.z; s.hy = t.y; s.ang = Math.atan2(s.x - t.x, s.z - t.z);
+    s.r0 = Math.max(BLUE_ORBIT_R, Math.hypot(s.x - t.x, s.z - t.z));   // spirals in from wherever it arrived, never inside the orbit radius
+    s.ey = s.y; s.mx = t.x; s.mz = t.z; s.my = t.y;
+    t.emit('incoming', s); this.race.emit('blueArrive', { shot: s, target: t });
   }
 
   _blueStrike(s, dt) {
@@ -466,7 +473,7 @@ export class ItemSystem {
       if (s.t <= 0) {
         const hitsBefore = t && !t.finished ? t.stats.hitsTaken : -1;
         const escaped = s.dodgedBy === t && !t.finished && t.rescueT <= 0 ? t : null;
-        this._explode(s.lx, s.ly, s.lz, s.owner, 'antitrust', escaped);
+        this._explode(s.lx, s.ly, s.lz, s.owner, 'antitrust', escaped, s);
         if (escaped) escaped.emit('dodged', 'antitrust');
         race.emit('blueHit', { x: s.lx, y: s.ly, z: s.lz });
         // MK8: the victim's held item is destroyed by the strike. Nearby racers

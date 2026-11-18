@@ -58,6 +58,8 @@
 @keyframes hud-touch-rank-up { 0%, 100% { transform: scale(1); } 35% { transform: scale(1.12); filter: brightness(1.5) drop-shadow(0 0 calc(var(--u) * 2) rgba(110,255,190,.95)); } }
 .hud.hud-touch .hud-rank span { font-size: calc(var(--u) * 6); }
 .hud.hud-touch .hud-item-info { top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 9.5)); }
+/* on touch the race feed starts 59 units in from the safe area, so the item card stops just short of it */
+.hud.hud-touch { --card-r: min(max(calc(var(--u) * 50.5), calc(50cqw - var(--u) * 41.5)), calc(var(--safe-l) + var(--u) * 58)); }
 .hud.hud-touch .hud-time { display: none; }
 .hud.hud-touch .hud-map { top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 27); height: calc(var(--u) * 27); }
 /* the incoming-item warning stays bottom-centre, as on a desktop; a control tip steps aside for it */

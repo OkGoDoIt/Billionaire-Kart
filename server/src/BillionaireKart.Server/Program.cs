@@ -135,7 +135,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/healthz", (RoomManager rooms, IConfiguration c) =>
-    Results.Json(new { ok = true, sha = c["Kart:Sha"], rooms = rooms.Rooms.Count, players = rooms.ConnectedCount }));
+    Results.Json(new { ok = true, sha = c["Kart:Sha"], protocol = Wire.Proto, minProtocol = Wire.MinProto, rooms = rooms.Rooms.Count, players = rooms.ConnectedCount }));
 PlayerApi.Map(app);
 app.Map("/ws", PlayerApi.HandleSocket);
 app.MapRazorPages();

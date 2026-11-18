@@ -121,7 +121,7 @@ public sealed class RoomManager(SettingsService settings, RatingService rating, 
         {
             if (t != "hello") { conn.SendText("""{"t":"err","code":"bad"}"""); return; }
             int proto = msg.TryGetProperty("proto", out var pp) && pp.TryGetInt32(out var pv) ? pv : 0;
-            if (proto != Wire.Proto)
+            if (proto < Wire.MinProto || proto > Wire.Proto)
             {
                 conn.SendText("""{"t":"old"}""");
                 conn.Close(WebSocketCloseStatus.NormalClosure, "old");

@@ -78,10 +78,10 @@ public sealed record SettingDef(
         new("PublicLevel", "Public races", "CPU skill", "How well the CPUs drive in public races.", SettingKind.Choice, "normal", Choices: ["easy", "normal", "hard"]),
 
         new("ValuationBaseDollars", "Ratings", "Starting valuation", "The valuation of a brand-new player.", SettingKind.Number, "1000000", 1, 1e12, Unit: "dollars"),
-        new("ValuationDoublingPoints", "Ratings", "Points per doubling", "How many rating points double a valuation.", SettingKind.Number, "2.5", 0.1, 100, Unit: "points"),
-        new("CpuMuEasy", "Ratings", "Easy CPU rating", "The fixed skill an easy CPU counts as.", SettingKind.Number, "18", 0, 50),
-        new("CpuMuNormal", "Ratings", "Normal CPU rating", "The fixed skill a normal CPU counts as.", SettingKind.Number, "22", 0, 50),
-        new("CpuMuHard", "Ratings", "Hard CPU rating", "The fixed skill a hard CPU counts as.", SettingKind.Number, "26", 0, 50),
+        new("ValuationDoublingPoints", "Ratings", "Points per doubling", "How many rating points double a valuation.", SettingKind.Number, "4", 0.1, 100, Unit: "points"),
+        new("CpuMuEasy", "Ratings", "Easy CPU rating", "The fixed skill an easy CPU counts as.", SettingKind.Number, "20", 0, 50),
+        new("CpuMuNormal", "Ratings", "Normal CPU rating", "The fixed skill a normal CPU counts as.", SettingKind.Number, "24", 0, 50),
+        new("CpuMuHard", "Ratings", "Hard CPU rating", "The fixed skill a hard CPU counts as.", SettingKind.Number, "27", 0, 50),
         new("CpuSigma", "Ratings", "CPU uncertainty", "How unsure the rating is about a CPU. Smaller is surer.", SettingKind.Number, "1.5", 0.1, 10),
         new("TrackMinRaceSeconds", "Ratings", "Fastest believable race", "A finish faster than this on a track is left out of the rating. Leave a track empty for no check.", SettingKind.TrackSeconds, "", Unit: "seconds"),
 

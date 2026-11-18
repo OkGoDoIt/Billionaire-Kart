@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- the handle titles are game content; the admin shows players by the same words -->
+    <EmbeddedResource Include="../../../src/content/handles.js" LogicalName="handles.js" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="BillionaireKart.Tests" />
   </ItemGroup>
 

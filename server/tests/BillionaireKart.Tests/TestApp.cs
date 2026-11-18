@@ -13,7 +13,9 @@ namespace BillionaireKart.Tests;
 public sealed class TestApp : IAsyncLifetime
 {
     public const string Database = "billionaire_kart_test";
-    public const string ConnectionString = $"Host=localhost;Database={Database}";
+    /// <summary>BK_TEST_PG names the database server (CI: "Host=localhost;Username=postgres;Password=postgres"); a developer machine needs nothing.</summary>
+    static readonly string Server = Environment.GetEnvironmentVariable("BK_TEST_PG") is { Length: > 0 } s ? s.TrimEnd(';') : "Host=localhost";
+    public static readonly string ConnectionString = $"{Server};Database={Database}";
     public const string AdminToken = "test-admin-token";
     public const string Origin = "http://game.test";
 
@@ -36,7 +38,7 @@ public sealed class TestApp : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await using (var conn = new NpgsqlConnection("Host=localhost;Database=postgres"))
+        await using (var conn = new NpgsqlConnection($"{Server};Database=postgres"))
         {
             await conn.OpenAsync();
             await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS {Database} WITH (FORCE)", conn);

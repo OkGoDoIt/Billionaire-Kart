@@ -225,13 +225,23 @@ export class Menus {
       const card = installCard();
       slot.replaceChildren(...(card ? [card] : []));
     };
+    // Online shows only when the race server answers and speaks this build's protocol (App#checkOnline)
+    const onlineBtn = this.btn('Online', () => A.goOnline(), { cls: 'big c4', sub: 'Friends, strangers, and CPUs' });
+    const drawOnline = state => {
+      onlineBtn.hidden = state !== 'ok' && state !== 'old';
+      onlineBtn.querySelector('.btn-sub').textContent = state === 'old' ? 'A new version is ready. Reload.' : 'Friends, strangers, and CPUs';
+      onlineBtn.closest('.main-nav')?.classList.toggle('no-online', onlineBtn.hidden);
+      if (onlineBtn.hidden && this.focusEl === onlineBtn) this.focus(onlineBtn.parentNode.querySelector('[data-f]'), false);
+    };
+    drawOnline(A.onlineState);
+    A.checkOnline().then(state => { if (onlineBtn.isConnected) drawOnline(state); });
     const el = h('div', {},
       h('div', { class: 'logo small' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c)))),
       h('nav', { class: 'main-nav' },
         this.btn('Grand Prix', () => start('gp'), { cls: 'big c1', def: true, sub: 'Four races, one trophy' }),
         this.btn('Quick Race', () => start('vs'), { cls: 'big c2', sub: 'Any track, your rules' }),
         this.btn('Time Trial', () => { A.flow = { mode: 'timetrial', players: 1, devices: ['any'] }; this.open('racers', { player: 0 }); }, { cls: 'big c3', sub: 'Just you and the clock' }),
-        this.btn('Online', () => A.goOnline(), { cls: 'big c4', sub: 'Friends, strangers, and CPUs' }),
+        onlineBtn,
         row),
       slot);
     drawInstall();

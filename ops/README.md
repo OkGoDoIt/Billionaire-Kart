@@ -21,6 +21,8 @@ nginx serves the game's files itself and passes `/api`, `/ws`, `/admin`, and `/h
 
 ## Deploying
 
+The game files deploy by themselves: after the checks pass on `main`, CI publishes them here and to GitHub Pages ([site-deploy/README.md](site-deploy/README.md)). The server app is deployed with the script below.
+
 ```bash
 ops/deploy.sh
 ```

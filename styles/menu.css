@@ -54,6 +54,7 @@
 .main-nav .btn { width: 100%; }
 /* the fourth mode, Online, wears the logo's fourth color; sideways, the four modes stand two by two so the menu still fits a phone on its side */
 .btn.c4 { background: linear-gradient(180deg, #8dffd6, #2ee6a6); }
+.btn[hidden] { display: none; }
 @media (orientation: landscape) {
   .main-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto; grid-auto-flow: column; width: calc(var(--u) * 74); }   /* down the first column, then the second: Down from Grand Prix is still Quick Race */
   .main-nav .row { grid-column: 1 / -1; grid-row: 3; }

@@ -8,8 +8,20 @@ public static class Fmt
 {
     static readonly CultureInfo Us = CultureInfo.InvariantCulture; // formats numbers and dates the US way
 
-    /// <summary>The handle's words live in the game; the admin shows the two numbers.</summary>
-    public static string Handle(int title, int number) => $"No. {number} (title {title})";
+    /// <summary>The handle's words live in the game (src/content/handles.js, embedded at build); the admin reads the same list.</summary>
+    static readonly string[] Titles = LoadTitles();
+
+    static string[] LoadTitles()
+    {
+        using var stream = typeof(Fmt).Assembly.GetManifestResourceStream("handles.js");
+        if (stream == null) return [];
+        var text = new StreamReader(stream).ReadToEnd();
+        int a = text.IndexOf("HANDLE_TITLES = [", StringComparison.Ordinal), b = a < 0 ? -1 : text.IndexOf("];", a, StringComparison.Ordinal);
+        return a < 0 || b < 0 ? [] : System.Text.RegularExpressions.Regex.Matches(text[a..b], "'([^']+)'").Select(m => m.Groups[1].Value).ToArray();
+    }
+
+    public static string Handle(int title, int number) =>
+        $"{(title >= 0 && title < Titles.Length ? Titles[title] : "Racer")} {number:0000}";
 
     public static string Money(long dollars) => "$" + dollars.ToString("N0", Us);
 

@@ -54,6 +54,8 @@ public static class Wire
     public static readonly int[] CupPoints = [15, 12, 10, 8, 6, 4, 2, 1];
     public const string RoomCodeLetters = "BCDFGHJKLMNPQRSTVWXZ";
     public const int Proto = 1;
+    /// <summary>The oldest client protocol still accepted: the one before the current, so a cached client survives a deploy.</summary>
+    public const int MinProto = 1;   // becomes Proto - 1 at the first protocol change
     public const int MaxTextBytes = 4096;
     public const int MaxBinaryBytes = 256;
     public const int MaxFramesPerSecond = 400;

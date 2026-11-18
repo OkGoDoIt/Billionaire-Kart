@@ -52,7 +52,7 @@ All under `/api`, JSON, same origin.
 | `POST /api/session` | Creates the guest player if there is no valid cookie and sets `bk_player` (HttpOnly, Secure, SameSite=Lax, 400 days). Returns `{ id, handle: {title, number}, rating: {valuation, races} }`. |
 | `POST /api/handle` `{title}` | Sets the handle's title index (0 to 199). The number is assigned by the server and never changes. |
 | `GET /api/leaderboard?board=all\|week&limit=50` | `{ rows: [{rank, handle, valuation, current, races, me}], me: {rank, valuation} }`. On the week board `valuation` is the gain over the last 7 days; `current` is always the valuation itself (for the tier name). |
-| `GET /healthz` | `{ ok, sha, rooms, players }` |
+| `GET /healthz` | `{ ok, sha, protocol, minProtocol, rooms, players }`. The game shows its Online button only when this answers and its own protocol is within `minProtocol..protocol`; a build older than `minProtocol` offers a reload instead. The server accepts the current protocol and the one before it, so a cached game survives a deploy. |
 
 A handle is `{title: int, number: int}`. The words live in the client (`src/content/handles.js`); the server stores and relays only the two numbers, so there is no free text to moderate.
 

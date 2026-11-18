@@ -187,7 +187,7 @@ export class Kart {
 
   /** Apply a hit. kinds: spin | tumble | squash. Returns true if it landed. */
   hurt(kind, from = null) {
-    if (!this.vulnerable || this.hitT > 0) return false;
+    if (this.puppet || !this.vulnerable || this.hitT > 0) return false;   // online: only a kart's owner hurts it
     if (this.absorbs > 0) { this.absorbs--; this.invulnT = TUNE.invuln; this.emit('absorbed', { kind, from }); return false; }   // special: the first hit of the race is covered
     this.streak = 0;                                                                                                          // special: a hit resets a charging streak
     this.hitKind = kind;

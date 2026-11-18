@@ -60,6 +60,7 @@ export class Race {
 
   /** inputs: array indexed by playerIndex. */
   step(dt, inputs = []) {
+    this.net?.pre(dt);   // online: apply what arrived, place the puppets (src/net/netrace.js)
     this.track.deckTime = this.time; this.track.deckRace = this;   // floating decks (def.decks) move on race time
     // countdown
     if (this.frozen) {
@@ -80,6 +81,7 @@ export class Race {
     }
     rubberBand(this);
     for (const k of this.karts) {
+      if (k.puppet) continue;   // online: another device steps this kart
       const inp = k.ai ? k.ai.think(dt) : (inputs[k.playerIndex] || NO_INPUT);
       k.step(dt, inp);
       if (inp.item && !k.prevItem && !this.frozen) this.items.use(k, inp);
@@ -90,13 +92,14 @@ export class Race {
     this.items.step(dt);
     this._rank();
     this._finish(dt);
+    this.net?.post(dt);
   }
 
   _collide() {
     const ks = this.karts;
     for (let a = 0; a < ks.length; a++) for (let b = a + 1; b < ks.length; b++) {
       const A = ks[a], B = ks[b];
-      if (A.rescueT > 0 || B.rescueT > 0) continue;
+      if (A.rescueT > 0 || B.rescueT > 0 || (A.puppet && B.puppet)) continue;
       const dx = B.x - A.x, dz = B.z - A.z, rr = (A.radius + B.radius) * (A.shrinkT > 0 || B.shrinkT > 0 ? 0.8 : 1);
       const d2 = dx * dx + dz * dz;
       if (d2 > rr * rr || d2 < 1e-6 || Math.abs(A.y - B.y) > 1.4) continue;
@@ -114,12 +117,13 @@ export class Race {
       }
       const d = Math.sqrt(d2), nx = dx / d, nz = dz / d, overlap = rr - d;
       const mA = A.mass * (A.shrinkT > 0 ? 0.4 : 1), mB = B.mass * (B.shrinkT > 0 ? 0.4 : 1), sum = mA + mB;
-      A.x -= nx * overlap * (mB / sum); A.z -= nz * overlap * (mB / sum);
-      B.x += nx * overlap * (mA / sum); B.z += nz * overlap * (mA / sum);
+      if (!A.puppet) { A.x -= nx * overlap * (mB / sum); A.z -= nz * overlap * (mB / sum); }   // online: only owned karts move
+      if (!B.puppet) { B.x += nx * overlap * (mA / sum); B.z += nz * overlap * (mA / sum); }
       const rvx = B.vx - A.vx, rvz = B.vz - A.vz, vn = rvx * nx + rvz * nz;
       if (vn < 0) {
         const j = -(1 + 0.45) * vn / (1 / mA + 1 / mB);
-        A.vx -= (j / mA) * nx; A.vz -= (j / mA) * nz; B.vx += (j / mB) * nx; B.vz += (j / mB) * nz;
+        if (!A.puppet) { A.vx -= (j / mA) * nx; A.vz -= (j / mA) * nz; }
+        if (!B.puppet) { B.vx += (j / mB) * nx; B.vz += (j / mB) * nz; }
         if (vn < -2.5) { A.emit('bump', { v: -vn, other: B }); B.emit('bump', { v: -vn, other: A }); }
       }
     }
@@ -178,13 +182,14 @@ export class Race {
   _finish(dt) {
     if (this.state === 'countdown') return;
     for (const k of this.order) {
-      if (!k.finished && k.lap > this.laps) {
+      if (!k.finished && k.lap > this.laps && !k.puppet) {   // online: a puppet finishes when its owner says so
         k.finished = true; k.finishTime = k.lapStart; k.finishRank = this.finishOrder.length + 1; k.rank = k.finishRank;
         this.finishOrder.push(k); k.endDrift(false);
         k.emit('finish', k.finishRank); this.emit('finish', k);
       }
       if (!k.finished && k.lap === this.laps && !k.finalLapAnnounced) { k.finalLapAnnounced = true; k.emit('finalLap'); }
     }
+    if (this.net) return;   // online: the server ends the race and owns the finishing order
     if (this.state === 'racing' && this.players.length && this.players.every(k => k.finished)) { this.state = 'finishing'; this.endT = 4.5; }
     if (this.state === 'racing' && !this.players.length && this.karts.every(k => k.finished)) { this.state = 'done'; this.emit('done'); }
     if (this.state === 'finishing') {

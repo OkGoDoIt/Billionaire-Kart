@@ -154,7 +154,7 @@ class Device {
     this.net = new NetRace({ race: this.race, conn: this.conn, room, me: id, delay: w.delay });
     this.pilots = new Map(this.race.karts.filter(k => k.isPlayer).map(k => [k.slot, new AIDriver(k, 'hard', makeRng(99 + k.slot))]));
     this.script = null;            // (kart, n) => input | undefined: overrides the autopilot
-    this.rec = this.race.karts.map(() => ({ x: [], z: [], y: [], own: [], rescue: [], hitT: [], ff: [], shrink: [] }));
+    this.rec = this.race.karts.map(() => ({ x: [], z: [], y: [], own: [], rescue: [], hitT: [], ff: [], shrink: [], play: [] }));
     this.hits = this.race.karts.map(() => []); this.seen = this.race.karts.map(() => []); this.explosions = []; this.dodged = []; this.ff = 0; this.nan = 0;
     this.events = [];
   }
@@ -181,7 +181,7 @@ class Device {
     const race = this.race;
     for (const k of race.karts) {
       const r = this.rec[k.slot];
-      r.shrink[n] = k.shrinkT > 0 ? 1 : 0; r.x[n] = k.x; r.z[n] = k.z; r.y[n] = k.y; r.own[n] = k.puppet ? 0 : 1; r.rescue[n] = k.rescueT > 0 ? 1 : 0; r.hitT[n] = k.hitT; r.ff[n] = ff ? 1 : 0;
+      r.shrink[n] = k.shrinkT > 0 ? 1 : 0; r.x[n] = k.x; r.z[n] = k.z; r.y[n] = k.y; r.own[n] = k.puppet ? 0 : 1; r.rescue[n] = k.rescueT > 0 ? 1 : 0; r.hitT[n] = k.hitT; r.ff[n] = ff ? 1 : 0; r.play[n] = k.puppet ? this.net.pp[k.slot].t : null;
       if (!Number.isFinite(k.x + k.y + k.z + k.yaw + k.vx + k.vz)) this.nan++;
       for (const e of k.events) {
         if (e.type === 'hit') (k.puppet ? this.seen : this.hits)[k.slot].push({ n, kind: e.data.kind });
@@ -267,35 +267,42 @@ function checkCodec() {
 function trackingRun(latency, stall, seconds) {
   const w = new World({ latency, stall, slots: field() });
   w.runTo(COUNTDOWN_STEPS + Math.round(seconds * 60));
-  const [A, B] = w.devices, errs = [], jumps = [];
+  const [A, B] = w.devices, errs = [], jumps = [], delays = [];
   let maxJump = 0;
   const from = COUNTDOWN_STEPS + 60;
+  // the error is against the owner's own kart at the moment the puppet is showing (its delay is adaptive, and fractional)
+  const at = (arr, t) => { const i = Math.floor(t), f = t - i; return f ? arr[i] + (arr[i + 1] - arr[i]) * f : arr[i]; };
   for (const [O, R] of [[A, B], [B, A]]) for (const k of O.race.karts) {
     if (!O.rec[k.slot].own[from]) continue;
     const o = O.rec[k.slot], r = R.rec[k.slot], end = Math.min(o.x.length, r.x.length);
     for (let n = from; n < end; n++) {
+      const t = r.play[n]; if (t == null) continue;
       let skip = false;
-      for (let j = n - DELAY - 30; j <= n + 2 && !skip; j++) if (o.rescue[j] || r.rescue[j] || !o.own[j] || r.own[j]) skip = true;
+      for (let j = Math.floor(t) - 30; j <= n + 2 && !skip; j++) if (o.rescue[j] || r.rescue[j] || !o.own[j] || r.own[j]) skip = true;
       if (skip) continue;
-      errs.push(Math.hypot(r.x[n] - o.x[n - DELAY], r.z[n] - o.z[n - DELAY]));
+      errs.push(Math.hypot(r.x[n] - at(o.x, t), r.z[n] - at(o.z, t)));
+      delays.push(n - t);
       const jmp = Math.hypot(r.x[n] - r.x[n - 1], r.z[n] - r.z[n - 1]);
       jumps.push(jmp); if (jmp > maxJump) maxJump = jmp;
     }
   }
-  return { latency, stall, mean: mean(errs), p95: pct(errs, 0.95), max: Math.max(...errs), samples: errs.length, maxJump, over: jumps.filter(j => j > 1.5).length, nan: A.nan + B.nan, clock: Math.max(...w.devices.map(d => Math.abs(d.conn.now() - w.sched.t))) };
+  return { latency, stall, mean: mean(errs), p95: pct(errs, 0.95), max: Math.max(...errs), samples: errs.length, maxJump, over: jumps.filter(j => j > 1.5).length, nan: A.nan + B.nan, clock: Math.max(...w.devices.map(d => Math.abs(d.conn.now() - w.sched.t))),
+    delay: mean(delays), delay95: pct(delays, 0.95) };
 }
 
 function checkTracking() {
   const secs = opt.quick ? 30 : 75;
   const rows = [];
   for (const latency of [30, 80, 160, 200]) for (const stall of [0, 0.01, 0.03]) rows.push(trackingRun(latency, stall, secs));
-  console.log(`\n  Puppet error vs. the owner's own kart ${DELAY} steps earlier (2 devices, 8 karts, ${secs} s of racing each)`);
-  console.log('  ' + 'one-way'.padEnd(9) + 'stall'.padStart(6) + 'mean m'.padStart(9) + 'p95 m'.padStart(9) + 'max m'.padStart(9) + 'max step m'.padStart(12) + 'samples'.padStart(9) + 'clock ms'.padStart(10));
-  for (const r of rows) console.log('  ' + `${r.latency} ms`.padEnd(9) + `${(r.stall * 100).toFixed(0)}%`.padStart(6) + r.mean.toFixed(3).padStart(9) + r.p95.toFixed(3).padStart(9) + r.max.toFixed(2).padStart(9) + r.maxJump.toFixed(2).padStart(12) + String(r.samples).padStart(9) + r.clock.toFixed(1).padStart(10));
+  console.log(`\n  Puppet error vs. the owner's own kart at the moment the puppet shows (2 devices, 8 karts, ${secs} s of racing each)`);
+  console.log(`  delay: how far in the past puppets are shown, mean and 95th percentile, in ms (the fixed delay was ${(DELAY * STEP_MS).toFixed(0)} ms)`);
+  console.log('  ' + 'one-way'.padEnd(9) + 'stall'.padStart(6) + 'mean m'.padStart(9) + 'p95 m'.padStart(9) + 'max m'.padStart(9) + 'max step m'.padStart(12) + 'delay ms'.padStart(10) + 'p95 ms'.padStart(8) + 'samples'.padStart(9) + 'clock ms'.padStart(10));
+  for (const r of rows) console.log('  ' + `${r.latency} ms`.padEnd(9) + `${(r.stall * 100).toFixed(0)}%`.padStart(6) + r.mean.toFixed(3).padStart(9) + r.p95.toFixed(3).padStart(9) + r.max.toFixed(2).padStart(9) + r.maxJump.toFixed(2).padStart(12) + (r.delay * STEP_MS).toFixed(0).padStart(10) + (r.delay95 * STEP_MS).toFixed(0).padStart(8) + String(r.samples).padStart(9) + r.clock.toFixed(1).padStart(10));
   console.log('');
-  const gate = rows.find(r => r.latency === 80 && r.stall === 0.01);
-  result(gate.p95 <= 1.0, 'tracking: 80 ms, 1% stall, 95th percentile within 1.0 m', `p95 ${gate.p95.toFixed(3)} m, mean ${gate.mean.toFixed(3)} m`);
-  result(gate.over === 0, 'smoothness: no puppet step over 1.5 m at 80 ms, 1% stall', `largest ${gate.maxJump.toFixed(2)} m`);
+  const row = (l, s) => rows.find(r => r.latency === l && r.stall === s);
+  const gates = [[30, 0.01, 0.2], [80, 0.01, 0.6], [160, 0.01, 1.2], [200, 0.01, 1.5], [200, 0.03, 2.5]];
+  for (const [l, s, lim] of gates) { const r = row(l, s); result(r.p95 <= lim, `tracking: ${l} ms, ${s * 100}% stall, 95th percentile within ${lim} m`, `p95 ${r.p95.toFixed(3)} m, mean ${r.mean.toFixed(3)} m, delay ${(r.delay * STEP_MS).toFixed(0)} ms`); }
+  for (const [l, s] of [[30, 0.01], [80, 0.01]]) { const r = row(l, s); result(r.maxJump <= 1.5, `smoothness: no puppet step over 1.5 m at ${l} ms, ${s * 100}% stall`, `largest ${r.maxJump.toFixed(2)} m`); }
   result(rows.every(r => r.clock < 5), 'clock: every device within 5 ms of the server clock', `worst ${Math.max(...rows.map(r => r.clock)).toFixed(1)} ms`);
   result(rows.every(r => !r.nan), 'tracking: no NaN');
 }

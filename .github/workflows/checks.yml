@@ -123,13 +123,15 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
 
-  # The game's home, billionaire-kart.okgodoit.com, gets the same tested folder. GitHub's key there can only upload
-  # a release and ask for a commit to be installed (ops/site-deploy/). The server app is still deployed by hand.
+  # The game's home, billionaire-kart.okgodoit.com, gets the same tested commit: the online server first (when the
+  # commit has one), then the game files, in one request. If the new server is not healthy, it is rolled back and
+  # the game files are not swapped, so the live client never runs ahead of its server. GitHub's key there can only
+  # upload a release and ask for a commit to be installed (ops/site-deploy/).
   deploy-okgodoit:
     needs: sim-and-bot
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     concurrency:
       group: okgodoit-deploy
       cancel-in-progress: false
@@ -143,6 +145,12 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up .NET for the online server
+        if: hashFiles('server/**/*.csproj') != ''
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
       - name: Deploy to billionaire-kart.okgodoit.com
         env:
           DEPLOY_KEY: ${{ secrets.OKGODOIT_DEPLOY_KEY }}
@@ -152,14 +160,31 @@ jobs:
           # a newer push to main is already on its way: let that one deploy instead of rolling back
           head=$(git ls-remote origin refs/heads/main | cut -f1)
           if [ "$head" != "$SHA" ]; then echo "main has moved on to $head; skipping $SHA"; exit 0; fi
-          node tools/build-site.mjs _site && echo "$SHA" > _site/version.txt
+          mkdir -p _upload
+          node tools/build-site.mjs _upload/site && echo "$SHA" > _upload/site/version.txt
+          # The server ships only when what it is built from changed since the commit it reports, because a restart
+          # drops live online rooms. Its inputs: server/src and the handle list it embeds. Unknown? Ship it.
+          server=""
+          if ls server/src/*/*.Server.csproj >/dev/null 2>&1; then
+            running=$(curl -fsS https://billionaire-kart.okgodoit.com/healthz | python3 -c 'import json,sys; print(json.load(sys.stdin).get("sha",""))' 2>/dev/null || true)
+            if [ -n "$running" ] && git fetch -q --depth=1 origin "$running" 2>/dev/null && git diff --quiet "$running" "$SHA" -- server/src src/content/handles.js; then
+              echo "the live server (${running:0:7}) is built from the same sources; leaving it running"
+            else
+              echo "the server changed since ${running:0:7}; shipping it with this deploy"
+              for proj in server/src/*/*.Server.csproj; do dotnet publish "$proj" -c Release -o _upload/server --nologo -v quiet; done
+              server=1
+            fi
+          fi
           install -m 600 /dev/null ~/deploy_key && printf '%s\n' "$DEPLOY_KEY" > ~/deploy_key
           ssh_cmd="ssh -i $HOME/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PWD/ops/site-deploy/known_hosts"
-          rsync -rt --chmod=D755,F644 -e "$ssh_cmd" _site/ "billionaire-kart-deploy@178.128.11.103:$SHA/"
+          rsync -rt --chmod=D755,F644 -e "$ssh_cmd" _upload/ "billionaire-kart-deploy@178.128.11.103:$SHA/"
           $ssh_cmd billionaire-kart-deploy@178.128.11.103 "activate $SHA"
           for i in 1 2 3 4 5 6; do
             live=$(curl -fsS https://billionaire-kart.okgodoit.com/version.txt || true)
-            [ "$live" = "$SHA" ] && { echo "live at https://billionaire-kart.okgodoit.com/ ($SHA)"; exit 0; }
+            health=$(curl -fsS https://billionaire-kart.okgodoit.com/healthz || true)
+            if [ "$live" = "$SHA" ] && { [ -z "$server" ] || echo "$health" | grep -q "$SHA"; }; then
+              echo "live at https://billionaire-kart.okgodoit.com/ ($SHA${server:+, server included})"; exit 0
+            fi
             sleep 5
           done
-          echo "::error::the site still reports ${live:-nothing} instead of $SHA"; exit 1
+          echo "::error::the site reports ${live:-nothing}${server:+ and the server reports ${health:-nothing}} instead of $SHA"; exit 1

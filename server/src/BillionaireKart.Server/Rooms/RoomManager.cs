@@ -25,6 +25,54 @@ public sealed class RoomManager(SettingsService settings, RatingService rating, 
 
     public int ConnectedCount => Connections.Count;
 
+    // ---------- shutting down for an update (docs/online-protocol.md, "Server updates") ----------
+
+    volatile bool _draining;
+    long _drainDeadline;
+    Task? _drain;
+    readonly object _drainLock = new();
+
+    /// <summary>True once shutdown has begun: no new rooms or races, and races in progress are left to finish.</summary>
+    public bool Draining => _draining;
+
+    bool AnyRacing => Rooms.Values.Any(r => r.Phase == Phase.Race);
+
+    /// <summary>Seconds until every socket is closed: 0 when nothing is racing.</summary>
+    int ByeSeconds(long now) => AnyRacing ? (int)Math.Ceiling(Math.Max(0, Interlocked.Read(ref _drainDeadline) - now) / 1000.0) : 0;
+
+    void SendBye(Connection c, long now) => c.SendText($$"""{"t":"bye","why":"update","in":{{ByeSeconds(now)}}}""");
+
+    /// <summary>
+    /// Begins shutdown and returns the task that finishes it: tells every device, waits for races to finish (up to
+    /// ShutdownDrainSeconds), then closes every socket. Calling it again returns the same task.
+    /// </summary>
+    public Task DrainAsync()
+    {
+        lock (_drainLock)
+        {
+            if (_drain != null) return _drain;
+            long now = Clock.Now;
+            double seconds = Math.Clamp(Settings.Current.ShutdownDrainSeconds, 0, SettingDef.MaxShutdownDrainSeconds);
+            Interlocked.Exchange(ref _drainDeadline, now + (long)(seconds * 1000));
+            _draining = true;
+            int racing = Rooms.Values.Count(r => r.Phase == Phase.Race);
+            Log.LogInformation("Shutting down: {Racing} race(s) in progress, waiting up to {Seconds} s", racing, seconds);
+            foreach (var c in Connections.Values) SendBye(c, now);
+            return _drain = Task.Run(FinishDrainAsync);
+        }
+    }
+
+    async Task FinishDrainAsync()
+    {
+        while (AnyRacing && Clock.Now < Interlocked.Read(ref _drainDeadline)) await Task.Delay(100);
+        int cut = Rooms.Values.Count(r => r.Phase == Phase.Race);
+        if (cut > 0) Log.LogWarning("Shutdown: {Count} race(s) did not finish in time", cut);
+        foreach (var c in Connections.Values) c.Close(WebSocketCloseStatus.EndpointUnavailable, "update");
+        // Give the writers a moment to send what is queued and the close frames.
+        for (int i = 0; i < 20 && !Connections.IsEmpty; i++) await Task.Delay(50);
+        Log.LogInformation("Shutdown: sockets closed");
+    }
+
     // ---------- connection loop ----------
 
     public async Task RunAsync(WebSocket ws, PlayerInfo player, CancellationToken ct)
@@ -135,6 +183,7 @@ public sealed class RoomManager(SettingsService settings, RatingService rating, 
                 return conn;
             });
             conn.SendText(JsonSerializer.Serialize(new { t = "welcome", you = id, now }, RoomView.Json));
+            if (_draining) SendBye(conn, now);
             if (MemberOf.TryGetValue(id, out var seat))
                 await WithRoom(seat, r => { if (r.Find(id) is Member m) r.Attach(m, conn, now); return Task.CompletedTask; });
             return;
@@ -147,6 +196,8 @@ public sealed class RoomManager(SettingsService settings, RatingService rating, 
             if (MemberOf.TryGetValue(id, out var pr)) await WithRoom(pr, r => { r.Touch(id, now); return Task.CompletedTask; });
             return;
         }
+
+        if (_draining && t is "create" or "join" or "find") { SendBye(conn, now); return; }
 
         switch (t)
         {
@@ -304,5 +355,25 @@ public sealed class RoomTicker(RoomManager rooms) : BackgroundService
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
         while (await timer.WaitForNextTickAsync(ct)) await rooms.TickAsync();
+    }
+}
+
+/// <summary>
+/// A graceful restart. Shutdown begins when the host signals ApplicationStopping (SIGINT from systemd), before the web
+/// server stops, so the drain runs while sockets are still open; StopAsync then waits for it. Registered after
+/// <see cref="RoomTicker"/>, so it stops first and the ticker keeps ending races while it waits.
+/// </summary>
+public sealed class ShutdownDrain(RoomManager rooms, IHostApplicationLifetime lifetime) : IHostedService
+{
+    public Task StartAsync(CancellationToken ct)
+    {
+        lifetime.ApplicationStopping.Register(() => rooms.DrainAsync());
+        return Task.CompletedTask;
+    }
+
+    public async Task StopAsync(CancellationToken ct)
+    {
+        try { await rooms.DrainAsync().WaitAsync(ct); }
+        catch (OperationCanceledException) { }
     }
 }

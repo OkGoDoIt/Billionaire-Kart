@@ -66,6 +66,17 @@ Client to server is marked →, server to client ←.
 - ← `{t:"welcome", you: playerId, now}` or `{t:"old"}`.
 - → `{t:"ping", c: localMs}` ← `{t:"pong", c, now}`.
 
+### Server updates
+
+- ← `{t:"bye", why:"update", in: seconds}` the server is shutting down for an update and will be back shortly. `in` is the longest it will keep this connection open (whole seconds, 0 when nothing is racing). Sent to every connected device when shutdown begins, and again to any device that connects, or asks to create, join, or find a room, while it lasts. `PROTO` is unchanged: a client that ignores `bye` just sees the socket close later and reconnects, as before.
+
+Shutdown, in order:
+
+1. The server stops making rooms and starting races. `create`, `join`, and `find` are answered with `bye`. Rooms in **lobby**, **track**, or **results** stay where they are; their timers no longer move them on.
+2. Races in progress carry on: snapshots, events, and `finish` work as usual, and a race that ends normally goes to **results** (rated as usual in a public room).
+3. When no race is left, or `ShutdownDrainSeconds` after shutdown began, every socket is closed (status 1001) and the server exits. A race still running at that point ends unrated: rooms live only in memory.
+4. The restarted server has no rooms. A client that was told `bye` reconnects as usual, finds it has no seat (no `room` arrives after `welcome`), and goes to the hub saying the room closed for an update. A client mid-race when its socket closes after `bye` ends the race at once and does the same.
+
 ### Rooms
 
 - → `{t:"create"}` makes a private room. → `{t:"join", code}` joins one. → `{t:"find"}` joins or creates a public room. → `{t:"leave"}`.
@@ -183,5 +194,6 @@ The winner's valuation never falls and last place's never rises (when at least 3
 | ValuationBaseDollars / ValuationDoublingPoints | 1000000 / 2.5 |
 | CpuMu easy / normal / hard, CpuSigma | 18 / 22 / 26, 1.5 |
 | RaceStartLeadSeconds | 6 |
+| ShutdownDrainSeconds (how long a shutdown waits for races to finish; at most 25, under systemd's `TimeoutStopSec=30`) | 25 |
 | TrackMinRaceSeconds (per track; a rated finish faster than this is not rated) | none |
 | Tracks, Cups, Racers (the ids the server may pick from) | the shipping lists |

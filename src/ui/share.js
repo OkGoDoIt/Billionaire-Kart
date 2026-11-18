@@ -16,11 +16,8 @@ const TROPHY = { 1: 'gold', 2: 'silver', 3: 'bronze' };
 const hex = n => '#' + n.toString(16).padStart(6, '0');
 const DISPLAY = '"Luckiest Guy", "Arial Black", Impact, sans-serif', BODY = '"Fredoka", "Trebuchet MS", sans-serif';
 
-/** Where people go to play: this page's own address, so a copy on another host links back to itself. */
-export function gameAddress() {
-  const u = new URL('./', location.href);
-  return u.protocol.startsWith('http') && !/^(localhost|127\.|\[::1\])/.test(u.hostname) ? u.href : 'https://okgodoit.github.io/Billionaire-Kart/';
-}
+/** Where people go to play: the game's home (src/moved.js forwards the old GitHub address there). */
+export const gameAddress = () => 'https://billionaire-kart.okgodoit.com/';
 const shortAddress = () => gameAddress().replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 const loadImage = src => new Promise(res => { if (!src) return res(null); const im = new Image(); im.decoding = 'async'; im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });

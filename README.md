@@ -2,7 +2,7 @@
 
 **Eight egos. One trophy.** A parody party kart racer that runs in your browser.
 
-### [Play it now](https://okgodoit.github.io/Billionaire-Kart/)
+### [Play it now](https://billionaire-kart.okgodoit.com/)
 
 No install. Works on a computer with a keyboard or controllers, and on a phone with touch. Add it to your home screen for full screen; tracks you have already played keep working offline.
 
@@ -100,7 +100,7 @@ node tools/track-shots.mjs silicon-valley out.jpg   # contact sheet of a whole t
 
 | Folder | What lives there |
 |---|---|
-| `src/track` | Tracks as data: a banked 3D spline with ramps, boost pads, tunnels, bridges, and obstacles. Road, kerbs, walls, and terrain are all generated from it. |
+| `src/track` | Tracks as data: a banked 3D spline with ramps, boost pads, tunnels, bridges, and obstacles. Road, curbs, walls, and terrain are all generated from it. |
 | `src/race` | The simulation: kart physics, AI drivers, items, race rules. It has no rendering, so whole races run headless for testing. |
 | `src/render` | Renderer and post-processing, sky, particles, kart animation, chase camera, scenery helpers. |
 | `src/models` | Procedural karts, bobblehead drivers, items, and the scenery prop library. |

@@ -10,3 +10,6 @@ tools/vendor/
 
 # Roger's reference photo for the Bliss Hills opening shot: kept out of the repository on purpose
 assets/bliss.jpg
+
+# the folder tools/build-site.mjs assembles for GitHub Pages
+_site/

@@ -56,30 +56,6 @@ export function cleaningBot() {
   return b.build({ body: plastic(0xe8e4da, .4), dome: plastic(0x30343c, .3), eye: glow(0x7dffce, 1.6), brush: MAT.rubber });
 }
 
-/** A 2x2 cubicle pod: partitions, desks, monitors, chairs. ~7.2 x 4.6 m.
-    Built to be instanced across the cubicle field. */
-export function cubicleCluster() {
-  const b = new ModelBuilder();
-  const part = paint(0x9aa3ab, { rough: .8 }), deskM = paint(0xd8d2c2, { rough: .6 });
-  // partitions: outer cross + spine
-  b.add('part', box(7.2, 1.5, .09, .02), { p: [0, .75, -2.3] });
-  b.add('part', box(7.2, 1.5, .09, .02), { p: [0, .75, 2.3] });
-  b.add('part', box(.09, 1.5, 4.6, .02), { p: [-3.6, .75, 0] });
-  b.add('part', box(.09, 1.5, 4.6, .02), { p: [3.6, .75, 0] });
-  b.add('part', box(.09, 1.5, 4.6, .02), { p: [0, .75, 0] });
-  b.add('part', box(7.2, 1.5, .09, .02), { p: [0, .75, 0] });
-  for (const sx of [-1.8, 1.8]) for (const sz of [-1.15, 1.15]) {
-    const f = sz > 0 ? 1 : -1;
-    b.add('desk', box(3.2, .07, .9, .02), { p: [sx, .74, sz + f * .62] });
-    b.add('screen', box(1.1, .65, .05, .02), { p: [sx, 1.15, sz + f * .78], r: [-.12, f > 0 ? 0 : Math.PI, 0] });
-    b.add('chair', box(.55, .08, .55, .03), { p: [sx, .48, sz + f * .05] });
-    b.add('chair', box(.55, .6, .08, .03), { p: [sx, .85, sz - f * .18] });
-    b.add('chair', cyl(.05, .05, .45, 6), { p: [sx, .22, sz + f * .05] });
-    b.add('mug', cyl(.06, .05, .12, 8), { p: [sx + .9, .84, sz + f * .55] });
-  }
-  return b.build({ part, desk: deskM, screen: glow(0xbfe0ff, .55), chair: plastic(0x3a3f47, .7), mug: plastic(0xd84f35, .5) });
-}
-
 /** One desk with a monitor and a chair (exec row, the lone lit office). */
 export function deskUnit() {
   const b = new ModelBuilder();

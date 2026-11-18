@@ -132,7 +132,7 @@ export class Gfx {
     this.maxAniso = renderer.capabilities.getMaxAnisotropy();
     this.scene = new THREE.Scene();
     this.views = [];
-    this.time = 0; this.scale = 1; this._ft = 16; this._scaleCooldown = 2;
+    this.time = 0; this.scale = 1; this._ft = 16; this._scaleCooldown = 2; this._vsync = 16.7; this._raisedAgo = 99; this._bounces = 0;
     this.post = { blur: 0, lines: 0, edge: 0, edgeColor: new THREE.Color(1, 0.2, 0.3), flash: 0, flashColor: new THREE.Color(1, 1, 1), vignette: 0.26, sat: 1.18, contrast: 1.08 };
 
     // lights (configured by setSky)
@@ -262,15 +262,27 @@ export class Gfx {
 
   /** Dynamic resolution: trade pixels for frame rate when the GPU is struggling. */
   _autoScale(dt) {
-    if (this.fixedScale) return;
-    this._ft += (dt * 1000 - this._ft) * 0.05;
+    if (this.fixedScale || dt <= 0) return;
+    const ms = dt * 1000;
+    this._ft += (ms - this._ft) * 0.05;
+    // the display's own frame interval (16.7 ms at 60 Hz, 8.3 at 120): the fastest recent frame, drifting up slowly so a hitch is forgotten
+    this._vsync = Math.max(6, Math.min(ms, this._vsync + 0.01));
+    this._raisedAgo += dt;
     this._scaleCooldown -= dt;
     if (this._scaleCooldown > 0) return;
     // already at the smallest picture and still slow: tell the app, which steps down a quality tier when quality is automatic
     if (this._ft > 24 && this.scale <= 0.56) { this._slowT = (this._slowT || 0) + 1; if (this._slowT >= 3) { this._slowT = 0; this._scaleCooldown = 6; this.onStruggle?.(); return; } this._scaleCooldown = 1.5; return; }
     this._slowT = 0;
-    if (this._ft > 21 && this.scale > 0.55) { this.scale = clamp(this.scale - 0.12, 0.55, 1); this._scaleCooldown = 2.5; this.resize(); }
-    else if (this._ft < 14.5 && this.scale < 1) { this.scale = clamp(this.scale + 0.08, 0.55, 1); this._scaleCooldown = 4; this.resize(); }
+    // a 60 Hz screen never shows a frame faster than 16.7 ms, so "fast enough" means keeping up with the display, not beating 14.5 ms
+    const keepingUp = Math.max(14.5, this._vsync * 1.08);
+    if (this._ft > 21 && this.scale > 0.55) {
+      // dropping straight back after a step up means that size is too much for now: wait longer before trying it again
+      if (this._raisedAgo < 6) this._bounces = Math.min(this._bounces + 1, 3);
+      this.scale = clamp(this.scale - 0.12, 0.55, 1); this._scaleCooldown = 2.5; this.resize();
+    } else if (this._ft < keepingUp && this.scale < 1) {
+      this.scale = clamp(this.scale + 0.08, 0.55, 1); this._scaleCooldown = 4 * 2 ** this._bounces; this._raisedAgo = 0; this.resize();
+      if (this._bounces && this._ft < keepingUp * 0.9) this._bounces--;
+    }
   }
 }
 

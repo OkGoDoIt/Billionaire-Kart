@@ -154,14 +154,6 @@ function hairMaterial(look) {
   return hairMats.get(k);
 }
 
-/** Older entry point: adds the style's geometry to a ModelBuilder's 'hair' bucket (no vertex colours). */
-export function addHair(b, look, faceId, R, cy) {
-  const m = buildHair(look, faceId, R, cy, look.skin ?? 0xe0b090);
-  if (!m) return;
-  m.geometry.deleteAttribute('color');
-  b.add('hair', m.geometry);
-}
-
 /**
  * Build a hair style as one mesh in head space (null for bald).
  * hat: 'cap' | 'cowboy' | undefined — hair is kept below the hat line.

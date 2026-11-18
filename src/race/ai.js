@@ -280,7 +280,9 @@ export class AIDriver {
   _follow(dt, throttleMul) {
     const k = this.kart, race = k.race, tr = race.track, inp = this.input, N = tr.N;
     const sp = k.speed, hit = k.hit;
-    const look = 8 + sp * (0.5 + 0.12 * this.skill);
+    // a smear across the windscreen: they read the road late, swerve, cannot see traffic, and ease off
+    const blind = k.inkT > 0;
+    const look = (8 + sp * (0.5 + 0.12 * this.skill)) * (blind ? 0.7 : 1);
     const iAhead = mod(Math.round((k.s + look) / tr.ds), N);
 
     // desired lateral position: racing line blended with habit, wander, and avoidance
@@ -302,8 +304,18 @@ export class AIDriver {
     this.mistakeT -= dt;
     if (this.mistakeT <= 0) { this.wobble = this.rng.range(-1, 1) * (1.15 - this.skill) * 5; this.mistakeT = this.rng.range(7, 22); this.wobbleT = 1.2; }
     if (this.wobbleT > 0) { this.wobbleT -= dt; lat += this.wobble; }
+    // smeared: they weave on the straights and ease off. Never near a ramp, a bridge, a deck, or a hairpin,
+    // where missing the line costs far more than the smear should.
+    this._calm = 1;
+    if (blind) {
+      let calm = k.grounded && !tr.bridge[iAhead] && tr.respawn[iAhead] === iAhead ? 1 : 0;
+      for (const r of tr.ramps) { const ahead = loopDelta(k.s + look * 2, r.s0, tr.length); if (ahead >= -r.len - 3 && ahead < 40) calm = 0; }
+      this._calm = calm;                                            // the gas lift waits for the ramp, not the corner
+      calm *= clamp(1.4 - Math.max(Math.abs(tr.curv[hit.i]), Math.abs(tr.curv[iAhead])) * 30, 0, 1);
+      lat += Math.sin(this.wanderPhase * 3.1 + k.inkT * 2.3) * 2.6 * calm;
+    }
     // traffic and hazard avoidance
-    const want = this._wantAvoid(sp);
+    const want = this._wantAvoid(sp) * (blind ? 0.5 : 1);
     this.avoid = lerp(this.avoid, clamp(want, -1, 1) * 3.4, 1 - Math.exp(-5 * dt));
     lat = clamp(lat + this.avoid, -hwA, hwA);
 
@@ -366,6 +378,7 @@ export class AIDriver {
     if (Math.abs(ang) > 1.25 && sp > 9) { throttle = 0.2; }
     if (k.wrongWayT > 0.8) { steer = clamp(-wrapAngle(tr.yaw[hit.i] - k.yaw) * 2, -1, 1); }
 
+    if (blind && this._calm && sp > k.top * 0.84) throttle = 0;         // cannot see far, so they coast rather than flat out
     inp.steer = steer; inp.throttle = throttle * throttleMul; inp.brake = brake; inp.drift = drift;
     return inp;
   }

@@ -231,7 +231,7 @@ try {
     console.log('cup totals:', await page.evaluate('JSON.stringify(BK.app.gp.totals)'));
     // the podium screen offers a way back in, not just a way out (#146): the default button runs the same cup again from race 1
     const exits = await page.evaluate(`[...document.querySelectorAll('.screen-cupResults .foot .btn .btn-label')].map(e => e.textContent)`);
-    if (JSON.stringify(exits) !== JSON.stringify(['Race this cup again', 'Change racer', 'Continue'])) fails.push(`cup results exits: ${exits.join(' / ')}`);
+    if (JSON.stringify(exits) !== JSON.stringify(['Race this cup again', 'Change racer', 'Main menu'])) fails.push(`cup results exits: ${exits.join(' / ')}`);
     await key('Enter', 1200);
     await page.waitForFunction('BK.app.gp && BK.app.gp.index === 0 && BK.session && !BK.app.menus.screen', null, { timeout: 30000 }).catch(() => fails.push('Race this cup again did not start a fresh cup'));
     const fresh = await page.evaluate('JSON.stringify(BK.app.gp.totals)');

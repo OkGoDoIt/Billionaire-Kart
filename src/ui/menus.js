@@ -7,7 +7,7 @@ import { CLASSES } from '../race/kart.js';
 import { DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindings, applyPadBind, padFamily } from '../core/input.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
-import { installCard, installButton, installPanel, onInstallChange } from './install.js';
+import { installButton, installPanel, onInstallChange, autoInstall } from './install.js';
 import { KEY_LAYOUTS, KEY_ACTIONS, keyName, bindKey, resetKeys } from '../core/keyboard.js';
 import { trialKey } from '../core/save.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
@@ -197,28 +197,37 @@ export class Menus {
   s_title() {
     // a shared room link (?room=CODE) goes straight on into that room after this first tap
     // a friend's challenge (?c=ID, from a shared result's link) shows under the logo, and the tap goes to race it
-    const A = this.app, touch = matchMedia('(pointer: coarse)').matches;
+    const A = this.app, coarse = matchMedia('(pointer: coarse)').matches;
+    const roomNow = () => (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
     const cid = new URLSearchParams(location.search).get('c');
     if (cid && !A.challengeAsk) A.challengeAsk = loadChallenge(cid);
     let challenge = null;
     const go = () => {
-      if (touch) A.fullscreen(true); A.audio?.unlock?.(); A.audio?.ui('start'); A.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main');
-      const room = new URLSearchParams(location.search).get('room'); if (room) return A.goOnline({ room });
+      if (this.screen?.el !== el) return;
+      if (coarse) A.fullscreen(true); A.audio?.unlock?.(); A.audio?.ui('start'); A.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main');
+      const room = roomNow(); if (room) return A.goOnline({ room });
       if (challenge) { A.challengeAsk = Promise.resolve(null); const q = new URLSearchParams(location.search); q.delete('c'); history.replaceState(null, '', location.pathname + (q.size ? `?${q}` : '')); this.raceChallenge(challenge); }
     };
-    const card = h('div', { class: 'challenge', hidden: true }), press = h('div', { class: 'press' }, touch ? 'Tap to start' : 'Press any button');
+    const card = h('div', { class: 'challenge', hidden: true }), press = h('div', { class: 'press' });
+    const label = () => {
+      const room = roomNow(), tap = coarse ? 'Tap' : 'Press any button';
+      press.textContent = room ? `${tap} to join room ${room}` : challenge ? `${tap} to race` : coarse ? 'Tap to start' : 'Press any button';
+    };
     A.challengeAsk?.then(c => {
       if (!c || !card.isConnected) return;
       challenge = c;
       const [goal, where] = challengeLines(c);
       card.replaceChildren(h('img', { src: c.racer.portrait, alt: '', style: `--rc:${hex(c.racer.color)}` }), h('div', {}, h('small', {}, 'A friend’s challenge'), h('b', {}, goal), h('span', {}, where)));
-      card.hidden = false; press.textContent = touch ? 'Tap to race' : 'Press any button to race';
+      card.hidden = false; label();
     });
     const el = h('div', { onclick: go },
       h('div', { class: 'logo' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c))), h('div', { class: 'logo-tag' }, 'Eight egos. One trophy.')),
       card, press,
       h('div', { class: 'fine' }, 'A parody. Not affiliated with, or endorsed by, anyone in it.'));
-    return { el, onAction: a => { if (a !== 'mute') go(); return true; }, onBack: () => false };
+    label();
+    // in a phone browser the get-the-app sheet comes first; its "Play in Safari" is this same first tap
+    autoInstall({ room: roomNow() || null, onPlay: go, when: () => this.screen?.el === el });
+    return { el, onAction: a => { if (a !== 'mute') go(); return true; }, onBack: () => false, onRoomLink: label };
   }
   /** Race a friend's challenge: pick a racer, then straight onto its track (or into its cup) at its engine class. */
   raceChallenge(c) {
@@ -232,21 +241,17 @@ export class Menus {
     const A = this.app;
     const start = mode => { A.flow = { mode, players: 1 }; this.open('players'); };
     const row = h('div', { class: 'row' }, this.btn('How to play', () => this.open('howto'), { cls: 'small' }), this.btn('Options', () => this.open('options'), { cls: 'small' }), this.btn('Records', () => this.open('records'), { cls: 'small' }));
-    /* install guidance (src/ui/install.js): a persistent button in the row and a one-time
-       hint card under the nav, each present only where installing is actually possible;
-       both redraw if the browser hands us its install prompt while the menu is up */
-    const slot = h('div', { class: 'install-slot' });
+    /* install guidance (src/ui/install.js): a persistent Get the app button in the row, present only where
+       installing is actually possible (the sheet itself opens on the title, once per visit); it redraws if the
+       browser hands us its install prompt while the menu is up */
     let installBtnEl = null;
-    /* short landscape (a phone on its side) has no spare width in the button row or height
-       in the column: there the hint card floats over the scene instead (install.css) and
-       carries the action on its own — Options keeps its Install row at every size */
+    /* short landscape (a phone on its side) has no spare width in the button row: Options keeps its Install
+       row at every size */
     const shortLandscape = matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
     const drawInstall = () => {
       const spec = shortLandscape ? null : installButton();
       if (spec && !installBtnEl) { installBtnEl = this.btn(spec.label, () => spec.act(installBtnEl), { cls: 'small' }); row.appendChild(installBtnEl); row.classList.add('has-install'); }
       if (!spec && installBtnEl) { installBtnEl.remove(); installBtnEl = null; row.classList.remove('has-install'); }
-      const card = installCard();
-      slot.replaceChildren(...(card ? [card] : []));
     };
     // Online shows only when the race server answers and speaks this build's protocol (App#checkOnline)
     const onlineBtn = this.btn('Online', () => A.goOnline(), { cls: 'big c4', sub: 'Friends, strangers, and CPUs' });
@@ -265,8 +270,7 @@ export class Menus {
         this.btn('Quick Race', () => start('vs'), { cls: 'big c2', sub: 'Any track, your rules' }),
         this.btn('Time Trial', () => { A.flow = { mode: 'timetrial', players: 1, devices: ['any'] }; this.open('racers', { player: 0 }); }, { cls: 'big c3', sub: 'Just you and the clock' }),
         onlineBtn,
-        row),
-      slot);
+        row));
     drawInstall();
     const offInstall = onInstallChange(drawInstall);
     return { el, onClose: offInstall, onBack: () => { this.reset('title'); return false; } };

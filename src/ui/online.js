@@ -22,8 +22,29 @@ const CODE_LETTERS = 'BCDFGHJKLMNPQRSTVWXZ';
 const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const QS = new URLSearchParams(location.search);
 const BACKSPACE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h11v14H9l-6-7z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="m12 9 5 6m0-6-5 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
+const CAMERA_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.6-2h5.8l1.6 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>';
+const KEYS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M6.5 10h1M10.5 10h1M14.5 10h1M8 14h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
 const CLOSED = 'That room has closed.', UNREACHABLE = 'Can’t reach the race server.';
+const NBSP = '\u00a0';
+const UPDATING = 'The race server is updating. Back in a moment.', UPDATED = 'That room closed for an update.';
 const JOIN_ERRORS = { no_room: 'No room has that code.', full: 'That room is full.' };
+
+/** The room code in a scanned QR code or a pasted link ("https://…/?room=BCDF"), or a bare code; null if neither. */
+function roomFromText(text) {
+  let code = String(text || '').trim();
+  try { code = new URL(code).searchParams.get('room') || ''; } catch { /* not a link: maybe the code itself */ }
+  code = code.toUpperCase();
+  return code.length === 4 && [...code].every(c => CODE_LETTERS.includes(c)) ? code : null;
+}
+/** A room's address: what Share sends and what the QR code holds. */
+const roomUrl = code => location.origin + location.pathname + '?room=' + code;
+/** The QR code for a room's address as SVG: dark modules on white, with the quiet zone the readers need. */
+function qrSvg(encode, code) {
+  const { data, size } = encode(roomUrl(code), { ecc: 'M', border: 2 });
+  let d = '';
+  data.forEach((row, y) => { for (let x = 0; x < size; x++) { if (!row[x]) continue; let w = 1; while (row[x + w]) w++; d += `M${x} ${y}h${w}v1h-${w}z`; x += w - 1; } });
+  return `<svg viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges" aria-hidden="true"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#12142b"/></svg>`;
+}
 
 /** "0:14" from a server time. */
 const clockText = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -56,6 +77,11 @@ export class Online {
     for (const name of ['online', 'onlineName', 'onlineJoin', 'onlineRoom', 'onlinePublic', 'onlineRacers', 'onlineRules', 'onlineTrack', 'onlineResults', 'onlineBoard', 'onlinePause'])
       this.menus['s_' + name] = params => this['s_' + name](params || {});
     this.pill = null; this.banner = null;
+    this.qr = import('../../vendor/uqr/uqr.js').then(m => m.encode).catch(() => null);   // the room card's QR code
+    // scanning needs a camera: phones and tablets have one; a computer is asked which devices it has
+    const canScan = !!(navigator.mediaDevices?.getUserMedia && window.isSecureContext);
+    this.hasCamera = !canScan ? Promise.resolve(false) : matchMedia('(pointer: coarse)').matches ? Promise.resolve(true)
+      : navigator.mediaDevices.enumerateDevices().then(d => d.some(x => x.kind === 'videoinput')).catch(() => false);
   }
 
   /* ---------- connection ---------- */
@@ -101,7 +127,16 @@ export class Online {
     conn.on('welcome', () => this._welcome(conn));
     conn.on('room', m => { if (conn === this.conn) this.route(m.room); });
     conn.on('err', m => { if (conn === this.conn) this._err(m.code); });
-    conn.on('close', () => { if (conn === this.conn) this.setPill('Reconnecting…'); });
+    // the server is restarting for an update (docs/online-protocol.md, "Server updates"): say so calmly and keep the
+    // screen; the room's countdowns stop showing (this.bye), since nothing moves on until the server is back
+    conn.on('bye', () => { if (conn === this.conn) { this.bye = true; this.setPill(UPDATING, true); } });
+    conn.on('close', () => {
+      if (conn !== this.conn) return;
+      if (!this.bye) { this.setPill('Reconnecting…'); return; }
+      this.byeClosed = true; this.setPill(UPDATING, true);
+      // cut off mid-race: the race is over; lobbies, track picks, and results wait for the server to come back
+      if (this.room?.phase === 'race' && this.inRace()) this.roomClosed(UPDATED);
+    });
     conn.on('old', () => this._old());
     // the socket cannot be reached: Conn keeps retrying on its own, but the player is told after a few seconds
     clearTimeout(this.welcomeTimer);
@@ -112,9 +147,12 @@ export class Online {
     if (conn !== this.conn) return;
     clearTimeout(this.welcomeTimer);
     this.setPill(null);
-    const first = this.state !== 'ready';
-    this.state = 'ready';
+    const first = this.state !== 'ready', updated = this.byeClosed;
+    this.state = 'ready'; this.bye = this.byeClosed = false;
     if (first) this.refreshHub();
+    // back after an update: the new server has no rooms, so ours has gone
+    if (updated && this.room) this.roomClosed(UPDATED);
+    else if (updated && this.menus.screen?.spec.name === 'online') this.refreshHub();
     if (this.pendingJoin) { this.join(this.pendingJoin); this.pendingJoin = null; }
     // back after a drop: the server sends our room straight away if we still have a seat; if none comes, it has gone
     else if (!first && this.room && !this.leaving) {
@@ -138,10 +176,11 @@ export class Online {
     Promise.resolve(navigator.serviceWorker?.getRegistration?.()).then(r => r?.update()).catch(() => {}).finally(() => setTimeout(reload, 900));
   }
 
-  /** The small pill at the top of the screen ("Reconnecting…"); null hides it. */
-  setPill(text) {
+  /** The small pill at the top of the screen ("Reconnecting…"); null hides it. A calm one is news, not trouble. */
+  setPill(text, calm = false) {
     if (!text) { this.pill?.remove(); this.pill = null; return; }
     if (!this.pill) { this.pill = h('div', { class: 'ol-pill', role: 'status' }); this.app.ui.prepend(this.pill); }
+    this.pill.classList.toggle('calm', calm);
     this.pill.textContent = text;
   }
   setBanner(text) {
@@ -153,7 +192,7 @@ export class Online {
   /** Back to the main menu: leave any room and close the connection. */
   exit() {
     this.leaveRoom();
-    this.attempt++; clearTimeout(this.welcomeTimer); clearTimeout(this.lostTimer);
+    this.attempt++; clearTimeout(this.welcomeTimer); clearTimeout(this.lostTimer); this.bye = this.byeClosed = false;
     this.conn?.close(); this.conn = null; this.state = 'idle';
     this.setPill(null); this.setBanner(null);
   }
@@ -169,8 +208,8 @@ export class Online {
     clearTimeout(this.lostTimer);
   }
   /** The room went away under us: back to the hub with one line saying so. */
-  roomClosed() {
-    this.leaveRoom(); this.notice = CLOSED;
+  roomClosed(notice = CLOSED) {
+    this.leaveRoom(); this.notice = notice;
     if (this.inRace()) this.toScene(() => this.show('online')); else this.show('online');
   }
 
@@ -215,8 +254,10 @@ export class Online {
       case 'lobby': {
         const home = room.public ? 'onlinePublic' : 'onlineRoom';
         if (this.inRace()) { this.toScene(() => this.show(home)); break; }
+        // looking for a friend's room from our own: stay on the join screen until someone joins ours
+        if (name === 'onlineJoin' && prev?.code === room.code && room.members.length < 2) break;
         const here = room.public ? ['onlinePublic', 'onlineRacers'] : ['onlineRoom', 'onlineRacers', 'onlineRules'];
-        if (here.includes(name)) { s.onRoom?.(room); break; }
+        if (here.includes(name) && prev?.code === room.code) { s.onRoom?.(room); break; }
         this.show(home);
         if (this.askedRacer !== room.code && me && !me.racer) {
           this.askedRacer = room.code;
@@ -280,6 +321,8 @@ export class Online {
 
   /** The other humans' karts wear their handle on the name tag over the kart, in place of the racer's name. */
   tagHumans(session, room) {
+    // what the after-the-line board and card call each human: the same name and color as their tag
+    session.names = new Map(room.race.slots.filter(s => s.member).map(s => [s.slot, { name: s.member === this.you ? 'You' : this.nameOf(s.member, room), color: this.colorOf(s.member, room) }]));
     for (const kv of session.view.karts) {
       const k = kv.kart, slot = room.race.slots.find(s => s.slot === k.slot);
       if (!k.human || k.isPlayer || !slot?.member || !kv.tag) continue;
@@ -361,22 +404,80 @@ export class Online {
     return { el: h('div', {}, M.header('Pick your title', 'Your number stays yours.'), h('div', { class: 'panel ol-names' }, chips)) };
   }
 
-  /** Join with a code: four boxes, twenty letters, and a delete key; typing works too. */
-  s_onlineJoin({ code = '', error = null }) {
+  /** Join with a code: four boxes, twenty letters, and a delete key; typing works too. Or the camera: point it at
+      a friend's room card and the code fills itself in. ({ scan: true } opens on the camera.) */
+  s_onlineJoin({ code = '', error = null, scan = false }) {
     const M = this.menus;
-    let text = (code || '').slice(0, 4), stale = !!error;
-    const boxes = [0, 1, 2, 3].map(() => h('div', { class: 'ol-box' }));
-    const err = h('p', { class: 'ol-err', role: 'status' }, error || ' ');
+    let text = (code || '').slice(0, 4), stale = !!error, scanning = false, closed = false;
+    const boxes = [0, 1, 2, 3].map(() => h('div', { class: 'ol-box' })), boxRow = h('div', { class: 'ol-boxes', 'aria-label': 'Room code' }, boxes);
+    const err = h('p', { class: 'ol-err', role: 'status' }, error || NBSP);
+    const say = (msg, bad = true) => { err.textContent = msg || NBSP; err.classList.toggle('ok', !bad); };
     const draw = () => boxes.forEach((b, i) => { b.textContent = text[i] || ''; b.classList.toggle('on', i === Math.min(text.length, 3) && !(stale && text.length === 4)); });
+    const submit = c => {
+      if (c === this.room?.code) { say('That’s your own room.'); stale = true; draw(); return; }
+      this.join(c);
+    };
     const add = c => {
-      if (stale) { text = ''; stale = false; err.textContent = ' '; }
+      if (scanning) setScan(false);
+      if (stale) { text = ''; stale = false; say(''); }
       if (text.length >= 4) return;
       text += c; draw(); this.app.audio?.ui('move');
-      if (text.length === 4) this.join(text);
+      if (text.length === 4) submit(text);
     };
-    const del = () => { if (stale) { stale = false; err.textContent = ' '; } text = text.slice(0, -1); draw(); this.app.audio?.ui('back'); };
+    const del = () => { if (stale) { stale = false; say(''); } text = text.slice(0, -1); draw(); this.app.audio?.ui('back'); };
     const keys = [...CODE_LETTERS].map((c, i) => h('button', { class: 'ol-key', 'data-f': true, 'data-default': i === 0, onclick: () => add(c) }, c));
     keys.push(h('button', { class: 'ol-key ol-del', 'data-f': true, 'aria-label': 'Delete a letter', onclick: del, html: BACKSPACE_SVG }));
+    const keyGrid = h('div', { class: 'ol-keys' }, keys);
+
+    /* the camera: a square viewfinder; every 150 ms its middle goes to the reader (qr-worker.js) until a room code turns up */
+    const video = h('video', { muted: true, playsinline: true, autoplay: true, 'aria-hidden': 'true' });
+    video.muted = true;
+    const finder = h('div', { class: 'ol-scan', hidden: true }, video, h('span', { class: 'ol-finder' }));
+    const canvas = document.createElement('canvas'), g = canvas.getContext('2d', { willReadFrequently: true });
+    let stream = null, worker = null, timer = null, busy = false;
+    const stopCam = () => {
+      clearInterval(timer); timer = null; worker?.terminate(); worker = null; busy = false;
+      stream?.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null;
+    };
+    const grab = () => {
+      if (busy || !worker || video.readyState < 2 || !video.videoWidth) return;
+      const vw = video.videoWidth, vh = video.videoHeight, side = Math.min(vw, vh), n = Math.min(side, 640);
+      canvas.width = canvas.height = n;
+      g.drawImage(video, (vw - side) / 2, (vh - side) / 2, side, side, 0, 0, n, n);
+      const img = g.getImageData(0, 0, n, n);
+      busy = true; worker.postMessage({ data: img.data.buffer, width: n, height: n }, [img.data.buffer]);
+    };
+    const read = found => {
+      busy = false;
+      if (!found || !scanning) return;
+      const c = roomFromText(found);
+      if (!c) { say('That isn’t a room code.'); return; }
+      setScan(false); text = c; stale = false; draw(); this.app.audio?.ui('select');
+      submit(c);
+    };
+    const startCam = async () => {
+      let s;
+      try { s = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } }); }
+      catch (e) { if (!closed && scanning) { setScan(false); say(e?.name === 'NotAllowedError' ? 'The camera is off for this game. Type the code instead.' : 'No camera found. Type the code instead.'); } return; }
+      if (closed || !scanning) { s.getTracks().forEach(t => t.stop()); return; }
+      stream = s; video.srcObject = s; video.play().catch(() => {});
+      worker = new Worker(new URL('./qr-worker.js', import.meta.url));
+      worker.onmessage = e => read(e.data);
+      timer = setInterval(grab, 150);
+    };
+    const scanBtn = M.btn('Scan a QR code', () => setScan(!scanning), { cls: 'c1 ol-scan-btn', icon: h('span', { html: CAMERA_SVG }) });
+    const scanLabel = scanBtn.querySelector('.btn-label'), scanIcon = scanBtn.querySelector('.btn-ico > span');
+    scanBtn.hidden = true;
+    const setScan = on => {
+      if (on === scanning) return;
+      scanning = on; finder.hidden = !on; keyGrid.hidden = on; boxRow.hidden = on;
+      scanLabel.textContent = on ? 'Type the code' : 'Scan a QR code'; scanIcon.innerHTML = on ? KEYS_SVG : CAMERA_SVG;
+      if (on) { text = ''; stale = false; say('Point your camera at your friend’s room code.', false); startCam(); M.focus(scanBtn, false); }
+      else { stopCam(); say(''); if (!M.focusEl || M.focusEl === scanBtn || M.focusEl.offsetParent === null) M.focus(keys[0], false); }
+      draw();
+    };
+    this.hasCamera.then(ok => { if (closed || !ok) return; scanBtn.hidden = false; if (scan) setScan(true); });
+
     // physical keys: letters type (D, M, P, R, S, and W would otherwise move, mute, or pause), Backspace deletes while there is something to delete
     const onKey = e => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
@@ -386,13 +487,19 @@ export class Online {
     };
     addEventListener('keydown', onKey, true);
     draw();
-    const el = h('div', {}, M.header('Join a room'), h('div', { class: 'ol-join' }, h('div', { class: 'ol-boxes', 'aria-label': 'Room code' }, boxes), err, h('div', { class: 'ol-keys' }, keys)));
-    return { el, onClose: () => removeEventListener('keydown', onKey, true), onError: msg => { err.textContent = msg; stale = true; draw(); } };
+    const el = h('div', {}, M.header('Join a room'), h('div', { class: 'ol-join' }, boxRow, err, keyGrid, finder, scanBtn));
+    return {
+      el,
+      onClose: () => { closed = true; stopCam(); removeEventListener('keydown', onKey, true); },
+      onError: msg => { if (scanning) setScan(false); say(msg); stale = true; draw(); },
+    };
   }
 
   /** "Who is here": one row per member (color, face, name, tags), kept by member so that the name field on your own
-      row in a friends' room keeps its focus and its text while the room updates around it. */
-  memberList({ valuation = false } = {}) {
+      row in a friends' room keeps its focus and its text while the room updates around it. With changeRacer, your
+      own row is your whole card: your racer, your name, and the way to change racer. */
+  memberList({ valuation = false, changeRacer = false } = {}) {
+    const M = this.menus;
     const el = h('div', { class: 'join-list ol-members' }), rows = new Map();
     let field = null, debounce = null;
     const nameField = () => {
@@ -421,6 +528,10 @@ export class Online {
         }
         const color = this.colorOf(m.id, room), racer = RACER_BY_ID[m.racer], me = m.id === this.you;
         row.el.style.setProperty('--pc', color); row.el.classList.toggle('away', !m.connected);
+        const card = me && changeRacer;
+        row.el.classList.toggle('mine', card);
+        if (card && !row.btn) { row.btn = M.btn(racer ? 'Change racer' : 'Pick a racer', () => this.openRacers(), { cls: 'small ol-change' }); row.el.appendChild(row.btn); }
+        if (row.btn) row.btn.querySelector('.btn-label').textContent = racer ? 'Change racer' : 'Pick a racer';
         const face = racer ? h('img', { class: 'ol-face', src: racer.portrait, alt: '', style: `--rc:${hex(racer.color)}` }) : h('span', { class: 'ol-face empty' });
         if (row.faceKey !== m.racer) { row.face.replaceWith(face); row.face = face; row.faceKey = m.racer; }
         if (me && !room.public) {
@@ -428,7 +539,7 @@ export class Online {
           f.placeholder = handleName(m.handle);
           if (!row.line.contains(f)) row.line.replaceChildren(f);
         } else row.line.textContent = this.nameOf(m.id, room);
-        row.sub.textContent = (racer ? racer.name : 'Choosing a racer') + (me ? ' (you)' : '') + (valuation && m.valuation != null ? ` · ${fmtMoney(m.valuation)}` : '');
+        row.sub.textContent = card ? (racer ? `${racer.name} · ${racer.title}` : 'No racer yet') : (racer ? racer.name : 'Choosing a racer') + (me ? ' (you)' : '') + (valuation && m.valuation != null ? ` · ${fmtMoney(m.valuation)}` : '');
         row.tags.replaceChildren(...[!room.public && room.host === m.id && h('span', { class: 'ol-tag' }, 'Host'),
           !m.connected && h('span', { class: 'ol-tag away' }, 'Reconnecting')].filter(Boolean));
       }
@@ -438,30 +549,36 @@ export class Online {
     return { el, update, flush: () => { if (debounce) field.dispatchEvent(new Event('blur')); } };
   }
 
-  /** Your racer, with the way to change it. */
-  youCard(room) {
-    const M = this.menus, racer = RACER_BY_ID[this.mine(room)?.racer];
-    return h('div', { class: 'panel ol-you' },
-      racer ? h('img', { class: 'r-portrait', src: racer.portrait, alt: '', style: `--rc:${hex(racer.color)}` }) : h('span', { class: 'ol-face empty' }),
-      h('div', {}, h('h2', {}, racer ? racer.name : 'Choosing a racer'), racer && h('div', { class: 'r-title' }, racer.title)),
-      M.btn('Change racer', () => this.openRacers(), { cls: 'small' }));
-  }
-
   /** Room (private, lobby): the code to share, who is here, the rules, and Start for the host. */
   s_onlineRoom() {
     const M = this.menus, room = this.room;
     if (!room) return this.s_online();
-    const code = room.code, url = location.origin + location.pathname + '?room=' + code;
+    const code = room.code, url = roomUrl(code);
     const share = M.btn('Share link', async () => {
-      if (navigator.share) { try { await navigator.share({ url }); } catch { /* dismissed */ } return; }
+      if (navigator.share) { try { await navigator.share({ title: 'Billionaire Kart', text: `Join my Billionaire Kart room: ${code}`, url }); } catch { /* dismissed */ } return; }
       try { await navigator.clipboard.writeText(url); } catch {
         const ta = h('textarea', { style: 'position:fixed;opacity:0' }); ta.value = url; document.body.appendChild(ta); ta.select();
         try { document.execCommand('copy'); } catch { /* nothing more to try */ } ta.remove();
       }
       label.textContent = 'Link copied'; clearTimeout(share.t); share.t = setTimeout(() => { label.textContent = 'Share link'; }, 2000);
     }, { cls: 'small' }), label = share.querySelector('.btn-label');
-    const list = this.memberList(), members = list.el;
-    const youSlot = h('div', { class: 'ol-you-slot', style: 'display:contents' });
+    const list = this.memberList({ changeRacer: true }), members = list.el;
+    /* the code as a QR code, for a friend in the same room to scan from the join screen (or their camera app);
+       a tap shows it big, for scanning from across the table */
+    const qr = h('button', { class: 'ol-qr', 'data-f': true, 'aria-label': 'Show the QR code bigger', onclick: () => setBig(true) });
+    const big = h('button', { class: 'ol-qr-big', hidden: true, 'aria-label': 'Close', onclick: () => setBig(false) }, h('span', { class: 'ol-qr-img' }), h('span', { class: 'ol-code' }, code));
+    const setBig = on => { big.hidden = !on; M.focus(on ? big : qr, false); };
+    this.qr.then(encode => { if (!encode) { qr.hidden = true; return; } const svg = qrSvg(encode, code); qr.innerHTML = svg; big.firstChild.innerHTML = svg; });
+    /* alone in the room: the way into a friend's instead, gone as soon as anyone joins */
+    const scanInstead = M.btn('Scan their code', () => M.open('onlineJoin', { scan: true }), { cls: 'small', icon: h('span', { html: CAMERA_SVG }) });
+    scanInstead.hidden = true;
+    this.hasCamera.then(ok => { scanInstead.hidden = !ok; });
+    const instead = h('div', { class: 'panel ol-instead' }, h('h3', {}, 'Joining a friend?'),
+      h('div', { class: 'ol-instead-btns' }, scanInstead, M.btn('Type their code', () => M.open('onlineJoin'), { cls: 'small' })));
+    // the grid: your code and, while you are alone, the way into a friend's room beside it; who is here below
+    const grid = h('div', { class: 'ol-room' },
+      h('div', { class: 'panel ol-code-card' }, qr, h('div', { class: 'ol-code-side' }, h('div', { class: 'ol-code', 'aria-label': `Room code ${code.split('').join(' ')}` }, code), share)),
+      instead, members);
     const rules = h('span', { class: 'ol-line' });
     const rulesBtn = M.btn('Change rules', () => M.open('onlineRules'), { cls: 'small' });
     const foot = h('div', { class: 'foot ol-foot' });
@@ -471,7 +588,7 @@ export class Online {
     const update = r => {
       const amHost = r.host === this.you;
       list.update(r);
-      youSlot.replaceChildren(this.youCard(r));
+      instead.hidden = r.members.length > 1; grid.classList.toggle('alone', r.members.length < 2); members.classList.toggle('many', r.members.length > 4);
       rules.textContent = rulesLine(r.rules);
       rulesBtn.hidden = !amHost;
       const ready = r.members.every(m => !m.connected || m.racer);
@@ -482,7 +599,7 @@ export class Online {
         foot.replaceChildren(amHost ? start : h('p', { class: 'ol-wait' }, 'Waiting for the host to start.'));
         hostShown = amHost; if (had || (amHost && ready && !M.focusEl)) M.focus(start, false);
       }
-      if (M.focusEl?.disabled || (M.focusEl && !M.focusEl.isConnected)) M.focus(M.screen?.el.querySelector('[data-f]:not(.back):not(:disabled)'), false);
+      if (M.focusEl?.disabled || (M.focusEl && (!M.focusEl.isConnected || M.focusEl.offsetParent === null) && M.focusEl !== big)) M.focus(M.screen?.el.querySelector('[data-f]:not(.back):not(:disabled)'), false);
       // a cup that just ended: its final standings over the room, until the player is done with them
       const cs = r.cupState, cup = CUP_BY_ID[r.rules.cup], key = cs && r.last && `${code}:${cs.tracks.join()}:${r.last.trackId}`;
       if (key && cup && cs.index >= cs.tracks.length - 1 && this.standingsSeen !== key) {
@@ -497,15 +614,12 @@ export class Online {
         }
       } else standings.replaceChildren();
     };
-    const el = h('div', {}, M.header(`Room ${code}`, 'Send the link. Up to eight can race.'),
+    const el = h('div', {}, M.header('Race with Friends', 'Share the code. Up to eight can race.'),
       standings,
-      h('div', { class: 'ol-room' },
-        h('div', { class: 'panel ol-code-card' }, h('div', { class: 'ol-code', 'aria-label': `Room code ${code.split('').join(' ')}` }, code), share),
-        youSlot, members),
-      h('div', { class: 'ol-rules-line' }, rules, rulesBtn),
-      foot);
+      grid,
+      h('div', { class: 'ol-bottom' }, h('div', { class: 'ol-rules-line' }, rules, rulesBtn), foot), big);
     update(room);
-    return { el, onRoom: update, onClose: list.flush, onBack: () => { this.leaveRoom(); } };
+    return { el, onRoom: update, onClose: list.flush, onBack: () => { if (!big.hidden) { setBig(false); return false; } this.leaveRoom(); } };
   }
 
   /** Public race, waiting in the lobby: who is here, with their valuations, and the countdown. */
@@ -513,13 +627,12 @@ export class Online {
     const M = this.menus, room = this.room;
     if (!room) return this.s_online();
     const head = M.header('Public race', ' '), sub = head.querySelector('p');
-    const list = this.memberList({ valuation: true }), members = list.el;
-    const youSlot = h('div', { style: 'display:contents' });
-    const update = r => { list.update(r); youSlot.replaceChildren(this.youCard(r)); };
-    const tick = () => { const r = this.room; sub.textContent = r?.until ? `Starts in ${clockText(r.until - this.now())}` : ' '; };
+    const list = this.memberList({ valuation: true, changeRacer: true }), members = list.el;
+    const update = r => list.update(r);
+    const tick = () => { const r = this.room; sub.textContent = r?.until && !this.bye ? `Starts in ${clockText(r.until - this.now())}` : ' '; };
     update(room); tick();
     const timer = setInterval(tick, 250);
-    const el = h('div', {}, head, h('div', { class: 'ol-room' }, youSlot, members), h('p', { class: 'ol-line ol-foot' }, 'Empty seats go to CPUs.'));
+    const el = h('div', {}, head, h('div', { class: 'ol-lobby' }, members), h('p', { class: 'ol-line ol-foot' }, 'Empty seats go to CPUs.'));
     return { el, onRoom: update, onClose: () => clearInterval(timer), onBack: () => { this.leaveRoom(); } };
   }
 
@@ -605,7 +718,7 @@ export class Online {
         b.classList.toggle('sel', me?.track === id);
       }
     };
-    const tick = () => { const r = this.room; count.textContent = !rolling && r?.phase === 'track' && r.until ? clockText(r.until - this.now()) : ''; };
+    const tick = () => { const r = this.room; count.textContent = !rolling && !this.bye && r?.phase === 'track' && r.until ? clockText(r.until - this.now()) : ''; };
     mark(room); tick();
     const timer = setInterval(tick, 250);
     const mineNow = this.mine(room)?.track;
@@ -674,7 +787,7 @@ export class Online {
       if (ready && !next.disabled) { next.disabled = true; nextLabel.textContent = 'Waiting for the others'; nextSub.hidden = false; if (M.focusEl === next) M.focus(leave, false); }
       tick();
     };
-    const tick = () => { const r = this.room; if (!nextSub.hidden) nextSub.textContent = r?.phase === 'results' && r.until ? clockText(r.until - this.now()) : ''; };
+    const tick = () => { const r = this.room; if (!nextSub.hidden) nextSub.textContent = !this.bye && r?.phase === 'results' && r.until ? clockText(r.until - this.now()) : ''; };
     const timer = setInterval(tick, 250);
     const el = h('div', { class: 'screen-results' }, h('div', { class: 'panel results ol-res' + (card ? ' with-card' : '') },
       h('h1', {}, track?.name || ''), inCup && h('p', { class: 'res-sub' }, `${CUP_BY_ID[room.rules.cup]?.name || 'Cup'} · Race ${cs.index + 1} of ${cs.tracks.length}`),

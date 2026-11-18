@@ -29,6 +29,10 @@ namespace BillionaireKart.Server.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTimeOffset?>("AppSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("app_seen_at");
+
                     b.Property<DateTimeOffset?>("BannedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("banned_at");

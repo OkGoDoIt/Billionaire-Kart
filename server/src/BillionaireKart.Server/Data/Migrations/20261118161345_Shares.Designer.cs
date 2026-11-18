@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BillionaireKart.Server.Data.Migrations
 {
     [DbContext(typeof(KartDb))]
-    [Migration("20261118095625_Shares")]
+    [Migration("20261118161345_Shares")]
     partial class Shares
     {
         /// <inheritdoc />
@@ -31,6 +31,10 @@ namespace BillionaireKart.Server.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AppSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("app_seen_at");
 
                     b.Property<DateTimeOffset?>("BannedAt")
                         .HasColumnType("timestamp with time zone")

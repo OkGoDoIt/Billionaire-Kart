@@ -150,6 +150,52 @@ public static class PlayerApi
                 me = mine,
             });
         });
+
+        // Room handoff (see RoomHandoff). No player cookie: Safari and the installed game each have their own.
+        api.MapPost("/handoff", (HttpContext ctx, HandoffRequest? body, RoomHandoff handoff, RoomManager rooms) =>
+        {
+            if (RoomHandoff.NormalizeCode(body?.Code) is not { } code) return Results.BadRequest(new { error = "code must be a four-letter room code" });
+            if (!rooms.Rooms.ContainsKey(code)) return Results.NotFound();
+            handoff.Offer(RoomHandoff.Key(ctx), code);
+            return Results.NoContent();
+        });
+
+        api.MapPost("/handoff/claim", (HttpContext ctx, RoomHandoff handoff, RoomManager rooms) =>
+            handoff.Claim(RoomHandoff.Key(ctx)) is { } code && rooms.Rooms.ContainsKey(code)
+                ? Results.Json(new { code })
+                : Results.NoContent());
+
+        api.MapDelete("/handoff", (HttpContext ctx, RoomHandoff handoff) =>
+        {
+            handoff.Forget(RoomHandoff.Key(ctx));
+            return Results.NoContent();
+        });
+
+        // The installed game says it is open (each launch and return to the foreground); the browser asks whether it
+        // has been. A cookie copied into the app at install time ties the two; the device key covers the rest.
+        api.MapPost("/app", async (HttpContext ctx, KartDb db, PlayerCookie cookie, InstalledApp installed) =>
+        {
+            installed.Seen(RoomHandoff.Key(ctx));
+            if (cookie.Read(ctx.Request) is Guid id)
+            {
+                var now = DateTimeOffset.UtcNow;
+                var stale = now - InstalledApp.WriteEvery;
+                await db.Players.Where(p => p.Id == id && (p.AppSeenAt == null || p.AppSeenAt < stale))
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.AppSeenAt, now));
+            }
+            return Results.NoContent();
+        });
+
+        api.MapGet("/app", async (HttpContext ctx, KartDb db, PlayerCookie cookie, InstalledApp installed) =>
+        {
+            bool app = installed.SeenLately(RoomHandoff.Key(ctx));
+            if (!app && cookie.Read(ctx.Request) is Guid id)
+            {
+                var since = installed.Since(DateTimeOffset.UtcNow);
+                app = await db.Players.AnyAsync(p => p.Id == id && p.AppSeenAt > since);
+            }
+            return Results.Json(new { app });
+        });
     }
 
     static object SessionView(Player p, KartSettings s) => new
@@ -160,6 +206,7 @@ public static class PlayerApi
     };
 
     public sealed record HandleRequest(int? Title);
+    public sealed record HandoffRequest(string? Code);
 
     /// <summary>The WebSocket handshake: an allowed origin, a valid player cookie, and no ban.</summary>
     public static async Task HandleSocket(HttpContext ctx, KartDb db, PlayerCookie cookie, OriginPolicy origins, RoomManager rooms)

@@ -16,6 +16,8 @@ public sealed class Player
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }
     public DateTimeOffset? BannedAt { get; set; }
+    /// <summary>When the installed (Home Screen) game last said it was open with this player's cookie.</summary>
+    public DateTimeOffset? AppSeenAt { get; set; }
 }
 
 /// <summary>A rated (public) race. Private races are not stored.</summary>

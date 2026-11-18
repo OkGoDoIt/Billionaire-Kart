@@ -24,6 +24,10 @@ const CASES = [
   { name: 'desktop-4x3', w: 1024, h: 768 }, { name: 'desktop-5x4', w: 1280, h: 1024 },
   { name: 'phone', w: 844, h: 390, touch: true }, { name: 'phone-wide', w: 932, h: 430, touch: true }, { name: 'phone-16x9', w: 667, h: 375, touch: true },
   { name: 'tablet', w: 1180, h: 820, touch: true }, { name: 'tablet-4x3', w: 1024, h: 768, touch: true },
+  // notched iPhones held sideways: headless Chrome reports no safe-area insets, so these set the real ones (top, right,
+  // bottom, left in CSS px). Roger's card crushed to a word a line here on 18 Nov, and the plain phone cases never saw it.
+  { name: 'iphone-notch', w: 852, h: 393, touch: true, safe: [0, 59, 21, 59] }, { name: 'iphone-max-notch', w: 932, h: 430, touch: true, safe: [0, 59, 21, 59] },
+  { name: 'desktop-21x9', w: 2560, h: 1080 },
   { name: 'two-players', w: 1280, h: 720, racers: 2 }, { name: 'three-players', w: 1280, h: 720, racers: 3 }, { name: 'four-players', w: 1280, h: 720, racers: 4 },
   { name: 'four-players-4x3', w: 1024, h: 768, racers: 4 },
   // the split follows the screen's shape (src/render/splitlayout.js): side by side, columns, rows
@@ -31,6 +35,8 @@ const CASES = [
   { name: 'three-players-wide', w: 2000, h: 800, racers: 3 }, { name: 'three-players-upright', w: 820, h: 1180, racers: 3 },
   { name: 'three-players-4x3', w: 1024, h: 768, racers: 3 }, { name: 'four-players-32x9', w: 2560, h: 720, racers: 4 },
   { name: 'four-players-upright', w: 820, h: 1180, racers: 4 },
+  { name: 'two-players-iphone', w: 852, h: 393, racers: 2, safe: [0, 59, 21, 59] }, { name: 'four-players-iphone', w: 852, h: 393, racers: 4, safe: [0, 59, 21, 59] },
+  { name: 'ipad-upright-2p', w: 820, h: 1180, racers: 2, safe: [24, 0, 20, 0] },
 ].filter(c => (!opt.only || c.name === opt.only) && (!opt.split || c.racers > 1));
 
 /* ---------- issue #132 guard: a held item's description must always show ----------
@@ -158,6 +164,12 @@ const stress = async () => {
       if (span.scrollHeight > span.clientHeight + 1) faults.add(`item-desc: ${tag}: description clipped for ${item.id}`);
     };
     for (const item of items) checkDesc(item, 'held');
+    // and readable: the longest description fills the card, which must be at least 7.5 of its own ems wide (about
+    // fifteen characters a line), not a column of single words
+    {
+      checkDesc(descItem, 'width'); const span = h.$.itemDesc, em = span.clientWidth / parseFloat(getComputedStyle(span).fontSize);
+      if (em < 7.5) faults.add(`item-desc: the item card is ${em.toFixed(1)} em wide, a word or two a line`);
+    }
     if (window.__BK_DESC_HOLD__) {
       checkDesc(descItem, 'hold start');
       h.feed(feedRows[0], 9000); h.banner('FINAL LAP!', 'final', 9000);
@@ -180,6 +192,7 @@ for (const c of CASES) {
   const page = await ctx.newPage(); const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(`${base}?track=bliss-hills&intro=0&seed=3&r=${RACERS4.slice(0, c.racers || 1).join(',')}`, { waitUntil: 'load' });
+  if (c.safe) { const [t, r, b, l] = c.safe; await page.addStyleTag({ content: `:root { --safe-t: ${t}px; --safe-r: ${r}px; --safe-b: ${b}px; --safe-l: ${l}px; }` }); }
   await page.waitForFunction('window.BK && BK.race', null, { timeout: 40000 });
   await page.exposeFunction('bkShot', tag => page.screenshot({ path: join(out, `${c.name}-${tag}.jpg`), type: 'jpeg', quality: 85 }).then(() => null));
   if (c.name === 'phone' || c.name === 'desktop-16x9') await page.evaluate(() => { window.__BK_DESC_HOLD__ = true; });   // issue #132: the 7 s hold test runs on Roger's shape + desktop

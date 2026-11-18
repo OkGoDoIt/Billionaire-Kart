@@ -4,6 +4,7 @@ import { Race } from '../race/race.js';
 import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
 import { DrivingGuide } from '../ui/driving-guide.js';
+import { AfterFinish } from './afterfinish.js';
 import { Hud, FieldBoard } from '../ui/hud.js';
 import { TouchControls, isTouchDevice } from '../ui/touch.js';
 import { ITEMS, HIT_LINES, isFundingBoost } from '../race/items.js';
@@ -87,6 +88,7 @@ export class RaceSession {
       this.view.setGhost(app.save?.ghost(config.trackId, config.cc));
       this.rec = { racer: this.race.players[0].racer.id, step: 0.1, d: [], next: 0 };
     }
+    this.after = new AfterFinish(this);
     this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;
     if (this.phase === 'intro') { this.view.startIntro(); for (const h of this.huds) h.setVisible(false); this.board?.setVisible(false); this.touch?.setVisible(false); app.audio?.event('introStart', def); }
     else app.audio?.event('countdownStart', def);
@@ -213,7 +215,8 @@ export class RaceSession {
         if (this.autopilots) guide.hide(); else guide.update(dt, inputs[i]);
       }
       this.board?.update(dt);
-      for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
+      for (const h of this.hudOf.values()) h.update(dt);
+      this.after?.frame(dt);
       if (race.state === 'done') { this.doneT += dt; if (!this.reported && this.doneT > 1.2) { this.reported = true; app.onRaceDone?.(this, race.results()); } }
     }
     view.update(dt, this.acc / STEP);
@@ -242,7 +245,8 @@ export class RaceSession {
     this.touch?.sync(dt);
     for (const [i, guide] of this.guides.entries()) { if (this.autopilots) guide.hide(); else guide.update(dt, inputs[i]); }
     this.board?.update(dt);
-    for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
+    for (const h of this.hudOf.values()) h.update(dt);
+    this.after?.frame(dt);
     if (!this.reported && net.phase === 'results' && net.room.last) { this.reported = true; app.onRaceDone?.(this, this.onlineResults()); }
     view.update(dt, net.stepFraction());
     app.afterUpdate?.(this);
@@ -265,5 +269,5 @@ export class RaceSession {
     if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume');
   }
 
-  dispose() { this.net?.dispose(); this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.touch?.dispose(); this.view.dispose(); }
+  dispose() { this.after?.dispose(); this.net?.dispose(); this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

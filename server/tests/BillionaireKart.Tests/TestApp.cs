@@ -69,13 +69,14 @@ public sealed class TestApp : IAsyncLifetime
         Assert.Empty(errors);
     }
 
-    public HttpClient Http(bool cookies = false) =>
-        Factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = cookies, AllowAutoRedirect = false });
+    public HttpClient Http(bool cookies = false, WebApplicationFactory<Program>? factory = null) =>
+        (factory ?? Factory).CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = cookies, AllowAutoRedirect = false });
 
-    /// <summary>A new guest: POST /api/session, then a WebSocket that has said hello.</summary>
-    public async Task<Gamer> NewGamer(string? cookie = null)
+    /// <summary>A new guest: POST /api/session, then a WebSocket that has said hello. <paramref name="factory"/> picks
+    /// another app than the shared one (a test that shuts its own server down).</summary>
+    public async Task<Gamer> NewGamer(string? cookie = null, WebApplicationFactory<Program>? factory = null)
     {
-        var http = Http();
+        var http = Http(factory: factory);
         var req = new HttpRequestMessage(HttpMethod.Post, "/api/session");
         if (cookie != null) req.Headers.Add("Cookie", cookie);
         var res = await http.SendAsync(req);
@@ -84,19 +85,20 @@ public sealed class TestApp : IAsyncLifetime
         var setCookie = res.Headers.GetValues("Set-Cookie").First(c => c.StartsWith("bk_player="));
         cookie = setCookie.Split(';')[0];
         var g = new Gamer(Guid.Parse(body.GetProperty("id").GetString()!), cookie);
-        await g.ConnectAsync(this);
+        await g.ConnectAsync(this, factory);
         return g;
     }
 
-    public async Task<WebSocket> OpenSocket(string cookie, string origin = Origin)
+    public async Task<WebSocket> OpenSocket(string cookie, string origin = Origin, WebApplicationFactory<Program>? factory = null)
     {
-        var client = Factory.Server.CreateWebSocketClient();
+        var server = (factory ?? Factory).Server;
+        var client = server.CreateWebSocketClient();
         client.ConfigureRequest = r =>
         {
             r.Headers["Origin"] = origin;
             r.Headers["Cookie"] = cookie;
         };
-        return await client.ConnectAsync(new Uri(Factory.Server.BaseAddress, "/ws"), CancellationToken.None);
+        return await client.ConnectAsync(new Uri(server.BaseAddress, "/ws"), CancellationToken.None);
     }
 }
 
@@ -116,9 +118,9 @@ public sealed class Gamer(Guid id, string cookie) : IAsyncDisposable
     readonly CancellationTokenSource _cts = new();
     Task? _keepAlive;
 
-    public async Task ConnectAsync(TestApp app)
+    public async Task ConnectAsync(TestApp app, WebApplicationFactory<Program>? factory = null)
     {
-        Ws = await app.OpenSocket(Cookie);
+        Ws = await app.OpenSocket(Cookie, factory: factory);
         _ = Task.Run(ReceiveLoop);
         await Send(new { t = "hello", proto = 1, build = "test" });
         var w = await Next("welcome");

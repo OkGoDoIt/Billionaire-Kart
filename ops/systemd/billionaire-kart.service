@@ -13,6 +13,8 @@ EnvironmentFile=-/opt/billionaire-kart/current/release.env
 ExecStart=/usr/bin/dotnet /opt/billionaire-kart/current/BillionaireKart.Server.dll --urls http://127.0.0.1:5105
 Restart=on-failure
 RestartSec=5
+# SIGINT starts a graceful restart: races get up to ShutdownDrainSeconds (at most 25, see KartSettings.cs) to finish,
+# then sockets close. Keep TimeoutStopSec above that; raise MaxShutdownDrainSeconds and this together.
 TimeoutStopSec=30
 KillSignal=SIGINT
 UMask=0077

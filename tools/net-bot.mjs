@@ -2,13 +2,14 @@
 /* Online play end to end: the real server (server/, on Postgres) and two real browsers, each its own player.
    Friends: A makes a room and picks a racer; B opens the link, is refused A's racer, picks another; A changes a rule
    and both see it; A starts; both pick tracks; the roulette; a race on autopilot on both; the same results on both;
-   Next race on both, back to the track pick; both leave. Public: A finds a race, the solo wait runs out, a race with
+   Next race on both, back to the track pick; the server restarts for an update while both sit there, and both show
+   the update line and land on the hub saying the room closed. Public: A finds a race, the solo wait runs out, a race with
    CPUs runs, A's valuation card shows the change, and the Rich List shows A.
    Fails on any page error, console error, or failed request. Builds and starts the server itself and stops it.
    Public-room timers are shortened in the dev database for the run and put back afterwards.
 
    Usage: node tools/net-bot.mjs [--out dir] [--shots] [--touch] [--port 5211] [--db billionaire_kart_dev]
-     --shots  every online screen at desktop, tablet, phone upright, and phone sideways
+     --shots  every online screen at desktop, tablet, phone upright, and phone sideways, and a restart that cuts off a race
      --touch  both players on phones (844x390, touch), tapping through the friends flow */
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, openSync } from 'node:fs';
@@ -30,7 +31,7 @@ const fails = [], log = (...a) => console.log('net-bot:', ...a);
 const fail = msg => { fails.push(msg); console.log('net-bot: FAIL', msg); };
 
 /* ---------- settings for the run ---------- */
-const SETTINGS = { PublicSoloWaitSeconds: SHOTS ? 14 : 5, PublicWaitSeconds: 10, TrackPickSeconds: SHOTS ? 30 : 12, ResultsSeconds: SHOTS ? 40 : 20, FinishGraceSeconds: 25 };
+const SETTINGS = { PublicSoloWaitSeconds: SHOTS ? 14 : 5, PublicWaitSeconds: 10, TrackPickSeconds: SHOTS ? 30 : 12, ResultsSeconds: SHOTS ? 40 : 20, FinishGraceSeconds: 25, ShutdownDrainSeconds: SHOTS ? 8 : 25 };
 const psql = sql => execFileSync('psql', ['-d', DB, '-At', '-v', 'ON_ERROR_STOP=1', '-c', sql], { encoding: 'utf8' });
 const saved = Object.fromEntries(psql(`select key, value from settings where key in (${Object.keys(SETTINGS).map(k => `'${k}'`).join(',')})`).trim().split('\n').filter(Boolean).map(l => l.split('|')));
 for (const [k, v] of Object.entries(SETTINGS)) psql(`insert into settings (key, value, updated_at) values ('${k}', '${v}', now()) on conflict (key) do update set value = excluded.value, updated_at = now()`);
@@ -42,18 +43,15 @@ const restoreSettings = () => {
 };
 
 /* ---------- the server ---------- */
-let server = null, browser = null;
+let server = null, browser = null, restarting = false;
 const stopServer = () => { if (server && server.exitCode == null) { server.kill('SIGTERM'); } };
-process.on('exit', stopServer);
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { stopServer(); try { restoreSettings(); } catch { /* best effort */ } process.exit(130); });
-
-try {
-  log('building the server');
-  execFileSync('dotnet', ['build', join(ROOT, 'server'), '-v', 'q', '-nologo'], { stdio: ['ignore', 'ignore', 'inherit'] });
-  const logFd = openSync(join(out, 'server.log'), 'w');
+const startServer = async () => {
+  const logFd = openSync(join(out, 'server.log'), 'a');
   server = spawn('dotnet', [join(PROJECT, 'bin/Debug/net10.0/BillionaireKart.Server.dll'), '--urls', `http://127.0.0.1:${PORT}`], {
     cwd: PROJECT, stdio: ['ignore', logFd, logFd],
-    env: { ...process.env, ASPNETCORE_ENVIRONMENT: 'Development', ConnectionStrings__Kart: `Host=localhost;Database=${DB}`, Kart__StaticRoot: ROOT, Kart__AdminToken: 'dev' },
+    env: { ...process.env, ASPNETCORE_ENVIRONMENT: 'Development', ConnectionStrings__Kart: `Host=localhost;Database=${DB}`, Kart__StaticRoot: ROOT, Kart__AdminToken: 'dev',
+      // keys on disk, as in production, so the players' cookies survive the restart below
+      Kart__KeyDirectory: join(out, 'keys') },
   });
   for (let i = 0; ; i++) {
     try { const r = await fetch(BASE + 'healthz'); if (r.ok) break; } catch { /* not yet */ }
@@ -61,6 +59,21 @@ try {
     if (i > 120) throw new Error('the server did not start');
     await new Promise(r => setTimeout(r, 250));
   }
+};
+/** SIGINT, as systemd stops it for a deploy; resolves with the seconds it took to exit. */
+const interruptServer = () => new Promise((resolve, reject) => {
+  const t0 = Date.now(), timer = setTimeout(() => reject(new Error('the server did not exit within 30 s of SIGINT')), 30000);
+  server.once('exit', code => { clearTimeout(timer); if (code !== 0) fail(`the server exited with ${code} after SIGINT`); resolve((Date.now() - t0) / 1000); });
+  server.kill('SIGINT');
+});
+process.on('exit', stopServer);
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { stopServer(); try { restoreSettings(); } catch { /* best effort */ } process.exit(130); });
+
+try {
+  log('building the server');
+  execFileSync('dotnet', ['build', join(ROOT, 'server'), '-v', 'q', '-nologo'], { stdio: ['ignore', 'ignore', 'inherit'] });
+  openSync(join(out, 'server.log'), 'w');
+  await startServer();
   log('server up on', BASE);
 
   try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] }); }
@@ -75,8 +88,11 @@ try {
     const page = await ctx.newPage();
     page.label = label;
     page.on('pageerror', e => fail(`${label}: page error: ${e.message}`));
-    page.on('console', m => { if (m.type() === 'error' && !(page.allow && /status of 503/.test(m.text()))) fail(`${label}: console error: ${m.text()}`); });
-    page.on('requestfailed', r => { if (!/\/favicon\.ico$/.test(r.url())) fail(`${label}: request failed: ${r.url()} ${r.failure()?.errorText}`); });
+    // while the server restarts, the browser reports each refused reconnect, and (here only: in production nginx serves
+    // the game's files) the menu scene's images; that is expected
+    const down = text => restarting && /WebSocket connection .* failed|ERR_CONNECTION_REFUSED/.test(text);
+    page.on('console', m => { if (m.type() === 'error' && !(page.allow && /status of 503/.test(m.text())) && !down(m.text())) fail(`${label}: console error: ${m.text()}`); });
+    page.on('requestfailed', r => { if (!/\/favicon\.ico$/.test(r.url()) && !down(r.failure()?.errorText || '')) fail(`${label}: request failed: ${r.url()} ${r.failure()?.errorText}`); });
     page.on('response', r => { if (r.status() >= 400 && !page.allow?.(r)) fail(`${label}: ${r.status()} ${r.url()}`); });
     return page;
   };
@@ -225,7 +241,28 @@ try {
   await press(B, '.ol-res .foot .btn.go');
   await Promise.all([A, B].map(p => waitScreen(p, 'onlineTrack', 30000)));
   log('both back at the track pick');
-  await Promise.all([A, B].map(async p => { await press(p, '.back'); await waitScreen(p, 'online'); }));
+
+  /* ---------- the server restarts for an update ---------- */
+  const UPDATING = 'The race server is updating. Back in a moment.', UPDATED = 'That room closed for an update.';
+  restarting = true;
+  const exited = interruptServer();
+  // nobody is racing, so it says goodbye and exits at once; both keep their screen and show the line
+  const calm = p => p.waitForFunction(t => document.querySelector('.ol-pill.calm')?.textContent === t, UPDATING, { timeout: 8000 }).then(() => true, () => false);
+  if (!(await Promise.all([A, B].map(calm))).every(Boolean)) fail('the update line did not show on both');
+  log('server exited', (await exited).toFixed(1), 's after SIGINT');
+  for (const p of [A, B]) {
+    if (await screen(p) !== 'onlineTrack') fail(`${p.label}: left the track pick while the server was down: ${await screen(p)}`);
+    else if (await p.locator('.ol-count').first().isVisible() && await text(p, '.ol-count')) fail(`${p.label}: the track countdown still shows while the server is down`);
+  }
+  await shoot(A, '19-server-updating', { check: false });
+  await startServer();
+  log('server back up');
+  await Promise.all([A, B].map(p => waitScreen(p, 'online', 40000)));
+  await Promise.all([A, B].map(p => p.waitForFunction(() => BK.app.online.conn?.ready && !document.querySelector('.ol-pill'), null, { timeout: 10000 }).catch(() => fail(`${p.label}: still not connected after the restart`))));
+  restarting = false;
+  for (const p of [A, B]) { const n = await p.locator('.ol-notice').first().textContent().catch(() => null); if (n !== UPDATED) fail(`${p.label}: the hub says ${JSON.stringify(n)} after the restart`); }
+  await shoot(A, '19b-room-closed-for-update');
+  log('both on the hub after the restart');
   await press(B, '.back'); await waitScreen(B, 'main');
   if (await B.evaluate(() => !!BK.app.online.conn)) fail('B: the connection stayed open after leaving to the main menu');
   log('friends: done');
@@ -259,6 +296,36 @@ try {
     await shoot(A, '23-rich-list');
     await press(A, '.chip:has-text("This week")'); await A.waitForTimeout(700); await shoot(A, '24-rich-list-week');
     await press(A, '.back'); await press(A, '.back'); await waitScreen(A, 'main');
+  }
+
+  /* ---------- a restart that cuts off a race (screens only) ---------- */
+  if (SHOTS && !touch) {
+    await press(A, '.main-nav .btn.c4'); await waitScreen(A, 'online');
+    await A.waitForFunction(() => BK.app.online?.state === 'ready', null, { timeout: 15000 });
+    await press(A, '.ol-modes .btn.c4'); await waitScreen(A, 'onlineRacers'); await press(A, '.r-go'); await waitScreen(A, 'onlineRoom');
+    const code2 = await A.evaluate(() => BK.app.online.room.code);
+    await toTitleAndOnline(B, '&room=' + code2);
+    await waitScreen(B, 'onlineRacers', 20000); await press(B, '.r-go'); await waitScreen(B, 'onlineRoom');
+    await A.waitForFunction(() => BK.app.online.room.members.length === 2 && BK.app.online.room.members.every(m => m.racer), null, { timeout: 8000 });
+    await press(A, '.ol-foot .btn.go');
+    await Promise.all([A, B].map(p => waitScreen(p, 'onlineTrack')));
+    await press(A, '.cards.tracks .card.track', 0); await press(B, '.cards.tracks .card.track', 0);
+    await Promise.all([A, B].map(p => p.waitForFunction(() => BK.app.session?.net && !BK.app.attract && BK.app.session.race?.time > 5, null, { timeout: 40000 })));
+    restarting = true;
+    const exited = interruptServer();
+    await A.waitForFunction(() => document.querySelector('.ol-pill.calm'), null, { timeout: 5000 }).catch(() => fail('A: no update line mid-race'));
+    if (!await A.evaluate(() => BK.app.session?.net && !BK.app.attract)) fail('A: the race stopped as soon as the server said it was updating');
+    await shoot(A, '25-race-server-updating', { check: false });
+    // the drain runs out: the race ends on both and they wait on the hub
+    await Promise.all([A, B].map(p => waitScreen(p, 'online', 20000)));
+    log('race cut off; server exited', (await exited).toFixed(1), 's after SIGINT');
+    await shoot(A, '26-race-cut-off');
+    await startServer();
+    await Promise.all([A, B].map(p => p.waitForFunction(() => BK.app.online.conn?.ready && !document.querySelector('.ol-pill'), null, { timeout: 40000 }).catch(() => fail(`${p.label}: still not connected after the restart`))));
+    restarting = false;
+    for (const p of [A, B]) { const n = await p.locator('.ol-notice').first().textContent().catch(() => null); if (n !== 'That room closed for an update.') fail(`${p.label}: the hub says ${JSON.stringify(n)} after the cut-off race`); }
+    await shoot(A, '27-hub-after-update');
+    for (const p of [A, B]) { await press(p, '.back'); await waitScreen(p, 'main'); }
   }
 
   /* ---------- connection trouble (screens only) ---------- */

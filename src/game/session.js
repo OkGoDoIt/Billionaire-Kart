@@ -21,9 +21,13 @@ const SLOW_MO = 1.1;   // seconds of real time the finish slow motion takes to e
 export class RaceSession {
   /**
    * config: { trackId, cc, laps?, players: [{ racerId, device }], level, seed?, mode?, auto?, intro? , grid?: [racerId...] }
+   * Online: config.net = { conn, room, me, NetRace } (NetRace is the class from src/net/netrace.js, which the
+   * caller loads with import(), so the offline game never fetches it). Track, field, grid, laps, and seed then
+   * come from room.race; the local players are the slots whose member is `me` (none: spectate on the TV camera).
    */
   constructor(app, config) {
     this.app = app; this.config = config;
+    if (config.net) this._onlineConfig(config);
     const def = this.def = TRACK_BY_ID[config.trackId], track = getTrack(config.trackId);
     const rng = makeRng(config.seed ?? (Date.now() & 0xffff));
     const humans = config.players.map(p => RACER_BY_ID[p.racerId]);
@@ -35,6 +39,15 @@ export class RaceSession {
     // (as in Mario Kart, best times stay the player's own work)
     const entries = [...pool.map(racer => ({ racer, player: -1, level: config.level || 'normal' })), ...humans.map((racer, i) => ({ racer, player: i, autoTrick: config.players[i].autoTrick, assist: { steer: config.mode !== 'timetrial' && config.players[i].smartSteer ? 1 : 0 } }))];
     if (config.order) entries.sort((a, b) => config.order.indexOf(a.racer.id) - config.order.indexOf(b.racer.id));
+    if (config.net) {
+      const { conn, room, me, NetRace } = config.net, ro = NetRace.raceOptions(room, me, RACER_BY_ID, getTrack);
+      for (const e of ro.entries) if (e.player >= 0 && config.players[e.player] && room.race.slots.some(s => s.member === me && RACER_BY_ID[s.racer] === e.racer)) {
+        const p = config.players[e.player]; e.autoTrick = p.autoTrick; e.assist = { steer: p.smartSteer ? 1 : 0 };
+      }
+      this.race = new Race(ro);
+      this.net = new NetRace({ race: this.race, conn, room, me });   // also narrows race.players to this device's players
+      conn.send({ t: 'loaded' });
+    } else
     this.race = new Race({ track, cc: config.cc || 150, laps: config.laps, seed: (config.seed ?? 1) + 17, entries, mode: config.mode, countdown: config.countdown });
     this.trialBest = config.mode === 'timetrial' ? app.save?.bestFor(config.trackId, trialKey(config.cc || 150))?.race : null;
     this.view = new RaceView(app.gfx, this.race, def, { onEvent: (kind, e, k) => this._onEvent(kind, e, k), tv: !!config.tv, trialBest: this.trialBest });
@@ -79,10 +92,21 @@ export class RaceSession {
     else app.audio?.event('countdownStart', def);
   }
 
-  /** Freeze the action briefly (one screen only: in split-screen a pause for one player would stall the others). */
-  _hitStop(sec) { if (this.race.players.length === 1) this.hitStopT = Math.max(this.hitStopT || 0, sec); }
-  /** Crossing the line: the race drops to a third of its speed for a beat and eases back (one screen only). */
-  _slowMo() { if (this.race.players.length === 1) this.slowT = SLOW_MO; }
+  /** Online: the session's settings come from the room. */
+  _onlineConfig(config) {
+    const { room, me } = config.net, rr = room.race, S = this.app.save?.settings || {};
+    const mine = rr.slots.filter(s => s.member === me).sort((a, b) => a.slot - b.slot);
+    Object.assign(config, {
+      trackId: rr.trackId, cc: room.rules?.cc || 150, laps: rr.laps, seed: rr.seed, level: room.rules?.level || 'normal', mode: 'race', intro: false,
+      players: config.players?.length === mine.length ? config.players : mine.map(s => ({ racerId: s.racer, device: 'any', autoTrick: !!S.autoTrick || !!this.app.input?.touch?.active, smartSteer: !!S.smartSteer })),
+      tv: !mine.length,
+    });
+  }
+
+  /** Freeze the action briefly (one screen only: in split-screen a pause for one player would stall the others). Never online. */
+  _hitStop(sec) { if (this.race.players.length === 1 && !this.net) this.hitStopT = Math.max(this.hitStopT || 0, sec); }
+  /** Crossing the line: the race drops to a third of its speed for a beat and eases back (one screen only). Never online. */
+  _slowMo() { if (this.race.players.length === 1 && !this.net) this.slowT = SLOW_MO; }
 
   skipIntro() { if (this.phase === 'intro') { this.view.intro.done = true; } }
 
@@ -96,7 +120,7 @@ export class RaceSession {
   /** Split screen, first count: each player hears from the rival nearest them on the grid, a different rival for each
       player where the field allows, so every pane gets its own line from someone actually beside them. */
   _gridLines() {
-    const rivals = this.race.karts.filter(k => !k.isPlayer), taken = new Set();
+    const rivals = this.race.karts.filter(k => !k.isPlayer && !k.human), taken = new Set();   // online, other people's karts are not rivals with lines
     for (const [k, hud] of this.hudOf) {
       const near = rivals.filter(r => !taken.has(r)).sort((a, b) => Math.hypot(a.x - k.x, a.z - k.z) - Math.hypot(b.x - k.x, b.z - k.z))[0];
       if (!near) continue;
@@ -112,7 +136,7 @@ export class RaceSession {
         hud.onKartEvent(e);
         // a track can have something to say as each lap starts (the reservoir at Datacenter Dash, for one)
         // overtaken: the one who just went by has a word, now and then
-        if (e.type === 'rankDown' && this.race.time > 6 && !kart.finished && Math.random() < 0.45) { const passer = this.race.order[kart.rank - 2]; if (passer && !passer.isPlayer) this._rivalLine(hud, passer.racer, RIVAL_PASS[passer.racer.id]?.[kart.racer.id], passer.racer.barks.pass, 2600); }
+        if (e.type === 'rankDown' && this.race.time > 6 && !kart.finished && Math.random() < 0.45) { const passer = this.race.order[kart.rank - 2]; if (passer && !passer.isPlayer && !passer.human) this._rivalLine(hud, passer.racer, RIVAL_PASS[passer.racer.id]?.[kart.racer.id], passer.racer.barks.pass, 2600); }
         if (e.type === 'lap' && e.data > 1 && e.data <= this.race.laps && this.def.lapNotes?.[e.data - 2]) hud.feed(this.def.lapNotes[e.data - 2], 4200);
         const p = kart.playerIndex;
         const guide = !this.autopilots && this.guides[p];
@@ -138,15 +162,15 @@ export class RaceSession {
       if (e.type === 'count') {
         for (const h of this.huds) h.countdown(e.data);
         // on the first count, whoever starts on pole says their piece
-        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (this.huds.length > 1) this._gridLines(); else if (pole && !pole.isPlayer) for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); }
+        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (this.huds.length > 1) this._gridLines(); else if (pole && !pole.isPlayer && !pole.human) for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); }
       }
       else if (e.type === 'go') for (const h of this.huds) h.countdown(0);
       else if (e.type === 'kartHit') {
         const { by, victim, with: w } = e.data, name = ITEMS[w]?.name || (w === 'star' ? 'Hype Cycle' : w === 'squash' ? 'a full-size kart' : w);
         const hv = this.hudOf.get(victim), hb = by && this.hudOf.get(by);
         // the one who got hit sees it shouted across the screen, then hears about it from whoever did it
-        if (hv) { hv.banner(ITEMS[w]?.hit || HIT_LINES[w] || 'HIT!', 'bad small', 1300, 2); if (by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer) hv.talk(by.racer, pick(by.racer.barks.taunt)); } }
-        if (hb && by !== victim) { this._hitStop(0.05); hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer) this._rivalLine(hb, victim.racer, HIT_REPLY[w]?.[victim.racer.id], victim.racer.barks.hit); }
+        if (hv) { hv.banner(ITEMS[w]?.hit || HIT_LINES[w] || 'HIT!', 'bad small', 1300, 2); if (by && by !== victim) { hv.feed(`<b>${by.racer.name}</b> got you with ${name}`); if (!by.isPlayer && !by.human) hv.talk(by.racer, pick(by.racer.barks.taunt)); } }
+        if (hb && by !== victim) { this._hitStop(0.05); hb.feed(`You got <b>${victim.racer.name}</b> with ${name}`); if (!victim.isPlayer && !victim.human) this._rivalLine(hb, victim.racer, HIT_REPLY[w]?.[victim.racer.id], victim.racer.barks.hit); }
       } else if (e.type === 'steal') { const h = this.hudOf.get(e.data.by); if (h) h.feed(`You stole ${ITEMS[e.data.id].name} from <b>${e.data.from.racer.name}</b>`); }
       // the suit has arrived over the leader: their feed says so, in terms — the hover is the warning window
       else if (e.type === 'blueArrive') {
@@ -161,6 +185,7 @@ export class RaceSession {
   }
 
   frame(dt) {
+    if (this.net) return this._frameOnline(dt);
     const frameTime = dt;
     const { race, view, app } = this;
     if (this.paused) { app.gfx.render(0); return; }
@@ -197,7 +222,48 @@ export class RaceSession {
     app.gfx.render(dt, frameTime);
   }
 
-  setPaused(p) { if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
+  /* Online: step to the shared clock (always catching up; fast-forward without drawing when more than 2 s
+     behind), never pause or hit-stop, and take the results from the server when the room reaches results. */
+  _frameOnline(dt) {
+    const { race, view, app, net } = this;
+    const polled = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
+    const inputs = this.menuOpen ? [] : polled;   // the pause menu may be open, but the race goes on
+    const think = () => this.autopilots ? this.autopilots.map(a => a.kart.puppet ? undefined : a.think(STEP)) : inputs;
+    let target = net.targetStep();
+    if (target - net.n > 120) {
+      net.wake();
+      while (net.n < target) { race.step(STEP, []); for (const k of race.karts) k.events.length = 0; race.events.length = 0; }
+      for (const c of view.cams) c.snap?.();
+      target = net.targetStep();
+    }
+    while (net.n < target) { view.snapshot(); race.step(STEP, think()); }
+    for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
+    if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
+    this.touch?.sync(dt);
+    for (const [i, guide] of this.guides.entries()) { if (this.autopilots) guide.hide(); else guide.update(dt, inputs[i]); }
+    this.board?.update(dt);
+    for (const [k, h] of this.hudOf) { h.update(dt); if (k.finished) { const cam = view.cams.find(c => c.kart === k); if (cam && cam.mode !== 'orbit') { cam.mode = 'orbit'; cam.t = 0; } } }
+    if (!this.reported && net.phase === 'results' && net.room.last) { this.reported = true; app.onRaceDone?.(this, this.onlineResults()); }
+    view.update(dt, net.stepFraction());
+    app.afterUpdate?.(this);
+    app.audio?.frame(dt, race, view);
+    app.gfx.render(dt, dt);
+  }
 
-  dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.touch?.dispose(); this.view.dispose(); }
+  /** The server's results (room.last), shaped like race.results() plus slot, member, and the valuation before and after. */
+  onlineResults() {
+    const karts = this.race.karts;
+    return this.net.room.last.results.slice().sort((a, b) => a.rank - b.rank).map(r => {
+      const k = karts[r.slot];
+      return { kart: k, racer: k.racer, rank: r.rank, time: r.time ?? k.finishTime, bestLap: k.bestLap, points: r.points ?? 0, isPlayer: k.isPlayer, playerIndex: k.playerIndex,
+        estimated: !!r.estimated, stats: k.stats, slot: r.slot, member: r.member, before: r.before ?? null, after: r.after ?? null };
+    });
+  }
+
+  setPaused(p) {
+    if (this.net) { this.menuOpen = p; if (p) this.app.input.stopRumble(); return; }   // online the race never stops
+    if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume');
+  }
+
+  dispose() { this.net?.dispose(); this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

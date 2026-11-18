@@ -19,6 +19,7 @@ It is a parody. It is not affiliated with, or endorsed by, anyone in it.
 - **Twelve tracks in three cups**, each with its own signature moment, soundtrack, and hazards.
 - **Grand Prix, Quick Race, and Time Trial** (with a ghost of your best run in the same engine class), four engine classes (50cc, 100cc, 150cc, and 200cc), and three levels of rivals.
 - **One to four players** on one screen.
+- **Online**: race friends in a private room with a code or a link, or find a public race and build your valuation on the Rich List.
 - **Sixteen racers** with their own stats, signature karts, and things to say when they hit you, and a special of their own that changes how they drive.
 - **Sixteen items**, weighted by position. Leaders get defense; the back of the pack gets the comeback kit.
 - **Real kart-racer driving**: hop into a drift and hold it for a blue, orange, or purple mini-turbo; trick off ramps; slipstream; collect coins for top speed; nail the rocket start.
@@ -106,6 +107,7 @@ node tools/track-shots.mjs silicon-valley out.jpg   # contact sheet of a whole t
 | `src/models` | Procedural karts, bobblehead drivers, items, and the scenery prop library. |
 | `src/tracks` | One file per track. See [docs/track-authoring.md](docs/track-authoring.md). |
 | `src/ui`, `src/game`, `src/audio` | HUD, menus, touch controls, the app shell, and the audio engine. |
+| `src/net`, `server`, `ops` | Online play: the netcode, the .NET server (rooms, ratings, admin), and hosting. See [docs/online-protocol.md](docs/online-protocol.md) and [ops/README.md](ops/README.md). |
 
 Faces, backdrops, the icon, sampled effects, announcer lines, and the original music assets use OpenAI’s image model and ElevenLabs; their scripts and prompts are in `tools/gen-*.mjs`. The Offshore Cup’s four instrumental arrangements are scored and rendered locally by `tools/score-offshore.mjs`. Design research is in `docs/research/`.
 

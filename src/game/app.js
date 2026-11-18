@@ -15,6 +15,10 @@ import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { CUPS, cupTracks, GP_POINTS, cupStars } from '../content/cups.js';
 import { makeRng } from '../core/util.js';
 
+/* The online protocol this build speaks (the same number as PROTO in src/net/conn.js, which is only loaded on demand). */
+const ONLINE_PROTO = 1;
+/* Where a race server lives beside the game: the live site, and the development server (server/README.md). */
+const ONLINE_HOSTS = ['billionaire-kart.okgodoit.com', 'localhost:5210', '127.0.0.1:5210', 'localhost:5211', '127.0.0.1:5211'];
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 export class App {
@@ -43,6 +47,7 @@ export class App {
     addEventListener('resize', turned); screen.orientation?.addEventListener?.('change', turned);
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.session && !this.attract && this.session.phase === 'racing' && !this.session.paused && !this.menus.visible) this.pause(); });
     this.applySettings(true);
+    this.checkOnline();
   }
 
   /* ---------- loop ---------- */
@@ -144,7 +149,32 @@ export class App {
   }
   onRaceDone(session, results) {
     if (this.attract) { setTimeout(() => { if (this.attract && this.session === session) this._attract(); }, 2500); return; }
+    if (session.net) { this.online?.raceDone(session); return; }   // online results come from the server: nothing goes in the save
     this._finishRace(session, results);
+  }
+
+  /* ---------- online ---------- */
+  /** Online play is its own module (src/ui/online.js), fetched the first time the player goes online, so the offline game never loads it. */
+  /** Is the race server there, and does it speak this build's protocol? 'ok', 'old' (this build is too old: reload), or 'down'.
+      Asked once at start and again whenever the main menu opens, so the Online button only shows when it will work,
+      whichever of the game and the server a deploy reached first. */
+  checkOnline() {
+    const ask = async () => {
+      if (!ONLINE_HOSTS.includes(location.host)) return 'down';   // a plain file server or the old address: no race server to ask
+      try {
+        const r = await fetch('/healthz', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+        const h = r.ok ? await r.json() : null;
+        if (!h?.ok || !Number.isInteger(h.protocol)) return 'down';
+        return ONLINE_PROTO > h.protocol ? 'down' : ONLINE_PROTO < (h.minProtocol ?? h.protocol) ? 'old' : 'ok';
+      } catch { return 'down'; }
+    };
+    return this._onlineAsk = ask().then(state => (this.onlineState = state));
+  }
+  async goOnline(opts) {
+    if (this.onlineState === 'old') { try { await (await navigator.serviceWorker?.getRegistration())?.update(); } catch { /* reload anyway */ } location.reload(); return; }
+    try { if (!this.online) this.online = new (await import('../ui/online.js')).Online(this); }
+    catch { const sub = this.menus.screen?.el.querySelector('.btn.c4 .btn-sub'); if (sub) sub.textContent = 'Can’t reach the race server.'; return; }
+    this.online.enter(opts);
   }
 
   /* ---------- showroom ---------- */
@@ -207,7 +237,7 @@ export class App {
   quitToMenu() { this.gp = null; this._wake(false); this._lockLandscape(false); this.transition(() => { this._attract(); this.menus.reset('main'); this.audio?.music?.('menu'); }); }
 
   /* ---------- pause ---------- */
-  pause() { if (!this.session || this.attract || this.session.paused) return; this.session.setPaused(true); this.session.touch?.setVisible(false); this.menus.reset('pause'); }
+  pause() { if (!this.session || this.attract || this.session.paused || this.session.menuOpen) return; this.session.setPaused(true); this.session.touch?.setVisible(false); this.menus.reset(this.session.net ? 'onlinePause' : 'pause'); }
   resume() {
     if (this.mustTurn()) this._turnOk = true;   // resuming while upright: race on upright, and do not pause again until the phone has been sideways and back
     this.menus.close(); this.session?.setPaused(false); this.session?.touch?.setVisible(this.session.phase !== 'intro');

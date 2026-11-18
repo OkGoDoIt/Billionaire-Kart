@@ -1,0 +1,46 @@
+@page "/admin/players"
+@model PlayersModel
+@{ ViewData["Title"] = "Players"; }
+<h1>Players</h1>
+<form method="get" class="search">
+  <label for="number">Handle number</label>
+  <input id="number" name="number" type="number" inputmode="numeric" min="1" max="9999" value="@Model.Number" placeholder="1 to 9999">
+  <button type="submit">Find</button>
+  @if (Model.Number != null) { <a href="/admin/players" class="quiet">Show recent players</a> }
+</form>
+
+<h2>@(Model.Number != null ? $"Players numbered {Model.Number}" : "Seen most recently")</h2>
+@if (Model.Rows.Count == 0) { <p class="empty">No players found.</p> }
+else
+{
+  <table class="players">
+    <thead><tr><th>Player</th><th class="num">Valuation</th><th class="num">Rated races</th><th>Last seen</th><th>Joined</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var p in Model.Rows)
+    {
+      <tr class="@(p.BannedAt != null ? "banned" : "")">
+        <td>@Fmt.Handle(p.HandleTitle, p.HandleNumber)
+          @if (p.BannedAt != null) { <span class="tag bad">Banned</span> }
+          <div class="sub mono">@p.Id</div>
+          <div class="sub">Skill @p.Mu.ToString("0.00") ± @p.Sigma.ToString("0.00")</div>
+        </td>
+        <td class="num">@Fmt.Money(Model.Valuation(p))</td>
+        <td class="num">@p.Races</td>
+        <td>@Fmt.When(p.LastSeenAt)</td>
+        <td>@Fmt.When(p.CreatedAt)</td>
+        <td class="actions">
+          <form method="post" asp-page-handler="Reset"><input type="hidden" name="id" value="@p.Id"><input type="hidden" name="number" value="@Model.Number"><button type="submit" class="quiet">Reset rating</button></form>
+          @if (p.BannedAt == null)
+          {
+            <form method="post" asp-page-handler="Ban"><input type="hidden" name="id" value="@p.Id"><input type="hidden" name="number" value="@Model.Number"><button type="submit" class="danger">Ban</button></form>
+          }
+          else
+          {
+            <form method="post" asp-page-handler="Unban"><input type="hidden" name="id" value="@p.Id"><input type="hidden" name="number" value="@Model.Number"><button type="submit" class="quiet">Unban</button></form>
+          }
+        </td>
+      </tr>
+    }
+    </tbody>
+  </table>
+}

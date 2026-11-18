@@ -1,0 +1,12 @@
+@page "/admin/signin"
+@model SignInModel
+@{ ViewData["Title"] = "Sign in"; }
+<section class="signin">
+  <h1>Billionaire Kart admin</h1>
+  <form method="post">
+    <label for="token">Admin token</label>
+    <input id="token" name="token" type="password" autocomplete="current-password" required autofocus>
+    @if (Model.Error != null) { <p class="error">@Model.Error</p> }
+    <button type="submit">Sign in</button>
+  </form>
+</section>

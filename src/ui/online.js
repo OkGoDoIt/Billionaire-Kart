@@ -26,6 +26,7 @@ const CAMERA_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5A
 const KEYS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M6.5 10h1M10.5 10h1M14.5 10h1M8 14h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
 const CLOSED = 'That room has closed.', UNREACHABLE = 'Can’t reach the race server.';
 const NBSP = '\u00a0';
+const UPDATING = 'The race server is updating. Back in a moment.', UPDATED = 'That room closed for an update.';
 const JOIN_ERRORS = { no_room: 'No room has that code.', full: 'That room is full.' };
 
 /** The room code in a scanned QR code or a pasted link ("https://…/?room=BCDF"), or a bare code; null if neither. */
@@ -126,7 +127,16 @@ export class Online {
     conn.on('welcome', () => this._welcome(conn));
     conn.on('room', m => { if (conn === this.conn) this.route(m.room); });
     conn.on('err', m => { if (conn === this.conn) this._err(m.code); });
-    conn.on('close', () => { if (conn === this.conn) this.setPill('Reconnecting…'); });
+    // the server is restarting for an update (docs/online-protocol.md, "Server updates"): say so calmly and keep the
+    // screen; the room's countdowns stop showing (this.bye), since nothing moves on until the server is back
+    conn.on('bye', () => { if (conn === this.conn) { this.bye = true; this.setPill(UPDATING, true); } });
+    conn.on('close', () => {
+      if (conn !== this.conn) return;
+      if (!this.bye) { this.setPill('Reconnecting…'); return; }
+      this.byeClosed = true; this.setPill(UPDATING, true);
+      // cut off mid-race: the race is over; lobbies, track picks, and results wait for the server to come back
+      if (this.room?.phase === 'race' && this.inRace()) this.roomClosed(UPDATED);
+    });
     conn.on('old', () => this._old());
     // the socket cannot be reached: Conn keeps retrying on its own, but the player is told after a few seconds
     clearTimeout(this.welcomeTimer);
@@ -137,9 +147,12 @@ export class Online {
     if (conn !== this.conn) return;
     clearTimeout(this.welcomeTimer);
     this.setPill(null);
-    const first = this.state !== 'ready';
-    this.state = 'ready';
+    const first = this.state !== 'ready', updated = this.byeClosed;
+    this.state = 'ready'; this.bye = this.byeClosed = false;
     if (first) this.refreshHub();
+    // back after an update: the new server has no rooms, so ours has gone
+    if (updated && this.room) this.roomClosed(UPDATED);
+    else if (updated && this.menus.screen?.spec.name === 'online') this.refreshHub();
     if (this.pendingJoin) { this.join(this.pendingJoin); this.pendingJoin = null; }
     // back after a drop: the server sends our room straight away if we still have a seat; if none comes, it has gone
     else if (!first && this.room && !this.leaving) {
@@ -163,10 +176,11 @@ export class Online {
     Promise.resolve(navigator.serviceWorker?.getRegistration?.()).then(r => r?.update()).catch(() => {}).finally(() => setTimeout(reload, 900));
   }
 
-  /** The small pill at the top of the screen ("Reconnecting…"); null hides it. */
-  setPill(text) {
+  /** The small pill at the top of the screen ("Reconnecting…"); null hides it. A calm one is news, not trouble. */
+  setPill(text, calm = false) {
     if (!text) { this.pill?.remove(); this.pill = null; return; }
     if (!this.pill) { this.pill = h('div', { class: 'ol-pill', role: 'status' }); this.app.ui.prepend(this.pill); }
+    this.pill.classList.toggle('calm', calm);
     this.pill.textContent = text;
   }
   setBanner(text) {
@@ -178,7 +192,7 @@ export class Online {
   /** Back to the main menu: leave any room and close the connection. */
   exit() {
     this.leaveRoom();
-    this.attempt++; clearTimeout(this.welcomeTimer); clearTimeout(this.lostTimer);
+    this.attempt++; clearTimeout(this.welcomeTimer); clearTimeout(this.lostTimer); this.bye = this.byeClosed = false;
     this.conn?.close(); this.conn = null; this.state = 'idle';
     this.setPill(null); this.setBanner(null);
   }
@@ -194,8 +208,8 @@ export class Online {
     clearTimeout(this.lostTimer);
   }
   /** The room went away under us: back to the hub with one line saying so. */
-  roomClosed() {
-    this.leaveRoom(); this.notice = CLOSED;
+  roomClosed(notice = CLOSED) {
+    this.leaveRoom(); this.notice = notice;
     if (this.inRace()) this.toScene(() => this.show('online')); else this.show('online');
   }
 
@@ -307,6 +321,8 @@ export class Online {
 
   /** The other humans' karts wear their handle on the name tag over the kart, in place of the racer's name. */
   tagHumans(session, room) {
+    // what the after-the-line board and card call each human: the same name and color as their tag
+    session.names = new Map(room.race.slots.filter(s => s.member).map(s => [s.slot, { name: s.member === this.you ? 'You' : this.nameOf(s.member, room), color: this.colorOf(s.member, room) }]));
     for (const kv of session.view.karts) {
       const k = kv.kart, slot = room.race.slots.find(s => s.slot === k.slot);
       if (!k.human || k.isPlayer || !slot?.member || !kv.tag) continue;
@@ -613,7 +629,7 @@ export class Online {
     const head = M.header('Public race', ' '), sub = head.querySelector('p');
     const list = this.memberList({ valuation: true, changeRacer: true }), members = list.el;
     const update = r => list.update(r);
-    const tick = () => { const r = this.room; sub.textContent = r?.until ? `Starts in ${clockText(r.until - this.now())}` : ' '; };
+    const tick = () => { const r = this.room; sub.textContent = r?.until && !this.bye ? `Starts in ${clockText(r.until - this.now())}` : ' '; };
     update(room); tick();
     const timer = setInterval(tick, 250);
     const el = h('div', {}, head, h('div', { class: 'ol-lobby' }, members), h('p', { class: 'ol-line ol-foot' }, 'Empty seats go to CPUs.'));
@@ -702,7 +718,7 @@ export class Online {
         b.classList.toggle('sel', me?.track === id);
       }
     };
-    const tick = () => { const r = this.room; count.textContent = !rolling && r?.phase === 'track' && r.until ? clockText(r.until - this.now()) : ''; };
+    const tick = () => { const r = this.room; count.textContent = !rolling && !this.bye && r?.phase === 'track' && r.until ? clockText(r.until - this.now()) : ''; };
     mark(room); tick();
     const timer = setInterval(tick, 250);
     const mineNow = this.mine(room)?.track;
@@ -771,7 +787,7 @@ export class Online {
       if (ready && !next.disabled) { next.disabled = true; nextLabel.textContent = 'Waiting for the others'; nextSub.hidden = false; if (M.focusEl === next) M.focus(leave, false); }
       tick();
     };
-    const tick = () => { const r = this.room; if (!nextSub.hidden) nextSub.textContent = r?.phase === 'results' && r.until ? clockText(r.until - this.now()) : ''; };
+    const tick = () => { const r = this.room; if (!nextSub.hidden) nextSub.textContent = !this.bye && r?.phase === 'results' && r.until ? clockText(r.until - this.now()) : ''; };
     const timer = setInterval(tick, 250);
     const el = h('div', { class: 'screen-results' }, h('div', { class: 'panel results ol-res' + (card ? ' with-card' : '') },
       h('h1', {}, track?.name || ''), inCup && h('p', { class: 'res-sub' }, `${CUP_BY_ID[room.rules.cup]?.name || 'Cup'} · Race ${cs.index + 1} of ${cs.tracks.length}`),

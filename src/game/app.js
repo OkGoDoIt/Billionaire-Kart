@@ -18,7 +18,7 @@ import { makeRng } from '../core/util.js';
 /* The online protocol this build speaks (the same number as PROTO in src/net/conn.js, which is only loaded on demand). */
 const ONLINE_PROTO = 1;
 /* Where a race server lives beside the game: the live site, and the development server (server/README.md). */
-const ONLINE_HOSTS = ['billionaire-kart.okgodoit.com', 'localhost:5210', '127.0.0.1:5210', 'localhost:5211', '127.0.0.1:5211'];
+const ONLINE_HOSTS = ['billionaire-kart.okgodoit.com', 'localhost:5210', '127.0.0.1:5210', 'localhost:5211', '127.0.0.1:5211', 'localhost:5212', '127.0.0.1:5212'];   // 5212: a second local server while another session's test holds 5211
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 export class App {
@@ -98,6 +98,7 @@ export class App {
     const s = this.session; if (!s || this.attract) return;
     if (action === 'pause' || (action === 'back' && device.startsWith('kb'))) { if (s.phase !== 'intro' && s.race.state !== 'done') this.pause(); else s.skipIntro(); }
     else if (action === 'confirm' && s.phase === 'intro') s.skipIntro();
+    else if ((action === 'left' || action === 'right') && s.after) s.after.step(s.after.paneFor(device), action === 'left' ? -1 : 1);   // after the line, online: who to watch
     else if (action === 'reset') { const k = s.race.players[0]; if (k && !k.finished && !s.race.frozen) k.startRescue(); }
   }
 

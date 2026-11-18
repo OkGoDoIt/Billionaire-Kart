@@ -114,8 +114,6 @@ export class AIDriver {
       inp.throttle = this.willRocket && race.countdown < this.launchAt ? 1 : 0;
       return inp;
     }
-    if (k.finished) { return this._follow(dt, 0.6); }
-
     // A tow can move the kart back a full ramp approach. Take a new progress
     // reading on landing so driving that stretch again never requests another tow.
     if (k.rescueT > 0) {
@@ -127,15 +125,20 @@ export class AIDriver {
     if (k.speed < 2.5 && k.hitT <= 0) this.stuckT += dt; else this.stuckT = Math.max(0, this.stuckT - dt * 2);
     if (this.stuckT > 1.6 && this.reverseT <= 0) { this.reverseT = 1.0; }
     if (this.stuckT > 5) { k.startRescue(); this.stuckT = 0; }
+    // past the line: a cool-down lap. Keep the stuck recovery above (a kart parked on a wall backs off it),
+    // but not the progress watch below, which counts race distance, and that stops at the finish.
+    if (k.finished && this.reverseT <= 0) return this._follow(dt, 0.6);
     // progress rescue: the speed timer above limit-cycles against a bump obstacle (reverse,
     // roll forward, bump again — stuckT drains while moving and never reaches 5), so also
     // watch the kart's best distance. No gain of 2 m in 6 s of live racing means it is
     // wedged somewhere; rescue it outright.
-    const prog = k.raceDistance;
-    if (this.bestProg === null) this.bestProg = prog;
-    if (prog > this.bestProg + 2) { this.bestProg = prog; this.progT = 0; }
-    else this.progT += dt;
-    if (this.progT > 6) { k.startRescue(); this.progT = 0; this.stuckT = 0; }
+    if (!k.finished) {
+      const prog = k.raceDistance;
+      if (this.bestProg === null) this.bestProg = prog;
+      if (prog > this.bestProg + 2) { this.bestProg = prog; this.progT = 0; }
+      else this.progT += dt;
+      if (this.progT > 6) { k.startRescue(); this.progT = 0; this.stuckT = 0; }
+    }
     if (this.reverseT > 0) {
       this.reverseT -= dt; inp.throttle = 0; inp.brake = 1; inp.drift = false;
       const ang = wrapAngle(tr.yaw[k.hit.i] - k.yaw); inp.steer = clamp(ang * 2, -1, 1); // reversed steering points the nose back

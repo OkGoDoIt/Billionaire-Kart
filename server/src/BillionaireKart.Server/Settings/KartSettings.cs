@@ -23,6 +23,7 @@ public sealed record KartSettings
     public double RoomIdleMinutes { get; init; }
     public double HandoffMinutes { get; init; }
     public double AppSeenDays { get; init; }
+    public double ShutdownDrainSeconds { get; init; }
     public double ValuationBaseDollars { get; init; }
     public double ValuationDoublingPoints { get; init; }
     public double CpuMuEasy { get; init; }
@@ -59,6 +60,10 @@ public sealed record SettingDef(
         "mars-colony", "singularity-speedway", "davos", "international-waters", "wework-memorial", "boring-tunnel",
     ];
 
+    /// <summary>systemd stops the service with TimeoutStopSec=30 (ops/systemd/billionaire-kart.service); the drain must end
+    /// before that, with time left to close sockets. Raise both together.</summary>
+    public const double MaxShutdownDrainSeconds = 25;
+
     public static readonly IReadOnlyList<SettingDef> All =
     [
         new("MaxRooms", "Rooms", "Most rooms at once", "New rooms are refused once this many are open.", SettingKind.Integer, "200", 1, 10000),
@@ -73,6 +78,7 @@ public sealed record SettingDef(
         new("RaceStartLeadSeconds", "Timers", "Loading time before a race", "Time between announcing a race and its countdown, so every device can load the track.", SettingKind.Number, "6", 0, 60, Unit: "seconds"),
         new("FinishGraceSeconds", "Timers", "Time after the first finish", "The race ends this long after the first person crosses the line.", SettingKind.Number, "30", 0, 600, Unit: "seconds"),
         new("RaceMaxSeconds", "Timers", "Longest race", "A race ends this long after its start, whoever has finished.", SettingKind.Number, "480", 1, 3600, Unit: "seconds"),
+        new("ShutdownDrainSeconds", "Timers", "Wait for races before an update", "When the server restarts for an update, races in progress get this long to finish first.", SettingKind.Number, "25", 0, MaxShutdownDrainSeconds, Unit: "seconds"),
         new("OwnerSilenceSeconds", "Timers", "Silence before a CPU takes over", "A kart whose device has been quiet this long is driven by a CPU until it comes back.", SettingKind.Number, "2", 0.1, 60, Unit: "seconds"),
 
         new("PublicSoloWaitSeconds", "Public races", "Wait when alone", "How long one person waits for company before racing CPUs.", SettingKind.Number, "20", 0, 600, Unit: "seconds"),
@@ -197,6 +203,7 @@ public sealed record SettingDef(
             RoomIdleMinutes = D("RoomIdleMinutes"),
             HandoffMinutes = D("HandoffMinutes"),
             AppSeenDays = D("AppSeenDays"),
+            ShutdownDrainSeconds = D("ShutdownDrainSeconds"),
             ValuationBaseDollars = D("ValuationBaseDollars"),
             ValuationDoublingPoints = D("ValuationDoublingPoints"),
             CpuMuEasy = D("CpuMuEasy"),

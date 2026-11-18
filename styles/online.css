@@ -22,6 +22,9 @@
 .ol-pill, .ol-banner { position: fixed; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: none; --u: min(1vw, calc(var(--vh) * 1.78)); font-family: var(--body); font-weight: 700; color: #fff; background: rgba(18,20,43,0.92); white-space: nowrap; }
 .ol-pill { top: calc(var(--u) * 1.4 + var(--safe-t)); font-size: calc(var(--u) * 1.9); border: calc(var(--u) * 0.35) solid var(--gold); border-radius: 2em; padding: 0.35em 1.2em 0.3em; box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0,0,0,0.4); animation: hud-pop 0.3s ease-out; }
 .ol-banner { top: calc(var(--u) * 1.4 + var(--safe-t)); font-size: calc(var(--u) * 2); border-radius: calc(var(--u) * 1.2); padding: 0.45em 1.4em 0.4em; border-left: calc(var(--u) * 0.6) solid var(--sky); }
+.ol-pill.calm { border-color: var(--sky); animation: none; white-space: normal; text-align: center; width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box; }
+/* the server is updating: nothing moves on until it is back, so the room's countdown means nothing */
+body:has(.ol-pill.calm) .ol-count { visibility: hidden; }
 .ol-pill ~ .ol-banner { top: calc(var(--u) * 6.4 + var(--safe-t)); }
 @media (orientation: portrait) { .ol-pill, .ol-banner { --u: min(1.78vw, var(--vh)); } }
 

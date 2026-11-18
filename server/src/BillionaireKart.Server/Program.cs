@@ -74,6 +74,10 @@ builder.Services.AddSingleton<NewPlayerLimit>();
 builder.Services.AddSingleton<RoomHandoff>();
 builder.Services.AddSingleton<InstalledApp>();
 builder.Services.AddHostedService<RoomTicker>();
+// After the ticker, so it stops first (see ShutdownDrain). The host's own stop budget covers the longest drain
+// plus closing sockets, and stays under systemd's TimeoutStopSec=30.
+builder.Services.AddHostedService<ShutdownDrain>();
+builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(SettingDef.MaxShutdownDrainSeconds + 3));
 
 var app = builder.Build();
 

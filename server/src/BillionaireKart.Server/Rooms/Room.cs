@@ -225,6 +225,7 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
         var m = Find(id);
         if (m == null) return;
         if (IsPublic || Host != id || Phase != Phase.Lobby) { Err(m, "bad"); return; }
+        if (manager.Draining) return;   // the device has been told "bye"
         if (Members.Any(x => x.Connected && x.Racer == null)) { Err(m, "bad"); return; }
 
         Last = null;
@@ -522,6 +523,8 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
     async Task CheckPhaseDoneAsync(long now)
     {
         if (Closed) return;
+        // Shutting down: a race in progress may still end, but nothing new begins.
+        if (manager.Draining && Phase != Phase.Race) return;
         bool anyone = Members.Any(m => m.Connected);
         bool due = Until is long u && now >= u;
         switch (Phase)

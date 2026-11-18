@@ -59,7 +59,7 @@ rsync -a --delete -e 'ssh -o BatchMode=yes' "$WORK/site/" "$HOST:/srv/$APP/relea
 # --- the server app: built here from the same commit ------------------------------------------
 if [[ $MODE == full ]]; then
   mkdir -p "$WORK/src"
-  git archive "$SHA" server tools/slot.mjs tools/with-slot.mjs | tar -x -C "$WORK/src"
+  git archive "$SHA" server src/content/handles.js tools/slot.mjs tools/with-slot.mjs | tar -x -C "$WORK/src"
   ( cd "$WORK/src" && node tools/with-slot.mjs dotnet publish server/src/BillionaireKart.Server -c Release -o "$WORK/app" --nologo -v quiet )
   printf 'Kart__Sha=%s\n' "$SHA" > "$WORK/app/release.env"
   "${SSH[@]}" "mkdir -p /opt/$APP/releases/$SHA"

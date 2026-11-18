@@ -108,11 +108,13 @@ Phases:
 - **race**: see below.
 - **results**: `last` is set. Ends when every connected member is ready or the timer runs out, then back to **track** (or the cup's next race; after a cup's last race, to **lobby**).
 
-Public rooms have no lobby phase and no host powers: a new room starts in **track** once the wait timer is satisfied (see settings), members pick racers at any time outside a race, and a member with no racer when a race starts gets a random free one.
+Public rooms have no host powers. A new public room waits in **lobby** with `until` set (`PublicSoloWaitSeconds`; when a second person arrives it becomes `PublicWaitSeconds` from then, once; a full room goes at once), then moves to **track** by itself. Members pick racers at any time outside a race, and a member with no racer when a race starts gets a random free one.
+
+A cup never enters **track**: `start` goes straight to its first race and results go straight to its next. In **results**, `race` is null and `last` holds the outcome.
 
 ### Race
 
-- `race.startAt` is at least 6 s after the `room` message that announces it, so clients can load the track. → `{t:"loaded"}` when ready; the server does not wait for it, a late client fast-forwards.
+- `race.startAt` is `RaceStartLeadSeconds` (6 s) after the `room` message that announces it, so clients can load the track. → `{t:"loaded"}` when ready; the server does not wait for it, a late client fast-forwards.
 - Slot order is grid order. Humans start at the back, as offline.
 - **Ownership.** A human's kart is owned by that human. CPU karts are owned by the host (in a public room, the member connected longest). When an owner stops sending (no frame for 2 s) or disconnects, the server gives its karts to the CPU owner and sends `room`. The new owner adopts each kart from its last puppet state and drives it with an AI driver. When the human returns, the server gives the kart back and the client adopts it from its puppet state. Clients learn ownership only from `race.slots[].owner`.
 - → `{t:"ev", e}` a game event. ← `{t:"ev", e, from: playerId}` relayed to every other device in the room, in order. The server does not read `e`. Events are defined below.
@@ -179,4 +181,6 @@ The winner's valuation never falls and last place's never rises (when at least 3
 | RoomIdleMinutes (empty room is removed) | 5 |
 | ValuationBaseDollars / ValuationDoublingPoints | 1000000 / 2.5 |
 | CpuMu easy / normal / hard, CpuSigma | 18 / 22 / 26, 1.5 |
-| MinLapSecondsFactor (a lap faster than this share of the track's reference lap voids the result) | 0.7 |
+| RaceStartLeadSeconds | 6 |
+| TrackMinRaceSeconds (per track; a rated finish faster than this is not rated) | none |
+| Tracks, Cups, Racers (the ids the server may pick from) | the shipping lists |

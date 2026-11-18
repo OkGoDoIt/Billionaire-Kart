@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>@ViewData["Title"] · Billionaire Kart admin</title>
+  <link rel="stylesheet" href="/admin/admin.css" asp-append-version="true">
+</head>
+<body>
+  @if (User.Identity?.IsAuthenticated == true)
+  {
+    var page = ViewContext.RouteData.Values["page"] as string;
+    string Cur(string p) => page == p ? "current" : "";
+    <header class="top">
+      <span class="brand">Billionaire Kart</span>
+      <nav>
+        <a href="/admin" class="@Cur("/Admin/Index")">Dashboard</a>
+        <a href="/admin/players" class="@Cur("/Admin/Players")">Players</a>
+        <a href="/admin/races" class="@Cur("/Admin/Races")">Races</a>
+        <a href="/admin/settings" class="@Cur("/Admin/Settings")">Settings</a>
+      </nav>
+      <form method="post" asp-page="/Admin/SignOut" class="signout"><button type="submit" class="quiet">Sign out</button></form>
+    </header>
+  }
+  <main>
+    @if (TempData["Notice"] is string notice) { <p class="notice">@notice</p> }
+    @RenderBody()
+  </main>
+</body>
+</html>

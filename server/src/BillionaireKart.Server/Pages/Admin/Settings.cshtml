@@ -1,0 +1,66 @@
+@page "/admin/settings"
+@model SettingsModel
+@using BillionaireKart.Server.Settings
+@{ ViewData["Title"] = "Settings"; }
+<h1>Settings</h1>
+<p class="lede">Changes take effect right away, for rooms already open too.</p>
+
+@foreach (var group in SettingDef.All.GroupBy(d => d.Group))
+{
+  <h2>@group.Key</h2>
+  <div class="settings">
+  @foreach (var d in group)
+  {
+    var current = Model.Current(d.Key);
+    var changed = current != d.Normalize(d.Default).Value;
+    var shown = Model.Errors.ContainsKey(d.Key) ? Model.Attempt ?? current : current;
+    <form method="post" class="setting @(changed ? "changed" : "")" id="@d.Key">
+      <input type="hidden" name="key" value="@d.Key">
+      <div class="what">
+        <label for="v-@d.Key">@d.Label</label>
+        <p>@d.Description</p>
+        <p class="default">Default: @Model.DefaultText(d)@if (changed) { <span class="tag">Changed</span> }</p>
+      </div>
+      <div class="value">
+        @switch (d.Kind)
+        {
+          case SettingKind.Integer:
+          case SettingKind.Number:
+            <span class="with-unit">
+              <input id="v-@d.Key" name="value" type="number" inputmode="decimal" step="@(d.Kind == SettingKind.Integer ? "1" : "any")" min="@d.Min" max="@d.Max" value="@shown" required>
+              @if (d.Unit != "") { <span class="unit">@d.Unit</span> }
+            </span>
+            break;
+          case SettingKind.Choice:
+            <select id="v-@d.Key" name="value">
+              @foreach (var c in d.Choices!)
+              {
+                <option value="@c" selected="@(c == shown)">@Model.ChoiceText(d, c)</option>
+              }
+            </select>
+            break;
+          case SettingKind.List:
+            <textarea id="v-@d.Key" name="value" rows="3">@shown</textarea>
+            break;
+          case SettingKind.Map:
+            <textarea id="v-@d.Key" name="value" rows="4" class="mono">@shown</textarea>
+            break;
+          case SettingKind.TrackSeconds:
+            var map = Model.TrackSeconds(current);
+            <div class="track-grid">
+            @foreach (var track in Model.Tracks)
+            {
+              <label class="track"><span class="mono">@track</span>
+                <input name="track:@track" type="number" inputmode="decimal" step="any" min="0" max="3600" value="@(map.TryGetValue(track, out var sec) ? sec.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")" placeholder="no check">
+              </label>
+            }
+            </div>
+            break;
+        }
+        @if (Model.Errors.TryGetValue(d.Key, out var err)) { <p class="error">@err</p> }
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  }
+  </div>
+}

@@ -71,6 +71,8 @@ builder.Services.AddSingleton<PlayerCookie>();
 builder.Services.AddSingleton<OriginPolicy>();
 builder.Services.AddSingleton<AdminAuth>();
 builder.Services.AddSingleton<NewPlayerLimit>();
+builder.Services.AddSingleton<RoomHandoff>();
+builder.Services.AddSingleton<InstalledApp>();
 builder.Services.AddHostedService<RoomTicker>();
 
 var app = builder.Build();

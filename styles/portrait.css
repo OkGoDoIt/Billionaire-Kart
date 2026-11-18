@@ -1,8 +1,8 @@
 /* Menus on a screen that is taller than it is wide. Everything here is inside one media query, so landscape is untouched. */
 @media (orientation: portrait) {
   /* the short side is 56.25u, as in landscape; a phone is about 56u by 122u */
-  .menu-layer { --u: min(1.78vw, 1vh); }
-  .track-card { --u: min(1.78vw, 1vh); }
+  .menu-layer { --u: min(1.78vw, var(--vh)); }
+  .track-card { --u: min(1.78vw, var(--vh)); }
 
   .menu-screen { padding: calc(var(--u) * 3 + var(--safe-t)) calc(var(--u) * 3 + var(--safe-r)) calc(var(--u) * 3 + var(--safe-b)) calc(var(--u) * 3 + var(--safe-l)); background: linear-gradient(180deg, rgba(11,13,32,0.6), rgba(11,13,32,0.2) 25%, rgba(11,13,32,0.2) 60%, rgba(11,13,32,0.7)); }
   /* a tablet is wider: the content keeps a phone's proportions, centered */
@@ -183,6 +183,6 @@
 
   /* an upright tablet: the same layouts, sized by height so they keep a phone's proportions */
   @media (min-aspect-ratio: 5/8) {
-    .menu-layer, .track-card { --u: min(1.78vw, 0.82vh); }
+    .menu-layer, .track-card { --u: min(1.78vw, calc(var(--vh) * 0.82)); }
   }
 }

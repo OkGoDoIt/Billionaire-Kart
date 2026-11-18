@@ -19,11 +19,11 @@
 .ol-state { margin: auto; display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 2.4); text-align: center; }
 .ol-state h2 { font-size: calc(var(--u) * 4.2); }
 .ol-state .foot { margin-top: 0; }
-.ol-pill, .ol-banner { position: fixed; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: none; --u: min(1vw, 1.78vh); font-family: var(--body); font-weight: 700; color: #fff; background: rgba(18,20,43,0.92); white-space: nowrap; }
+.ol-pill, .ol-banner { position: fixed; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: none; --u: min(1vw, calc(var(--vh) * 1.78)); font-family: var(--body); font-weight: 700; color: #fff; background: rgba(18,20,43,0.92); white-space: nowrap; }
 .ol-pill { top: calc(var(--u) * 1.4 + var(--safe-t)); font-size: calc(var(--u) * 1.9); border: calc(var(--u) * 0.35) solid var(--gold); border-radius: 2em; padding: 0.35em 1.2em 0.3em; box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0,0,0,0.4); animation: hud-pop 0.3s ease-out; }
 .ol-banner { top: calc(var(--u) * 1.4 + var(--safe-t)); font-size: calc(var(--u) * 2); border-radius: calc(var(--u) * 1.2); padding: 0.45em 1.4em 0.4em; border-left: calc(var(--u) * 0.6) solid var(--sky); }
 .ol-pill ~ .ol-banner { top: calc(var(--u) * 6.4 + var(--safe-t)); }
-@media (orientation: portrait) { .ol-pill, .ol-banner { --u: min(1.78vw, 1vh); } }
+@media (orientation: portrait) { .ol-pill, .ol-banner { --u: min(1.78vw, var(--vh)); } }
 
 /* ---------- hub ---------- */
 .ol-hub { width: min(100%, calc(var(--u) * 86)); margin: auto; display: flex; flex-direction: column; gap: calc(var(--u) * 1.8); }
@@ -46,32 +46,76 @@
 .ol-boxes { display: flex; gap: calc(var(--u) * 1.6); }
 .ol-box { width: calc(var(--u) * 8.4); height: calc(var(--u) * 10); display: grid; place-items: center; background: rgba(18,20,43,0.9); border: calc(var(--u) * 0.45) solid rgba(255,255,255,0.6); border-radius: calc(var(--u) * 1.8); box-shadow: 0 calc(var(--u) * 0.7) 0 rgba(0,0,0,0.4); font-family: var(--display); font-size: calc(var(--u) * 6.4); color: var(--gold); paint-order: stroke fill; -webkit-text-stroke: 0.12em var(--ink); padding-top: 0.12em; }
 .ol-box.on { border-color: var(--gold); border-width: calc(var(--u) * 0.55); }
+.ol-err.ok { color: #fff; }
 .ol-err { min-height: 1.3em; font-weight: 700; font-size: calc(var(--u) * 2.1); color: #ffb0be; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
 .ol-keys { display: grid; grid-template-columns: repeat(7, calc(var(--u) * 7.4)); gap: calc(var(--u) * 1.1); }
 .ol-key { font-family: var(--display); font-size: calc(var(--u) * 3.1); color: var(--ink); height: calc(var(--u) * 6.2); padding: calc(var(--u) * 0.5) 0 0; border: calc(var(--u) * 0.4) solid var(--ink); border-radius: calc(var(--u) * 1.4); background: linear-gradient(180deg, #fff, #e8ecf7); box-shadow: 0 calc(var(--u) * 0.6) 0 rgba(0,0,0,0.42); cursor: pointer; transition: transform 0.1s; display: grid; place-items: center; }
 .ol-key svg { width: 1em; height: 1em; margin-top: -0.12em; }
 .ol-key:active { transform: translateY(calc(var(--u) * 0.4)); box-shadow: 0 calc(var(--u) * 0.2) 0 rgba(0,0,0,0.42); }
+/* the camera's square view, with a frame to aim with */
+.ol-scan { position: relative; width: calc(var(--u) * 36); aspect-ratio: 1; border-radius: calc(var(--u) * 2.2); overflow: hidden; background: #05060f; border: calc(var(--u) * 0.45) solid var(--ink); box-shadow: 0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.42); }
+.ol-scan video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ol-finder { position: absolute; inset: 16%; border: calc(var(--u) * 0.55) solid var(--gold); border-radius: calc(var(--u) * 2); box-shadow: 0 0 0 100vmax rgba(5,6,18,0.35); }
+.ol-join .btn.ol-scan-btn { align-self: stretch; min-width: 0; margin-top: calc(var(--u) * 0.8); font-size: calc(var(--u) * 2.6); padding: calc(var(--u) * 1.2) calc(var(--u) * 2) calc(var(--u) * 0.9); }
+/* on a wide screen the scan button is a tall tile beside the keys (or the camera), so nothing goes below them */
+@media (orientation: landscape) {
+  .ol-join { display: grid; grid-template-columns: auto auto; grid-template-areas: "boxes boxes" "err err" "keys scan"; justify-items: center; column-gap: calc(var(--u) * 1.6); }
+  .ol-join > .ol-boxes { grid-area: boxes; } .ol-join > .ol-err { grid-area: err; } .ol-join > .ol-keys, .ol-join > .ol-scan { grid-area: keys; }
+  .ol-join .btn.ol-scan-btn { grid-area: scan; flex-direction: column; justify-content: center; gap: calc(var(--u) * 0.8); width: calc(var(--u) * 17); margin-top: 0; white-space: normal; line-height: 1.1; text-align: center; }
+  .ol-join .btn.ol-scan-btn .btn-ico svg { width: 2em; height: 2em; margin: 0; }
+}
 .ol-key.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.3); transform: scale(1.06); z-index: 2; }
 
 /* ---------- room and public lobby ---------- */
 .screen-onlineRoom, .screen-onlinePublic { padding-top: calc(var(--u) * 2 + var(--safe-t)); padding-bottom: calc(var(--u) * 2 + var(--safe-b)); }
 .screen-onlineRoom .menu-head, .screen-onlinePublic .menu-head { margin-bottom: calc(var(--u) * 1.2); }
-.ol-room { align-self: stretch; flex: 0 0 auto; display: grid; grid-template-columns: calc(var(--u) * 32) minmax(0, 1fr); grid-template-rows: auto auto 1fr; gap: calc(var(--u) * 1.4) calc(var(--u) * 2.2); align-content: start; }
-.ol-room > .ol-members { grid-column: 2; grid-row: 1 / 4; }
-.ol-room > .panel { grid-column: 1; }
-.panel.ol-code-card { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.5); padding: calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 1.3); }
+.ol-room { align-self: stretch; flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "code who"; gap: calc(var(--u) * 1.4) calc(var(--u) * 2.2); align-items: start; }
+.ol-room.alone { grid-template-areas: "code join" "who who"; align-items: stretch; }
+/* with company: the code card stands upright in a narrow column, so who is here gets the width */
+.ol-room:not(.alone) { grid-template-columns: calc(var(--u) * 30) minmax(0, 1fr); }
+.ol-room:not(.alone) > .ol-code-card { grid-template-columns: minmax(0, 1fr); justify-items: center; padding: calc(var(--u) * 1.6); }
+.ol-room:not(.alone) .ol-code-side { align-self: stretch; }
+.ol-room:not(.alone) .ol-qr { width: calc(var(--u) * 17); }
+.ol-room > .ol-code-card { grid-area: code; } .ol-room > .ol-instead { grid-area: join; } .ol-room > .ol-members { grid-area: who; }
+.ol-lobby { align-self: stretch; }
+/* the code card: the QR code beside the code and the Share button */
+.panel.ol-code-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: calc(var(--u) * 1.6); padding: calc(var(--u) * 1.2) calc(var(--u) * 1.6) calc(var(--u) * 1.3) calc(var(--u) * 1.2); }
+.ol-code-side { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.9); min-width: 0; }
 .ol-code { font-family: var(--display); font-size: calc(var(--u) * 5.2); line-height: 1; letter-spacing: 0.16em; padding-left: 0.16em; color: var(--gold); paint-order: stroke fill; -webkit-text-stroke: 0.1em var(--ink); }
 .ol-code-card .btn.small { flex: none; align-self: stretch; }
-.panel.ol-you { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: calc(var(--u) * 1.4); row-gap: calc(var(--u) * 0.8); padding: calc(var(--u) * 1) calc(var(--u) * 1.6) calc(var(--u) * 1.3); }
-.ol-you .r-portrait { width: calc(var(--u) * 5.8); height: calc(var(--u) * 5.8); border-radius: calc(var(--u) * 1.3); }
-.ol-you h2 { font-size: calc(var(--u) * 2.6); line-height: 1.1; }
-.ol-you .r-title { font-size: calc(var(--u) * 1.75); }
-.ol-you .btn.small { grid-column: 1 / -1; flex: none; }
-.ol-you .ol-face.empty { width: calc(var(--u) * 5.8); height: calc(var(--u) * 5.8); border-radius: calc(var(--u) * 1.3); }
+.ol-qr { width: calc(var(--u) * 15); aspect-ratio: 1; padding: 0; border: 0; border-radius: calc(var(--u) * 1); background: #fff; overflow: hidden; cursor: zoom-in; box-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0,0,0,0.4); }
+.ol-qr svg, .ol-qr-img svg { display: block; width: 100%; height: 100%; }
+.ol-qr.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.3); }
+.ol-qr[hidden] + .ol-code-side { grid-column: 1 / -1; }
+/* tapped: the QR code as big as the screen allows, the code under it; any tap closes it */
+.ol-qr-big { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 2); border: 0; padding: 0; background: rgba(8,10,28,0.9); cursor: zoom-out; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.ol-qr-img { width: min(80vw, calc(var(--vh) * 66)); aspect-ratio: 1; background: #fff; border-radius: calc(var(--u) * 2); padding: calc(var(--u) * 1); box-shadow: 0 calc(var(--u) * 1) 0 rgba(0,0,0,0.45); }
+.ol-qr-big .ol-code { font-size: calc(var(--u) * 7); }
+.ol-qr-big.focus .ol-qr-img { outline: calc(var(--u) * 0.6) solid var(--gold); outline-offset: calc(var(--u) * 0.4); }
+/* alone in your room: the way into a friend's room instead */
+.panel.ol-instead { display: flex; flex-direction: column; justify-content: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 1.2) calc(var(--u) * 1.6) calc(var(--u) * 1.4); }
+.ol-instead h3 { font-size: calc(var(--u) * 2.6); text-align: center; }
+.ol-instead-btns { display: flex; gap: calc(var(--u) * 1.2); }
+.ol-instead-btns .btn.small { flex: 1 1 0; }
+/* who is here: one column, two once more than four have joined */
+.ol-room > .join-list.ol-members { grid-template-columns: minmax(0, 1fr); }
+.ol-room > .join-list.ol-members.many { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ol-room > .join-list.ol-members > .mine { grid-column: 1 / -1; }
+/* a button with a small picture before its label (the camera) */
+.btn:has(> .btn-ico) { flex-direction: row; justify-content: center; gap: 0.45em; }
+.btn-ico { display: inline-flex; }
+.btn-ico svg { width: 1.25em; height: 1.25em; margin-top: -0.18em; }
 /* who is here: the join screen's slots, slimmed to one line of face, handle, and tags */
 .join-list.ol-members { margin-top: 0; max-width: none; gap: calc(var(--u) * 1); align-content: start; grid-auto-rows: min-content; }
 .join-slot.ol-member { padding: calc(var(--u) * 0.8) calc(var(--u) * 1.4); gap: calc(var(--u) * 1.3); font-size: calc(var(--u) * 1.95); border-width: calc(var(--u) * 0.4); border-radius: calc(var(--u) * 1.8); min-width: 0; }
 .ol-member.away { opacity: 0.6; }
+/* your own row is your card: a bigger face, your name to type, your racer, and Change racer */
+.join-slot.ol-member.mine { padding: calc(var(--u) * 1) calc(var(--u) * 1.4); }
+.ol-member.mine .ol-face { width: calc(var(--u) * 5.8); height: calc(var(--u) * 5.8); }
+.ol-member.mine .ol-who { gap: calc(var(--u) * 0.3); }
+.ol-member.mine .ol-who small { font-size: 0.86em; opacity: 0.9; }
+.ol-member.mine .ol-name-in { max-width: calc(var(--u) * 30); }
+.ol-member.mine .btn.ol-change { flex: none; padding-left: calc(var(--u) * 2); padding-right: calc(var(--u) * 2); }
 .ol-who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
 .ol-who b { font-family: var(--body); font-size: inherit; font-weight: 700; color: #fff; -webkit-text-stroke: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ol-who small { font-weight: 500; font-size: 0.8em; opacity: 0.82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -80,6 +124,13 @@
 .ol-rules-line { align-self: stretch; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: calc(var(--u) * 0.6) calc(var(--u) * 1.6); margin-top: calc(var(--u) * 1); }
 .ol-rules-line .btn.small { flex: none; padding-left: calc(var(--u) * 2.2); padding-right: calc(var(--u) * 2.2); }
 .ol-foot { margin-top: calc(var(--u) * 1); }
+/* the rules and Start: one bar along the bottom, rules on the left, Start on the right (stacked when upright) */
+.ol-bottom { align-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 2.2); margin-top: auto; padding-top: calc(var(--u) * 1.4); }
+.ol-bottom .ol-rules-line { margin-top: 0; justify-content: flex-start; flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; }
+.ol-bottom .ol-rules-line .ol-line { text-align: left; flex: 0 1 auto; min-width: 0; }
+.ol-bottom .ol-foot { margin-top: 0; flex: none; }
+.ol-bottom .ol-foot .btn.go { min-width: calc(var(--u) * 28); }
+.ol-bottom .ol-wait { white-space: nowrap; }
 .ol-foot .btn.go { min-width: calc(var(--u) * 36); padding-top: calc(var(--u) * 1.1); padding-bottom: calc(var(--u) * 0.8); }
 .btn.go:disabled { cursor: default; filter: saturate(0.25) brightness(0.8); box-shadow: none; transform: none; }
 .ol-foot .btn.go:disabled .btn-label { font-size: 0.72em; }
@@ -174,6 +225,15 @@
 
 /* ---------- a phone on its side: ~56u tall, so the chrome gives way, never the content ---------- */
 @media (max-height: 500px) and (orientation: landscape) {
+  .ol-qr { width: calc(var(--u) * 15); }
+  .ol-room:not(.alone) .ol-qr { width: calc(var(--u) * 16); }
+  .ol-room > .join-list.ol-members.many { gap: calc(var(--u) * 0.7); }
+  .ol-members.many .join-slot.ol-member { padding-top: calc(var(--u) * 0.4); padding-bottom: calc(var(--u) * 0.4); }
+  .ol-members.many .ol-member.mine .ol-face { width: calc(var(--u) * 4.8); height: calc(var(--u) * 4.8); }
+  .screen-onlineRoom .menu-head { margin-bottom: calc(var(--u) * 0.8); }
+  .ol-bottom { padding-top: calc(var(--u) * 0.8); }
+  .panel.ol-code-card { padding-top: calc(var(--u) * 0.8); padding-bottom: calc(var(--u) * 0.8); }
+  .ol-scan { width: calc(var(--u) * 34); }
   .ol-res .res-table { gap: calc(var(--u) * 0.3); margin-top: calc(var(--u) * 0.5); }
   .ol-res .res-row { padding-top: calc(var(--u) * 0.05); padding-bottom: calc(var(--u) * 0.05); }
 }
@@ -185,10 +245,21 @@
   .ol-id .btn.small { flex: 1 1 100%; }
   .ol-hub { margin: auto 0; }
   .ol-room { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
-  .ol-room > .ol-members, .ol-room > .panel { grid-column: 1; grid-row: auto; }
-  .ol-room > .ol-members { order: 2; } .ol-room > .ol-you { order: 3; }
+  .ol-room { grid-template-columns: minmax(0, 1fr); grid-template-areas: "code" "who"; }
+  .ol-room.alone { grid-template-areas: "code" "join" "who"; }
+  .ol-room:not(.alone) { grid-template-columns: minmax(0, 1fr); }
+  .ol-room:not(.alone) > .ol-code-card { grid-template-columns: auto minmax(0, 1fr); justify-items: stretch; }
+  .ol-qr { width: calc(var(--u) * 20); }
+  .ol-room:not(.alone) .ol-qr { width: calc(var(--u) * 15); }
+  .join-slot.ol-member.mine { flex-wrap: wrap; row-gap: calc(var(--u) * 1); }
+  .ol-room > .join-list.ol-members.many { grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 0.8); }
+  .ol-member.mine .btn.ol-change { flex: 1 1 100%; }
+  .ol-scan { width: min(100%, calc(var(--u) * 46)); }
   .join-list.ol-members { grid-template-columns: minmax(0, 1fr); }
   .ol-rules-line .ol-line { flex: 1 1 100%; }
+  .ol-bottom { flex-direction: column; align-items: stretch; }
+  .ol-bottom .ol-rules-line { justify-content: center; flex-wrap: wrap; }
+  .ol-bottom .ol-rules-line .ol-line { text-align: center; }
   .ol-foot .btn.go { width: 100%; min-width: 0; }
   .ol-rules { grid-template-columns: minmax(0, 1fr); }
   .ol-rules .cards.ol-cc { grid-template-columns: repeat(2, minmax(0, 1fr)); }

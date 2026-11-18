@@ -21,6 +21,8 @@ public sealed record KartSettings
     public double OwnerSilenceSeconds { get; init; }
     public double SeatHoldSeconds { get; init; }
     public double RoomIdleMinutes { get; init; }
+    public double HandoffMinutes { get; init; }
+    public double AppSeenDays { get; init; }
     public double ValuationBaseDollars { get; init; }
     public double ValuationDoublingPoints { get; init; }
     public double CpuMuEasy { get; init; }
@@ -63,6 +65,8 @@ public sealed record SettingDef(
         new("MaxMembersPerRoom", "Rooms", "Most people in a room", "Includes people watching. A race has 8 karts at most.", SettingKind.Integer, "8", 1, 8),
         new("SeatHoldSeconds", "Rooms", "Seat hold after a drop", "How long someone who lost their connection keeps their place.", SettingKind.Number, "120", 0, 3600, Unit: "seconds"),
         new("RoomIdleMinutes", "Rooms", "Empty room lifetime", "An empty room is closed after this long.", SettingKind.Number, "5", 0, 1440, Unit: "minutes"),
+        new("HandoffMinutes", "Rooms", "Room link handoff", "A room link opened in Safari waits this long for the game on the Home Screen to pick it up.", SettingKind.Number, "10", 0, 1440, Unit: "minutes"),
+        new("AppSeenDays", "Rooms", "Installed game memory", "A room link opened in the browser offers to open the installed game, not to install it, if the game was opened on that phone within this long.", SettingKind.Number, "30", 0, 3650, Unit: "days"),
 
         new("TrackPickSeconds", "Timers", "Track pick time", "How long everyone has to pick a track.", SettingKind.Number, "20", 0, 300, Unit: "seconds"),
         new("ResultsSeconds", "Timers", "Results time", "How long the results stay up before the next race.", SettingKind.Number, "25", 0, 300, Unit: "seconds"),
@@ -191,6 +195,8 @@ public sealed record SettingDef(
             OwnerSilenceSeconds = D("OwnerSilenceSeconds"),
             SeatHoldSeconds = D("SeatHoldSeconds"),
             RoomIdleMinutes = D("RoomIdleMinutes"),
+            HandoffMinutes = D("HandoffMinutes"),
+            AppSeenDays = D("AppSeenDays"),
             ValuationBaseDollars = D("ValuationBaseDollars"),
             ValuationDoublingPoints = D("ValuationDoublingPoints"),
             CpuMuEasy = D("CpuMuEasy"),

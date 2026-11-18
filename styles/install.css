@@ -1,42 +1,50 @@
-/* Install guidance (src/ui/install.js): the main-menu hint card, the steps
-   overlay, and the How to Play panel. Same tokens and --u sizing as the menus;
-   --u comes from .menu-layer while inside a screen, the overlay sets its own. */
+/* Install guidance (src/ui/install.js): the get-the-app sheet, the main menu's button row, and the How to Play
+   panel. Same tokens as the menus; --u comes from .menu-layer inside a screen, the sheet sets its own. */
 
-/* the one-time card under the main menu buttons */
-/* the button row gains a fourth button (install): at natural widths with wrapping, so the
-   long "Add to Home Screen" label gets a row of its own on narrow screens instead of the
-   equal-share row shrinking every button until the labels spill over each other */
+/* the button row gains a fourth button (Get the app): at natural widths with wrapping, so the label gets a row
+   of its own on narrow screens instead of the equal-share row shrinking every button */
 .screen-main .row.has-install { flex-wrap: wrap; }
 .screen-main .row.has-install .btn { flex: 0 1 auto; }
-.install-slot { width: calc(var(--u) * 42); max-width: 100%; }
-.install-card { margin-top: calc(var(--u) * 1.8); background: rgba(18,20,43,0.93); border: calc(var(--u) * 0.45) solid var(--gold); border-radius: calc(var(--u) * 2.4); padding: calc(var(--u) * 1.8) calc(var(--u) * 2.2); box-shadow: 0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.42); animation: menu-in 0.22s ease-out; }
-.install-card-text { display: flex; flex-direction: column; gap: calc(var(--u) * 0.5); }
-.install-card-text b { font-family: var(--display); font-weight: normal; font-size: calc(var(--u) * 2.5); letter-spacing: 0.02em; color: var(--gold); }
-.install-card-text span { font-size: calc(var(--u) * 1.8); line-height: 1.35; opacity: 0.92; }
-.install-card-btns { display: flex; gap: calc(var(--u) * 1.4); margin-top: calc(var(--u) * 1.5); }
-.install-card-btns .btn { min-width: 0; flex: 1; font-size: calc(var(--u) * 2.1); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.6) calc(var(--u) * 0.65); }
-.install-card-btns .install-later { opacity: 0.85; }
 
-/* the steps overlay (a sheet over everything, opened from the card / menus) */
-.install-overlay { --u: min(1vw, 1.78vh); position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: calc(var(--u) * 3); background: rgba(5,6,18,0.66); font-family: var(--body); color: #fff; }
-.install-sheet { position: relative; width: calc(var(--u) * 62); max-width: 100%; max-height: 100%; overflow-y: auto; background: rgba(18,20,43,0.97); border: calc(var(--u) * 0.45) solid #fff; border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 3) calc(var(--u) * 3.6); box-shadow: 0 calc(var(--u) * 1) 0 rgba(0,0,0,0.42); animation: menu-in 0.22s ease-out; }
-.install-sheet h2 { font-family: var(--display); font-weight: normal; font-size: calc(var(--u) * 3.6); margin: 0 calc(var(--u) * 5) calc(var(--u) * 1) 0; letter-spacing: 0.02em; paint-order: stroke fill; -webkit-text-stroke: 0.12em var(--ink); }
-.install-blurb { margin: 0 0 calc(var(--u) * 2); font-size: calc(var(--u) * 1.9); line-height: 1.4; opacity: 0.92; }
-.install-x { position: absolute; top: calc(var(--u) * 1.6); right: calc(var(--u) * 1.6); width: calc(var(--u) * 4.6); height: calc(var(--u) * 4.6); border-radius: 50%; border: calc(var(--u) * 0.35) solid var(--ink); background: linear-gradient(180deg, #fff, #e8ecf7); color: var(--ink); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: calc(var(--u) * 1.1); }
-.install-x svg { width: 100%; height: 100%; }
-/* the sheet's focus ring (#274): same gold outline the menus give a focused button
-   (.btn.focus in menu.css covers "Got it"; the round close button needs its own) */
-.install-x.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.35); z-index: 2; }
-.install-gotit { min-width: 0; width: 100%; margin-top: calc(var(--u) * 2.2); font-size: calc(var(--u) * 2.4); padding: calc(var(--u) * 1) calc(var(--u) * 2) calc(var(--u) * 0.7); }
+/* the get-the-app sheet: over everything, sized for the phone it is on (upright phones get the portrait unit) */
+.install-overlay { --u: min(1vw, calc(var(--vh) * 1.78)); position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: calc(var(--u) * 2 + var(--safe-t)) calc(var(--u) * 3 + var(--safe-r)) calc(var(--u) * 2 + var(--safe-b)) calc(var(--u) * 3 + var(--safe-l)); background: rgba(5,6,18,0.78); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); font-family: var(--body); color: #fff; }
+@media (orientation: portrait) { .install-overlay { --u: min(1.78vw, var(--vh)); } }
+.install-sheet { width: calc(var(--u) * 96); max-width: 100%; max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; align-items: stretch; gap: calc(var(--u) * 1.6); background: rgba(18,20,43,0.97); border: calc(var(--u) * 0.5) solid #fff; border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 2.6) calc(var(--u) * 3.2) calc(var(--u) * 2.8); box-shadow: 0 calc(var(--u) * 1.2) 0 rgba(0,0,0,0.45); }
+.install-kicker { margin: 0; font-weight: 700; font-size: calc(var(--u) * 2.3); color: var(--gold); text-align: center; }
+.install-sheet h2 { margin: 0; text-align: center; font-family: var(--display); font-weight: normal; font-size: calc(var(--u) * 5.4); line-height: 1.05; letter-spacing: 0.02em; paint-order: stroke fill; -webkit-text-stroke: 0.12em var(--ink); }
+.install-blurb { margin: 0 auto; max-width: 34em; text-align: center; font-size: calc(var(--u) * 2.4); line-height: 1.4; opacity: 0.94; }
+.install-sheet .btn { min-width: 0; font-size: calc(var(--u) * 2.8); padding: calc(var(--u) * 1.3) calc(var(--u) * 2) calc(var(--u) * 1); }
+.install-sheet .install-do { font-size: calc(var(--u) * 3.2); }
+.install-sheet .install-have { background: linear-gradient(180deg, #ffe680, #ffd23c); }
+.install-row { display: flex; gap: calc(var(--u) * 1.4); }
+.install-row .btn { flex: 1 1 0; }
+.install-sheet .install-play { opacity: 0.92; }
+.install-code { align-self: center; font-family: var(--display); font-size: calc(var(--u) * 9); line-height: 1; letter-spacing: 0.16em; padding-left: 0.16em; color: var(--gold); paint-order: stroke fill; -webkit-text-stroke: 0.1em var(--ink); }
+.install-glyph { font-weight: 800; letter-spacing: 0.05em; }
 
-/* numbered steps, shared by the overlay and the How to Play panel */
-.install-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--u) * 1.7); }
-.install-steps li { display: flex; flex-direction: column; gap: calc(var(--u) * 0.25); font-size: calc(var(--u) * 1.85); line-height: 1.35; }
-.install-steps li b { display: flex; align-items: center; gap: calc(var(--u) * 1.1); font-weight: 600; font-size: calc(var(--u) * 2); }
-.install-steps li b i { font-style: normal; flex: none; width: calc(var(--u) * 3); height: calc(var(--u) * 3); border-radius: 50%; background: var(--gold); color: var(--ink); display: flex; align-items: center; justify-content: center; font-family: var(--display); font-size: calc(var(--u) * 1.9); }
-.install-steps li span { opacity: 0.88; margin-left: calc(var(--u) * 4.1); }
-.install-steps li span svg { width: calc(var(--u) * 2); height: calc(var(--u) * 2); vertical-align: -0.35em; }
-.install-steps.compact li span { margin-left: calc(var(--u) * 4.1); }
+/* numbered steps, shared by the sheet and the How to Play panel: a row of three on a wide screen, a list upright */
+.install-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 1.4); }
+.install-steps li { display: flex; flex-direction: column; align-items: center; text-align: center; gap: calc(var(--u) * 0.8); background: rgba(255,255,255,0.07); border-radius: calc(var(--u) * 2); padding: calc(var(--u) * 1.6) calc(var(--u) * 1.4); }
+.install-steps li > i { font-style: normal; flex: none; width: calc(var(--u) * 4.2); height: calc(var(--u) * 4.2); border-radius: 50%; background: var(--gold); color: var(--ink); display: grid; place-items: center; font-family: var(--display); font-size: calc(var(--u) * 2.6); padding-top: 0.12em; }
+.install-steps li > div { display: flex; flex-direction: column; gap: calc(var(--u) * 0.5); }
+.install-steps li b { font-weight: 700; font-size: calc(var(--u) * 2.5); line-height: 1.25; }
+.install-steps li span { font-size: calc(var(--u) * 2.1); line-height: 1.35; opacity: 0.88; }
+.install-steps svg { width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .install-sheet { gap: calc(var(--u) * 1.1); padding: calc(var(--u) * 1.8) calc(var(--u) * 2.6) calc(var(--u) * 2); }
+  .install-sheet h2 { font-size: calc(var(--u) * 4.6); }
+  .install-steps li { padding: calc(var(--u) * 1.1) calc(var(--u) * 1.2); gap: calc(var(--u) * 0.5); }
+  .install-steps li > i { width: calc(var(--u) * 3.6); height: calc(var(--u) * 3.6); }
+  .install-code { font-size: calc(var(--u) * 7); }
+}
+@media (orientation: portrait) {
+  .install-row { flex-direction: column; }
+  .install-row .btn { flex: none; }
+  .install-sheet { padding: calc(var(--u) * 3) calc(var(--u) * 2.6); gap: calc(var(--u) * 2); }
+  .install-steps { grid-template-columns: minmax(0, 1fr); }
+  .install-steps li { flex-direction: row; align-items: flex-start; text-align: left; gap: calc(var(--u) * 1.6); }
+}
+.install-sheet button.focus { outline: calc(var(--u) * 0.55) solid var(--gold); outline-offset: calc(var(--u) * 0.35); }
 
 /* the How to Play panel: a full-width strip under the two .howto columns */
 .install-panel { display: flex; flex-direction: column; gap: calc(var(--u) * 1.4); }
@@ -44,11 +52,3 @@
 .install-panel h3 { margin: 0; }
 .install-panel-blurb { margin: 0; line-height: 1.4; opacity: 0.92; }
 .install-panel .install-do { align-self: flex-start; min-width: 0; font-size: calc(var(--u) * 2.2); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.2) calc(var(--u) * 0.65); }
-
-/* short landscape phones: the menu column is already exactly viewport-tall, so the card
-   leaves the flow and floats over the scene on the right, vertically centered, in its
-   normal column layout (src/ui/menus.js also skips the row button at this size) */
-@media (max-height: 500px) and (orientation: landscape) {
-  .screen-main .install-slot { position: absolute; right: calc(var(--u) * 3 + var(--safe-r, 0px)); top: 50%; transform: translateY(-50%); width: calc(var(--u) * 38); }
-  .screen-main .install-card { margin-top: 0; }
-}

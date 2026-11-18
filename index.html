@@ -56,6 +56,7 @@
 #boot.failed .boot-fail { display: flex; } #boot.failed .boot-lights, #boot.failed .boot-grid { display: none; }
 .boot-fail button { font: inherit; font-family: var(--display); font-size: calc(var(--u) * 3.2); color: #12142b; background: #2ee6a6; border: calc(var(--u) * 0.45) solid #12142b; border-radius: calc(var(--u) * 99); padding: calc(var(--u) * 1) calc(var(--u) * 4); cursor: pointer; }
 @media (orientation: portrait) { #boot { --u: min(1.78vw, 1vh); } .boot-grid { grid-template-columns: repeat(8, calc(var(--u) * 5.2)); gap: calc(var(--u) * 0.9); } }
+@supports (height: 1dvh) { #boot { --u: min(1vw, 1.78dvh); } @media (orientation: portrait) { #boot { --u: min(1.78vw, 1dvh); } } }
 @media (prefers-reduced-motion: reduce) { #boot .logo-main span, .boot-grid img.in { animation: none; opacity: 1; transform: none; } }
 </style>
 </head>

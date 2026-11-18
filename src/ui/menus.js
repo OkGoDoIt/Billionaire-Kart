@@ -7,7 +7,7 @@ import { CLASSES } from '../race/kart.js';
 import { DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindings, applyPadBind, padFamily } from '../core/input.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
-import { installCard, installButton, installPanel, onInstallChange } from './install.js';
+import { installButton, installPanel, onInstallChange, autoInstall } from './install.js';
 import { KEY_LAYOUTS, KEY_ACTIONS, keyName, bindKey, resetKeys } from '../core/keyboard.js';
 import { trialKey } from '../core/save.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
@@ -196,12 +196,19 @@ export class Menus {
   /* ---------- title ---------- */
   s_title() {
     // a shared room link (?room=CODE) goes straight on into that room after this first tap
-    const go = () => { if (matchMedia('(pointer: coarse)').matches) this.app.fullscreen(true); this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); const room = new URLSearchParams(location.search).get('room'); if (room) this.app.goOnline({ room }); };
+    const roomNow = () => (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+    const go = () => { if (this.screen?.el !== el) return; if (matchMedia('(pointer: coarse)').matches) this.app.fullscreen(true); this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); const room = roomNow(); if (room) this.app.goOnline({ room }); };
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const press = h('div', { class: 'press' });
+    const label = () => { const room = roomNow(); press.textContent = room ? `${coarse ? 'Tap' : 'Press any button'} to join room ${room}` : coarse ? 'Tap to start' : 'Press any button'; };
     const el = h('div', { onclick: go },
       h('div', { class: 'logo' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c))), h('div', { class: 'logo-tag' }, 'Eight egos. One trophy.')),
-      h('div', { class: 'press' }, matchMedia('(pointer: coarse)').matches ? 'Tap to start' : 'Press any button'),
+      press,
       h('div', { class: 'fine' }, 'A parody. Not affiliated with, or endorsed by, anyone in it.'));
-    return { el, onAction: a => { if (a !== 'mute') go(); return true; }, onBack: () => false };
+    label();
+    // in a phone browser the get-the-app sheet comes first; its "Play in Safari" is this same first tap
+    autoInstall({ room: roomNow() || null, onPlay: go, when: () => this.screen?.el === el });
+    return { el, onAction: a => { if (a !== 'mute') go(); return true; }, onBack: () => false, onRoomLink: label };
   }
 
   /* ---------- main menu ---------- */
@@ -209,21 +216,17 @@ export class Menus {
     const A = this.app;
     const start = mode => { A.flow = { mode, players: 1 }; this.open('players'); };
     const row = h('div', { class: 'row' }, this.btn('How to play', () => this.open('howto'), { cls: 'small' }), this.btn('Options', () => this.open('options'), { cls: 'small' }), this.btn('Records', () => this.open('records'), { cls: 'small' }));
-    /* install guidance (src/ui/install.js): a persistent button in the row and a one-time
-       hint card under the nav, each present only where installing is actually possible;
-       both redraw if the browser hands us its install prompt while the menu is up */
-    const slot = h('div', { class: 'install-slot' });
+    /* install guidance (src/ui/install.js): a persistent Get the app button in the row, present only where
+       installing is actually possible (the sheet itself opens on the title, once per visit); it redraws if the
+       browser hands us its install prompt while the menu is up */
     let installBtnEl = null;
-    /* short landscape (a phone on its side) has no spare width in the button row or height
-       in the column: there the hint card floats over the scene instead (install.css) and
-       carries the action on its own — Options keeps its Install row at every size */
+    /* short landscape (a phone on its side) has no spare width in the button row: Options keeps its Install
+       row at every size */
     const shortLandscape = matchMedia('(max-height: 500px) and (orientation: landscape)').matches;
     const drawInstall = () => {
       const spec = shortLandscape ? null : installButton();
       if (spec && !installBtnEl) { installBtnEl = this.btn(spec.label, () => spec.act(installBtnEl), { cls: 'small' }); row.appendChild(installBtnEl); row.classList.add('has-install'); }
       if (!spec && installBtnEl) { installBtnEl.remove(); installBtnEl = null; row.classList.remove('has-install'); }
-      const card = installCard();
-      slot.replaceChildren(...(card ? [card] : []));
     };
     // Online shows only when the race server answers and speaks this build's protocol (App#checkOnline)
     const onlineBtn = this.btn('Online', () => A.goOnline(), { cls: 'big c4', sub: 'Friends, strangers, and CPUs' });
@@ -242,8 +245,7 @@ export class Menus {
         this.btn('Quick Race', () => start('vs'), { cls: 'big c2', sub: 'Any track, your rules' }),
         this.btn('Time Trial', () => { A.flow = { mode: 'timetrial', players: 1, devices: ['any'] }; this.open('racers', { player: 0 }); }, { cls: 'big c3', sub: 'Just you and the clock' }),
         onlineBtn,
-        row),
-      slot);
+        row));
     drawInstall();
     const offInstall = onInstallChange(drawInstall);
     return { el, onClose: offInstall, onBack: () => { this.reset('title'); return false; } };

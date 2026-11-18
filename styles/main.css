@@ -14,7 +14,9 @@
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
+  --vh: 1vh;   /* the visible height: Safari's toolbars come out of it (below), so menus sized by it fit in a browser tab too */
 }
+@supports (height: 1dvh) { :root { --vh: 1dvh; } }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1026; color: var(--paper); font-family: var(--body); overscroll-behavior: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 #stage { position: fixed; inset: 0; }

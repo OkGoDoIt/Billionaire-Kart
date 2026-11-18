@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(process.argv[2] || join(ROOT, '_site'));
 const FILES = ['index.html', 'sw.js', 'offline-shell.js', 'manifest.webmanifest'];
-const DIRS = ['src', 'styles', 'assets', 'vendor/three/build', 'vendor/three/addons'];
+const DIRS = ['src', 'styles', 'assets', 'vendor/three/build', 'vendor/three/addons', 'vendor/uqr', 'vendor/jsqr'];
 const skip = src => basename(src).endsWith('.md') || basename(src) === '.DS_Store';
 
 await rm(OUT, { recursive: true, force: true });

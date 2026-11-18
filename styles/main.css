@@ -14,6 +14,8 @@
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
+  /* the screen's insets, for a layer that sets its own --safe-* (a HUD pane placed inside the safe area: hud.js placePane) */
+  --inset-t: var(--safe-t); --inset-r: var(--safe-r); --inset-b: var(--safe-b); --inset-l: var(--safe-l);
   --vh: 1vh;   /* the visible height: Safari's toolbars come out of it (below), so menus sized by it fit in a browser tab too */
 }
 @supports (height: 1dvh) { :root { --vh: 1dvh; } }

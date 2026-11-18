@@ -4,7 +4,7 @@ import { Race } from '../race/race.js';
 import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
 import { DrivingGuide } from '../ui/driving-guide.js';
-import { Hud, FieldBoard } from '../ui/hud.js';
+import { Hud, FieldBoard, SharedTalk } from '../ui/hud.js';
 import { TouchControls, isTouchDevice } from '../ui/touch.js';
 import { ITEMS, HIT_LINES, isFundingBoost } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
@@ -47,7 +47,15 @@ export class RaceSession {
     // three players on a two-by-two grid leave a cell empty: the whole field goes there
     this.board = n === 3 ? new FieldBoard(app.ui, this.race) : null;
     // the split follows the window's shape, so the HUDs and the board move whenever it is laid out again
-    this.view.onLayout = view => { this.huds.forEach((h, i) => h.setRect(view.views[i].rect)); this.board?.setRect(view.spare[0] || null); };
+    // a line said to everyone is said once: over the board, or at the top centre of the screen where the panes meet
+    this.sharedTalk = n > 1 ? new SharedTalk(app.ui) : null;
+    this.view.onLayout = view => {
+      const board = !!(this.board && view.spare.length);
+      this.board?.setRect(view.spare[0] || null);
+      if (this.sharedTalk) { const [, , w, h] = view.views[0].rect; this.sharedTalk.place(board ? view.spare[0] : [0.5 - w / 2, 1 - h, w, h], board); }
+      // with the board up, the panes' own minimaps repeat it; Thiel keeps his, where his special shows rivals' items
+      this.huds.forEach((h, i) => { h.setRect(view.views[i].rect); h.root.classList.toggle('hud-nomap', board && !h.kart.sp?.seeItems); });
+    };
     this.view.onLayout(this.view);
     // touch controls for a solo player on a touch screen
     this.touch = null;
@@ -122,7 +130,7 @@ export class RaceSession {
       if (e.type === 'count') {
         for (const h of this.huds) h.countdown(e.data);
         // on the first count, whoever starts on pole says their piece
-        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (pole && !pole.isPlayer) for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); }
+        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (pole && !pole.isPlayer) { if (this.sharedTalk) this.sharedTalk.talk(pole.racer, pole.racer.quote, 3200); else for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); } }
       }
       else if (e.type === 'go') for (const h of this.huds) h.countdown(0);
       else if (e.type === 'kartHit') {
@@ -149,7 +157,8 @@ export class RaceSession {
     const { race, view, app } = this;
     if (this.paused) { app.gfx.render(0); return; }
     if (this.phase === 'intro') {
-      if (view.intro.done) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) h.setVisible(true); this.board?.setVisible(true); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
+      // in split screen the countdown waits for the screen to finish dividing, and the HUDs fade in as it lands
+      if (view.intro.done && !view.splitting) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) { h.setVisible(true); if (this.huds.length > 1) h.root.classList.add('hud-enter'); } this.board?.setVisible(true); this.board?.root.classList.add('hud-enter'); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
     } else {
       const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
       // hit pause: the world holds still for a few frames when a hit lands, so it feels heavy
@@ -182,5 +191,5 @@ export class RaceSession {
 
   setPaused(p) { if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
 
-  dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.touch?.dispose(); this.view.dispose(); }
+  dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.sharedTalk?.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

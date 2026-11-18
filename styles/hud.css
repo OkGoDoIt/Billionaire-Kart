@@ -115,7 +115,9 @@
 .hud-banner.finish.win.show { animation: hud-banner-slam 0.5s cubic-bezier(.2,1.6,.4,1) forwards, hud-win 0.5s 0.5s ease-in-out 5 alternate; }
 
 /* trash talk: a rival's face and a speech bubble, on the left where it cannot cover the road */
-.hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--u) * 41); display: flex; align-items: center; gap: calc(var(--u) * 2); max-width: calc(var(--u) * 58); opacity: 0; transform: translateX(calc(var(--u) * -8)) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }
+/* In a pane taller than 16:9 (side-by-side split screen) the banners, placed by pane height, come down to its
+   level, so it drops below them: it never sits higher than 12 units under the lowest small banner (24%). */
+.hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: max(calc(var(--u) * 41), calc(24% + var(--u) * 12)); display: flex; align-items: center; gap: calc(var(--u) * 2); max-width: calc(var(--u) * 58); opacity: 0; transform: translateX(calc(var(--u) * -8)) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }
 .hud-talk.show { opacity: 1; transform: none; }
 .hud-talk img { flex: none; width: calc(var(--u) * 11); height: calc(var(--u) * 11); border-radius: 50%; object-fit: cover; object-position: 50% 20%; background: var(--rc, #444); box-shadow: 0 0 0 calc(var(--u) * 0.6) var(--ink), 0 0 0 calc(var(--u) * 1.1) #fff, 0 calc(var(--u) * 1) 0 calc(var(--u) * 1.1) rgba(0,0,0,0.3); }
 .hud-talk div { position: relative; background: #fff; color: var(--ink); border: calc(var(--u) * 0.55) solid var(--ink); border-radius: calc(var(--u) * 2.6); padding: calc(var(--u) * 0.9) calc(var(--u) * 2) calc(var(--u) * 1.2); font-family: var(--body); box-shadow: 0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35); }
@@ -154,7 +156,20 @@
 .hud-compact .hud-map { width: calc(var(--u) * 26); height: calc(var(--u) * 26); }
 .hud-compact .hud-time { display: none; }
 .hud-compact .hud-map { top: calc(var(--edge) + var(--safe-t)); }
+/* three players on a two-by-two grid: the board in the spare cell shows the whole field, so a pane's own map steps aside */
+.hud-nomap .hud-map { display: none; }
+.hud-nomap .hud-speed { top: calc(var(--edge) + var(--safe-t)); }
 
+/* split screen: a line said to everyone, once, centred at the top of its box (see SharedTalk) */
+.hud-shared .hud-talk { left: 50%; top: calc(var(--edge) + var(--safe-t)); transform: translate(-50%, calc(var(--u) * -4)) scale(0.9); }
+.hud-shared .hud-talk.show { transform: translate(-50%, 0); }
+/* over the board it keeps to the map's corner, clear of the running order */
+.hud-shared.on-board .hud-talk { left: calc(var(--u) * 3); top: calc(var(--u) * 3); transform: translateY(calc(var(--u) * -4)) scale(0.9); }
+.hud-shared.on-board .hud-talk.show { transform: none; }
+
+/* split screen: the HUDs and the board fade in as the panes land after the flyover */
+.hud-enter { animation: hud-enter 0.3s ease-out both; }
+@keyframes hud-enter { from { opacity: 0; } }
 @keyframes hud-pop { 0% { transform: scale(1); } 40% { transform: scale(1.28); } 100% { transform: scale(1); } }
 @keyframes hud-spin { to { transform: rotate(360deg); } }
 @keyframes hud-pulse { from { filter: brightness(1); } to { filter: brightness(1.35); } }
@@ -172,6 +187,7 @@
 @keyframes hud-coin-pop { 0% { opacity: 0; transform: translate(0, calc(var(--u) * 1.6)) scale(0.7); } 14% { opacity: 1; transform: translate(0, 0) scale(1.08); } 26% { transform: translate(0, calc(var(--u) * -0.6)) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(0, calc(var(--u) * -3.4)) scale(1); } }
 @keyframes hud-coin-pop-down { 0% { opacity: 0; transform: translate(0, calc(var(--u) * -1.6)) scale(0.7); } 14% { opacity: 1; transform: translate(0, 0) scale(1.08); } 26% { transform: translate(0, calc(var(--u) * 0.6)) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(0, calc(var(--u) * 3.4)) scale(1); } }
 
+@media (prefers-reduced-motion: reduce) { .hud-enter { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .hud-item.pop, .hud-rank.pop, .hud-pill.pop, .hud-coins.glow, .hud-coin-pop.show { animation: none; } }
 @media (prefers-reduced-motion: reduce) {
   .hud-rank.up, .hud-rank.down, .hud-banner.out { animation: none; }
@@ -202,7 +218,7 @@
 .board-list em { font-style: normal; font-family: var(--display); font-size: 0.8em; margin-left: 0.6em; background: var(--ink); color: #fff; border-radius: 1em; padding: 0.2em 0.7em 0.05em; }
 /* an upright cell: the map on top, the order under it */
 @container (aspect-ratio < 1.15) {
-  .board-in { flex-direction: column; --u: min(0.62cqh, 1cqw); }
-  .board-map { width: min(100cqw - var(--pad) * 2, 46cqh); }
+  .board-in { flex-direction: column; --u: min(0.75cqh, 1.15cqw); --pad: calc(var(--u) * 4); }
+  .board-map { width: min(100cqw - var(--pad) * 2, 42cqh); }
   .board-list { width: 100%; max-width: none; height: auto; flex: 1 1 0; min-height: 0; }
 }

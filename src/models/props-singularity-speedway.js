@@ -466,21 +466,6 @@ export function platformSeats(r, seed) {
 }
 
 /* ---------- holo boards ---------- */
-/** A floating billboard: a slim frame with glowing edges, a bright panel, and a little thruster pod. */
-export function holoBoard(map, { w = 16, h = 4, color = 0x7a6bff } = {}) {
-  const grp = new THREE.Group(), b = new ModelBuilder();
-  b.add('frame', box(w + 0.8, h + 0.8, 0.5, 0.15, 2), { p: [0, 0, -0.3] });
-  for (const y of [h / 2 + 0.42, -h / 2 - 0.42]) b.add('edge', box(w + 0.9, 0.16, 0.6, 0.05, 1), { p: [0, y, -0.25] });
-  b.add('pod', cyl(0.9, 0.5, 1.4, 16), { p: [0, -h / 2 - 1.2, -0.3] });
-  b.add('jet', sphere(0.45, 12, 8), { p: [0, -h / 2 - 2.0, -0.3] });
-  grp.add(b.build({ frame: plastic(0x14162a, 0.4, 0.5), edge: glow(color, 3), pod: MAT.dark, jet: glow(0x35e0ff, 4) }));
-  const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.5 }));
-  panel.position.z = 0.0; grp.add(panel);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.5 }));
-  back.position.z = -0.6; back.rotation.y = Math.PI; grp.add(back);
-  return grp;
-}
-
 /* ---------- planet and moons ---------- */
 /** A distant blue-green world with clouds and a soft atmosphere. Not fogged. */
 export function planet({ r = 380 } = {}) {

@@ -637,20 +637,3 @@ export function medianIsland(L = 42, W = 4.8) {
   return b.build({ kerb: plastic(0xb9bcc4, 0.7, 0.05), lawn: m.lawn, hedge: m.hedge });
 }
 
-/** The LP lane's gate: two wrought-iron leaves, each w wide, hinged on their outer ends (x = -w and x = +w), shut across
-    the lane along X. userData.leaves: [left, right] groups to swing open (rotation.y). Gold finials. */
-export function lpGate(w = 3.6) {
-  const grp = new THREE.Group(), leaves = [];
-  const m = farmMats();
-  for (const s of [-1, 1]) {
-    const b = new ModelBuilder();
-    for (let x = 0.15; x < w; x += 0.32) { b.add('iron', bx(0.07, 2.3, 0.07), { p: [-s * x, 1.35, 0] }); b.add('gold', cone(0.07, 0.22, 6), { p: [-s * x, 2.6, 0] }); }
-    for (const y of [0.35, 1.3, 2.3]) b.add('iron', bx(w, 0.09, 0.09), { p: [-s * w / 2, y, 0] });
-    const leaf = b.build({ iron: m.iron, gold: m.gold }); leaf.position.x = s * w; grp.add(leaf); leaves.push(leaf);
-    const pb = new ModelBuilder();
-    pb.add('trim', bx(0.9, 3.4, 0.9), { p: [s * (w + 0.45), 1.7, 0] }); pb.add('gold', sphere(0.35, 10, 8), { p: [s * (w + 0.45), 3.7, 0] });
-    grp.add(pb.build({ trim: m.trim, gold: m.gold }));
-  }
-  grp.userData.leaves = leaves;
-  return grp;
-}

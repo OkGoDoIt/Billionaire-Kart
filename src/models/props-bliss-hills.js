@@ -185,15 +185,6 @@ export function picketFence(len = 6) {
   return b.build({ w: plastic(0xffffff, 0.55) });
 }
 
-/** Hay bale obstacle: a fat golden cylinder on its side. */
-export function hayBale() {
-  const b = new ModelBuilder(), R = 1.05, L = 1.9;
-  b.add('hay', cyl(R, R, L, 22), { p: [0, R, 0], r: [0, 0, Math.PI / 2] });
-  for (const s of [1, -1]) b.add('end', cyl(R * 0.82, R * 0.82, 0.06, 22), { p: [s * (L / 2 + 0.01), R, 0], r: [0, 0, Math.PI / 2] });
-  for (const x of [-0.45, 0.45]) b.add('twine', torus(R + 0.02, 0.04, 6, 26), { p: [x, R, 0], r: [0, Math.PI / 2, 0] });
-  return b.build({ hay: plastic(0xe8b84a, 0.95), end: plastic(0xd09a32, 0.95), twine: plastic(0xa8782a, 0.9) });
-}
-
 /* What the dialogs say, one per dialog in turn. */
 const DIALOGS = [
   { title: 'KART.EXE', lines: ['KART.EXE HAS', 'STOPPED RESPONDING'], buttons: ['CLOSE'] },

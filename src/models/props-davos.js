@@ -259,14 +259,6 @@ export function snowBank(seed = 1) {
   return b.build({ snow: SNOW_SOFT });
 }
 
-/** The Mount Wario marker: a thin red post with a white band, 1.15 m tall. */
-export function redPost() {
-  const b = new ModelBuilder();
-  b.add('post', cyl(0.09, 0.11, 1.15, 8), { p: [0, 0.57, 0] });
-  b.add('band', cyl(0.12, 0.12, 0.22, 8), { p: [0, 0.92, 0] });
-  return b.build({ post: RED, band: SNOW });
-}
-
 /** Wind-bent firs. Matching irregular branch tips and snow mantles keep
     the silhouette twiggy at distance without modelling individual needles. */
 export function snowPine(seed = 1, { h = 8.5 } = {}) {
@@ -293,13 +285,6 @@ export function snowPine(seed = 1, { h = 8.5 } = {}) {
 }
 
 /* ---------- polish round: resort, village and summit furniture ---------- */
-/** A flat sponsor panel on a plain group, for cladding structures (crest jump beam, hotel front). */
-export function facadePanel(text, opts = {}) {
-  const g = new THREE.Group();
-  g.add(signPanel(text, opts));
-  return g;
-}
-
 /** A cylinder stretched between two world points (gondola cables, braces). */
 export function tubeBetween(a, b, r = 0.05, mat = STEEL) {
   const A = new THREE.Vector3(a[0], a[1], a[2]), B = new THREE.Vector3(b[0], b[1], b[2]);
@@ -343,15 +328,6 @@ export function bunting(span = 20, { sag = 1.7, flags = 13 } = {}) {
     b.add(cols[k % 4], box(0.95, 1.2, 0.04, 0.02, 1), { p: [x, y - 0.64, 0], r: [0, 0, (k % 2 ? -1 : 1) * 0.05] });
   }
   return b.build({ string: STEEL, cNavy: NAVY, cGold: GOLD, cRed: RED, cWhite: WHITE });
-}
-
-/** Wooden pasture fence panel, 4.6 m: two posts, two rails. Instanced along the meadow and the valley. */
-export function woodFence() {
-  const b = new ModelBuilder();
-  for (const sx of [-1, 1]) b.add('post', box(0.18, 1.25, 0.18, 0.03, 1), { p: [sx * 2.2, 0.62, 0], r: [0, 0, sx * 0.04] });
-  b.add('rail', box(4.6, 0.14, 0.07, 0.02, 1), { p: [0, 1.02, 0.02], r: [0, 0, 0.015] });
-  b.add('rail', box(4.6, 0.14, 0.07, 0.02, 1), { p: [0, 0.55, -0.02], r: [0, 0, -0.012] });
-  return b.build({ post: WOOD_D, rail: WOOD });
 }
 
 /** A stack of firewood logs, for leaning against a chalet wall. */

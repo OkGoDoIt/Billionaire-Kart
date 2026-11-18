@@ -3,7 +3,21 @@
 import { clamp } from './util.js';
 import { keyboardBindings } from './keyboard.js';
 
-const blank = () => ({ steer: 0, throttle: 0, brake: 0, drift: false, item: false, itemBack: false, rear: false });
+const blank = () => ({ steer: 0, throttle: 0, brake: 0, drift: false, item: false, itemBack: false, rear: false, trick: false, trickDir: 0 });
+
+/* ---------- flick to trick ----------
+   A sharp flick of a phone or tablet is a trick press, the way a Wii remote did it.
+   A flick is a spike from the motion sensor: a fast turn (degrees a second) or a
+   jolt (m/s² beyond gravity). Twisting the device like a wheel is the axis tilt
+   steering reads, so with tilt on that axis needs a harder twist to count. A hard
+   enough twist picks the spin direction; anything else is a flip. Tuning numbers. */
+/** 1 or -1 when the screen is landscape (which way round), 0 when upright. iOS reports
+    the left-hand turn as 270 through screen.orientation and as -90 through window.orientation. */
+const landscapeSide = () => {
+  const a = (((screen.orientation?.angle ?? window.orientation ?? 0) % 360) + 360) % 360;
+  return a === 90 ? 1 : a === 270 ? -1 : 0;
+};
+export const FLICK = { turn: 320, twist: 360, twistTilt: 520, jolt: 15, gap: 350, tiltHold: 300, tiltBack: 160 };
 
 export const DEVICE_LABEL = { kb: 'Keyboard', kb1: 'Keyboard P1', kb2: 'Keyboard P2', touch: 'Touch', pad0: 'Controller 1', pad1: 'Controller 2', pad2: 'Controller 3', pad3: 'Controller 4' };
 
@@ -90,8 +104,11 @@ export class Input {
     this.assign = ['any'];                 // device per local player; 'any' merges everything (solo play)
     this.setPadBindings(null);   // the app replaces the defaults from the save
     this.padSteer = 'both';                 // steering source: 'both' | 'stick' | 'dpad'
-    this.touch = { active: false, steer: 0, throttle: 0, brake: 0, drift: false, item: false, itemBack: false, rear: false };
+    this.touch = { active: false, steer: 0, throttle: 0, brake: 0, drift: false, item: false, itemBack: false, rear: false, trick: false, trickDir: 0 };
     this.tilt = { enabled: false, value: 0, available: false };
+    // flick to trick: `seq` counts flicks; `dir` is the last one's spin (-1 left, 1 right, 0 flip)
+    this.motion = { enabled: false, available: false, seq: 0, dir: 0, at: -1e9, peak: { turn: 0, twist: 0, jolt: 0 } };
+    this._tiltHist = []; this._tiltHoldUntil = 0;
     this.onMenu = null;                    // (action, device) => void
     this.onAnyInput = null;                // first interaction (to unlock audio)
     this.lastDevice = 'kb'; this.kbUsed = false; this.padPrev = [{}, {}, {}, {}]; this.padRepeat = [0, 0, 0, 0];
@@ -201,7 +218,7 @@ export class Input {
     this._padMenus(dt);
     for (let p = 0; p < this.assign.length; p++) {
       const dev = this.assign[p], out = this.states[p];
-      out.steer = 0; out.throttle = 0; out.brake = 0; out.drift = false; out.item = false; out.itemBack = false; out.rear = false;
+      out.steer = 0; out.throttle = 0; out.brake = 0; out.drift = false; out.item = false; out.itemBack = false; out.rear = false; out.trick = false; out.trickDir = 0;
       if (dev === 'any') {
         this._kb('kb', dt, out);
         for (let i = 0; i < 4; i++) this._pad(i, out);
@@ -212,6 +229,7 @@ export class Input {
           out.drift = out.drift || t.drift; out.item = out.item || t.item; out.itemBack = out.itemBack || t.itemBack; out.rear = out.rear || t.rear;
         }
         if (this.tilt.enabled && Math.abs(this.tilt.value) > Math.abs(out.steer)) out.steer = this.tilt.value;
+        if (t.active && t.trick) { out.trick = true; out.trickDir = t.trickDir || 0; }
       } else if (dev.startsWith('kb')) this._kb(dev, dt, out);
       else if (dev.startsWith('pad')) this._pad(+dev.slice(3), out);
       out.steer = clamp(out.steer, -1, 1);
@@ -308,13 +326,60 @@ export class Input {
           if (e.beta == null) return;
           this.tilt.available = true;
           // in landscape the roll axis is beta; sign depends on which way the phone is turned
-          const angle = (screen.orientation?.angle ?? window.orientation ?? 0);
-          let v = Math.abs(angle) === 90 ? (angle === 90 ? e.beta : -e.beta) : e.gamma;
-          this.tilt.value = clamp((v || 0) / 28, -1, 1);
+          const side = landscapeSide();
+          let v = side ? side * e.beta : e.gamma;
+          const value = clamp((v || 0) / 28, -1, 1), now = performance.now();
+          this._tiltHist.push({ t: now, v: value }); if (this._tiltHist.length > 30) this._tiltHist.shift();
+          if (now < this._tiltHoldUntil) return;   // a flick just happened: it is not a steer
+          this.tilt.value = value;
         });
       }
       this.tilt.enabled = true; return true;
     } catch { return false; }
   }
   disableTilt() { this.tilt.enabled = false; this.tilt.value = 0; }
+
+  static motionSupported() { return typeof DeviceMotionEvent !== 'undefined'; }
+
+  /** Flick to trick. Where the browser asks first (iOS), it must be called from a tap unless already allowed this visit.
+      Resolves to 'granted', 'denied', 'unavailable' (no motion API), or 'retry' (not asked from a tap). */
+  async enableMotion() {
+    try {
+      if (!Input.motionSupported()) return 'unavailable';
+      if (typeof DeviceMotionEvent.requestPermission === 'function') {   // iOS asks, and only from a tap; Chrome has it too and just says yes
+        // ask for orientation in the same tap: iOS shares both under one permission, and tilt steering needs it too
+        const asks = [DeviceMotionEvent.requestPermission()];
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') asks.push(DeviceOrientationEvent.requestPermission().catch(() => 'denied'));
+        const [r] = await Promise.all(asks);
+        if (r !== 'granted') return 'denied';
+      }
+      if (!this._motionBound) { this._motionBound = true; addEventListener('devicemotion', e => this._onMotion(e)); }
+      this.motion.enabled = true; return 'granted';
+    } catch { return 'retry'; }   // NotAllowedError: not asked from a tap; ask again on the next one
+  }
+  disableMotion() { this.motion.enabled = false; }
+
+  _onMotion(e) {
+    const r = e.rotationRate, a = e.acceleration, m = this.motion;
+    if (r?.beta == null && a?.x == null) return;   // the browser fires empty events where there is no sensor
+    m.available = true;
+    if (!m.enabled) return;
+    const side = landscapeSide();
+    // twist: the same axis and sign tilt steering reads, so a twist right is positive
+    const twist = (side ? side * (r?.beta || 0) : r?.gamma) || 0;
+    const turn = side ? Math.hypot(r?.alpha || 0, r?.gamma || 0) : Math.hypot(r?.alpha || 0, r?.beta || 0);
+    const jolt = a ? Math.hypot(a.x || 0, a.y || 0, a.z || 0) : 0;
+    const pk = m.peak; pk.turn = Math.max(pk.turn * 0.98, turn); pk.twist = Math.max(pk.twist * 0.98, Math.abs(twist)); pk.jolt = Math.max(pk.jolt * 0.98, jolt);
+    const now = performance.now();
+    if (now - m.at < FLICK.gap) return;
+    const twistAt = this.tilt.enabled ? FLICK.twistTilt : FLICK.twist;
+    if (Math.abs(twist) < twistAt && turn < FLICK.turn && jolt < FLICK.jolt) return;
+    m.at = now; m.seq++;
+    m.dir = Math.abs(twist) >= twistAt * 0.8 && Math.abs(twist) > turn ? Math.sign(twist) : 0;
+    if (this.tilt.enabled) {   // put the steering back where it was before the flick began, and hold it there a moment
+      const before = [...this._tiltHist].reverse().find(s => s.t <= now - FLICK.tiltBack);
+      if (before) this.tilt.value = before.v;
+      this._tiltHoldUntil = now + FLICK.tiltHold;
+    }
+  }
 }

@@ -2,6 +2,7 @@
    between the title's attract race, the showroom, races, and results. */
 import { Gfx, detectQuality } from '../render/gfx.js';
 import { Input } from '../core/input.js';
+import { isTouchDevice } from '../ui/touch.js';
 import { keyboardBindings } from '../core/keyboard.js';
 import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
@@ -47,6 +48,7 @@ export class App {
     addEventListener('resize', turned); screen.orientation?.addEventListener?.('change', turned);
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.session && !this.attract && this.session.phase === 'racing' && !this.session.paused && !this.menus.visible) this.pause(); });
     this.applySettings(true);
+    this._motionStart();
     this.checkOnline();
   }
 
@@ -83,7 +85,13 @@ export class App {
     if (!initial && want !== this.gfx.qualityName) this.gfx.applyQuality(want);
     this.input.setPadBindings(S.padBinds, S.padSteer);
     if (this.session?.touch) this.session.touch.autoGo = S.autoGo;
-    if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); } });
+    if (!S.tilt) this.input.disableTilt(); else if (!initial && !this.input.tilt.enabled) this.input.enableTilt().then(ok => { if (!ok) { S.tilt = false; this.save.write(); this._redrawOptions(); } });
+    // flick to trick: turning it on in Options is a tap, so iOS can ask right there
+    if (!S.flickTrick) this.input.disableMotion();
+    else if (!initial && !this.input.motion.enabled && isTouchDevice()) {
+      S.motionAsked = true; this.save.write();
+      this.input.enableMotion().then(r => { if (r === 'denied' || r === 'unavailable') { S.flickTrick = false; this.save.write(); this._redrawOptions(); } else if (r === 'retry') this._askOnFirstTap(); });
+    }
     this.audio?.setVolumes?.(S.music, S.sfx);
     this.shake = S.shake;
     const session = this.session;
@@ -91,10 +99,65 @@ export class App {
       for (const cam of session.view.cams) cam.shakeScale = S.shake === false ? 0 : 1;
       for (const kart of session.race.players) {
         const touch = !!session.touch && kart.playerIndex === 0;
-        kart.autoTrick = touch || S.autoTrick;
+        kart.autoTrick = touch ? !this.flickReady() : S.autoTrick;
         kart.assist.steer = session.config.mode !== 'timetrial' && (touch || S.smartSteer) ? 1 : 0;
       }
     }
+  }
+
+  _redrawOptions() { if (this.menus.screen?.spec.name === 'options') this.menus.open('options', {}, { replace: true }); }
+
+  /* ---------- flick to trick (touch) ----------
+     On by default. On load it simply starts where the browser shares motion without a
+     tap (Android, or iOS that already said yes this visit). iOS otherwise asks, and only
+     from a tap: the first time, a card before the first touch race explains it and asks
+     (s_flick in src/ui/menus.js); after that the first tap of each visit asks again,
+     because iOS may forget between visits. Until motion is flowing, touch tricks stay
+     automatic, and so do the hints. */
+  /** The touch player's tricks come from flicks right now. */
+  flickReady() { const m = this.input.motion; return !!this.save.settings.flickTrick && m.enabled && m.available; }
+  /** The touch player is set up to flick (it may still be waiting for this visit's first tap). */
+  flickChosen() { const m = this.input.motion; return !!this.save.settings.flickTrick && Input.motionSupported() && (m.available || !m.enabled); }
+  _motionStart() {
+    const S = this.save.settings;
+    if (!S.flickTrick || !isTouchDevice() || !Input.motionSupported()) return;
+    this.input.enableMotion().then(r => {
+      if (r === 'granted' || r === 'unavailable') return;
+      this.motionNeedsTap = true;               // only a tap may ask (iOS)
+      if (S.motionAsked) this._askOnFirstTap(); // the first time, the card before the first touch race asks
+    });
+  }
+  _askOnFirstTap() {
+    if (this._tapAsk) return; this._tapAsk = true;
+    const S = this.save.settings;
+    let busy = false;
+    const off = () => { this._tapAsk = false; for (const ev of ['touchend', 'click']) removeEventListener(ev, ask, true); };
+    const ask = () => {
+      if (busy) return;
+      if (this.input.motion.enabled || !S.flickTrick) { off(); return; }
+      busy = true;
+      this.input.enableMotion().then(r => {
+        busy = false;
+        if (r === 'denied') { S.flickTrick = false; this.save.write(); this._redrawOptions(); }
+        if (r !== 'retry') off();
+      });
+    };
+    for (const ev of ['touchend', 'click']) addEventListener(ev, ask, { capture: true, passive: true });
+  }
+  /** Before the first race on an iPhone or iPad, the flick card asks for motion. True when it took over. */
+  _askFlick(go) {
+    const S = this.save.settings;
+    if (S.motionAsked || !S.flickTrick || !this.motionNeedsTap || !isTouchDevice() || (this.flow.racers?.length || 1) !== 1 || this.input.motion.enabled) return false;
+    this.menus.open('flick', { go });
+    return true;
+  }
+  /** The player's answer on the flick card. Called from its buttons, so iOS can ask. */
+  answerFlick(on, go) {
+    const S = this.save.settings;
+    S.motionAsked = true;
+    if (!on) { S.flickTrick = false; this.save.write(); go(); return; }
+    this.save.write();
+    this.input.enableMotion().then(r => { if (r === 'denied' || r === 'unavailable') S.flickTrick = false; else if (r === 'retry') this._askOnFirstTap(); this.save.write(); go(); });
   }
 
   /** Enter or leave full screen. Must be called from a user gesture. */
@@ -189,10 +252,12 @@ export class App {
     return f.racers.map((racerId, i) => ({ racerId, device: f.devices[i] || 'any', autoTrick: this.save.settings.autoTrick || this.input.touch.active, smartSteer: this.save.settings.smartSteer }));
   }
   startSingle(trackId) {
+    if (this._askFlick(() => this.startSingle(trackId))) return;
     const f = this.flow; this.gp = null;
     this._race({ trackId, cc: f.cc || this.save.data.last.cc, level: f.level || 'normal', players: this._players(), mode: f.mode === 'timetrial' ? 'timetrial' : 'race' });
   }
   startCup(cup, grid = null) {
+    if (this._askFlick(() => this.startCup(cup, grid))) return;
     const f = this.flow, tracks = cupTracks(cup), humans = f.racers.map(id => RACER_BY_ID[id]);
     const rivals = grid || this.rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, 8 - humans.length).map(r => r.id);
     this.gp = { cup, tracks, index: 0, grid: rivals, totals: Object.fromEntries([...rivals, ...f.racers].map(id => [id, 0])), order: null, cc: f.cc, level: f.level };

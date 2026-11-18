@@ -71,10 +71,10 @@ export class RaceSession {
     this.touch = null;
     if (n === 1 && isTouchDevice() && !config.auto) {
       const S = app.save?.settings || {};
-      this.touch = new TouchControls(app.ui, app.input, this.race.players[0], { onPause: () => app.pause?.(), autoGo: !!S.autoGo });
-      this.huds[0].root.classList.add('hud-touch'); this.race.players[0].autoTrick = true;
-      // touch play gets the steering assist by default (issue #136), the way automatic
-      // tricks are forced here too; the Options toggle governs the other controls
+      // tricks are automatic on touch unless the phone is flicking them (flick to trick, src/game/app.js)
+      this.touch = new TouchControls(app.ui, app.input, this.race.players[0], { onPause: () => app.pause?.(), autoGo: !!S.autoGo, flickReady: () => !!app.flickReady?.() });
+      this.huds[0].root.classList.add('hud-touch'); this.race.players[0].autoTrick = !app.flickReady?.();
+      // touch play gets the steering assist by default (issue #136); the Options toggle governs the other controls
       if (config.mode !== 'timetrial') this.race.players[0].assist = { steer: 1 };
       // a phone screen is small and the thumbs cover its corners: sit the camera further back so there is more road in view
       for (const c of this.view.cams) c.pullBack = 1.24;

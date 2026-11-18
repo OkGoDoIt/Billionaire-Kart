@@ -330,7 +330,7 @@ export class NetRace {
     k.hint = k.hit.i; k.lastSafeI = k.hit.i; k.gy = k.hit.y; k.safeT = 0;
     if (k.grounded) k.y = Math.max(k.y, k.hit.y);
     k.drifting = false; k.driftArmed = false; k.driftCharge = 0; k.driftTier = 0; k.driftDir = 0; k.driftPaused = false; k.hopping = false;
-    k.trick = false; k.trickArmT = 0; k.prevDrift = false; k.prevItem = false; k.landingSpeedKeep = 1; k._steal = null;
+    k.trick = false; k.trickArmT = 0; k.trickArmDir = null; k.prevDrift = false; k.prevTrick = false; k.prevItem = false; k.landingSpeedKeep = 1; k._steal = null;
     k.airT = k.grounded ? 0 : 0.1; k.revving = false; k.draftT = 0; k.drafting = false;
     if (k.ai) { k.ai.bestProg = null; k.ai.progT = 0; k.ai.stuckT = 0; k.ai.reverseT = 0; k.ai.driftPlan = null; k.ai.cut = null; }
     this.pp[k.slot].raw = null;

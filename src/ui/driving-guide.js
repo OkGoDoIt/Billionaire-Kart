@@ -1,6 +1,7 @@
 import { describePadBind, padFamily } from '../core/input.js';
 import { keyName } from '../core/keyboard.js';
 import { loopDelta } from '../core/util.js';
+import { handheldWord } from './touch.js';
 
 // Each pane learns its own controls. Successful uses retire a lesson sooner;
 // the exposure limit also gives players who choose not to drift some peace.
@@ -25,7 +26,7 @@ export class DrivingGuide {
       else return null;
     }
     if (this.touch && device === 'kb' && !i.kbUsed) device = 'touch';
-    if (device === 'touch') return { profile: 'touch', touch: true, gas: 'Hold right', steer: i.tilt.enabled ? 'Tilt' : 'Slide left thumb', item: 'Flick up', drift: 'Steer sharply' };
+    if (device === 'touch') return { profile: 'touch', touch: true, gas: 'Hold right', steer: i.tilt.enabled ? 'Tilt' : 'Slide left thumb', item: 'Flick up', drift: 'Steer sharply', trick: `Flick your ${handheldWord()}` };
     if (family) {
       const name = action => describePadBind(i.padBinds, action, family);
       return { profile: assigned === 'any' ? family : device + family, gas: name('accelerate'), steer: i.padSteer === 'dpad' ? 'D-pad' : 'Left stick', item: name('item'), drift: name('drift') };
@@ -36,7 +37,7 @@ export class DrivingGuide {
   }
 
   lesson(skill, c) {
-    const binding = skill === 'start' ? c.gas + ' ' + c.steer : skill === 'item' ? c.item : c.drift;
+    const binding = skill === 'start' ? c.gas + ' ' + c.steer : skill === 'item' ? c.item : skill === 'trick' && c.trick ? c.trick : c.drift;
     const profile = this.save.data.drivingGuide[c.profile] ||= {};
     if (profile[skill]?.binding !== binding) profile[skill] = { binding, uses: 0, shows: 0 };
     return profile[skill];
@@ -109,7 +110,8 @@ export class DrivingGuide {
       case 'item': parts = [c.item, c.touch ? ' on the pedal to use item' : ' Use item']; break;
       case 'drift': parts = [c.drift, c.touch ? ' to drift' : ' Hold while turning to drift']; break;
       case 'release': parts = c.touch ? ['Straighten up', ' to boost'] : [c.drift, ' Release to boost']; break;
-      case 'trick': parts = [c.drift, ' Tap at takeoff to trick']; break;
+      // on touch this only shows with flick to trick on and working: otherwise the kart tricks by itself (k.autoTrick)
+      case 'trick': parts = c.touch ? [c.trick, ' at takeoff to trick'] : [c.drift, ' Tap at takeoff to trick']; break;
     }
     const text = parts.join('');
     if (this.text !== text) {

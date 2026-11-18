@@ -4,6 +4,8 @@
      Right thumb: hold to accelerate; pull down to brake and reverse; flick up to use the item.
      Drifting:    hold the steering hard over and the kart hops into a drift;
                   straighten up to release the boost.
+     Tricks:      flick the phone as the kart leaves a ramp (input.motion), when
+                  the player has flick to trick; otherwise they are automatic.
    Writes into input.touch. */
 import { clamp, lerp } from '../core/util.js';
 import { itemIcon } from './hud.js';
@@ -19,10 +21,10 @@ const GAS_GRACE = 0.22;                 // seconds the throttle holds after the 
 const DRIFT_AT = 0.72, DRIFT_HOLD = 0.16, DRIFT_KEEP = 0.12;
 
 export class TouchControls {
-  constructor(parent, input, kart, { onPause, autoGo = false } = {}) {
-    this.input = input; this.kart = kart; this.autoGo = autoGo; const t = this.t = input.touch;
-    t.active = true; t.steer = 0; t.drift = false; t.item = false; t.brake = 0; t.throttle = 0;
-    this.raw = 0; this.pedal = false; this.braking = false; this.gasT = 0; this.itemT = 0;
+  constructor(parent, input, kart, { onPause, autoGo = false, flickReady = () => false } = {}) {
+    this.input = input; this.kart = kart; this.autoGo = autoGo; this.flickReady = flickReady; const t = this.t = input.touch;
+    t.active = true; t.steer = 0; t.drift = false; t.item = false; t.trick = false; t.brake = 0; t.throttle = 0;
+    this.raw = 0; this.pedal = false; this.braking = false; this.gasT = 0; this.itemT = 0; this.trickT = 0; this.flickSeq = input.motion.seq;
     this.vd = 0; this.vdT = 0; this.hardT = 0; this.lowT = 0; this.needCentre = false;
     const root = this.root = el('div', 'tc');
     root.innerHTML = `
@@ -103,6 +105,12 @@ export class TouchControls {
     t.throttle = this.braking ? 0 : (this.pedal || this.gasT > 0 || (this.autoGo && race && !race.frozen)) ? 1 : 0;
     // item: a short press, so the race sees one clean use per tap
     t.item = this.itemT > 0; this.itemT -= dt;
+    // trick: each flick of the phone is one short press, carrying the flick's spin; with no flicks
+    // coming (turned off, or iOS has not shared motion yet this visit) the kart tricks by itself
+    k.autoTrick = !this.flickReady();
+    const m = this.input.motion;
+    if (m.seq !== this.flickSeq) { this.flickSeq = m.seq; if (m.enabled) { this.trickT = 0.09; t.trickDir = m.dir; } }
+    t.trick = this.trickT > 0; this.trickT -= dt;
 
     // steering, with the drift folded in: hard over hops into a drift, back to the middle lets it go
     const raw = tilt.enabled && Math.abs(tilt.value) > Math.abs(this.raw) ? tilt.value : this.raw, mag = Math.abs(raw);
@@ -135,7 +143,9 @@ export class TouchControls {
     $.stick.dataset.tier = k.drifting ? k.driftTier : '';
     this.root.classList.toggle('drifting', !!k.drifting);
   }
-  setVisible(v) { this.root.classList.toggle('hidden', !v); if (!v) { const t = this.t; this.raw = 0; this.pedal = false; this.braking = false; this.gasT = 0; this.vd = 0; t.steer = 0; t.drift = false; t.item = false; t.brake = 0; t.throttle = 0; } }
+  setVisible(v) { this.root.classList.toggle('hidden', !v); if (!v) { const t = this.t; this.raw = 0; this.pedal = false; this.braking = false; this.gasT = 0; this.vd = 0; t.steer = 0; t.drift = false; t.item = false; t.trick = false; t.brake = 0; t.throttle = 0; } }
   dispose() { this.setVisible(false); this.root.remove(); }
 }
+/** What the player is holding, for words like "flick your phone": a tablet once its short side is tablet-sized. */
+export const handheldWord = () => Math.min(screen.width || innerWidth, screen.height || innerHeight) >= 600 ? 'tablet' : 'phone';
 export const isTouchDevice = () => matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;

@@ -162,12 +162,19 @@ jobs:
           if [ "$head" != "$SHA" ]; then echo "main has moved on to $head; skipping $SHA"; exit 0; fi
           mkdir -p _upload
           node tools/build-site.mjs _upload/site && echo "$SHA" > _upload/site/version.txt
+          # The server ships only when what it is built from changed since the commit it reports, because a restart
+          # drops live online rooms. Its inputs: server/src and the handle list it embeds. Unknown? Ship it.
           server=""
-          for proj in server/src/*/*.Server.csproj; do
-            [ -f "$proj" ] || continue
-            dotnet publish "$proj" -c Release -o _upload/server --nologo -v quiet
-            server=1
-          done
+          if ls server/src/*/*.Server.csproj >/dev/null 2>&1; then
+            running=$(curl -fsS https://billionaire-kart.okgodoit.com/healthz | python3 -c 'import json,sys; print(json.load(sys.stdin).get("sha",""))' 2>/dev/null || true)
+            if [ -n "$running" ] && git fetch -q --depth=1 origin "$running" 2>/dev/null && git diff --quiet "$running" "$SHA" -- server/src src/content/handles.js; then
+              echo "the live server (${running:0:7}) is built from the same sources; leaving it running"
+            else
+              echo "the server changed since ${running:0:7}; shipping it with this deploy"
+              for proj in server/src/*/*.Server.csproj; do dotnet publish "$proj" -c Release -o _upload/server --nologo -v quiet; done
+              server=1
+            fi
+          fi
           install -m 600 /dev/null ~/deploy_key && printf '%s\n' "$DEPLOY_KEY" > ~/deploy_key
           ssh_cmd="ssh -i $HOME/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PWD/ops/site-deploy/known_hosts"
           rsync -rt --chmod=D755,F644 -e "$ssh_cmd" _upload/ "billionaire-kart-deploy@178.128.11.103:$SHA/"

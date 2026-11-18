@@ -3,7 +3,7 @@
 After the checks pass on `main`, CI publishes the same tested commit to GitHub Pages and to the game's home on the shared host: the online server (when the commit has `server/`) and the game files, in one request. The `deploy-okgodoit` job in `.github/workflows/checks.yml` does this:
 
 1. It skips the run if `main` has already moved on, so a slow run can never roll anything back.
-2. It builds the game files into `_upload/site` (`tools/build-site.mjs`, plus `version.txt`) and, if there is a server project, `dotnet publish`es it into `_upload/server`.
+2. It builds the game files into `_upload/site` (`tools/build-site.mjs`, plus `version.txt`). It `dotnet publish`es the server into `_upload/server` only when the server's inputs (`server/src` and the embedded `src/content/handles.js`) changed since the commit the live `/healthz` reports. A restart drops live online rooms, so a game-only change never restarts the server. If that commit can't be found, the server ships.
 3. It rsyncs `_upload/` to `billionaire-kart-deploy@178.128.11.103:<sha>/`, then sends `activate <sha>`.
 4. It waits until `version.txt`, and `/healthz` when a server was included, report the new commit.
 

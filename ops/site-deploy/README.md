@@ -30,7 +30,7 @@ After the checks pass on `main`, CI publishes the same tested commit to GitHub P
   2. Re-run `setup.sh` with the new public key.
   3. Run `gh secret set OKGODOIT_DEPLOY_KEY < <new private key>`.
 - **`known_hosts`** pins the host's ed25519 key. It was checked against the key Roger's Mac already trusted. If the host is rebuilt, replace it.
-- **The game checks the server itself.** The Online button only appears when `/healthz` answers with a protocol version the client supports, so a server that's down or out of date never shows players a broken button.
+- **The game will check the server itself.** With the online work, the Online button appears only when `/healthz` answers with a protocol version the client supports, so a server that is down or out of date never shows players a broken button. (Agreed with the online session; part of its PR.)
 - **To roll back by hand,** point the `current` link at an older release as root:
 
   ```bash

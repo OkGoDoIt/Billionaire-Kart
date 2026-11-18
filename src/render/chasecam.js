@@ -7,8 +7,9 @@ import { TAG_LAYER } from './kartview.js';
 const _look = new THREE.Vector3(), _want = new THREE.Vector3();
 /* Reduced motion (the system setting): no shake, no roll or dip kicks, and only a hint of the boost punch. */
 const REDUCED = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
-/* A damped spring driven by impulses: kicks rise and settle instead of popping. */
-const spring = (s, k, c, dt) => { s.v += (-s.x * k - s.v * c) * dt; s.x += s.v * dt; if (Math.abs(s.x) < 1e-4 && Math.abs(s.v) < 1e-3) s.x = s.v = 0; return s.x; };
+/* A damped spring driven by impulses: kicks rise and settle instead of popping. Stepped at most 1/60 s at a time:
+   one long frame (a window resize, a hitch) taken in a single step would fling the camera off to infinity. */
+const spring = (s, k, c, dt) => { for (let t = dt; t > 1e-6; t -= 1 / 60) { const h = Math.min(t, 1 / 60); s.v += (-s.x * k - s.v * c) * h; s.x += s.v * h; } if (Math.abs(s.x) < 1e-4 && Math.abs(s.v) < 1e-3) s.x = s.v = 0; return s.x; };
 
 export class ChaseCam {
   constructor(kart, track, playerIndex = 0) {

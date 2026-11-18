@@ -1,23 +1,25 @@
-# Automatic game deploys to billionaire-kart.okgodoit.com
+# Automatic deploys to billionaire-kart.okgodoit.com
 
-After the checks pass on `main`, CI publishes the same tested `_site` folder to GitHub Pages and to the game's home on the shared host. The `deploy-okgodoit` job in `.github/workflows/checks.yml` does this:
+After the checks pass on `main`, CI publishes the same tested commit to GitHub Pages and to the game's home on the shared host: the online server (when the commit has `server/`) and the game files, in one request. The `deploy-okgodoit` job in `.github/workflows/checks.yml` does this:
 
-1. It skips the run if `main` has already moved on, so a slow run can never roll the site back.
-2. It builds `_site` with `tools/build-site.mjs` and writes `version.txt` with the commit SHA.
-3. It rsyncs that folder to `billionaire-kart-deploy@178.128.11.103:<sha>/`, then sends `activate <sha>`.
-4. It waits until https://billionaire-kart.okgodoit.com/version.txt reports the new commit.
+1. It skips the run if `main` has already moved on, so a slow run can never roll anything back.
+2. It builds the game files into `_upload/site` (`tools/build-site.mjs`, plus `version.txt`). It `dotnet publish`es the server into `_upload/server` only when the server's inputs (`server/src` and the embedded `src/content/handles.js`) changed since the commit the live `/healthz` reports. A restart drops live online rooms, so a game-only change never restarts the server. If that commit can't be found, the server ships.
+3. It rsyncs `_upload/` to `billionaire-kart-deploy@178.128.11.103:<sha>/`, then sends `activate <sha>`.
+4. It waits until `version.txt`, and `/healthz` when a server was included, report the new commit.
+
+**The order is the point.** The server goes live first: a database dump, migrations as `billionaire-kart-migrate`, the swap, a restart, and a health check that must report the commit. If it isn't healthy, the previous server is put back and the game files are **not** swapped. So players never get a client that expects a server that isn't there, and nobody has to remember an order by hand.
 
 ## On the host
 
 - **`billionaire-kart-deploy`:** a system account. Its only key has `restrict,command="/usr/local/libexec/billionaire-kart-site-ssh"` (`receive.py`). That key can upload into `/var/lib/billionaire-kart-deploy/incoming` (write-only, no deletes) and request an install by SHA, nothing else. It has no shell and no sudo, and it can't write to the public folder.
 - **`billionaire-kart-site.path`:** starts the root-owned installer, `/usr/local/libexec/billionaire-kart-site-install` (`install.py`), when a request appears. The installer:
-  - refuses anything but plain files and folders, an upload over 400 MB, and an upload without `index.html` or a matching `version.txt`;
-  - copies the release to `/srv/billionaire-kart/releases/<sha>` as root;
-  - swaps `/srv/billionaire-kart/current` and keeps six releases;
+  - refuses symlinks, special files, uploads over 600 MB, a server without `BillionaireKart.Server.dll`, and game files without `index.html` or a matching `version.txt`;
+  - installs the server under `/opt/billionaire-kart/releases/<sha>` and the game files under `/srv/billionaire-kart/releases/<sha>`, both as root;
+  - swaps each `current` link and keeps six releases of each;
+  - skips any part that's already live at that commit;
   - writes `/var/lib/billionaire-kart-deploy/results/<sha>.json`.
 
   It takes `/run/lock/billionaire-kart.lock`, the same lock as `ops/deploy.sh`.
-- **Each commit installs once.** Asking again for a commit that already succeeded does nothing.
 
 ## Setup and keys
 
@@ -28,7 +30,7 @@ After the checks pass on `main`, CI publishes the same tested `_site` folder to 
   2. Re-run `setup.sh` with the new public key.
   3. Run `gh secret set OKGODOIT_DEPLOY_KEY < <new private key>`.
 - **`known_hosts`** pins the host's ed25519 key. It was checked against the key Roger's Mac already trusted. If the host is rebuilt, replace it.
-- **The server app** (`server/`, the online backend) is still deployed by hand with `ops/deploy.sh`. This covers the game files only.
+- **The game will check the server itself.** With the online work, the Online button appears only when `/healthz` answers with a protocol version the client supports, so a server that is down or out of date never shows players a broken button. (Requested from the online session for its PR.)
 - **To roll back by hand,** point the `current` link at an older release as root:
 
   ```bash

@@ -4,7 +4,7 @@
    line a rival can say, the longest feed entries, each kind of banner, the incoming-item warning. Then it measures.
    It fails if any text sits on other text, any HUD block overlaps another, or any text is cut off or leaves its pane.
    A real race shows two or three of these at a time, so a pass here means no combination can collide.
-   Usage: node tools/hud-check.mjs [--out dir] [--only name]      exits 1 on any fault; saves two screenshots per case */
+   Usage: node tools/hud-check.mjs [--out dir] [--only name] [--split: split-screen cases only]      exits 1 on any fault; saves two screenshots per case */
 import http from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize, resolve, dirname } from 'node:path';
@@ -26,7 +26,12 @@ const CASES = [
   { name: 'tablet', w: 1180, h: 820, touch: true }, { name: 'tablet-4x3', w: 1024, h: 768, touch: true },
   { name: 'two-players', w: 1280, h: 720, racers: 2 }, { name: 'three-players', w: 1280, h: 720, racers: 3 }, { name: 'four-players', w: 1280, h: 720, racers: 4 },
   { name: 'four-players-4x3', w: 1024, h: 768, racers: 4 },
-].filter(c => !opt.only || c.name === opt.only);
+  // the split follows the screen's shape (src/render/splitlayout.js): side by side, columns, rows
+  { name: 'two-players-wide', w: 2000, h: 800, racers: 2 }, { name: 'two-players-upright', w: 820, h: 1180, racers: 2 },
+  { name: 'three-players-wide', w: 2000, h: 800, racers: 3 }, { name: 'three-players-upright', w: 820, h: 1180, racers: 3 },
+  { name: 'three-players-4x3', w: 1024, h: 768, racers: 3 }, { name: 'four-players-32x9', w: 2560, h: 720, racers: 4 },
+  { name: 'four-players-upright', w: 820, h: 1180, racers: 4 },
+].filter(c => (!opt.only || c.name === opt.only) && (!opt.split || c.racers > 1));
 
 /* ---------- issue #132 guard: a held item's description must always show ----------
    Roger hit a name-only item card on his phone (Mars Colony, holding a Subpoena): the description had been

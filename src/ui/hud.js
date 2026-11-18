@@ -13,12 +13,53 @@ const hex = n => '#' + n.toString(16).padStart(6, '0');
 export const itemIcon = id => { const d = ITEMS[id]; return d ? `assets/items/${d.img}.webp` : ''; };
 const ROULETTE = ['boost', 'leak', 'subpoena', 'tweet', 'star', 'pr', 'pinkslip', 'golden', 'crash', 'insider', 'smear', 'antitrust'];
 
+/** Position a HUD layer over a screen-fraction rect [x, y (from the bottom), w, h]; inner edges lose the safe-area insets. */
+function placePane(root, rect) {
+  const [x, y, w, h] = rect, inner = (cond, side) => root.style.setProperty('--safe-' + side, cond ? '0px' : '');
+  root.style.left = x * 100 + '%'; root.style.bottom = y * 100 + '%'; root.style.width = w * 100 + '%'; root.style.height = h * 100 + '%';
+  inner(x > 0.001, 'l'); inner(x + w < 0.999, 'r'); inner(y > 0.001, 'b'); inner(y + h < 0.999, 't');
+}
+
+/** The track drawn top-down on a size x size canvas (+x right, +z down), and the function that places a world point on it. */
+function mapBase(tr, size) {
+  const b = tr.bounds, pad = size * 0.05, span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
+  const sc = (size - pad * 2) / span, ox = (size - (b.maxX - b.minX) * sc) / 2, oz = (size - (b.maxZ - b.minZ) * sc) / 2;
+  const xy = (x, z) => [(x - b.minX) * sc + ox, (z - b.minZ) * sc + oz];
+  const bg = document.createElement('canvas'); bg.width = bg.height = size;
+  const g = bg.getContext('2d'), path = new Path2D();
+  for (let i = 0; i <= tr.N; i += 2) { const k = i % tr.N, [x, y] = xy(tr.px[k], tr.pz[k]); if (i) path.lineTo(x, y); else path.moveTo(x, y); }
+  path.closePath();
+  g.lineJoin = g.lineCap = 'round';
+  g.strokeStyle = 'rgba(10,12,30,0.75)'; g.lineWidth = 22; g.stroke(path);
+  g.strokeStyle = 'rgba(255,255,255,0.92)'; g.lineWidth = 12; g.stroke(path);
+  // start line tick
+  const [sx, sy] = xy(tr.px[0], tr.pz[0]); g.fillStyle = '#12142b'; g.beginPath(); g.arc(sx, sy, 7, 0, 7); g.fill(); g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(sx, sy, 4, 0, 7); g.fill();
+  return { bg, xy };
+}
+/** Portraits for map markers, loaded once; a kart whose portrait has not arrived yet keeps its colored dot. */
+function loadFaces(karts) {
+  const faces = new Map();
+  for (const k of karts) { const p = k?.racer?.portrait; if (p && !faces.has(p)) { const img = new Image(); img.src = p; faces.set(p, img); } }
+  return faces;
+}
+/* A round portrait in the map: the dark ring every marker wears, an optional bright ring for the
+   player, and the face clipped to the circle, framed on the top of the portrait where the face is. */
+function mapFace(g, img, x, y, r, ring) {
+  g.save();
+  g.beginPath(); g.arc(x, y, r + 3, 0, 7); g.fillStyle = '#12142b'; g.fill();
+  if (ring) { g.beginPath(); g.arc(x, y, r + 1.5, 0, 7); g.fillStyle = ring; g.fill(); }
+  g.beginPath(); g.arc(x, y, r, 0, 7); g.clip();
+  // the portraits are square with the head in the top two-thirds: zoom in and center on it (35% down)
+  const D = 2.8 * r;
+  g.drawImage(img, x - D / 2, y - 0.35 * D, D, D);
+  g.restore();
+}
+
 export class Hud {
   constructor(parent, race, kart, rect = [0, 0, 1, 1], { compact = false, showMap = true, trialBest = null } = {}) {
     this.race = race; this.kart = kart; this.t = 0; this.mapT = 0; this.lastRank = 0; this.lastCoins = -1; this.lastLap = -1; this.lastItem = undefined; this.rouletteI = 0; this.rouletteT = 0;
     const root = this.root = el('div', 'hud' + (compact ? ' hud-compact' : ''));
-    // rect is [x, y(from bottom), w, h] in screen fractions
-    root.style.left = rect[0] * 100 + '%'; root.style.bottom = rect[1] * 100 + '%'; root.style.width = rect[2] * 100 + '%'; root.style.height = rect[3] * 100 + '%';
+    this.setRect(rect);
     root.innerHTML = `
       <div class="hud-item"><div class="hud-item-ring"></div><img class="hud-item-img" alt=""><div class="hud-item-coin">$</div><div class="hud-item-count"></div></div>
       <div class="hud-item-info"><b></b><span></span></div>
@@ -56,42 +97,14 @@ export class Hud {
 
   /* ---------- minimap ---------- */
   _buildMap() {
-    const tr = this.race.track, c = this.map = el('canvas', 'hud-map'); this.root.appendChild(c);
+    const c = this.map = el('canvas', 'hud-map'); this.root.appendChild(c);
     const S = this.mapSize = 220; c.width = c.height = S * 2; // 2x for sharpness
-    const b = tr.bounds, pad = 22, span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
-    const sc = (S * 2 - pad * 2) / span, ox = (S * 2 - (b.maxX - b.minX) * sc) / 2, oz = (S * 2 - (b.maxZ - b.minZ) * sc) / 2;
-    // a true top-down view: +x to the right, +z down the screen
-    this.mapXY = (x, z) => [(x - b.minX) * sc + ox, (z - b.minZ) * sc + oz];
-    const bg = this.mapBg = document.createElement('canvas'); bg.width = bg.height = S * 2;
-    const g = bg.getContext('2d');
-    const path = new Path2D();
-    for (let i = 0; i <= tr.N; i += 2) { const k = i % tr.N, [x, y] = this.mapXY(tr.px[k], tr.pz[k]); if (i) path.lineTo(x, y); else path.moveTo(x, y); }
-    path.closePath();
-    g.lineJoin = g.lineCap = 'round';
-    g.strokeStyle = 'rgba(10,12,30,0.75)'; g.lineWidth = 22; g.stroke(path);
-    g.strokeStyle = 'rgba(255,255,255,0.92)'; g.lineWidth = 12; g.stroke(path);
-    // start line tick
-    const [sx, sy] = this.mapXY(tr.px[0], tr.pz[0]); g.fillStyle = '#12142b'; g.beginPath(); g.arc(sx, sy, 7, 0, 7); g.fill(); g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(sx, sy, 4, 0, 7); g.fill();
+    const base = mapBase(this.race.track, S * 2);
+    this.mapXY = base.xy; this.mapBg = base.bg;
     this.mapCtx = c.getContext('2d');
-    // faces for the map, loaded once; a kart whose portrait has not arrived yet keeps its colored dot
-    this.mapFaces = new Map();
-    for (const k of [...this.race.order, this.kart]) {
-      const p = k?.racer?.portrait;
-      if (p && !this.mapFaces.has(p)) { const img = new Image(); img.src = p; this.mapFaces.set(p, img); }
-    }
+    this.mapFaces = loadFaces([...this.race.order, this.kart]);
   }
-  /* A round portrait in the map: the dark ring every marker wears, an optional bright ring for the
-     player, and the face clipped to the circle, framed on the top of the portrait where the face is. */
-  _mapFace(g, img, x, y, r, ring) {
-    g.save();
-    g.beginPath(); g.arc(x, y, r + 3, 0, 7); g.fillStyle = '#12142b'; g.fill();
-    if (ring) { g.beginPath(); g.arc(x, y, r + 1.5, 0, 7); g.fillStyle = ring; g.fill(); }
-    g.beginPath(); g.arc(x, y, r, 0, 7); g.clip();
-    // the portraits are square with the head in the top two-thirds: zoom in and center on it (35% down)
-    const D = 2.8 * r;
-    g.drawImage(img, x - D / 2, y - 0.35 * D, D, D);
-    g.restore();
-  }
+  _mapFace(g, img, x, y, r, ring) { mapFace(g, img, x, y, r, ring); }
   _drawMap() {
     const g = this.mapCtx; if (!g) return;
     g.clearRect(0, 0, this.map.width, this.map.height);
@@ -267,9 +280,59 @@ export class Hud {
     $.wrong.classList.toggle('show', k.wrongWayT > 1 && !k.finished);
     $.ink.classList.toggle('show', k.inkT > 0);
     $.speedN.textContent = Math.round(k.speed * MPH_PER_MS);
-    this.mapT -= dt; if (this.mapT <= 0) { this.mapT = 0.05; this._drawMap(); }
+    this.mapT -= dt; if (this.mapT <= 0 && !this.root.classList.contains('hud-nomap')) { this.mapT = 0.05; this._drawMap(); }
   }
 
+  /** Place the HUD over its pane: rect is [x, y (from the bottom), w, h] in screen fractions. A pane edge inside the
+      screen is not next to a notch or a rounded corner, so it drops that safe-area inset. */
+  setRect(rect) { placePane(this.root, rect); }
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
   dispose() { this.root.remove(); clearTimeout(this._bt); this._bNext = null; clearTimeout(this._wt); clearTimeout(this._kt); clearTimeout(this._ct); }
 }
+
+/** P1 to P4, the colors the join screen and the results use. */
+const PLAYER_COLORS = ['#ff4d6d', '#38b6ff', '#ffd23c', '#2ee6a6'];
+
+/* The board in a split screen's empty cell (three players on a two-by-two grid): the whole field on one big map,
+   each player ringed in their color, beside the running order. Shared by everyone, so it sits outside any pane. */
+export class FieldBoard {
+  constructor(parent, race) {
+    this.race = race; this.t = 0; this.order = '';
+    const root = this.root = el('div', 'board hidden');
+    const canvas = this.canvas = el('canvas', 'board-map'), S = 640; canvas.width = canvas.height = S;
+    const base = mapBase(race.track, S); this.xy = base.xy; this.bg = base.bg; this.g = canvas.getContext('2d');
+    this.faces = loadFaces(race.karts);
+    const list = el('ol', 'board-list');
+    this.rows = new Map(race.karts.map(k => {
+      const li = el('li', k.isPlayer ? 'me' : '');
+      li.style.setProperty('--rc', hex(k.racer.color));
+      if (k.isPlayer) li.style.setProperty('--pc', PLAYER_COLORS[k.playerIndex]);
+      const rank = el('b'), img = el('img'), name = el('span', '', ''); img.src = k.racer.portrait; img.alt = ''; name.textContent = k.racer.name;
+      if (k.isPlayer) name.append(el('em', '', `P${k.playerIndex + 1}`));
+      li.append(rank, img, name); list.append(li);
+      return [k, { li, rank }];
+    }));
+    const inner = el('div', 'board-in'); inner.append(canvas, list); root.append(inner); parent.appendChild(root);
+    this.update(0);
+  }
+  /** rect: the empty cell, or null when this layout has none. */
+  setRect(rect) { this.rect = rect; if (rect) placePane(this.root, rect); this._show(); }
+  setVisible(v) { this.visible = v; this._show(); }
+  _show() { this.root.classList.toggle('hidden', !this.rect || this.visible === false); }
+  update(dt) {
+    this.t -= dt; if (this.t > 0 || !this.rect) return; this.t = 0.05;
+    const order = this.race.order;
+    const sig = order.map(k => k.id).join();
+    if (sig !== this.order) { this.order = sig; order.forEach((k, i) => { const r = this.rows.get(k); if (r) { r.li.style.order = i; r.rank.textContent = i + 1; } }); }
+    const g = this.g; g.clearRect(0, 0, 640, 640); g.drawImage(this.bg, 0, 0);
+    // rivals first, then the players on top, leader last so the front of the race is never hidden
+    const marks = [...order].reverse().sort((a, b) => a.isPlayer - b.isPlayer);
+    for (const k of marks) {
+      const [x, y] = this.xy(k.x, k.z), face = this.faces.get(k.racer.portrait), r = k.isPlayer ? 24 : 17;
+      if (face?.complete && face.naturalWidth) mapFace(g, face, x, y, r, k.isPlayer ? PLAYER_COLORS[k.playerIndex] : null);
+      else { g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, r * 0.75, 0, 7); g.fill(); g.fillStyle = k.isPlayer ? PLAYER_COLORS[k.playerIndex] : hex(k.racer.color); g.beginPath(); g.arc(x, y, r * 0.55, 0, 7); g.fill(); }
+    }
+  }
+  dispose() { this.root.remove(); }
+}
+

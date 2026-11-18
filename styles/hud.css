@@ -115,7 +115,9 @@
 .hud-banner.finish.win.show { animation: hud-banner-slam 0.5s cubic-bezier(.2,1.6,.4,1) forwards, hud-win 0.5s 0.5s ease-in-out 5 alternate; }
 
 /* trash talk: a rival's face and a speech bubble, on the left where it cannot cover the road */
-.hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--u) * 41); display: flex; align-items: center; gap: calc(var(--u) * 2); max-width: calc(var(--u) * 58); opacity: 0; transform: translateX(calc(var(--u) * -8)) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }
+/* In a pane taller than 16:9 (side-by-side split screen) the banners, placed by pane height, come down to its
+   level, so it drops below them: it never sits higher than 12 units under the lowest small banner (24%). */
+.hud-talk { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: max(calc(var(--u) * 41), calc(24% + var(--u) * 12)); display: flex; align-items: center; gap: calc(var(--u) * 2); max-width: calc(var(--u) * 58); opacity: 0; transform: translateX(calc(var(--u) * -8)) rotate(-3deg); transition: opacity 0.18s, transform 0.26s cubic-bezier(.2,1.6,.4,1); }
 .hud-talk.show { opacity: 1; transform: none; }
 .hud-talk img { flex: none; width: calc(var(--u) * 11); height: calc(var(--u) * 11); border-radius: 50%; object-fit: cover; object-position: 50% 20%; background: var(--rc, #444); box-shadow: 0 0 0 calc(var(--u) * 0.6) var(--ink), 0 0 0 calc(var(--u) * 1.1) #fff, 0 calc(var(--u) * 1) 0 calc(var(--u) * 1.1) rgba(0,0,0,0.3); }
 .hud-talk div { position: relative; background: #fff; color: var(--ink); border: calc(var(--u) * 0.55) solid var(--ink); border-radius: calc(var(--u) * 2.6); padding: calc(var(--u) * 0.9) calc(var(--u) * 2) calc(var(--u) * 1.2); font-family: var(--body); box-shadow: 0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35); }
@@ -154,7 +156,13 @@
 .hud-compact .hud-map { width: calc(var(--u) * 26); height: calc(var(--u) * 26); }
 .hud-compact .hud-time { display: none; }
 .hud-compact .hud-map { top: calc(var(--edge) + var(--safe-t)); }
+/* three players on a two-by-two grid: the board in the spare cell shows the whole field, so a pane's own map steps aside */
+.hud-nomap .hud-map { display: none; }
+.hud-nomap .hud-speed { top: calc(var(--edge) + var(--safe-t)); }
 
+/* split screen: the HUDs and the board fade in as the panes land after the flyover */
+.hud-enter { animation: hud-enter 0.3s ease-out both; }
+@keyframes hud-enter { from { opacity: 0; } }
 @keyframes hud-pop { 0% { transform: scale(1); } 40% { transform: scale(1.28); } 100% { transform: scale(1); } }
 @keyframes hud-spin { to { transform: rotate(360deg); } }
 @keyframes hud-pulse { from { filter: brightness(1); } to { filter: brightness(1.35); } }
@@ -172,6 +180,7 @@
 @keyframes hud-coin-pop { 0% { opacity: 0; transform: translate(0, calc(var(--u) * 1.6)) scale(0.7); } 14% { opacity: 1; transform: translate(0, 0) scale(1.08); } 26% { transform: translate(0, calc(var(--u) * -0.6)) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(0, calc(var(--u) * -3.4)) scale(1); } }
 @keyframes hud-coin-pop-down { 0% { opacity: 0; transform: translate(0, calc(var(--u) * -1.6)) scale(0.7); } 14% { opacity: 1; transform: translate(0, 0) scale(1.08); } 26% { transform: translate(0, calc(var(--u) * 0.6)) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(0, calc(var(--u) * 3.4)) scale(1); } }
 
+@media (prefers-reduced-motion: reduce) { .hud-enter { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .hud-item.pop, .hud-rank.pop, .hud-pill.pop, .hud-coins.glow, .hud-coin-pop.show { animation: none; } }
 @media (prefers-reduced-motion: reduce) {
   .hud-rank.up, .hud-rank.down, .hud-banner.out { animation: none; }
@@ -186,3 +195,23 @@
 .trial-clock-label { text-transform: uppercase; letter-spacing: .09em; margin-bottom: .25em; }
 .trial-clock-mark:empty { display: none; }
 .hud-touch .trial-clock { right: auto; bottom: auto; top: calc(var(--edge) + var(--safe-t) + var(--u) * 25); left: calc(var(--edge) + var(--safe-l)); justify-items: start; }
+
+/* The board in a split screen's empty cell: the whole field on one map, and the running order beside it (below it in
+   an upright cell). Rows wear the results table's stripes: the racer's color down the left, a player's row filled. */
+.board { position: absolute; container-type: size; pointer-events: none; overflow: hidden; background: radial-gradient(120% 120% at 30% 20%, #232a5c 0%, #12142b 70%); color: #fff; font-family: var(--body); }
+.board.hidden { display: none; }
+.board-in { --u: min(1cqh, 0.5625cqw); --pad: calc(var(--u) * 5); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: var(--pad); padding: var(--pad) calc(var(--pad) + var(--safe-r)) calc(var(--pad) + var(--safe-b)) calc(var(--pad) + var(--safe-l)); }
+.board-map { flex: none; width: min(100cqh - var(--pad) * 2, 50cqw); height: auto; aspect-ratio: 1; }
+.board-list { list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-width: 0; max-width: calc(var(--u) * 72); height: min(100%, calc(var(--u) * 84)); display: flex; flex-direction: column; gap: calc(var(--u) * 1.2); }
+.board-list li { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: calc(var(--u) * 6) calc(var(--u) * 7.4) 1fr; align-items: center; gap: calc(var(--u) * 1.6); padding: 0 calc(var(--u) * 2) 0 calc(var(--u) * 1); border-radius: calc(var(--u) * 1.8); border-left: calc(var(--u) * 1.1) solid var(--rc); background: rgba(255,255,255,0.08); font-weight: 600; font-size: calc(var(--u) * 3.6); line-height: 1; white-space: nowrap; }
+.board-list li.me { background: var(--pc); color: var(--ink); }
+.board-list b { font-family: var(--display); font-weight: normal; font-size: calc(var(--u) * 5); text-align: center; padding-top: 0.12em; }
+.board-list img { width: calc(var(--u) * 6.4); height: calc(var(--u) * 6.4); border-radius: 50%; object-fit: cover; object-position: 50% 20%; border: calc(var(--u) * 0.45) solid var(--ink); background: var(--rc); }
+.board-list span { overflow: hidden; text-overflow: ellipsis; }
+.board-list em { font-style: normal; font-family: var(--display); font-size: 0.8em; margin-left: 0.6em; background: var(--ink); color: #fff; border-radius: 1em; padding: 0.2em 0.7em 0.05em; }
+/* an upright cell: the map on top, the order under it */
+@container (aspect-ratio < 1.15) {
+  .board-in { flex-direction: column; --u: min(0.75cqh, 1.15cqw); --pad: calc(var(--u) * 4); }
+  .board-map { width: min(100cqw - var(--pad) * 2, 42cqh); }
+  .board-list { width: 100%; max-width: none; height: auto; flex: 1 1 0; min-height: 0; }
+}

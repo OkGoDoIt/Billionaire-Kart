@@ -226,6 +226,91 @@ namespace BillionaireKart.Server.Data.Migrations
                     b.ToTable("settings", (string)null);
                 });
 
+            modelBuilder.Entity("BillionaireKart.Server.Data.Share", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Cc")
+                        .HasColumnType("integer")
+                        .HasColumnName("cc");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CupId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("cup_id");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)")
+                        .HasColumnName("description");
+
+                    b.Property<int?>("FieldSize")
+                        .HasColumnType("integer")
+                        .HasColumnName("field_size");
+
+                    b.Property<byte[]>("Image")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("image");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("mode");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("player_id");
+
+                    b.Property<int?>("Points")
+                        .HasColumnType("integer")
+                        .HasColumnName("points");
+
+                    b.Property<string>("Racer")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("racer");
+
+                    b.Property<int?>("Rank")
+                        .HasColumnType("integer")
+                        .HasColumnName("rank");
+
+                    b.Property<int?>("TimeMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("time_ms");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(140)
+                        .HasColumnType("character varying(140)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("TrackId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("track_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_shares");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_shares_created_at");
+
+                    b.HasIndex("PlayerId", "CreatedAt")
+                        .HasDatabaseName("ix_shares_player_id_created_at");
+
+                    b.ToTable("shares", (string)null);
+                });
+
             modelBuilder.Entity("BillionaireKart.Server.Data.RaceResult", b =>
                 {
                     b.HasOne("BillionaireKart.Server.Data.Player", null)
@@ -242,6 +327,16 @@ namespace BillionaireKart.Server.Data.Migrations
                         .HasConstraintName("fk_race_results_races_race_id");
 
                     b.Navigation("Race");
+                });
+
+            modelBuilder.Entity("BillionaireKart.Server.Data.Share", b =>
+                {
+                    b.HasOne("BillionaireKart.Server.Data.Player", null)
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_shares_players_player_id");
                 });
 
             modelBuilder.Entity("BillionaireKart.Server.Data.Race", b =>

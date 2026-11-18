@@ -76,6 +76,7 @@ const SHELL = [
   'src/tracks/silicon-valley.js',
   'src/tracks/singularity-speedway.js',
   'src/tracks/wework-memorial.js',
+  'src/ui/challenge.js',
   'src/ui/driving-guide.js',
   'src/ui/hud.js',
   'src/ui/install.js',

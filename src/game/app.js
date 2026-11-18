@@ -192,6 +192,8 @@ export class App {
     const f = this.flow; this.gp = null;
     this._race({ trackId, cc: f.cc || this.save.data.last.cc, level: f.level || 'normal', players: this._players(), mode: f.mode === 'timetrial' ? 'timetrial' : 'race' });
   }
+  /** A friend's challenge (ui/challenge.js), once the racer is picked: its track, or its cup. */
+  startChallenge() { const c = this.flow.challenge; if (c.mode === 'cup') this.startCup(c.cupDef); else this.startSingle(c.trackDef.id); }
   startCup(cup, grid = null) {
     const f = this.flow, tracks = cupTracks(cup), humans = f.racers.map(id => RACER_BY_ID[id]);
     const rivals = grid || this.rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, 8 - humans.length).map(r => r.id);

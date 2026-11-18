@@ -51,7 +51,7 @@ All under `/api`, JSON, same origin.
 |---|---|
 | `POST /api/session` | Creates the guest player if there is no valid cookie and sets `bk_player` (HttpOnly, Secure, SameSite=Lax, 400 days). Returns `{ id, handle: {title, number}, rating: {valuation, races} }`. |
 | `POST /api/handle` `{title}` | Sets the handle's title index (0 to 199). The number is assigned by the server and never changes. |
-| `GET /api/leaderboard?board=all\|week&limit=50` | `{ rows: [{rank, handle, valuation, races, me}], me: {rank, valuation} }` |
+| `GET /api/leaderboard?board=all\|week&limit=50` | `{ rows: [{rank, handle, valuation, current, races, me}], me: {rank, valuation} }`. On the week board `valuation` is the gain over the last 7 days; `current` is always the valuation itself (for the tier name). |
 | `GET /healthz` | `{ ok, sha, rooms, players }` |
 
 A handle is `{title: int, number: int}`. The words live in the client (`src/content/handles.js`); the server stores and relays only the two numbers, so there is no free text to moderate.
@@ -81,7 +81,7 @@ room = {
   until: serverMs | null,          // when the current phase's timer runs out, if it has one
   rules: { mode: "single"|"cup", cup: id|null, cc: 50|100|150|200, level: "easy"|"normal"|"hard",
            cpus: bool, pick: "vote"|"host" },
-  members: [{ id, handle, racer: id|null, ready: bool, connected: bool, spectating: bool,
+  members: [{ id, handle, name: string|null, racer: id|null, ready: bool, connected: bool, spectating: bool,
               valuation: int|null, track: id|null }],
   race: null | { n, trackId, seed, laps, startAt,
                  slots: [{ slot, racer, member: playerId|null, level: str|null, owner: playerId }],
@@ -95,6 +95,7 @@ room = {
 
 ### Lobby and picks
 
+- → `{t:"name", name}` private rooms only: the name my friends see in place of my handle. The server strips control characters, collapses spaces, trims, and cuts it to 16 characters; empty clears it. It lives only in that room's memory. `members[].name` is always null in a public room, and the Rich List only ever shows handles: a typed name is seen only by people you invited.
 - → `{t:"racer", id}` claims a racer. The server refuses one that another member holds (it just re-sends `room`).
 - → `{t:"rules", rules}` host only, lobby phase, private rooms only.
 - → `{t:"start"}` host only: lobby → track (or straight to race when the host picks and has picked).

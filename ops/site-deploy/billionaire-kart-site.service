@@ -1,5 +1,6 @@
 [Unit]
-Description=Install Billionaire Kart game releases uploaded by CI
+Description=Install Billionaire Kart releases (server, then game files) uploaded by CI
 [Service]
 Type=oneshot
+TimeoutStartSec=15min
 ExecStart=/usr/local/libexec/billionaire-kart-site-install

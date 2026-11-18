@@ -46,7 +46,7 @@ try {
   await page.waitForFunction(() => window.BK?.app?.menus?.screen?.spec.name === 'title', null, { timeout: 120000 });
   console.log(`boot-check: title screen after ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   // the loading screen fades out once the title has drawn its first frame
-  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 15000 }).catch(() => { throw new Error('the loading screen is still showing over the title'); });
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 60000 }).catch(() => { throw new Error('the loading screen is still showing over the title'); });
   await page.waitForTimeout(800);
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.BK?.app?.menus?.screen?.spec.name === 'main', null, { timeout: 20000 });

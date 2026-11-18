@@ -234,7 +234,7 @@ export async function sharePrepared(p) {
     try { await navigator.share(data); return 'shared'; }
     catch (e) { if (e?.name === 'AbortError') return 'cancelled'; if (e?.name === 'NotAllowedError') return 'again'; }
   }
-  if (matchMedia('(pointer: coarse)').matches) return 'failed';   // a phone opens a download link as a page, leaving the game
+  // no file sharing at all (a computer, or a phone browser without it): save the picture
   const a = document.createElement('a');
   a.href = URL.createObjectURL(p.ready.blob); a.download = p.ready.file.name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);

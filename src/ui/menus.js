@@ -4,7 +4,8 @@ import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { CUPS, cupTracks } from '../content/cups.js';
 import { CLASSES } from '../race/kart.js';
-import { DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindings, applyPadBind, padFamily } from '../core/input.js';
+import { Input, DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindings, applyPadBind, padFamily } from '../core/input.js';
+import { handheldWord } from './touch.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
 import { installButton, installPanel, onInstallChange, autoInstall } from './install.js';
@@ -439,6 +440,18 @@ export class Menus {
     return { el, onBack: () => { A.resume(); return false; }, onAction: a => { if (a === 'pause') { A.resume(); return true; } } };
   }
 
+  /* ---------- flick to trick: asked once on an iPhone or iPad, before the first touch race ---------- */
+  s_flick({ go }) {
+    const A = this.app;
+    const el = h('div', {}, h('div', { class: 'panel narrow flick' },
+      h('div', { class: 'flick-phone', 'aria-hidden': 'true' }),
+      h('h1', {}, 'Flick to trick'),
+      h('p', { class: 'turn-sub' }, `Flick your ${handheldWord()} as you leave a ramp to do a trick for a boost.`),
+      this.btn('Turn on', () => A.answerFlick(true, go), { def: true, cls: 'go' }),
+      this.btn('Not now', () => A.answerFlick(false, go))));
+    return { el };
+  }
+
   /* ---------- results ---------- */
   s_results({ results, gp, track, records, best, trialCc, trialBest }) {
     const A = this.app;
@@ -585,6 +598,10 @@ export class Menus {
       const row = h('button', { class: 'opt', 'data-f': true, onclick: () => { spec.act(row); A.audio?.ui('move'); } }, h('span', {}, 'Install app'), h('div', { class: 'opt-ctl' }, h('b', {}, spec.label === 'Install app' ? 'Install' : 'Guide')));
       return row;
     };
+    // on a phone, tricks are a flick of the phone or automatic; with no motion sensor there, and everywhere else, the plain switch
+    const tricksRow = () => touch && Input.motionSupported() && !(A.input.motion.enabled && !A.input.motion.available)
+      ? cycle('Tricks', 'flickTrick', [[true, `Flick ${handheldWord()}`], [false, 'Automatic']])
+      : cycle('Automatic tricks', 'autoTrick', onoff);
     const el = h('div', {}, this.header('Options'), h('div', { class: 'panel options' },
       stepper('Music', 'music', pct), stepper('Sound effects', 'sfx', pct),
       cycle('Graphics', 'quality', [['auto', 'Automatic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]),
@@ -592,7 +609,7 @@ export class Menus {
       installRow(),
       h('button', { class: 'opt', 'data-f': true, onclick: () => this.open('keyboard') }, h('span', {}, 'Keyboard'), h('span', { class: 'opt-ctl' }, h('b', {}, 'Keys…'))),
       padRow(),
-      cycle('Camera shake', 'shake', onoff), cycle('Automatic tricks', 'autoTrick', onoff), cycle('Steering assist', 'smartSteer', onoff), cycle('Pause in portrait', 'pausePortrait', onoff),
+      cycle('Camera shake', 'shake', onoff), tricksRow(), cycle('Steering assist', 'smartSteer', onoff), cycle('Pause in portrait', 'pausePortrait', onoff),
       touch && cycle('Automatic accelerate', 'autoGo', onoff), touch && cycle('Tilt to steer', 'tilt', onoff)));
     return { el, onClose: () => fsOff?.() };
   }
@@ -848,7 +865,9 @@ export class Menus {
     const content = h('div');
     const show = () => {
       if (kind === 'touch') content.replaceChildren(h('div', { class: 'pad-diagram' },
-        half('Left thumb', 'Slide to steer', 'Tap to use an item'), half('Right thumb', 'Hold to accelerate', 'Pull down to brake', 'Flick up to use an item')));
+        half('Left thumb', 'Slide to steer', 'Tap to use an item'), half('Right thumb', 'Hold to accelerate', 'Pull down to brake', 'Flick up to use an item'),
+        // flick to trick, only where this player is set up for it (otherwise ramps trick by themselves)
+        this.app.flickChosen() && h('div', { class: 'pd-whole' }, h('b', {}, `Whole ${handheldWord()}`), h('span', {}, 'Flick off a ramp to trick'))));
       else {
         const rows = kind === 'pad' ? padRows : keyboardHelp(kind);
         content.replaceChildren(h('table', { class: 'ctl' }, h('tbody', {}, rows.map(([label, how]) => h('tr', {}, h('th', {}, label), h('td', {}, h('span', { class: 'ctl-how' }, how)))))));

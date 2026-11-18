@@ -360,6 +360,8 @@ kbd { font-family: var(--body); font-weight: 700; background: #fff; color: var(-
 .pd-half { display: flex; flex-direction: column; gap: calc(var(--u) * 0.7); padding: calc(var(--u) * 1.6) calc(var(--u) * 1.6) calc(var(--u) * 2); min-height: calc(var(--u) * 19); font-size: calc(var(--u) * 1.8); line-height: 1.2; }
 .pd-half + .pd-half { border-left: calc(var(--u) * 0.3) dashed rgba(255,255,255,0.5); background: rgba(46,230,166,0.12); }
 .pd-half b { font-family: var(--display); font-weight: normal; font-size: calc(var(--u) * 2.3); color: var(--gold); letter-spacing: 0.02em; }
+.pd-whole { grid-column: 1 / -1; display: flex; align-items: baseline; gap: calc(var(--u) * 1.4); padding: calc(var(--u) * 1.2) calc(var(--u) * 1.6); border-top: calc(var(--u) * 0.3) dashed rgba(255,255,255,0.5); font-size: calc(var(--u) * 1.8); line-height: 1.2; }
+.pd-whole b { font-family: var(--display); font-weight: normal; font-size: calc(var(--u) * 2.3); color: var(--gold); letter-spacing: 0.02em; }
 
 /* items guide: every item on the left, the one in focus explained on the right */
 .item-layout { align-self: stretch; flex: 1; display: grid; grid-template-columns: minmax(0, 63%) 1fr; gap: calc(var(--u) * 3); min-height: 0; align-items: start; }
@@ -402,6 +404,12 @@ kbd { font-family: var(--body); font-weight: 700; background: #fff; color: var(-
 @keyframes turn-phone { 0%, 22% { transform: rotate(0); } 55%, 82% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
 @media (prefers-reduced-motion: reduce) { .turn-phone { animation: none; transform: rotate(-90deg); } }
 body.must-turn .hud, body.must-turn .track-card, body.must-turn .hint-card { visibility: hidden; }
+/* flick to trick: the same phone, on its side as it races, flicked up the way the card says */
+.panel.flick h1 { font-size: calc(var(--u) * 4); margin-bottom: 0; }
+.flick-phone { align-self: center; width: calc(var(--u) * 11); height: calc(var(--u) * 6.5); border: calc(var(--u) * 0.6) solid #fff; border-radius: calc(var(--u) * 1.5); margin: calc(var(--u) * 3) 0 calc(var(--u) * 1.5); position: relative; transform-origin: 50% 100%; animation: flick-phone 1.8s cubic-bezier(.3,0,.2,1) infinite; }
+.flick-phone::after { content: ""; position: absolute; right: calc(var(--u) * 0.6); top: 50%; width: calc(var(--u) * 0.45); height: calc(var(--u) * 1.8); border-radius: 1em; background: #fff; transform: translateY(-50%); }
+@keyframes flick-phone { 0%, 45% { transform: perspective(40em) rotateX(0) translateY(0); } 52% { transform: perspective(40em) rotateX(38deg) translateY(calc(var(--u) * -1.4)); } 70%, 100% { transform: perspective(40em) rotateX(0) translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .flick-phone { animation: none; } }
 
 
 /* results must fit eight rows plus buttons on a phone in landscape */

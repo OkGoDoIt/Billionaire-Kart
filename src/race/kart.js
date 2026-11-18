@@ -115,7 +115,7 @@ export class Kart {
     this.coins = 0; this.item = null; this.itemUses = 0; this.rouletteT = 0; this.nextItem = null;
     this.hitT = 0; this.hitKind = ''; this.hitDur = 1; this.invulnT = 0; this.starT = 0; this.shrinkT = 0; this.ghostT = 0; this.inkT = 0; this.bulletT = 0; this.goldenT = 0;
     this.squashT = 0; this.landingSpeedKeep = 1;
-    this.trickArmT = 0; this.trick = false; this.trickSpin = 0; this.offRampT = 9; this.lastRamp = null;
+    this.trickArmT = 0; this.trickArmDir = null; this.prevTrick = false; this.trick = false; this.trickSpin = 0; this.offRampT = 9; this.lastRamp = null;
     this.draftT = 0; this.drafting = false; this.draftTarget = null;
     this.draftSpent = false; this.draftAway = 0; this.draftReadyAt = 0;
     this.hint = 0; this.s = 0; this.circuit = -1; this.lap = 0; this.cpNext = 4; this.rank = 1; this.finished = false; this.finishTime = 0; this.finishRank = 0;
@@ -215,7 +215,7 @@ export class Kart {
     this.drifting = false; this.driftArmed = false; this.driftCharge = 0; this.driftTier = 0; this.driftDir = 0;
   }
 
-  /** Advance one fixed step. input: {steer,throttle,brake,drift,item,trick} */
+  /** Advance one fixed step. input: {steer,throttle,brake,drift,item,trick,trickDir} */
   step(dt, input) {
     const race = this.race, tr = race.track, T = TUNE;
     this.time += dt;
@@ -241,6 +241,9 @@ export class Kart {
     const driftHeld = controllable && !!input.drift;
     const driftPressed = driftHeld && !this.prevDrift;
     this.prevDrift = !!input.drift;
+    // a trick on its own (a flicked phone): the ramp half of the drift button, with no hop
+    const trickPressed = controllable && !!input.trick && !this.prevTrick;
+    this.prevTrick = !!input.trick;
     if (this.finished) { throttle = 0.5; brake = 0; }
     // special: a drivetrain that now and then loses power for a moment
     const spt = this.sp.sputter;
@@ -296,7 +299,7 @@ export class Kart {
     if (driftPressed && this.grounded) {
       if (this.hit.ramp?.trick) {
         // Buffer the press until takeoff. A normal hop here overrides the ramp's launch velocity.
-        this.trickArmT = T.trickWindow;
+        this.trickArmT = T.trickWindow; this.trickArmDir = null;
       } else {
         this.vy = T.hopV; this.grounded = false; this.airT = 0; this.hopping = true;
         this.driftArmed = true; this.emit('hop');
@@ -304,6 +307,11 @@ export class Kart {
     } else if (driftPressed && !this.hopping && this.offRampT < T.trickWindow + 0.2) {
       // Use wheel contact for input. The short air grace above is for handling only.
       this._doTrick(steerIn);
+    }
+    if (trickPressed) {
+      const dir = input.trickDir || 0;
+      if (this.grounded && this.hit.ramp?.trick) { this.trickArmT = T.trickWindow; this.trickArmDir = dir; }
+      else if (!this.grounded && !this.hopping && this.offRampT < T.trickWindow + 0.2) this._doTrick(dir);
     }
     if (this.trickArmT > 0) this.trickArmT -= dt;
     if (!driftHeld) {
@@ -431,7 +439,7 @@ export class Kart {
         this.y += this.vy * dt; this.vy -= g * dt;
         if ((this.lastRamp || hit.ramp)?.trick) {
           this.offRampT = 0;
-          if (this.trickArmT > 0 || this.autoTrick) this._doTrick(this.steer);
+          if (this.trickArmT > 0 || this.autoTrick) this._doTrick(this.trickArmT > 0 && this.trickArmDir != null ? this.trickArmDir : this.steer);
         }
       } else { this.y = gy; this.vy = clamp(lerp(this.vy, vyGround, 0.55), -40, 40); }
     } else {
@@ -512,7 +520,7 @@ export class Kart {
 
   _doTrick(steer) {
     if (this.trick) return;
-    this.trick = true; this.trickSpin = 0; this.trickDir = Math.abs(steer) > 0.3 ? sign(steer) : 0; this.trickArmT = 0;
+    this.trick = true; this.trickSpin = 0; this.trickDir = Math.abs(steer) > 0.3 ? sign(steer) : 0; this.trickArmT = 0; this.trickArmDir = null;
     this.emit('trick');
   }
 

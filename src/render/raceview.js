@@ -108,6 +108,9 @@ export class RaceView {
     const sun = this.gfx.sun, shadow = this.cull && sun.castShadow ? sun.shadow : null;
     if (shadow) shadow.updateMatrices(sun);
     this.cull?.before(v.camera, shadow?.camera);
+    // an item box close enough to fill the lens (the finish shot rides ahead of the kart, over the box rows) is left out of this view
+    const cp0 = v.camera.position;
+    for (const o of this.boxes) if (o.b.active) o.m.visible = (o.m.position.x - cp0.x) ** 2 + (o.m.position.y - cp0.y) ** 2 + (o.m.position.z - cp0.z) ** 2 > 12;
     if (this.boxMesh) {
       const cam = v.camera;
       this.boxFrustum.setFromProjectionMatrix(_m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse), cam.coordinateSystem, cam.reversedDepth);
@@ -318,11 +321,11 @@ export class RaceView {
     }
     // coins
     if (this.coinMesh) {
-      const coins = race.items.coins;
+      const coins = race.items.coins, lens = this.views.length === 1 ? this.views[0].camera.position : null;   // one view: a coin that would fill the lens is left out
       for (let i = 0; i < coins.length; i++) {
         const c = coins[i];
         this.coinScale[i] += ((c.active ? 1 : 0) - this.coinScale[i]) * Math.min(1, dt * 12);
-        const sc = this.coinScale[i] * 0.95;
+        const sc = lens && (c.x - lens.x) ** 2 + (c.y - lens.y) ** 2 + (c.z - lens.z) ** 2 < 9 ? 0 : this.coinScale[i] * 0.95;
         _e.set(0, this.time * 3.2 + i * 0.6, 0); _q.setFromEuler(_e); _s.set(sc, sc, sc);
         _m.compose(_p.set(c.x, c.y + Math.sin(this.time * 3 + i) * 0.08, c.z), _q, _s);
         this.coinMesh.setMatrixAt(i, _m);

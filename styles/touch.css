@@ -63,3 +63,5 @@
 /* the incoming-item warning stays bottom-centre, as on a desktop; a control tip steps aside for it */
 /* a rival's speech bubble lands where the "tap to use" reminder floats above the steering control: the reminder waits */
 #ui:has(.hud-talk.show) .tc.has-item .tc-tap { opacity: 0; }
+/* past the line the kart drives itself: the steering and the pedal go (pause stays), and taps reach the HUD under them */
+.tc.done .tc-zone { display: none; }

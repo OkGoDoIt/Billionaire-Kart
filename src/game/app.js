@@ -5,7 +5,7 @@ import { Input } from '../core/input.js';
 import { keyboardBindings } from '../core/keyboard.js';
 import { Save, trialKey } from '../core/save.js';
 import { Menus } from '../ui/menus.js';
-import { handleInstallAction } from '../ui/install.js';
+import { handleInstallAction, takeRoom, announceApp } from '../ui/install.js';
 import { Wipe } from '../ui/wipe.js';
 import { Showroom } from '../render/showroom.js';
 import { RaceSession, MAX_FRAME_TIME } from './session.js';
@@ -48,6 +48,30 @@ export class App {
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.session && !this.attract && this.session.phase === 'racing' && !this.session.paused && !this.menus.visible) this.pause(); });
     this.applySettings(true);
     this.checkOnline();
+    // an installed copy opened by a room link (Chrome on Android and computers): the manifest's launch_handler
+    // keeps the running game, which takes the link here; the launch that started the page is the title's (?room=)
+    const bootUrl = location.href;
+    let firstLaunch = true;
+    window.launchQueue?.setConsumer?.(p => {
+      const url = p?.targetURL, wasFirst = firstLaunch; firstLaunch = false;
+      if (!url || (wasFirst && url === bootUrl)) return;
+      const room = new URL(url).searchParams.get('room');
+      if (room) this.openRoomLink(room);
+    });
+    // the installed game: a room link opened in the browser a moment ago left its room for us (src/ui/install.js);
+    // look when the game starts and whenever it comes back to the front
+    const claim = () => { announceApp(); takeRoom().then(room => { if (room) this.openRoomLink(room); }); };
+    claim();
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) claim(); });
+  }
+
+  /** A room link arrived (or was left for the installed game): on the title it waits for the tap; mid-race it is
+      dropped; anywhere else in the menus it opens the room. */
+  openRoomLink(room) {
+    if (this.session && !this.attract) return;
+    if (!this.menus.screen || this.menus.screen.spec.name === 'title') { const u = new URL(location.href); u.searchParams.set('room', room); history.replaceState(history.state, '', u); this.menus.screen?.onRoomLink?.(); return; }
+    if (this.online?.room?.code === room) return;
+    this.goOnline({ room });
   }
 
   /* ---------- loop ---------- */

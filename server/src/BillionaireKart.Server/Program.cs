@@ -71,6 +71,8 @@ builder.Services.AddSingleton<PlayerCookie>();
 builder.Services.AddSingleton<OriginPolicy>();
 builder.Services.AddSingleton<AdminAuth>();
 builder.Services.AddSingleton<NewPlayerLimit>();
+builder.Services.AddSingleton<RoomHandoff>();
+builder.Services.AddSingleton<InstalledApp>();
 builder.Services.AddHostedService<RoomTicker>();
 // After the ticker, so it stops first (see ShutdownDrain). The host's own stop budget covers the longest drain
 // plus closing sockets, and stays under systemd's TimeoutStopSec=30.

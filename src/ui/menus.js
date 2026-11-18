@@ -166,6 +166,33 @@ export class Menus {
   }
   header(title, sub) { return h('header', { class: 'menu-head' }, h('button', { class: 'back', 'data-f': true, 'aria-label': 'Back', onclick: () => this.back(), html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4.5 7.5 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>' }), h('div', {}, h('h1', {}, title), sub && h('p', {}, sub))); }
 
+  /** A Share button for a result. The card is drawn as soon as the screen opens, so the tap itself can open the
+      share sheet (Safari only allows that inside the tap). */
+  shareButton(result) {
+    let ready = null;
+    const pending = import('./share.js').then(m => m.prepareShare(result).then(p => (ready = { m, p })));
+    pending.catch(() => {});
+    const b = this.btn('Share', async () => {
+      const label = b.querySelector('.btn-label');
+      try {
+        const { m, p } = ready || await pending;
+        const how = await m.sharePrepared(p);
+        if (how === 'copied' || how === 'saved') {
+          label.textContent = how === 'copied' ? 'Link copied' : 'Picture saved';
+          setTimeout(() => { label.textContent = 'Share'; }, 2600);
+        }
+      } catch { label.textContent = 'Try again'; setTimeout(() => { label.textContent = 'Share'; }, 2600); }
+    });
+    b.classList.add('share');
+    return b;
+  }
+  cupShare(cup, standings, best) {
+    const me = standings.find(s => s.isPlayer && standings.indexOf(s) + 1 === best) || standings.find(s => s.isPlayer);
+    if (!me) return null;
+    const tracks = cupTracks(cup);
+    return this.shareButton({ racer: me.racer, rank: best, fieldSize: standings.length, points: me.points, cup, track: { id: tracks[tracks.length - 1] }, cc: this.app.gp?.cc, mode: 'cup' });
+  }
+
   /* ---------- title ---------- */
   s_title() {
     const go = () => { if (matchMedia('(pointer: coarse)').matches) this.app.fullscreen(true); this.app.audio?.unlock?.(); this.app.audio?.ui('start'); this.app.audio?.say?.('title', { force: true, delay: 0.25 }); this.reset('main'); };
@@ -403,7 +430,21 @@ export class Menus {
     });
     const buttons = gp
       ? [this.btn(gp.last ? 'See final standings' : 'Next race', () => A.gpNext(), { cls: 'go', def: true })]
-      : [this.btn('Race again', () => A.restartRace(), { cls: 'go', def: true }), this.btn('Choose another track', () => A.backToTracks()), this.btn('Quit to menu', () => A.quitToMenu())];
+      : [this.btn('Race again', () => A.restartRace(), { cls: 'go', def: true }), this.btn('Change track', () => A.backToTracks()), this.btn('Main menu', () => A.quitToMenu())];
+    // Share: the best human finish as a poster with a headline, ready before the tap (see ui/share.js)
+    const me = humans.slice().sort((a, b) => a.rank - b.rank)[0];
+    if (me) {
+      let trial = null, delta = null;
+      if (trialCc) {
+        const diff = trialBest == null ? null : Math.round(me.time * 1000) - Math.round(trialBest * 1000);
+        trial = diff == null ? 'first' : diff < 0 ? 'best' : 'slower';
+        if (diff > 0) delta = `${(diff / 1000).toFixed(2)}\u00a0s`;
+      }
+      buttons.splice(1, 0, this.shareButton({
+        racer: me.racer, rank: me.rank, fieldSize: results.length, track, time: me.time, estimated: me.estimated, stats: me.stats,
+        cc: trialCc || A.gp?.cc || A.flow?.cc || A.save.data.last?.cc, mode: trialCc ? 'trial' : gp ? 'gp' : 'race', trial, delta,
+      }));
+    }
     if (trialCc) {
       const run = humans[0], laps = run.kart.lapTimes;
       const difference = trialBest == null ? null : Math.round(run.time * 1000) - Math.round(trialBest * 1000);
@@ -453,7 +494,8 @@ export class Menus {
     const el = h('div', {}, h('div', { class: 'panel cupres' },
       h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, cup.name), best === 1 && starRow(stars))),
       h('div', { class: 'res-table final' }, standings.map((s, i) => h('div', { class: 'res-row' + (s.isPlayer ? ' me' : ''), style: `--d:${i * 60}ms;--rc:${hex(s.racer.color)}` }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: s.racer.portrait, alt: '' }), h('span', { class: 'res-name' }, s.racer.name), h('span', { class: 'res-total' }, String(s.points))))),
-      h('div', { class: 'foot' }, this.btn('Race this cup again', () => A.restartCup(), { cls: 'go', def: true }), this.btn('Change racer', () => A.backToRacers()), this.btn('Main menu', () => A.quitToMenu()))));
+      // four equal exits: after a whole cup, no one of them is the obvious next step
+      h('div', { class: 'foot' }, this.btn('Replay cup', () => A.restartCup(), { def: true }), this.cupShare(cup, standings, best), this.btn('Change racer', () => A.backToRacers()), this.btn('Main menu', () => A.quitToMenu()))));
     return { el, onBack: () => false, stage: true, onLayout: () => A.showroom?.setStage(freeRect(el.firstElementChild)) };
   }
 

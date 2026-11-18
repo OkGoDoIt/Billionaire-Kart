@@ -336,25 +336,3 @@ export class FieldBoard {
   dispose() { this.root.remove(); }
 }
 
-/* A line said to everyone at once (the pole sitter's opener), shown once in split screen instead of once per pane:
-   the same bubble as a pane's, at the top centre of a pane-sized box that the session places where the panes meet,
-   or over the board when there is one. Sized like a pane's HUD, so it matches the bubbles inside them. */
-export class SharedTalk {
-  constructor(parent) {
-    const root = this.root = el('div', 'hud hud-shared');
-    root.innerHTML = '<div class="hud-talk"><img alt=""><div><b></b><span></span></div></div>';
-    const q = s => root.querySelector(s);
-    this.$ = { talk: q('.hud-talk'), img: q('img'), name: q('b'), line: q('span') };
-    parent.appendChild(root);
-  }
-  /** box: [x, y (from the bottom), w, h] in screen fractions. onBoard: the box is the board, so keep to its map side. */
-  place(box, onBoard = false) { placePane(this.root, box); this.root.classList.toggle('on-board', onBoard); }
-  talk(racer, line, ms = 3000) {
-    if (!line) return false;
-    const $ = this.$; $.img.src = racer.portrait; $.name.textContent = racer.name; $.line.textContent = line;
-    $.talk.style.setProperty('--rc', hex(racer.color)); $.talk.classList.remove('show'); void $.talk.offsetWidth; $.talk.classList.add('show');
-    clearTimeout(this._kt); this._kt = setTimeout(() => $.talk.classList.remove('show'), ms);
-    return true;
-  }
-  dispose() { clearTimeout(this._kt); this.root.remove(); }
-}

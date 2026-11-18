@@ -4,7 +4,7 @@ import { Race } from '../race/race.js';
 import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
 import { DrivingGuide } from '../ui/driving-guide.js';
-import { Hud, FieldBoard, SharedTalk } from '../ui/hud.js';
+import { Hud, FieldBoard } from '../ui/hud.js';
 import { TouchControls, isTouchDevice } from '../ui/touch.js';
 import { ITEMS, HIT_LINES, isFundingBoost } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
@@ -47,12 +47,9 @@ export class RaceSession {
     // three players on a two-by-two grid leave a cell empty: the whole field goes there
     this.board = n === 3 ? new FieldBoard(app.ui, this.race) : null;
     // the split follows the window's shape, so the HUDs and the board move whenever it is laid out again
-    // a line said to everyone is said once: over the board, or at the top centre of the screen where the panes meet
-    this.sharedTalk = n > 1 ? new SharedTalk(app.ui) : null;
     this.view.onLayout = view => {
       const board = !!(this.board && view.spare.length);
       this.board?.setRect(view.spare[0] || null);
-      if (this.sharedTalk) { const [, , w, h] = view.views[0].rect; this.sharedTalk.place(board ? view.spare[0] : [0.5 - w / 2, 1 - h, w, h], board); }
       // with the board up, the panes' own minimaps repeat it; Thiel keeps his, where his special shows rivals' items
       this.huds.forEach((h, i) => { h.setRect(view.views[i].rect); h.root.classList.toggle('hud-nomap', board && !h.kart.sp?.seeItems); });
     };
@@ -96,6 +93,17 @@ export class RaceSession {
     } else hud.talk(racer, lines[Math.floor(Math.random() * lines.length)], ms);
   }
 
+  /** Split screen, first count: each player hears from the rival nearest them on the grid, a different rival for each
+      player where the field allows, so every pane gets its own line from someone actually beside them. */
+  _gridLines() {
+    const rivals = this.race.karts.filter(k => !k.isPlayer), taken = new Set();
+    for (const [k, hud] of this.hudOf) {
+      const near = rivals.filter(r => !taken.has(r)).sort((a, b) => Math.hypot(a.x - k.x, a.z - k.z) - Math.hypot(b.x - k.x, b.z - k.z))[0];
+      if (!near) continue;
+      taken.add(near); hud.talk(near.racer, near.racer.quote, 3200);
+    }
+  }
+
   _onEvent(kind, e, kart) {
     const app = this.app, pick = list => list[Math.floor(Math.random() * list.length)];
     if (kind === 'kart') {
@@ -130,7 +138,7 @@ export class RaceSession {
       if (e.type === 'count') {
         for (const h of this.huds) h.countdown(e.data);
         // on the first count, whoever starts on pole says their piece
-        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (pole && !pole.isPlayer) { if (this.sharedTalk) this.sharedTalk.talk(pole.racer, pole.racer.quote, 3200); else for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); } }
+        if (!this._poleSpoke) { this._poleSpoke = true; const pole = this.race.order[0] || this.race.karts[0]; if (this.huds.length > 1) this._gridLines(); else if (pole && !pole.isPlayer) for (const h of this.huds) h.talk(pole.racer, pole.racer.quote, 3200); }
       }
       else if (e.type === 'go') for (const h of this.huds) h.countdown(0);
       else if (e.type === 'kartHit') {
@@ -191,5 +199,5 @@ export class RaceSession {
 
   setPaused(p) { if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume'); }
 
-  dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.sharedTalk?.dispose(); this.touch?.dispose(); this.view.dispose(); }
+  dispose() { this.app.input.stopRumble(); for (const h of this.huds) h.dispose(); this.board?.dispose(); this.touch?.dispose(); this.view.dispose(); }
 }

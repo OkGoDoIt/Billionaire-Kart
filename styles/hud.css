@@ -160,13 +160,6 @@
 .hud-nomap .hud-map { display: none; }
 .hud-nomap .hud-speed { top: calc(var(--edge) + var(--safe-t)); }
 
-/* split screen: a line said to everyone, once, centred at the top of its box (see SharedTalk) */
-.hud-shared .hud-talk { left: 50%; top: calc(var(--edge) + var(--safe-t)); transform: translate(-50%, calc(var(--u) * -4)) scale(0.9); }
-.hud-shared .hud-talk.show { transform: translate(-50%, 0); }
-/* over the board it keeps to the map's corner, clear of the running order */
-.hud-shared.on-board .hud-talk { left: calc(var(--u) * 3); top: calc(var(--u) * 3); transform: translateY(calc(var(--u) * -4)) scale(0.9); }
-.hud-shared.on-board .hud-talk.show { transform: none; }
-
 /* split screen: the HUDs and the board fade in as the panes land after the flyover */
 .hud-enter { animation: hud-enter 0.3s ease-out both; }
 @keyframes hud-enter { from { opacity: 0; } }

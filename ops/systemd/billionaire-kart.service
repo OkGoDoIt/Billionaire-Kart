@@ -1,0 +1,34 @@
+[Unit]
+Description=Billionaire Kart online server (rooms, ratings, admin)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=billionaire-kart
+Group=billionaire-kart
+WorkingDirectory=/opt/billionaire-kart/current
+EnvironmentFile=/etc/billionaire-kart/app.env
+EnvironmentFile=/etc/billionaire-kart/secrets.env
+EnvironmentFile=-/opt/billionaire-kart/current/release.env
+ExecStart=/usr/bin/dotnet /opt/billionaire-kart/current/BillionaireKart.Server.dll --urls http://127.0.0.1:5105
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGINT
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/billionaire-kart
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryHigh=384M
+MemoryMax=768M
+CPUWeight=50
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

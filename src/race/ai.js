@@ -400,7 +400,7 @@ export class AIDriver {
     Each driver's per-race form (paceMul) rides underneath the band: the band still
     keeps the field in reach of the human, but it no longer irons them flat. */
 export function rubberBand(race) {
-  const humans = race.players.filter(k => !k.finished);
+  const humans = (race.humans || race.players).filter(k => !k.finished);   // online: race.humans counts the humans on other devices too
   if (!humans.length) { for (const k of race.karts) k.aiSpeedMul = k.ai ? k.ai.lv.speed * (k.ai.paceMul || 1) * (race.cls.ai || 1) : 1; return; }
   let lead = humans[0];
   for (const h of humans) if (h.raceDistance > lead.raceDistance) lead = h;

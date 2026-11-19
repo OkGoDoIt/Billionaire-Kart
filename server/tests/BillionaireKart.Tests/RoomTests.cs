@@ -172,6 +172,47 @@ public sealed class RoomTests(TestApp app)
         }
     }
 
+    [Theory]
+    [InlineData("cup")]
+    [InlineData("single")]
+    public async Task Without_cpus_the_last_one_left_goes_back_to_the_lobby(string mode)
+    {
+        await app.UseSettings(new() { ["FinishGraceSeconds"] = "0.3" });
+        var (a, b, _) = await TwoInPrivate();
+        await using var _a = a;
+        object rules = mode == "cup" ? new { mode = "cup", cup = "seed", cpus = false } : new { mode = "single", cpus = false, pick = "host" };
+        await a.Send(new { t = "rules", rules });
+        await b.Room(r => r.GetProperty("rules").Str("mode") == mode);
+        if (mode == "single")
+        {
+            await a.Send(new { t = "track", id = "davos" });
+            await b.Room(r => r.MemberOf(a.Id).Str("track") == "davos");
+        }
+        await a.Send(new { t = "start" });
+        var race = await a.Room(r => r.Str("phase") == "race");
+        await b.Room(r => r.Str("phase") == "race");
+
+        // B drops mid-race; A finishes alone and is the only one left.
+        b.Abort();
+        await a.Room(r => !r.MemberOf(b.Id).GetProperty("connected").GetBoolean());
+        await Task.Delay(200);
+        await a.Send(new { t = "finish", slot = race.SlotOf(a.Id).Int("slot"), time = 0.2 });
+        await a.Room(r => r.Str("phase") == "results", 4);
+        await a.Send(new { t = "ready" });
+
+        var lobby = await a.Room(r => r.Str("phase") != "results");
+        Assert.Equal("lobby", lobby.Str("phase"));
+        Assert.True(lobby.IsNull("race"));
+        if (mode == "cup")
+        {
+            var cs = lobby.GetProperty("cupState");
+            Assert.Equal(0, cs.Int("index"));
+            Assert.True(cs.GetProperty("ended").GetBoolean());
+            Assert.Equal(15, cs.GetProperty("totals").GetProperty("elon").GetInt32());
+        }
+        else Assert.True(lobby.IsNull("cupState"));
+    }
+
     [Fact]
     public async Task Silent_owner_loses_kart_and_gets_it_back_and_host_leaving_moves_cpus()
     {

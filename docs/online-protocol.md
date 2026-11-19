@@ -106,7 +106,7 @@ room = {
                  slots: [{ slot, racer, member: playerId|null, level: str|null, owner: playerId }],
                  finished: [{ slot, time, rank }] },
   offer: [trackId, ...] | null,    // public rooms: the tracks on offer this vote
-  cupState: null | { index, tracks: [id], totals: {racerId: points}, places: {racerId: [finish in each race, 0 = did not race]} },
+  cupState: null | { index, tracks: [id], totals: {racerId: points}, places: {racerId: [finish in each race, 0 = did not race]}, ended: bool },
   last: null | { trackId, results: [{ slot, racer, member, rank, time, estimated, points,
                  before: valuation|null, after: valuation|null }] }
 }
@@ -126,7 +126,7 @@ Phases:
 - **lobby** (private rooms): people arrive and pick racers. The host presses start. Needs every connected member to have a racer.
 - **track**: everyone picks. Ends when all connected members have picked or the timer runs out. The server chooses uniformly among the picks (or the host's pick when `pick:"host"`; in a cup, the cup's next track), fills empty slots with CPUs when `rules.cpus`, assigns owners, and sends `room` with `race` set and phase `race`. The client plays the roulette from `members[].track` to `race.trackId`.
 - **race**: see below.
-- **results**: `last` is set. Ends when every connected member is ready or the timer runs out, then back to **track** (or the cup's next race; after a cup's last race, to **lobby**).
+- **results**: `last` is set. Ends when every connected member is ready or the timer runs out, then back to **track** (or the cup's next race; after a cup's last race, to **lobby**). A private room without CPUs whose race had two or more humans goes back to **lobby** instead when fewer than two members are still connected; a cup cut short this way keeps its `cupState` with `ended: true`.
 
 Public rooms have no host powers. A new public room waits in **lobby** with `until` set (`PublicSoloWaitSeconds`; when a second person arrives it becomes `PublicWaitSeconds` from then, once; a full room goes at once), then moves to **track** by itself. Members pick racers at any time outside a race, and a member with no racer when a race starts gets a random free one.
 

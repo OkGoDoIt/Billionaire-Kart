@@ -54,7 +54,7 @@ public static class RoomView
             finished = race.Finished.Select(f => new { slot = f.Slot, time = f.Time, rank = f.Rank }),
         },
         offer = r.Offer,
-        cupState = r.Cup is not { } cup ? null : new { index = cup.Index, tracks = cup.Tracks, totals = cup.Totals, places = cup.Places },
+        cupState = r.Cup is not { } cup ? null : new { index = cup.Index, tracks = cup.Tracks, totals = cup.Totals, places = cup.Places, ended = cup.Ended },
         last = r.Last is not { } last ? null : new
         {
             trackId = last.TrackId,

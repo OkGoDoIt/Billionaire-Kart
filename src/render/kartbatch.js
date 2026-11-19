@@ -1,5 +1,8 @@
-/* In a split race a kart can appear in every pane. Draw rigid, untextured parts together; each
-   vertex follows the original wheel, head, or body pivot. Faces, badges, glass, the plate,
+/* A kart is two dozen small meshes, and the start grid puts the whole field in view (and in the shadow
+   pass) at once; in a split race a kart can appear in every pane too. Draw rigid, untextured parts
+   together; each vertex follows the original wheel, head, or body pivot. (Reflection strength needs no
+   attribute: with the sky as scene.environment, three.js gives every standard material the scene's
+   environmentIntensity, not its own envMapIntensity.) Faces, badges, glass, the plate,
    and effects keep their own materials and draw order. The paint follows the star uniforms. */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';

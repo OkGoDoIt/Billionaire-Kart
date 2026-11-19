@@ -484,8 +484,8 @@ export default {
         return { x: tip.x, y: tip.y, z: tip.z, dx: out.x, dz: out.z };
       });
       bake.add(pu); take(PU.x, PU.z, 13);
-      // its name stands up behind it, high enough to read over the ring of fire, turned to the slalom
-      signAt(46, -302, 0.42, B.board('EL PULPO MECÁNICO', { bg: '#1a1d29', fg: '#ffb020', size: 130, sub: 'BREATHES FIRE. STAND BACK.', subFg: '#ff6a2a', subScale: 0.6, lines: 1 }), 18, 6.5, 13, { frame: 0x1a1d29 });
+      // its name stands up beside it, clear of the dunes' runoff, high enough to read past the ring of fire, turned to the slalom
+      signAt(40, -280, 0.52, B.board('EL PULPO MECÁNICO', { bg: '#1a1d29', fg: '#ffb020', size: 130, sub: 'BREATHES FIRE. STAND BACK.', subFg: '#ff6a2a', subScale: 0.6, lines: 1 }), 18, 6.5, 13, { frame: 0x1a1d29 });
       anim.push((dt, time) => {
         const live = nozzles.filter((nz, k) => (time * 0.22 + k * 0.17) % 1 < 0.3);
         if (!live.length) return;

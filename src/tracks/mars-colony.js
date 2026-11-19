@@ -721,7 +721,7 @@ function dress(ctx) {
     bake.add(st);
   }
   // the hiring sign stands where the landing deck points, on the outside of the bend into the bowl, two lines tall
-  const signP = sc.beside(12.75, -1, 14);
+  const signP = sc.beside(12.75, -1, 17.5);
   sc.place(M.hiringSign('NOW HIRING: EXTREMELY HARDCORE', { w: 24, h: 9, legs: 6, lines: 2 }), signP.x, signP.z, { yaw: signP.yaw + 0.6, y: signP.y - 0.3 });
   take(signP.x, signP.z, 15);
   const lander2 = sc.beside(21.6, 1, 46);

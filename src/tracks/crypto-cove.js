@@ -216,7 +216,7 @@ function decorate(ctx) {
   };
   sc.along({ from: 18.3, to: 0.95, side: 1, offset: 6.5, spacing: 36 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
-  const listing = sc.beside(11.3, 1, 9);
+  const listing = sc.beside(11.5, 1, 18.5);   // the listing stage and its banner stand clear of the runoff
   const jk = jokes(ctx, sc, { standSpots, seats, gantryAt: g0, listing });
   // The animated lip uses the same rising and crashing colors as the exchange.
   const ramp = view.trackMesh.userData.mats.ramp.uniforms;
@@ -600,7 +600,7 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
   // BUY THE DIP stands over the bottom of the dive, beside the landing, where the pier and the jump point: it sits dead
   // ahead from halfway down the pier, all the way through the air, and its arrow points at where you come down
   {
-    const q = sc.beside(10.35, 1, 16), rp = roadPt(9.0), yaw = Math.atan2(rp.x - q.x, rp.z - q.z), ground = sc.y(q.x, q.z), cy = Math.max(ground, W) + 16;
+    const q = sc.beside(10.35, 1, 21), rp = roadPt(9.0), yaw = Math.atan2(rp.x - q.x, rp.z - q.z), ground = sc.y(q.x, q.z), cy = Math.max(ground, W) + 16;
     atlas.place2(sDip, [q.x, cy, q.z], yaw, 32, 9.2);
     for (const d of [-9, 9]) pole(q.x + Math.cos(yaw) * d - Math.sin(yaw) * 0.4, q.z - Math.sin(yaw) * d - Math.cos(yaw) * 0.4, Math.min(ground, W) - 1, cy - 4.4, 0.45);
   }

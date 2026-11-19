@@ -595,11 +595,13 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
   {
     const p = spot(25, -1, 24), R = 7, H = 14; p.y -= 0.3;
     const bin = B.recycleBin({ R, H }); sc.place(bin, p.x, p.z, { yaw: p.yaw, y: p.y }); bake.add(bin);
-    const dead = ['ZUNE', 'VISTA', 'CLIPPY', 'WINDOWS PHONE', 'INTERNET EXPLORER', 'GOOGLE+'];
+    const dead = ['ZUNE', 'CLIPPY', 'VISTA', 'WINDOWS PHONE', 'GOOGLE+', 'INTERNET EXPLORER'];
+    // the tombstones in two rows of three, the back row higher, so no board hides another and each is big enough to read
+    // from the approach (#397: six smaller boards bunched 2.3 m apart, and ZUNE never read for long)
     dead.forEach((name, k) => {
-      const u = (k - 2.5) * 2.3, v = (k % 2 ? -1.5 : 1.5), top = H + 4 + (k % 3) * 2.2, q = { x: 0, z: 0, yaw: p.yaw }; const [x, , z] = local(p, u, v, 0); q.x = x; q.z = z; q.y = p.y + H - 2;
+      const back = k % 2, u = (Math.floor(k / 2) - 1) * 6.4, v = back ? -2 : 2, top = H + (back ? 6.9 : 3.5), q = { x: 0, z: 0, yaw: p.yaw }; const [x, , z] = local(p, u, v, 0); q.x = x; q.z = z; q.y = p.y + H - 2;
       const pole = S.post(top - H + 2, 0.15, 0x8a929e); sc.place(pole, q.x, q.z, { y: q.y }); bake.add(pole, false);
-      atlas.place(board(name, { bg: ['#ffffff', '#ffd23c', '#7fd0ff', '#ff9ab0'][k % 4], fg: '#12142b', size: 110, border: '#12142b', font: SANS, lines: 2 }, 384, 200), local(q, 0, 0.2, p.y + top), p.yaw + rng.range(-0.25, 0.25), 4.8, 2.5);
+      atlas.place(board(name, { bg: ['#ffffff', '#ffd23c', '#7fd0ff', '#ff9ab0'][k % 4], fg: '#12142b', size: 110, border: '#12142b', font: SANS, lines: 2 }, 384, 200), local(q, 0, 0.2, p.y + top), p.yaw + rng.range(-0.25, 0.25) * 0.4, 6, 3.1);
     });
     atlas.place(board('RECYCLE BIN', { bg: '#ffffff', fg: '#0a4fd6', size: 120, border: '#0a4fd6', font: SANS, lines: 1 }, 768, 160), local(p, 0, R + 0.3, p.y + H * 0.55), p.yaw, 12, 2.5);
     const sp = { ...p, ...(([x, , z]) => ({ x, z }))(local(p, 0, -R - 4, 0)) };

@@ -99,6 +99,7 @@ export class Input {
   constructor() {
     this.keyBinds = keyboardBindings(); this.captureKey = null; this.suppressed = new Set();
     this.keys = new Set(); this.steerKb = { kb: 0, kb1: 0, kb2: 0 };
+    this.tapped = new Set();   // keys pressed since the last poll: a tap that is up again before the next frame still counts once (#359)
     this.motorPulses = new Map();
     this.rumbleFocused = true;
     this.assign = ['any'];                 // device per local player; 'any' merges everything (solo play)
@@ -129,7 +130,7 @@ export class Input {
         if (['up', 'down', 'left', 'right'].includes(action) && this._menu(action, 'kb')) e.preventDefault();
         return;
       }
-      this.keys.add(e.code); this.lastDevice = 'kb'; this.kbUsed = true; this.onAnyInput?.();
+      this.keys.add(e.code); this.tapped.add(e.code); this.lastDevice = 'kb'; this.kbUsed = true; this.onAnyInput?.();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && !(e.target instanceof HTMLInputElement)) e.preventDefault();
       if (this.onJoinKey?.(this._kbDeviceFor(e.code))) { e.preventDefault(); return; }
       if (MENU_KEYS[e.code] && this._menu(MENU_KEYS[e.code], this._kbDeviceFor(e.code))) e.preventDefault();
@@ -172,7 +173,7 @@ export class Input {
   devices() { return ['kb1', 'kb2', ...this.pads()]; }
 
   _kb(layout, dt, out) {
-    const K = this.keyBinds[layout], down = list => list.some(c => this.keys.has(c));
+    const K = this.keyBinds[layout], down = list => list.some(c => this.keys.has(c) || this.tapped.has(c));
     const target = (down(K.right) ? 1 : 0) - (down(K.left) ? 1 : 0);
     // keys are digital: ease toward full lock so taps make small corrections
     const cur = this.steerKb[layout], rate = target === 0 ? 9 : Math.sign(target) !== Math.sign(cur) && cur !== 0 ? 14 : 5.5;
@@ -234,6 +235,7 @@ export class Input {
       else if (dev.startsWith('pad')) this._pad(+dev.slice(3), out);
       out.steer = clamp(out.steer, -1, 1);
     }
+    this.tapped.clear();   // read once, then gone
     return this.states;
   }
 

@@ -3,6 +3,7 @@
    Sized in container units so it scales to split-screen panes. */
 import { ITEMS } from '../race/items.js';
 import { TUNE } from '../race/kart.js';
+import { CAP_COUNTDOWN } from '../race/race.js';
 import { fmtTime, ordinalSuffix, clamp } from '../core/util.js';
 
 /* kart.speed is metres per second (the class table in race/kart.js says so); the readout shows honest mph. */
@@ -82,13 +83,14 @@ export class Hud {
       <div class="hud-feed"></div>
       <div class="hud-talk"><img alt=""><div><b></b><span></span></div></div>
       <div class="hud-wrong">WRONG WAY</div>
+      <div class="hud-cap"></div>
       <div class="hud-ink"><i>EXCLUSIVE!</i><i>SOURCES SAY</i><i>SHOCKING!</i><i>SCANDAL</i><i>YOU WON’T BELIEVE</i></div>
       <div class="hud-speed"><b>0</b><span>mph</span></div>
       <div class="hud-draft"></div>`;
     parent.appendChild(root);
     const q = s => root.querySelector(s);
     this.$ = { item: q('.hud-item'), img: q('.hud-item-img'), coinFallback: q('.hud-item-coin'), count: q('.hud-item-count'), info: q('.hud-item-info'), itemName: q('.hud-item-info b'), itemDesc: q('.hud-item-info span'), coins: q('.hud-coins b'), coinsPill: q('.hud-coins'), lap: q('.hud-lap b'), lapPill: q('.hud-lap'),
-      rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), ink: q('.hud-ink'), speed: q('.hud-speed'), speedN: q('.hud-speed b'), coinPop: q('.hud-coin-pop'),
+      rank: q('.hud-rank'), rankN: q('.hud-rank b'), rankS: q('.hud-rank span'), time: q('.hud-time'), banner: q('.hud-banner'), warn: q('.hud-warn'), feed: q('.hud-feed'), talk: q('.hud-talk'), talkImg: q('.hud-talk img'), talkName: q('.hud-talk b'), talkLine: q('.hud-talk span'), wrong: q('.hud-wrong'), cap: q('.hud-cap'), ink: q('.hud-ink'), speed: q('.hud-speed'), speedN: q('.hud-speed b'), coinPop: q('.hud-coin-pop'),
     };
     if (race.mode === 'timetrial') {
       // The rank corner is free in a solo trial, including on touch where the ordinary clock is hidden.
@@ -289,6 +291,9 @@ export class Hud {
       }
     }
     $.wrong.classList.toggle('show', k.wrongWayT > 1 && !k.finished);
+    // split screen: another player has finished and time is running out to follow them (race.capT, #357)
+    const capN = race.state === 'racing' && race.capT > 0 && race.capT <= CAP_COUNTDOWN && !k.finished ? Math.ceil(race.capT) : 0;
+    if (capN !== this._capN) { this._capN = capN; $.cap.textContent = capN || ''; $.cap.classList.toggle('show', capN > 0); if (capN) this.pop($.cap); }
     $.ink.classList.toggle('show', k.inkT > 0);
     $.speedN.textContent = Math.round(k.speed * MPH_PER_MS);
     this.mapT -= dt; if (this.mapT <= 0 && !this.root.classList.contains('hud-nomap')) { this.mapT = 0.05; this._drawMap(); }

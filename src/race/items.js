@@ -109,7 +109,7 @@ export class ItemSystem {
     for (const b of this.boxes) {
       if (!b.active) { b.t -= dt; if (b.t <= 0) { b.active = true; race.emit('boxBack', b); } continue; }
       for (const k of karts) {
-        if (k.puppet || k.rescueT > 0 || k.finished || k.item || k.rouletteT > 0 || k.goldenT > 0) continue;   // online: puppets only touch boxes on their owner's device
+        if (k.puppet || k.rescueT > 0 || k.finished || k.item || k._steal || k.rouletteT > 0 || k.goldenT > 0) continue;   // online: puppets only touch boxes on their owner's device; a stolen item on its way holds the slot
         const dx = k.x - b.x, dz = k.z - b.z;
         if (dx * dx + dz * dz < 2.9 && Math.abs(k.y + 0.6 - b.y) < 2.2) {
           b.active = false; b.t = BOX_RESPAWN; race.emit('boxBreak', { box: b, kart: k });
@@ -129,7 +129,7 @@ export class ItemSystem {
     for (const c of this.coins) {
       if (!c.active) { c.t -= dt; if (c.t <= 0) c.active = true; continue; }
       for (const k of karts) {
-        if (k.puppet || k.rescueT > 0) continue;
+        if (k.puppet || k.rescueT > 0 || k.finished) continue;   // past the line, a kart leaves the coins to the racers
         const dx = k.x - c.x, dz = k.z - c.z, dy = k.y + 0.7 - c.y;
         if (dx * dx + dz * dz < 2.6 && Math.abs(dy) < 1.9) { c.active = false; c.t = 7; k.addCoins(1); race.emit('coinTaken', { coin: c, kart: k }); break; }
       }
@@ -207,7 +207,8 @@ export class ItemSystem {
     this.shots.push(s); this.race.net?.spawn(s); this.race.emit('shotSpawn', s);
   }
 
-  _aheadOf(kart) { const o = this.race.order, i = o.indexOf(kart); return i > 0 ? o[i - 1] : null; }
+  /** The nearest kart ahead that is still racing: a finished kart is out of reach of items. */
+  _aheadOf(kart) { const o = this.race.order; for (let i = o.indexOf(kart) - 1; i >= 0; i--) if (!o[i].finished) return o[i]; return null; }
 
   _crash(user) {
     const race = this.race, n = race.karts.length;
@@ -215,13 +216,13 @@ export class ItemSystem {
     for (const k of race.karts) {
       if (k === user || k.puppet || k.finished || k.rescueT > 0) continue;
       if (k.invincible || k.ghostT > 0) { k.emit('dodged', 'crash'); continue; }
+      // the jolt goes through the same door as every other hit: mercy invulnerability, an absorb, or a kart
+      // already reeling all stop it, and then it does not shrink the kart or shake its item loose either (#349)
+      if (!k.hurt('zap', user)) continue;
       const front = 1 - (k.rank - 1) / Math.max(1, n - 1);
       k.shrinkT = lerp(3.4, 6.5, front) * (k.sp.shrinkTake || 1);
-      k.hitKind = 'zap'; k.hitDur = k.hitT = 0.55; k.endDrift(false); k.boostT = 0; k.boostMul = 1;
-      k.slowFromHit(0.6);
       if (k.item) { k.item = null; k.itemUses = 0; k.goldenActive = false; k.goldenT = 0; k.emit('itemGone'); }
-      k.rouletteT = 0; k.stats.hitsTaken++; user.stats.hitsGiven++;
-      k.emit('hit', { kind: 'zap', from: user });
+      k.rouletteT = 0;
     }
   }
 
@@ -258,19 +259,28 @@ export class ItemSystem {
     const pool = race.karts.filter(k => k !== user && k.item && !k.finished && k.bulletT <= 0 && !k.goldenActive);
     const ahead = pool.filter(k => k.rank < user.rank);
     const from = (ahead.length ? ahead : pool)[Math.floor(race.rng() * (ahead.length ? ahead.length : pool.length))];
+    // The take is atomic: the item leaves the victim and is reserved for the thief at once, and the thief's slot
+    // stays spoken for while it is on its way (no box can fill it), so it always lands somewhere (#359).
     if (from) {
       const id = from.item, uses = from.itemUses;
       from.item = null; from.itemUses = 0; from.emit('robbed', user); from.emit('itemGone');
-      user._steal = { id, uses, t: 0.9 };
+      user._steal = { id, uses, t: 0.9, from };
       race.emit('steal', { by: user, from, id });
-    } else user._steal = { id: 'boost', uses: 1, t: 0.9 };
+    } else user._steal = { id: 'boost', uses: 1, t: 0.9, from: null };
+  }
+  /** The stolen item arrives. Should the thief's hand somehow be full, it goes back to its owner rather than vanishing. */
+  _deliver(k) {
+    const st = k._steal; k._steal = null;
+    if (!k.item) { k.item = st.id; k.itemUses = st.uses; k.emit('itemReady', k.item); return; }
+    const v = st.from;
+    if (v && !v.puppet && !v.item && !v._steal) { v.item = st.id; v.itemUses = st.uses; v.rouletteT = 0; v.emit('itemReady', v.item); }
   }
 
   /* ---------- hazards on the ground ---------- */
   _hazards(dt) {
     const race = this.race, list = this.hazards;
     for (const k of race.karts) {
-      if (k._steal) { k._steal.t -= dt; if (k._steal.t <= 0) { if (!k.item) { k.item = k._steal.id; k.itemUses = k._steal.uses; k.emit('itemReady', k.item); } k._steal = null; } }
+      if (k._steal) { k._steal.t -= dt; if (k._steal.t <= 0) this._deliver(k); }
       if (k.shockT > 0) { k.shockT -= dt; this._clearAround(k.x, k.z, 9.5, k); }
     }
     for (let i = list.length - 1; i >= 0; i--) {
@@ -279,7 +289,7 @@ export class ItemSystem {
       if (h.type === 'pinkslip' && h.age >= h.life) { this._explode(h.x, h.y, h.z, h.owner, 'pinkslip', null, h); h.dead = true; }
       if (!h.dead && h.age > h.life) h.dead = true;
       if (!h.dead) for (const k of race.karts) {
-        if (k.puppet || k.rescueT > 0 || k.ghostT > 0) continue;   // online: puppets are never hurt here
+        if (k.puppet || k.rescueT > 0 || k.ghostT > 0 || k.finished) continue;   // online: puppets are never hurt here; a finished kart drives through
         if (h.owner === k && h.age < 0.6) continue;
         const dx = k.x - h.x, dz = k.z - h.z, rr = h.radius + k.radius * 0.8;
         if (dx * dx + dz * dz > rr * rr || Math.abs(k.y - h.y) > 1.6) continue;
@@ -355,7 +365,7 @@ export class ItemSystem {
       }
       // kart hits
       if (!s.dead && s.type !== 'antitrust' && s.phase !== 'arc') for (const k of race.karts) {
-        if (k.puppet || k.rescueT > 0 || k.ghostT > 0) continue;
+        if (k.puppet || k.rescueT > 0 || k.ghostT > 0 || k.finished) continue;   // a finished kart is out of the race: shots fly through it
         if (k === s.owner && s.age < 0.45) continue;
         const dx = k.x - s.x, dz = k.z - s.z, rr = k.radius * (k.sp.targetR || 1) + SHOT_R;
         if (dx * dx + dz * dz > rr * rr || Math.abs(k.y + 0.5 - s.y) > 1.7) continue;
@@ -383,7 +393,7 @@ export class ItemSystem {
       const gr = tr.ground(s.x, s.z, s.hint, this.hit, s.y); s.hint = gr.i;
       if (s.y <= gr.y + 0.5) { s.y = gr.y + 0.5; s.phase = 'sit'; s.t = 1.9; s.vx = s.vz = 0; this.race.emit('bombLand', s); }
       // direct hit in the air
-      for (const k of this.race.karts) { if (k.puppet || (k === s.owner && s.age < 0.5)) continue; if (Math.hypot(k.x - s.x, k.z - s.z) < 1.6 && Math.abs(k.y + 0.6 - s.y) < 1.5) { this._explode(s.x, s.y, s.z, s.owner, 'pinkslip', null, s); s.dead = true; return; } }
+      for (const k of this.race.karts) { if (k.puppet || k.finished || k.rescueT > 0 || k.ghostT > 0 || (k === s.owner && s.age < 0.5)) continue; if (Math.hypot(k.x - s.x, k.z - s.z) < 1.6 && Math.abs(k.y + 0.6 - s.y) < 1.5) { this._explode(s.x, s.y, s.z, s.owner, 'pinkslip', null, s); s.dead = true; return; } }
     } else {
       s.t -= dt;
       if (s.t <= 0) { this._explode(s.x, s.y, s.z, s.owner, 'pinkslip', null, s); s.dead = true; }

@@ -173,15 +173,15 @@ export class Menus {
       shared is one link whose preview is the card (see ui/share.js). */
   shareButton(result) {
     const A = this.app, base = A.onlineState === 'ok' || A.onlineState === 'old' ? location.origin : null;
-    let mod = null, p = null;
-    const prepare = () => import('./share.js').then(m => { mod = m; p = m.prepareShare(result, { base }); });
-    let pending = prepare().catch(() => { pending = null; });
+    // a preparation that failed is tried again by the next tap, which says Try again for as long as it keeps failing
+    let mod = null, p = null, pending = null, failed = false;
+    const prepare = () => (pending ||= import('./share.js').then(m => { mod = m; p = m.prepareShare(result, { base }); failed = false; }).catch(() => { pending = null; failed = true; }));
+    prepare();
     const SAY = { copied: 'Link copied', saved: 'Picture saved', preparing: 'One moment…', again: 'Tap again to share', failed: 'Try again' };
     const b = this.btn('Share', async () => {
       const label = b.querySelector('.btn-label');
-      let how;
-      if (!p) { pending ||= prepare().catch(() => { pending = null; }); how = 'preparing'; }
-      else how = await mod.sharePrepared(p);
+      if (!p) { const retry = failed, ask = prepare(); if (retry) await ask; }
+      const how = p ? await mod.sharePrepared(p) : failed ? 'failed' : 'preparing';
       if (SAY[how]) { label.textContent = SAY[how]; clearTimeout(b.t); b.t = setTimeout(() => { label.textContent = 'Share'; }, how === 'preparing' ? 1200 : 2600); }
     });
     b.classList.add('share');
@@ -263,7 +263,10 @@ export class Menus {
       if (onlineBtn.hidden && this.focusEl === onlineBtn) this.focus(onlineBtn.parentNode.querySelector('[data-f]'), false);
     };
     drawOnline(A.onlineState);
-    A.checkOnline().then(state => { if (onlineBtn.isConnected) drawOnline(state); });
+    // a later answer (a retry, the network coming back) shows or hides the button in place; focus stays where it is
+    const onState = state => { if (onlineBtn.isConnected) drawOnline(state); };
+    A.onOnlineState = onState;
+    A.checkOnline().then(onState);
     const el = h('div', {},
       h('div', { class: 'logo small' }, h('div', { class: 'logo-top' }, 'BILLIONAIRE'), h('div', { class: 'logo-main' }, ...'KART'.split('').map((c, i) => h('span', { style: `--i:${i}` }, c)))),
       h('nav', { class: 'main-nav' },
@@ -274,7 +277,7 @@ export class Menus {
         row));
     drawInstall();
     const offInstall = onInstallChange(drawInstall);
-    return { el, onClose: offInstall, onBack: () => { this.reset('title'); return false; } };
+    return { el, onClose: () => { offInstall(); if (A.onOnlineState === onState) A.onOnlineState = null; }, onBack: () => { this.reset('title'); return false; } };
   }
 
   /* ---------- how many players, and who holds what ---------- */

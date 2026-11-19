@@ -20,6 +20,8 @@ import { makeRng } from '../core/util.js';
 const ONLINE_PROTO = 1;
 /* Where a race server lives beside the game: the live site, and the development server (server/README.md). */
 const ONLINE_HOSTS = ['billionaire-kart.okgodoit.com', 'localhost:5210', '127.0.0.1:5210', 'localhost:5211', '127.0.0.1:5211', 'localhost:5212', '127.0.0.1:5212'];   // 5212: a second local server while another session's test holds 5211
+/* While the race server does not answer: ask again after these waits, then once a minute while the main menu is up (App#checkOnline). */
+const ONLINE_RETRY_MS = [2000, 5000, 10000, 20000];
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 export class App {
@@ -50,6 +52,10 @@ export class App {
     this.applySettings(true);
     this._motionStart();
     this.checkOnline();
+    // the network came back, or the game came back to the front: ask again now, and start the retries over
+    const recheck = () => { this._onlineTries = 0; this.checkOnline(); };
+    addEventListener('online', recheck);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) recheck(); });
     // an installed copy opened by a room link (Chrome on Android and computers): the manifest's launch_handler
     // keeps the running game, which takes the link here; the launch that started the page is the title's (?room=)
     const bootUrl = location.href;
@@ -244,24 +250,42 @@ export class App {
   /* ---------- online ---------- */
   /** Online play is its own module (src/ui/online.js), fetched the first time the player goes online, so the offline game never loads it. */
   /** Is the race server there, and does it speak this build's protocol? 'ok', 'old' (this build is too old: reload), or 'down'.
-      Asked once at start and again whenever the main menu opens, so the Online button only shows when it will work,
-      whichever of the game and the server a deploy reached first. */
+      Asked at start, whenever the main menu opens, when the device comes back online or to the front, and, while the
+      answer is 'down', again and again (ONLINE_RETRY_MS, then once a minute while the main menu is up), so one slow
+      answer never hides Online for the visit. Only "this address has no race server" stops the asking. Each new answer
+      goes to onOnlineState (the main menu redraws its Online button in place), whichever of the game and the server a
+      deploy reached first. */
   checkOnline() {
+    if (this._onlineBusy) return this._onlineAsk;
+    clearTimeout(this._onlineRetry);
     const ask = async () => {
-      if (!ONLINE_HOSTS.includes(location.host)) return 'down';   // a plain file server or the old address: no race server to ask
+      if (!ONLINE_HOSTS.includes(location.host)) return 'none';   // a plain file server or the old address: no race server to ask
       try {
-        const r = await fetch('/healthz', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+        const r = await fetch('/healthz', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        if (r.status === 404) return 'none';
         const h = r.ok ? await r.json() : null;
         if (!h?.ok || !Number.isInteger(h.protocol)) return 'down';
         return ONLINE_PROTO > h.protocol ? 'down' : ONLINE_PROTO < (h.minProtocol ?? h.protocol) ? 'old' : 'ok';
       } catch { return 'down'; }
     };
-    return this._onlineAsk = ask().then(state => (this.onlineState = state));
+    this._onlineBusy = true;
+    return this._onlineAsk = ask().then(answer => {
+      this._onlineBusy = false;
+      const state = answer === 'none' ? 'down' : answer, was = this.onlineState;
+      this.onlineState = state;
+      this._onlineTries = state === 'down' ? (this._onlineTries || 0) + 1 : 0;
+      if (answer === 'down') {
+        const n = this._onlineTries - 1, wait = ONLINE_RETRY_MS[n] ?? 60000;
+        this._onlineRetry = setTimeout(() => { if (n < ONLINE_RETRY_MS.length || this.menus.screen?.spec.name === 'main') this.checkOnline(); }, wait);
+      }
+      if (state !== was) this.onOnlineState?.(state);
+      return state;
+    });
   }
   async goOnline(opts) {
     if (this.onlineState === 'old') { try { await (await navigator.serviceWorker?.getRegistration())?.update(); } catch { /* reload anyway */ } location.reload(); return; }
     try { if (!this.online) this.online = new (await import('../ui/online.js')).Online(this); }
-    catch { const sub = this.menus.screen?.el.querySelector('.btn.c4 .btn-sub'); if (sub) sub.textContent = 'Can’t reach the race server.'; return; }
+    catch { const sub = this.menus.screen?.el.querySelector('.btn.c4 .btn-sub'); if (sub) sub.textContent = 'Can’t reach the online server.'; return; }
     this.online.enter(opts);
   }
 

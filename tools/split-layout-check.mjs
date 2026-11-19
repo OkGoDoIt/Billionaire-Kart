@@ -5,7 +5,7 @@
    the choices that matter: side by side on a wide window, stacked on a squarer or upright one, columns on an
    ultrawide, rows on an upright tablet. And a layout already on screen holds while the window is dragged a little
    past a threshold. Pure arithmetic, no browser.   Usage: node tools/split-layout-check.mjs */
-import { splitLayout } from '../src/render/splitlayout.js';
+import { splitLayout, fieldHub, hubClearance, HUB_MIN } from '../src/render/splitlayout.js';
 
 const faults = [];
 const fail = m => faults.push(m);
@@ -70,6 +70,33 @@ want(1, 3840, 1080, '1x1', 'one player always has the whole screen');
   if (`${d.cols}x${d.rows}` !== '1x2') fail(`hysteresis: back at 1180x820 the layout stayed ${d.cols}x${d.rows}`);
   const e = splitLayout(3, 1280, 720, { prev: splitLayout(2, 2000, 800) });   // a previous layout for another player count is ignored
   if (e.rects.length !== 3) fail('a previous layout for a different player count was reused');
+}
+
+// three or four players: one shared field map and clock (issue #375). With a spare cell the board takes it and there is no
+// hub; otherwise exactly one hub, on screen, where at least two panes meet, never taking much of any pane's picture, and
+// big enough to read wherever the panes leave room for it. tools/hud-check.mjs checks the live page: one map, one clock,
+// and no readout under the hub.
+for (const n of [3, 4]) for (const W of widths) for (const H of heights) {
+  const tag = `${n}p ${W}x${H}`, L = splitLayout(n, W, H), hub = fieldHub(L, W, H);
+  if (L.spare.length) { if (hub) fail(`${tag}: a hub as well as the board in the spare cell`); continue; }
+  if (!hub) { fail(`${tag}: no shared map or clock anywhere`); continue; }
+  const [l, t, r, b] = hub.box;
+  if (l < -EPS || t < -EPS || r > W + EPS || b > H + EPS) fail(`${tag}: the hub is off screen ${hub.box.map(Math.round)}`);
+  const px = L.rects.map(([x, y, w, h]) => [x * W, (1 - y - h) * H, (x + w) * W, (1 - y) * H]);
+  const cover = px.map(([pl, pt, pr, pb]) => Math.max(0, Math.min(r, pr) - Math.max(l, pl)) * Math.max(0, Math.min(b, pb) - Math.max(t, pt)) / ((pr - pl) * (pb - pt)));
+  if (cover.filter(c => c > 0).length < 2) fail(`${tag}: the hub is inside one pane, not where the panes meet`);
+  if (W >= 390 && H >= 390 && Math.max(...cover) > 0.12) fail(`${tag}: the hub covers ${Math.round(Math.max(...cover) * 100)}% of a pane`);
+  const [pw, ph] = [px[0][2] - px[0][0], px[0][3] - px[0][1]];
+  if (hub.d < Math.min(HUB_MIN, ph * 0.62, pw * 0.42) - 1) fail(`${tag}: the hub map is ${hub.d}px, too small to read`);
+  const clear = hubClearance(L, W, H, hub);
+  if (clear.filter(c => c.tl || c.tr || c.bl || c.br).length < 2) fail(`${tag}: no pane's corner readouts make way for the hub`);
+}
+{ // where it goes: the centre junction of a two-by-two grid, the right-hand end of a seam between rows, the foot of a seam between columns
+  const at = (n, W, H, kind, why) => { const L = splitLayout(n, W, H), h = fieldHub(L, W, H); if (h?.kind !== kind) fail(`${n}p ${W}x${H} (${why}): hub ${h?.kind}, wanted ${kind}`); return h; };
+  const j = at(4, 1280, 720, 'junction', '16:9'); if (j && Math.hypot((j.box[0] + j.box[2]) / 2 - 640, (j.box[1] + j.box[3]) / 2 - 360) > 8) fail('4p 1280x720: the hub is not on the centre junction');
+  at(4, 500, 900, 'rows', 'four on a phone-sized portrait window'); at(3, 820, 1180, 'rows', 'tablet upright');
+  at(3, 2000, 800, 'columns', 'wide window'); at(4, 3840, 1080, 'columns', '32:9');
+  if (fieldHub(splitLayout(3, 1280, 720), 1280, 720)) fail('3p 1280x720: a hub beside the board');
 }
 
 for (const f of faults.slice(0, 40)) console.log('FAIL ' + f);

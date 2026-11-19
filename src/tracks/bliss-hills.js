@@ -468,6 +468,7 @@ export default {
     const cols = [[0xff4d6d, 0xffd23c], [0x38b6ff, 0xffffff], [0x2ee6a6, 0xffd23c], [0x9b6bff, 0xff7eb6], [0xff8a3c, 0xffffff]];
     const balloons = cols.map((c, i) => { const b = P.balloon(c); const a = 1.5 + (i / (cols.length - 1)) * 3.3, r = 210 + (i % 2) * 80;   /* over the west and south, clear of the wallpaper */ b.position.set(-10 + Math.cos(a) * r, 60 + i * 8, 130 + Math.sin(a) * r); b.scale.setScalar(1.4 + (i % 3) * 0.3); ctx.group.add(b); return b; });
     anim.push((dt, time) => { balloons.forEach((b, i) => { b.position.y += Math.sin(time * 0.4 + i * 1.7) * dt * 0.8; b.position.x += Math.sin(time * 0.05 + i) * dt * 0.6; b.rotation.y += dt * 0.05; }); });
+    giantZune({ THREE, track, sc, bake, anim });   // last, and with no rng, so nothing above moves
     bake.flush();
     atlas.flush();
     restartSky(ctx);
@@ -768,6 +769,49 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
       for (const m of meshes) m.instanceMatrix.needsUpdate = true;
     });
   }
+}
+
+/* A Zune the size of an office block, in a clearing on the hill past the lake: dead ahead from the hairpin exit to
+   the last corner, right after its tombstone in the recycle bin. The screen is still looking for another one. */
+const ZUNE = { x: -228, z: 77.5, H: 54, sink: 1.8, lean: 0.08, roll: -0.03, faceCp: 28.8 };
+function giantZune({ THREE, track, sc, bake, anim }) {
+  const f = track.indexAtCp(ZUNE.faceCp), yaw = Math.atan2(track.px[f] - ZUNE.x, track.pz[f] - ZUNE.z);
+  const root = new THREE.Group(), tilt = new THREE.Group(), body = B.zune({ H: ZUNE.H }), s = body.userData.screen;
+  tilt.rotation.set(-ZUNE.lean, 0, ZUNE.roll); tilt.add(body); root.add(tilt);
+  const W = 480, H = 640, UI = '"Segoe UI", "Helvetica Neue", Arial, sans-serif', BAR = [30, 562, W - 30, 592];
+  const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+  const draw = () => {
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#060607'; g.fillRect(0, 0, W, H);
+    const glow = g.createRadialGradient(W * 0.85, H * 1.05, 10, W * 0.85, H * 1.05, H * 0.75);
+    glow.addColorStop(0, 'rgba(242,106,33,0.22)'); glow.addColorStop(1, 'rgba(242,106,33,0)'); g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#b8b8b8'; g.lineWidth = 4; g.strokeRect(W - 80, 22, 50, 24); g.fillStyle = '#b8b8b8'; g.fillRect(W - 30, 29, 6, 10);
+    g.fillStyle = '#e5352b'; g.fillRect(W - 76, 26, 9, 16);   // one bar of battery left
+    g.fillStyle = '#8c8c8c'; g.font = `76px ${UI}`; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText('social', 22, 112);
+    S.fitText(g, '0', W / 2, 232, W * 0.9, 230, S.SANS, '#f26a21', { lines: 1 });
+    S.fitText(g, 'ZUNES', W / 2, 376, W * 0.9, 112, S.SANS, '#ffffff', { lines: 1 });
+    S.fitText(g, 'NEARBY', W / 2, 468, W * 0.9, 112, S.SANS, '#ffffff', { lines: 1 });
+    g.fillStyle = '#f26a21'; g.font = `bold 34px ${UI}`; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText('SEARCHING', BAR[0], 550);
+    g.fillStyle = '#2b2b30'; g.fillRect(BAR[0], BAR[1], BAR[2] - BAR[0], BAR[3] - BAR[1]);
+  };
+  draw();
+  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  if (document.fonts?.ready) document.fonts.ready.then(() => { draw(); tex.needsUpdate = true; });
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+  screen.position.set(0, s.y, s.z); tilt.add(screen);
+  // the search never ends: a block slides along the bar, the way a busy bar did in 2006
+  const mx = px => (px / W - 0.5) * s.w, my = py => s.y + (0.5 - py / H) * s.h;
+  const x0 = mx(BAR[0] + 6), x1 = mx(BAR[2] - 6), cw = (x1 - x0) * 0.3;
+  const chunk = new THREE.Mesh(new THREE.PlaneGeometry(1, my(BAR[1] + 5) - my(BAR[3] - 5)), new THREE.MeshBasicMaterial({ color: 0xf26a21, toneMapped: false }));
+  chunk.position.set(0, my((BAR[1] + BAR[3]) / 2), s.z + 0.03); tilt.add(chunk);
+  sc.place(root, ZUNE.x, ZUNE.z, { yaw, y: sc.y(ZUNE.x, ZUNE.z) - ZUNE.sink });
+  screen.castShadow = chunk.castShadow = false;   // the body casts for them
+  root.updateMatrixWorld(true); bake.add(body);
+  anim.push((dt, time) => {
+    const a = x0 - cw + ((time / 2.8) % 1) * (x1 - x0 + cw), l = Math.max(x0, a), r = Math.min(x1, a + cw);
+    chunk.visible = r > l;
+    if (r > l) { chunk.scale.x = r - l; chunk.position.x = (l + r) / 2; }
+  });
 }
 
 // The painted cloud dome is fixed. Fade a crash screen over it while keeping the road and hills in front.

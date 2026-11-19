@@ -72,6 +72,7 @@ Client to server is marked →, server to client ←.
 - → `{t:"hello", proto, build}` first message.
 - ← `{t:"welcome", you: playerId, now}` or `{t:"old"}`.
 - → `{t:"ping", c: localMs}` ← `{t:"pong", c, now}`.
+- A socket not welcomed within 10 s is closed and tried again (`Conn`, `OPEN_TIMEOUT`), with the usual back-off. The hub shows "Can’t reach the online server" when the way in (the session, then the socket) takes longer than 10 s a leg, and when a connection that dropped has not come back within 30 s.
 
 ### Server updates
 

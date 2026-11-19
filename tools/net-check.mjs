@@ -6,7 +6,7 @@
    stalls: a lost packet delays everything behind it by a retransmit time; nothing is ever dropped. Frames
    written in the same moment travel in one packet, so the stall rate is per packet, not per frame.
 
-   Usage: node tools/net-check.mjs [--only tracking,items,...] [--quick] [--verbose]
+   Usage: node tools/net-check.mjs [--only conn,tracking,items,...] [--quick] [--verbose]
    Prints PASS/FAIL per check and exits 1 on any failure.
 
    Latency in the tracking table is one-way device to device (each device-to-server link carries half). */
@@ -547,7 +547,29 @@ async function checkOffline() {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
+/* ---------- the connection itself: a socket that never opens (a proxy holding the upgrade, #371) ---------- */
+function checkConn() {
+  const sched = new Sched(), schedule = (fn, ms) => sched.after(ms, fn);
+  let made = 0, closed = 0;
+  const dead = () => { made++; return { open: false, onopen: null, onmessage: null, onclose: null, send() {}, close() { closed++; } }; };
+  const conn = new Conn({ transport: dead, clock: () => sched.t, schedule });
+  sched.until(9900);
+  const early = made;
+  sched.until(10700);
+  result(early === 1 && made === 2 && closed === 1, 'conn: a socket that never opens is closed after 10 s and another is tried', `${made} sockets, ${closed} closed`);
+  conn.close(); sched.until(120000);
+  result(made === 2 && closed === 2, 'conn: close() stops the retrying, and no timer fires later', `${made} sockets, ${closed} closed`);
+  let t = null, shut = 0;
+  const live = () => (t = { open: true, onopen: null, onmessage: null, onclose: null, close() { shut++; },
+    send(d) { if (JSON.parse(d).t === 'hello') sched.after(80, () => t.onmessage(JSON.stringify({ t: 'welcome', you: 'A', now: 0 }))); } });
+  const ok = new Conn({ transport: live, clock: () => sched.t, schedule });
+  sched.until(sched.t + 40000);
+  result(ok.ready && shut === 0, 'conn: a welcomed socket is never timed out', `ready ${ok.ready}, closed ${shut} times`);
+  ok.close();
+}
+
 const run = async (name, fn) => { if (!only || only.has(name)) await fn(); };
+await run('conn', checkConn);
 await run('codec', checkCodec);
 await run('offline', checkOffline);
 await run('items', checkItems);

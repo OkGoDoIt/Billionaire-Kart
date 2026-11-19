@@ -560,6 +560,8 @@ function dress(ctx) {
       });
       const sg = M.panelStage({ screenMat: screenSign.mat });
       sc.place(sg, sx, sz, { yaw: 0, y: sy - 0.15 }); take(sx, sz, 17);
+      // its screen keeps a sight line up the outrun, so no corner arrow board or pine stands in front of it (#397)
+      for (const cp of [23.8, 24.6]) { const e = track.pointAt(track.sAtCp(cp), 0, {}); sightLines.push({ x: sx, z: sz, dx: e.x - sx, dz: e.z - sz }); }
       sg.updateMatrixWorld(true);
       const audM = new THREE.Matrix4().copy(sg.matrixWorld), audV = new THREE.Vector3(), aud = [];
       for (let rI = 0; rI < 3; rI++) for (let i = 0; i < 9; i++) if (rng() < 0.8) { audV.set((i - 4) * 2.6 + rng.range(-0.5, 0.5), 0.68, 8.5 + rI * 2.2 + rng.range(-0.3, 0.3)).applyMatrix4(audM); aud.push({ x: audV.x, y: audV.y, z: audV.z, yaw: Math.PI + rng.range(-0.3, 0.3) }); }

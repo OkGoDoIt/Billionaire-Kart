@@ -157,8 +157,10 @@ export function roadSign(text, { w = 9, h = 2.4, legs = 3.4, bg = '#1f2a44', fg 
 /** An alpine chalet: stone ground floor, timber upper floor, steep snow roof, balcony. */
 export function chalet(seed = 1, { sign = null } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder(), rng = makeRng(seed);
-  const W = 11, D = 8;
-  b.add('stone', box(W, 2.6, D, 0.15, 2), { p: [0, 1.3, 0] });
+  const W = 11, D = 8, FOOT = 5;
+  // the stone storey runs FOOT metres on below the floor: on a slope the downhill side stands on its
+  // foundation instead of hovering over the snow (#376); on flat ground it stays buried
+  b.add('stone', box(W, 2.6 + FOOT, D, 0.15, 2), { p: [0, (2.6 - FOOT) / 2, 0] });
   b.add('wood', box(W - 0.8, 2.8, D - 0.8, 0.12, 2), { p: [0, 4.0, 0] });
   // steep pitched roof: two slabs + ridge, snow slabs riding on top
   // (polish round: the slabs' tilt sign was flipped, which built a valley roof — ridge up, eaves down is the chalet read)
@@ -591,7 +593,7 @@ const HALL_GLASS = new THREE.MeshStandardMaterial({ color: 0x2b3f5c, emissive: 0
 export function congressHall() {
   const b = new ModelBuilder();
   const W = 66, D = 30, H = 11;
-  b.add('base', box(W + 2, 1.2, D + 2, 0.1, 1), { p: [0, 0.6, 0] });
+  b.add('base', box(W + 2, 1.2 + 7, D + 2, 0.1, 1), { p: [0, (1.2 - 7) / 2, 0] });   // a plinth 7 m deep: the lakeside corner stands on it, not over the shore (#376)
   b.add('glass', box(W - 1, H - 1.2, D - 1, 0.1, 1), { p: [0, 1.2 + (H - 1.2) / 2, 0] });
   for (let i = 0; i <= 12; i++) for (const sz of [-1, 1]) b.add('pier', box(0.7, H - 1.2, 0.7, 0.08, 1), { p: [-W / 2 + i * (W / 12), 1.2 + (H - 1.2) / 2, sz * (D / 2 - 0.1)] });
   for (const sx of [-1, 1]) for (let i = 0; i <= 5; i++) b.add('pier', box(0.7, H - 1.2, 0.7, 0.08, 1), { p: [sx * (W / 2 - 0.1), 1.2 + (H - 1.2) / 2, -D / 2 + i * (D / 5)] });

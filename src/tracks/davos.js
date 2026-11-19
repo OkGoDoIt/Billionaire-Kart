@@ -742,6 +742,7 @@ function dress(ctx) {
       const i = (c.i0 + Math.round(((k + 0.6) / n) * (c.len / track.ds))) % track.N;
       const edge = side > 0 ? track.edgeL[i] : track.edgeR[i];
       const p = sc.beside(track.cp[i], side, edge === EDGE.OPEN ? (side > 0 ? track.outerL[i] : track.outerR[i]) + 1.2 : 1.2);
+      if (!sightClear(p.x, p.z)) continue;   // never in front of a roadside sign (#376: one covered SKI SCHOOL)
       const b = P.chevronBoard(0xe23b3b); if (c.dir > 0) b.scale.x = -1;
       sc.place(b, p.x, p.z, { yaw: p.yaw, lift: edge === EDGE.OPEN ? 0.9 : 1.2 }); bake.add(b, false);
     }

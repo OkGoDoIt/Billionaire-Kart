@@ -491,7 +491,7 @@ function decorate(ctx) {
     const shop = W.flagShop(); shop.position.set(fs.x, WL, fs.z); shop.rotation.y = faceApproach(fs, 13.4); shop.scale.setScalar(1.45); group.add(shop); fbake.add(shop);
     const sb = W.signBuoy(), ss = at(0.25, 20);
     sb.position.set(ss.x, WL - 0.15, ss.z); sb.rotation.y = faceRoad(ss, 1); group.add(sb); fbake.add(sb);
-    [[0.98, 1, 1, 0.42], [11.8, 1, 2, 10.75], [15.2, -1, 3, 14.2], [41.7, -1, 4, 40.4], [44.7, 1, 5, 43.55]].forEach(([cp, side, n, approach]) => {
+    [[0.98, 1, 1, 0.42], [11.8, 1, 2, 10.75], [15.2, 1, 3, 14.2], [41.7, -1, 4, 40.4], [44.7, 1, 5, 43.55]].forEach(([cp, side, n, approach]) => {
       const p = at(cp, side * 20);
       const board = W.adBoard(n); board.position.set(p.x, WL, p.z); board.rotation.y = faceApproach(p, approach); board.scale.setScalar(1.6); group.add(board); fbake.add(board);
     });

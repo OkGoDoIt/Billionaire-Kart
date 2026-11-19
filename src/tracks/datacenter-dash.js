@@ -76,7 +76,8 @@ const HALL_DEFS = [
     portal: ['NOW TRAINING', 'ON YOU', '#ff7847'], signIn: ['GPU HALL · 41°C AND RISING', '#ff8a5c'], signOut: ['COOL DOWN AHEAD (NOT REALLY)', '#ffd23c'], jokes: ['WE BOUGHT ALL OF THEM', 'FAN SPEED: YES', 'SPICY TENSORS INSIDE'] },
   { id: 'inference', from: 21.85, to: 26.45, wide: [23.5, 26.1], wideIn: 9.5, wideOut: 16, inAt: 24.0, narrow: 4.6, up: 9.8, upWide: 11.8, skin: 'neon',
     panel: ['#1d2333', '#262e42', '#121620', '#3dc8ff'], glow: 0x9fe6ff, band: 0x9fe6ff, accent: 0x1f6bff, tanks: [24.42, 25.2], screen: 24.05,
-    signIn: ['HALL 2 · INFERENCE', '#7fd0ff'], signOut: ['NOW LEAVING THE CLOUD', '#ffd23c'], signOutSub: 'NEXT: THE KEYNOTE (ATTENDANCE MANDATORY)',
+    // the door sign tells a joke: the hall's name is on the roof right above it
+    signIn: ['ANSWERS: 100% CONFIDENT', '#7fd0ff'], signOut: ['NOW LEAVING THE CLOUD', '#ffd23c'], signOutSub: 'NEXT: THE KEYNOTE (ATTENDANCE MANDATORY)',
     jokes: ['PLEASE HOLD. YOUR LAP IS IMPORTANT TO US', 'TRAINING RUN 7 OF ∞', 'NO GPUs WERE HARMED (MOST)', 'THIS HALL RUNS ON YOUR LAKE'] },
 ];
 /** Lap ranges that are indoors, Hall 9 included: for the tunnel zones, and for the sim/report. */
@@ -1896,7 +1897,13 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, palette, view }) {
   }
   const gauge = ledSign(THREE, group, 768, 384, [8, 32.6, zc - 6.4], Math.PI, 15, 7.5);
   {
-    const s = atlas.add(768, 120, signDraw('H₂O → GPU', { bg: '#ffc928', fg: '#1a1d29', font: SANS, size: 80, lines: 1 }));
+    // the subscript 2 is drawn small in the sign's own face: Arial Black has no '₂', so it fell back to another font
+    const s = atlas.add(768, 120, (g, w, h) => {
+      g.fillStyle = '#ffc928'; g.fillRect(0, 0, w, h); g.fillStyle = '#1a1d29'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+      const big = `80px ${SANS}`, small = `52px ${SANS}`, parts = [['H', big, 0], ['2', small, 14], ['O → GPU', big, 0]];
+      const width = parts.reduce((t, [txt, f]) => { g.font = f; return t + g.measureText(txt).width; }, 0), y = h / 2 + 28;
+      let x = (w - width) / 2; for (const [txt, f, dy] of parts) { g.font = f; g.fillText(txt, x, y + dy); x += g.measureText(txt).width; }
+    });
     atlas.place(s, [8, 25.1, -347.4 - 0.95], Math.PI, 11, 1.72);
   }
 

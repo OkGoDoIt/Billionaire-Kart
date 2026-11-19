@@ -591,7 +591,19 @@ function dressSectors(ctx, H) {
   }
 
   /* ================= S3: cubicle field ================= */
-  putSign(['DO WHAT YOU L  VE'], 26, 3.6, -88.5, 4.6, -28, 90, { bg: '#14060d', fg: '#ff7dbe', size: 150, w: 1024, h: 142 });   // canvas at the board's shape, so the type fills it (#397: squeezed into 1024x256 it read at half the size)
+  // canvas at the board's shape, so the type fills it (#397: squeezed into 1024x256 it read at half the size). The O fell into the
+  // road (the neonO obstacle on the field), so its gap shows the empty socket: a dark tube outline, its clips, and the cut wires.
+  putSign(['DO WHAT YOU L  VE'], 26, 3.6, -88.5, 4.6, -28, 90, { bg: '#14060d', fg: '#ff7dbe', size: 150, w: 1024, h: 142, after: (g, w, h) => {
+    const full = g.measureText('DO WHAT YOU L  VE').width, x = w / 2 - full / 2 + g.measureText('DO WHAT YOU L').width + g.measureText('  ').width / 2;
+    const o = g.measureText('O').width, r = o * 0.4, y = h / 2, lw = Math.max(3, o * 0.13);
+    g.save(); g.lineCap = 'round';
+    g.strokeStyle = 'rgba(255,125,190,.28)'; g.lineWidth = lw; g.setLineDash([lw * 1.6, lw * 1.1]); g.beginPath(); g.ellipse(x, y, r * 0.86, r, 0, 0, Math.PI * 2); g.stroke();
+    g.setLineDash([]); g.fillStyle = '#8a8f99'; for (const a of [-2.4, -0.7, 1.6]) g.fillRect(x + Math.cos(a) * r * 0.86 - lw * 0.6, y + Math.sin(a) * r - lw * 0.6, lw * 1.2, lw * 1.2);
+    g.strokeStyle = '#c9ccd4'; g.lineWidth = Math.max(2, lw * 0.35); g.beginPath();
+    g.moveTo(x - r * 0.3, y - r * 1.02); g.quadraticCurveTo(x - r * 0.45, y - r * 0.4, x - r * 0.2, y + r * 0.05);
+    g.moveTo(x + r * 0.25, y - r * 1.02); g.quadraticCurveTo(x + r * 0.4, y - r * 0.55, x + r * 0.32, y - r * 0.15); g.stroke();
+    g.restore();
+  } });
   putSign(['GROWTH (HOCKEY STICK)'], 11, 2.4, 0, 6, 1.55, 180, { bg: '#274b63', fg: '#ffe9a8' });
   // The main carpet is the aisle between two banks. Local +Z is the open side.
   for (const side of [-1,1]) {

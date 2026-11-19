@@ -221,7 +221,9 @@ export default {
     };
     /** The same, beside the road at control point `at`, if the spot is clear for its full width. */
     const sign = (at, side, off, draw, w, h, up, opts = {}) => {
-      const p = sc.beside(at, side, off), yaw = opts.yaw ?? faceIn(p.i, side, opts.turn ?? 0.5), rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
+      let p = sc.beside(at, side, off), yaw = opts.yaw ?? faceIn(p.i, side, opts.turn ?? 0.5), rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
+      // stepped back off any grandstand, so a stand's back wall and roof never cut across the board (#389)
+      for (let k = 0; k < 12 && [0, 1, -1].some(t => onStand(p.x + rx * t, p.z + rz * t)); k++) { p = sc.beside(at, side, ++off); yaw = opts.yaw ?? faceIn(p.i, side, opts.turn ?? 0.5); rx = Math.cos(yaw) * w / 2; rz = -Math.sin(yaw) * w / 2; }
       if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return null;
       signAt(p.x, p.z, yaw, draw, w, h, up, opts); return p;
     };
@@ -285,6 +287,8 @@ export default {
       });
       bake.add(g);
     };
+    /** True when (x, z) is on a grandstand's footprint, its roof included, by margin m. */
+    const onStand = (x, z, m = 0.6) => standSpots.some(s => { const dx = x - s.x, dz = z - s.z, u = dx * Math.cos(s.yaw) - dz * Math.sin(s.yaw), v = dx * Math.sin(s.yaw) + dz * Math.cos(s.yaw); return Math.abs(u) < 15.4 + m && v > -10 - m && v < 2.3 + m; });
     sc.along({ from: 26.9, to: 1.0, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
     sc.along({ from: 27.3, to: 0.7, side: 1, offset: 17, spacing: 34, phase: 12 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
     sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });

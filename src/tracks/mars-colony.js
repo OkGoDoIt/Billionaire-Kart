@@ -248,12 +248,16 @@ function dress(ctx) {
   const atlas = K.makeAtlas(ctx.group, { glow: 0.5 });
   /** Yaw that faces the road at sample i from `side`, turned toward oncoming karts by k. */
   const faceIn = (i, side, k = 0.5) => Math.atan2(-side * track.lx[i] - track.tx[i] * k, -side * track.lz[i] - track.tz[i] * k);
+  // Where the boards stand (centre and half-width vector), so a poster slides on along the road rather than through one.
+  const boards = [];
+  const crosses = (x, z, rx, rz) => boards.some(b => { for (let t = -1; t <= 1.01; t += 0.1) { const dx = x + rx * t - b.x, dz = z + rz * t - b.z, u = clamp((dx * b.rx + dz * b.rz) / (b.rx ** 2 + b.rz ** 2), -1, 1); if (Math.hypot(dx - u * b.rx, dz - u * b.rz) < 1.5) return true; } return false; });
   /** A lettered board on legs at (x, z), facing yaw; up is the panel centre above the ground. */
   const signAt = (x, z, yaw, draw, w, h, up, { px = 1024, frame = 0x2a2026, y = null, legs = 2 } = {}) => {
     const y0 = y ?? sc.y(x, z), f = K.signFrame(w, h, up, { color: frame, legs }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f);
     const r = atlas.add(px, Math.max(48, Math.round(px * h / w)), draw);
-    atlas.both(r, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h, 0.42);
-    take(x, z, w * 0.55);
+    const out = Math.max(0.03, w * 0.006 - 0.06);   // a wide frame's legs thicken with it: hang the face clear of them
+    atlas.both(r, [x + Math.sin(yaw) * out, y0 + up, z + Math.cos(yaw) * out], yaw, w, h, 0.39 + out);
+    take(x, z, w * 0.55); boards.push({ x, z, rx: Math.cos(yaw) * w / 2, rz: -Math.sin(yaw) * w / 2 });
     return r;
   };
   /** The same, beside the road at control point `at`, if the spot is clear for its full width. */
@@ -301,11 +305,12 @@ function dress(ctx) {
   })();
   /** A painted poster on a board beside the road (poster k of the atlas), with a lettered back. */
   const poster = (at, side, off, k, back, { w = 15, h = 10, up = 9, turn = 1.8, roadLevel = false } = {}) => {
-    const p = sc.beside(at, side, off), yaw = faceIn(p.i, side, turn), rx = Math.cos(yaw) * w / 2, rz = -Math.sin(yaw) * w / 2;
+    let p, yaw, rx, rz;
+    for (let n = 0; n < 40; n++, at += 0.02) { p = sc.beside(at, side, off); yaw = faceIn(p.i, side, turn); rx = Math.cos(yaw) * w / 2; rz = -Math.sin(yaw) * w / 2; if (!crosses(p.x, p.z, rx, rz)) break; }
     if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return null;
     const ground = sc.y(p.x, p.z), y0 = roadLevel ? Math.max(p.roadY - 1, ground) : ground;
     const f = K.signFrame(w, h, up + y0 - ground, { color: 0x2a2026, legs: 2 });
-    bake.add(sc.place(f, p.x, p.z, { yaw, y: ground })); take(p.x, p.z, w * 0.55);
+    bake.add(sc.place(f, p.x, p.z, { yaw, y: ground })); take(p.x, p.z, w * 0.55); boards.push({ x: p.x, z: p.z, rx, rz });
     posters.place(k, [p.x + Math.sin(yaw) * 0.03, y0 + up, p.z + Math.cos(yaw) * 0.03], yaw, w, h);
     // Marquee below the illustration: a one-way race should see both halves of the joke.
     const strap = atlas.add(1024, 150, K.board(back, { bg: INK, fg: CREAM, size: 96, lines: 1, pad: 0.04 }));
@@ -570,8 +575,8 @@ function dress(ctx) {
   // debris: a few chunk shapes, three of each, hidden until the bang
   const debris = rocket.userData.chunks.map(([geo, mat]) => { const m = new THREE.InstancedMesh(geo, mat, 3); m.frustumCulled = false; m.visible = false; ctx.group.add(m); return m; });
   const bits = []; debris.forEach((m, k) => { for (let j = 0; j < 3; j++) bits.push({ m, j, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3() }); });
-  // the banner greets you on the canyon side of the pad entry; the counter watches the mount exit
-  sign(8.3, -sideW, 15, K.board('RAPID UNSCHEDULED DISASSEMBLY', { bg: CREAM, fg: INK, size: 150, stripe: RUST_HEX, sub: '(A SUCCESS)', subFg: '#16a34a', subScale: 0.75 }), 30, 11, 17, { legs: 3, frame: 0x2a2026 });
+  // the banner greets you on the canyon side of the pad entry, ahead of the travel poster; the counter watches the mount exit
+  sign(7.95, -sideW, 15, K.board('RAPID UNSCHEDULED DISASSEMBLY', { bg: CREAM, fg: INK, size: 150, stripe: RUST_HEX, sub: '(A SUCCESS)', subFg: '#16a34a', subScale: 0.75 }), 30, 11, 17, { legs: 3, frame: 0x2a2026 });
   const counter = (() => {
     const cv = document.createElement('canvas'); cv.width = 768; cv.height = 384;
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;

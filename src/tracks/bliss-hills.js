@@ -323,7 +323,11 @@ export default {
       } else {
         atlas.place(board(STANDS[k % STANDS.length], { bg: k % 2 ? '#0a4fd6' : '#ece9d8', fg: k % 2 ? '#ffffff' : '#12142b', size: 120, lines: 1 }, 1024, 96), local(p, 0, 2.3, p.y + 7.9), p.yaw, 28, 2.6);
       }
-      [-10, 0.5, 10.5].forEach((u, j) => atlas.place(board(PLACARDS[(k * 3 + j) % PLACARDS.length], { bg: ['#ffffff', '#ffffe1', '#7fd0ff', '#ff9ab0'][(k + j) % 4], fg: '#12142b', size: 110, border: '#12142b' }, 384, 224), local(p, u + rng.range(-1.5, 1.5), 0.4, p.y + 3.9), p.yaw + rng.range(-0.15, 0.15), 3.0, 1.75));
+      [-10, 0.5, 10.5].forEach((u, j) => {
+        const at = local(p, u + rng.range(-1.5, 1.5), 0.4, p.y + 3.9), yw = p.yaw + rng.range(-0.15, 0.15);
+        if ([-1.5, 0, 1.5].some(d => track.terrainHeight(at[0] + Math.cos(yw) * d, at[2] - Math.sin(yw) * d) > at[1] - 1.0)) return;   // where the hill comes up over the front row, that placard stays down
+        atlas.place(board(PLACARDS[(k * 3 + j) % PLACARDS.length], { bg: ['#ffffff', '#ffffe1', '#7fd0ff', '#ff9ab0'][(k + j) % 4], fg: '#12142b', size: 110, border: '#12142b' }, 384, 224), at, yw, 3.0, 1.75);
+      });
     };
     const rowA = sc.along({ from: 34.9, to: 0.9, side: 1, offset: 6.5, spacing: 34 });
     const gi = track.indexAtCp(0.45);
@@ -411,6 +415,9 @@ export default {
     sc.instances(partsOf(B.sheep(1)), sheepSpots.filter((_, i) => i % 2 === 0), { scale: [1.2, 1.55], yaw: 'random', tilt: 0.05 });
     sc.instances(partsOf(B.sheep(4)), sheepSpots.filter((_, i) => i % 2 === 1), { scale: [1.2, 1.55], yaw: 'random', tilt: 0.05 });
 
+    // the big billboards' spots, claimed before the trees go in so none grows through a board (they are built further down)
+    const boardSpots = BOARDS.map(b => [b, sc.beside(b[0], b[1], b[2])]).filter(([, p]) => free(p.x, p.z) && p.x <= 100);
+    boardSpots.forEach(([, p]) => taken.push([p.x, p.z, 12]));
     // trees in small round clumps: lighter, sunnier greens than Silicon Valley
     const clear = (x, z) => free(x, z) && !inMeadow(x, z) && !nearLake(x, z) && !onRidge(x, z);
     const clumps = sc.scatter({ count: 26, min: 18, max: 210, maxSlope: 0.55, minGap: 30, where: clear });
@@ -451,8 +458,7 @@ export default {
 
     // big billboards where you are looking anyway
     const frame = P.billboard(null, { w: 15, h: 5, legs: 6 }); frame.remove(frame.children[frame.children.length - 1]);   // the frame, without its blank panel
-    BOARDS.forEach(([at, side, off, text, bg, fg]) => {
-      const p = sc.beside(at, side, off); if (!free(p.x, p.z) || p.x > 100) return;
+    boardSpots.forEach(([[, , , text, bg, fg], p]) => {
       const yaw = p.yaw + rng.range(-0.12, 0.12), f = frame.clone(); sc.place(f, p.x, p.z, { yaw }); bake.add(f);
       atlas.place(board(text, { bg, fg, size: 118 }), [p.x + Math.sin(yaw) * 0.03, p.y + 8.5, p.z + Math.cos(yaw) * 0.03], yaw, 15, 5);
       atlas.place(board(text, { bg, fg, size: 118 }), [p.x - Math.sin(yaw) * 0.46, p.y + 8.5, p.z - Math.cos(yaw) * 0.46], yaw + Math.PI, 15, 5);   // and on the back

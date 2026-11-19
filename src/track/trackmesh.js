@@ -46,6 +46,20 @@ export const DEFAULT_LOOK = {
 /** Shared uniforms animated by the renderer each frame. */
 export const trackUniforms = { uTime: { value: 0 } };
 
+/* The tunnel shell is an arch drawn with TUNNEL_ARC flat facets, so between its corners the wall sits inside the
+   ideal curve. Anything fixed to the wall (posters, lamps) measures against the wall as drawn, with tunnelWallLat. */
+export const TUNNEL_ARC = 10;
+/** Lateral offset (along track.l, + = left) of the tunnel wall's inner face at sample i, `up` metres above the road, on side +1 (left) or -1 (right). */
+export function tunnelWallLat(track, i, side, up) {
+  const a = track.hwL[i] + 0.7, b = track.hwR[i] + 0.7, mid = (a - b) / 2, half = (a + b) / 2, H = track.def.tunnelHeight ?? 7.5;
+  const u = Math.min(Math.max(up, 0), H), at = k => { const ang = Math.PI * k / TUNNEL_ARC; return [mid + Math.cos(ang) * half, Math.sin(ang) * H]; };
+  for (let k = 0; k < TUNNEL_ARC / 2; k++) {   // walk the facets from the foot of this side up to the crown
+    const [l0, u0] = at(side > 0 ? k : TUNNEL_ARC - k), [l1, u1] = at(side > 0 ? k + 1 : TUNNEL_ARC - k - 1);
+    if (u <= u1 + 1e-6) return l0 + (l1 - l0) * (u - u0) / ((u1 - u0) || 1);
+  }
+  return mid;
+}
+
 export function buildTrackMesh(track, look = {}) {
   const L = { ...DEFAULT_LOOK, ...look, terrain: { ...DEFAULT_LOOK.terrain, ...(look.terrain || {}) }, road: { ...DEFAULT_LOOK.road, ...(look.road || {}) } };
   const group = new THREE.Group(); group.name = 'track';
@@ -306,7 +320,7 @@ export function buildTrackMesh(track, look = {}) {
   /* ----- tunnels: an arched shell over the road with light strips ----- */
   {
     const g = new Geo(), gPort = new Geo(); let prev = -1, any = false;
-    const ARC = 10, H = track.def.tunnelHeight ?? 7.5;
+    const ARC = TUNNEL_ARC, H = track.def.tunnelHeight ?? 7.5;
     for (let r = 0; r <= N; r++) {
       const i = r % N;
       if (!track.tunnel[i] || track.def.tunnelShell === false) { prev = -1; continue; }   // a track can build its own tunnel interior

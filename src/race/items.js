@@ -216,9 +216,12 @@ export class ItemSystem {
     for (const k of race.karts) {
       if (k === user || k.puppet || k.finished || k.rescueT > 0) continue;
       if (k.invincible || k.ghostT > 0) { k.emit('dodged', 'crash'); continue; }
-      // the jolt goes through the same door as every other hit: mercy invulnerability, an absorb, or a kart
-      // already reeling all stop it, and then it does not shrink the kart or shake its item loose either (#349)
-      if (!k.hurt('zap', user)) continue;
+      // the jolt goes through the same door as every other hit: mercy invulnerability or an absorb stops it, and
+      // then it does not shrink the kart or shake its item loose either (#349). A kart already reeling from another
+      // hit is still shrunk and loses its item, as Lightning does in Mario Kart; its spin just isn't started again.
+      const reeling = k.hitT > 0 && k.vulnerable;
+      if (reeling) { k.stats.hitsTaken++; user.stats.hitsGiven++; }
+      else if (!k.hurt('zap', user)) continue;
       const front = 1 - (k.rank - 1) / Math.max(1, n - 1);
       k.shrinkT = lerp(3.4, 6.5, front) * (k.sp.shrinkTake || 1);
       if (k.item) { k.item = null; k.itemUses = 0; k.goldenActive = false; k.goldenT = 0; k.emit('itemGone'); }

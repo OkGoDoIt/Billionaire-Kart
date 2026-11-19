@@ -162,6 +162,11 @@ public sealed class RoomTests(TestApp app)
             var totals = res.GetProperty("cupState").GetProperty("totals");
             Assert.Equal(15 * (n + 1), totals.GetProperty("elon").GetInt32());
             Assert.Equal(12 * (n + 1), totals.GetProperty("sam").GetInt32());
+            // each racer's finish per race, for the countback on a tie (src/content/cups.js cupOrder)
+            var places = res.GetProperty("cupState").GetProperty("places");
+            Assert.Equal(1, places.GetProperty("elon")[n].GetInt32());
+            Assert.Equal(2, places.GetProperty("sam")[n].GetInt32());
+            if (n == 0) Assert.Equal(0, places.GetProperty("elon")[1].GetInt32());
             await a.Send(new { t = "ready" });
             await b.Send(new { t = "ready" });
         }

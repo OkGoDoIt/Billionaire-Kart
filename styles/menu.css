@@ -416,7 +416,8 @@ body.must-turn .hud, body.must-turn .track-card, body.must-turn .hint-card { vis
 .screen-results, .screen-cupResults { padding-top: calc(var(--u) * 1.6 + var(--safe-t)); padding-bottom: calc(var(--u) * 1.6 + var(--safe-b)); }
 .panel.results { position: relative; padding: calc(var(--u) * 1.5) calc(var(--u) * 2.2); }
 .panel.results h1 { font-size: calc(var(--u) * 3.3); }
-.panel.results .badge { position: absolute; right: calc(var(--u) * 2.2); top: calc(var(--u) * 1.4); margin: 0; font-size: calc(var(--u) * 1.9); }
+.panel.results .badges { position: absolute; right: calc(var(--u) * 2.2); top: calc(var(--u) * 1.4); display: flex; flex-direction: column; align-items: flex-end; gap: calc(var(--u) * 0.5); }
+.panel.results .badge { margin: 0; font-size: calc(var(--u) * 1.9); }
 .panel.results .res-sub { display: inline-block; margin-left: 1em; }
 .panel.results .res-row { font-size: calc(var(--u) * 1.85); padding-top: calc(var(--u) * 0.15); padding-bottom: calc(var(--u) * 0.15); }
 .panel.results .res-row img { width: calc(var(--u) * 3.3); height: calc(var(--u) * 3.3); }

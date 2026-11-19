@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { h, hex, PLAYER_COLORS, LEVELS, CC_LIST } from './menus.js';
 import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
-import { CUPS, CUP_BY_ID } from '../content/cups.js';
+import { CUPS, CUP_BY_ID, cupOrder } from '../content/cups.js';
 import { CLASSES } from '../race/kart.js';
 import { RaceSession } from '../game/session.js';
 import { fmtTime } from '../core/util.js';
@@ -635,7 +635,7 @@ export class Online {
       const cs = r.cupState, cup = CUP_BY_ID[r.rules.cup], key = cs && Array.isArray(cs.tracks) && r.last && `${code}:${cs.tracks.join()}:${r.last.trackId}`;
       if (key && cup && cs.index >= cs.tracks.length - 1 && this.standingsSeen !== key) {
         if (!standings.firstChild) {
-          const rows = Object.entries(cs.totals || {}).sort((a, b) => b[1] - a[1]);
+          const totals = cs.totals || {}, rows = cupOrder(totals, cs.places || {}).map(id => [id, totals[id]]);   // ties on countback; a server without places sorts on points alone
           const humans = new Map(listOf(r.last.results).filter(x => x.member).map(x => [x.racer, x.member]));
           const done = M.btn('Done', () => { this.standingsSeen = key; standings.replaceChildren(); M.focus(M.screen.el.querySelector('[data-f]:not(.back):not(:disabled)'), false); }, { cls: 'small go', def: true });
           standings.replaceChildren(h('div', { class: 'panel ol-standings' }, h('h3', {}, `${cup.name} · Final standings`),

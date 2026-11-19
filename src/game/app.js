@@ -13,7 +13,7 @@ import { RaceSession, MAX_FRAME_TIME } from './session.js';
 import { AudioEngine } from '../audio/audio.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { RACERS, RACER_BY_ID } from '../content/racers.js';
-import { CUPS, cupTracks, GP_POINTS, cupStars } from '../content/cups.js';
+import { CUPS, cupTracks, GP_POINTS, cupStars, cupOrder } from '../content/cups.js';
 import { makeRng } from '../core/util.js';
 
 /* The online protocol this build speaks (the same number as PROTO in src/net/conn.js, which is only loaded on demand). */
@@ -311,7 +311,9 @@ export class App {
     if (this._askFlick(() => this.startCup(cup, grid))) return;
     const f = this.flow, tracks = cupTracks(cup), humans = f.racers.map(id => RACER_BY_ID[id]);
     const rivals = grid || this.rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, 8 - humans.length).map(r => r.id);
-    this.gp = { cup, tracks, index: 0, grid: rivals, totals: Object.fromEntries([...rivals, ...f.racers].map(id => [id, 0])), order: null, cc: f.cc, level: f.level };
+    const field = [...rivals, ...f.racers];
+    // places: each racer's finish in every race so far, for the countback on a tie (cupOrder in content/cups.js)
+    this.gp = { cup, tracks, index: 0, grid: rivals, totals: Object.fromEntries(field.map(id => [id, 0])), places: Object.fromEntries(field.map(id => [id, []])), order: null, cc: f.cc, level: f.level };
     this._gpRace();
   }
   _gpRace() {
@@ -363,17 +365,25 @@ export class App {
   /* ---------- results ---------- */
   _finishRace(session, results) {
     const cfg = session.config, def = TRACK_BY_ID[cfg.trackId];
-    const mine = results.filter(r => r.isPlayer).sort((a, b) => a.rank - b.rank)[0];
+    const humans = results.filter(r => r.isPlayer).sort((a, b) => a.rank - b.rank), mine = humans[0];
     let records = null;
     if (mine) {
-      records = this.save.recordRace(cfg.trackId, cfg.mode === 'timetrial' ? trialKey(cfg.cc) : cfg.cc, mine.time, mine.bestLap, mine.racer.id, cfg.mode !== 'timetrial' && mine.rank === 1);
-      if (cfg.mode === 'timetrial' && session.rec && records.newBestRace) this.save.setGhost(cfg.trackId, cfg.cc, { racer: session.rec.racer, step: session.rec.step, time: mine.time, d: session.rec.d });
-      const st = this.save.data.stats; st.coins += mine.stats.coins; st.hitsGiven += mine.stats.hitsGiven; st.hitsTaken += mine.stats.hitsTaken; this.save.write();
+      // Every local player's run is up for the track's bests: the fastest finish and the fastest lap, whoever set them.
+      // The race counts once in the stats, and as a win when any of them won; coins and hits are each kart's own, so they add up.
+      const fastest = humans.filter(r => !r.estimated && isFinite(r.time)).reduce((b, r) => (b && b.time <= r.time ? b : r), null);
+      const lapper = humans.filter(r => isFinite(r.bestLap)).reduce((b, r) => (b && b.bestLap <= r.bestLap ? b : r), null);
+      const saved = this.save.recordRace(cfg.trackId, cfg.mode === 'timetrial' ? trialKey(cfg.cc) : cfg.cc, fastest ? fastest.time : NaN, lapper ? lapper.bestLap : NaN, (fastest || mine).racer.id, cfg.mode !== 'timetrial' && mine.rank === 1);
+      // who set each, so the results screen names the right player
+      records = { ...saved, raceBy: saved.newBestRace ? fastest.playerIndex : null, lapBy: saved.newBestLap ? lapper.playerIndex : null, players: humans.length };
+      if (cfg.mode === 'timetrial' && session.rec && saved.newBestRace && fastest.kart === session.race.players[0]) this.save.setGhost(cfg.trackId, cfg.cc, session.rec.ghost(fastest.time));
+      const st = this.save.data.stats;
+      for (const r of humans) { st.coins += r.stats.coins; st.hitsGiven += r.stats.hitsGiven; st.hitsTaken += r.stats.hitsTaken; }
+      this.save.write();
     }
     let gp = null;
     if (this.gp) {
       const g = this.gp;
-      for (const r of results) g.totals[r.racer.id] = (g.totals[r.racer.id] || 0) + (GP_POINTS[r.rank - 1] || 0);
+      for (const r of results) { const id = r.racer.id; g.totals[id] = (g.totals[id] || 0) + (GP_POINTS[r.rank - 1] || 0); (g.places[id] ||= [])[g.index] = r.rank; }
       g.order = results.map(r => r.racer.id);
       gp = { totals: g.totals, index: g.index, count: g.tracks.length, last: g.index === g.tracks.length - 1 };
     }
@@ -400,12 +410,16 @@ export class App {
       this.menus.reset('results', { results, gp: null, track, records, best });
     });
   }
+  /** The cup's standings, best first, ties settled by countback (cupOrder). */
+  cupStandings() {
+    const g = this.gp, humans = new Set(this.flow.racers);
+    return cupOrder(g.totals, g.places).map(id => ({ racer: RACER_BY_ID[id], points: g.totals[id], isPlayer: humans.has(id) }));
+  }
   gpNext() {
     const g = this.gp; if (!g) return;
     if (g.index < g.tracks.length - 1) { g.index++; this._gpRace(); return; }
     // final standings and podium
-    const humans = new Set(this.flow.racers);
-    const standings = Object.entries(g.totals).map(([id, points]) => ({ racer: RACER_BY_ID[id], points, isPlayer: humans.has(id) })).sort((a, b) => b.points - a.points);
+    const standings = this.cupStandings();
     const playerRanks = standings.map((s, i) => (s.isPlayer ? i + 1 : 99)).filter(r => r < 99);
     const best = Math.min(...playerRanks), bestPts = standings[best - 1].points, stars = cupStars(best, bestPts, g.tracks.length);
     this.save.recordCup(g.cup.id, g.cc, best, bestPts, stars);

@@ -5,7 +5,7 @@ After the checks pass on `main`, CI publishes the same tested commit to GitHub P
 1. It skips the run if `main` has already moved on, so a slow run can never roll anything back.
 2. It builds the game files into `_upload/site` (`tools/build-site.mjs`, plus `version.txt`). It `dotnet publish`es the server into `_upload/server` only when the server's inputs (`server/src` and the embedded `src/content/handles.js`) changed since the commit the live `/healthz` reports. A restart drops live online rooms, so a game-only change never restarts the server. If that commit can't be found, the server ships.
 3. It rsyncs `_upload/` to `billionaire-kart-deploy@178.128.11.103:<sha>/`, then sends `activate <sha>`.
-4. It waits until `version.txt`, and `/healthz` when a server was included, report the new commit.
+4. It waits until `version.txt`, and `/healthz` when a server was included, report the new commit (fetched with a cache-busting query), and fails the run if they don't within a minute.
 
 **The order is the point.** The server goes live first: a database dump, migrations as `billionaire-kart-migrate`, the swap, a restart, and a health check that must report the commit. If it isn't healthy, the previous server is put back and the game files are **not** swapped. So players never get a client that expects a server that isn't there, and nobody has to remember an order by hand.
 
@@ -17,14 +17,15 @@ After the checks pass on `main`, CI publishes the same tested commit to GitHub P
   - installs the server under `/opt/billionaire-kart/releases/<sha>` and the game files under `/srv/billionaire-kart/releases/<sha>`, both as root;
   - swaps each `current` link and keeps six releases of each;
   - skips any part that's already live at that commit;
+  - goes by arrival, not by SHA: the receiver stamps each request, and when several are queued only the newest goes live. The older ones are reported as superseded and their uploads deleted, so an older commit never lands on top of a newer one;
   - writes `/var/lib/billionaire-kart-deploy/results/<sha>.json`.
 
   It takes `/run/lock/billionaire-kart.lock`, the same lock as `ops/deploy.sh`.
 
 ## Setup and keys
 
-- **Set up or refresh the host:** `ops/site-deploy/setup.sh ~/.ssh/billionaire-kart-ci.pub`. It needs root SSH and is safe to re-run.
-- **The private key** is the repository secret `OKGODOIT_DEPLOY_KEY`. Without it, the job warns and skips.
+- **Set up or refresh the host:** `ops/site-deploy/setup.sh ~/.ssh/billionaire-kart-ci.pub`. It needs root SSH and is safe to re-run. CI never updates the receiver or the installer, so re-run this after changing anything in this folder.
+- **The private key** is the repository secret `OKGODOIT_DEPLOY_KEY`. Without it, the deploy job fails, so the domain can't go stale quietly.
 - **To rotate the key:**
   1. Make a new ed25519 key.
   2. Re-run `setup.sh` with the new public key.

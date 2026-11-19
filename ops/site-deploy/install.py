@@ -10,6 +10,8 @@ The server goes first: database dump, migrations as the migrate identity, symlin
 check that must report this commit. If any of that fails, the previous server is put back and the game files are
 NOT swapped, so players never get a client ahead of its server. Then the game files go live. Each part that is
 already live at this commit is skipped, so a repeat request is harmless. Six releases of each are kept.
+Requests go in arrival order (the receiver's 'arrived' stamp, or the file's mtime): when several are queued, only
+the newest goes live and the older ones are reported as superseded.
 It takes /run/lock/billionaire-kart.lock, the same lock as ops/deploy.sh.
 Installed as /usr/local/libexec/billionaire-kart-site-install."""
 import fcntl, json, os, pathlib, re, shutil, stat, subprocess, time, urllib.request
@@ -143,22 +145,55 @@ def install(sha):
         shutil.rmtree(upload, ignore_errors=True)
 
 
+def arrival(request):
+    """When the receiver queued this request: its 'arrived' stamp (ns), or the file's mtime for older requests."""
+    try:
+        stamp = json.loads(request.read_text()).get('arrived')
+        if isinstance(stamp, int): return stamp
+    except Exception:
+        pass
+    return request.stat().st_mtime_ns
+
+
+def report(sha, ok, log, **extra):
+    result = BASE / 'results' / f'{sha}.json'
+    tmp = result.with_suffix('.tmp')
+    tmp.write_text(json.dumps({'success': ok, 'sha': sha, 'message': '; '.join(log), 'time': int(time.time()), **extra}))
+    os.chmod(tmp, 0o644); tmp.replace(result)
+
+
+def queued():
+    """Valid requests, oldest arrival first. A malformed name is dropped."""
+    requests = []
+    for request in (BASE / 'requests').glob('*.json'):
+        if re.fullmatch(r'[a-f0-9]{40}', request.stem):
+            try: requests.append((arrival(request), request))
+            except FileNotFoundError: pass
+        else:
+            request.unlink(missing_ok=True)
+    return [r for _, r in sorted(requests)]
+
+
 def main():
     with open(f'/run/lock/{APP}.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        for request in sorted((BASE / 'requests').glob('*.json')):
-            sha = request.stem
-            if not re.fullmatch(r'[a-f0-9]{40}', sha):
-                request.unlink(); continue
+        # Only the newest request goes live; anything queued before it is superseded, so an older commit can never
+        # land on top of a newer one. Requests that arrive during an install are newer still: loop until none are left.
+        while requests := queued():
+            newest = requests[-1]
+            for request in requests[:-1]:
+                sha = request.stem
+                shutil.rmtree(BASE / 'incoming' / sha, ignore_errors=True)
+                report(sha, False, [f'superseded by {newest.stem[:7]}, which was requested later'], superseded=newest.stem)
+                request.unlink(missing_ok=True)
+                print(f'skipped {sha}: superseded by {newest.stem}', flush=True)
+            sha = newest.stem
             try:
                 ok, log = install(sha)
             except Exception as e:                       # report, never leave the request hanging
                 ok, log = False, [f'install failed: {e}']
-            result = BASE / 'results' / f'{sha}.json'
-            tmp = result.with_suffix('.tmp')
-            tmp.write_text(json.dumps({'success': ok, 'sha': sha, 'message': '; '.join(log), 'time': int(time.time())}))
-            os.chmod(tmp, 0o644); tmp.replace(result)
-            request.unlink(missing_ok=True)
+            report(sha, ok, log)
+            newest.unlink(missing_ok=True)
             print(('installed ' if ok else 'refused ') + sha + ': ' + '; '.join(log), flush=True)
 
 

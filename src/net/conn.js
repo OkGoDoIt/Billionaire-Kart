@@ -9,6 +9,8 @@
      conn.now()                                  // estimated server ms
 */
 export const PROTO = 1;
+/** How long a new socket has to open and be welcomed, ms. */
+export const OPEN_TIMEOUT = 10000;
 
 /** A WebSocket to the same origin's /ws, wrapped as a transport. */
 export function webSocketTransport(url) {
@@ -31,7 +33,7 @@ export function webSocketTransport(url) {
 export class Conn {
   /**
    * opts: { transport: () => transport, build, clock: () => localMs, schedule: (fn, ms) => cancel,
-   *         reconnect: bool (default true), pings: 8, pingEvery: 5000 }
+   *         reconnect: bool (default true), pings: 8, pingEvery: 5000, openTimeout: OPEN_TIMEOUT }
    */
   constructor(opts) {
     this.opts = opts;
@@ -78,6 +80,13 @@ export class Conn {
     t.onopen = () => t.send(JSON.stringify({ t: 'hello', proto: PROTO, build: this.opts.build || '' }));
     t.onmessage = data => this._message(data);
     t.onclose = () => this._closed(t);
+    // a socket that neither opens nor fails (a proxy holding the upgrade) or is never welcomed is given up on, so
+    // reconnecting carries on instead of waiting on it forever
+    this.cancels.push(this.schedule(() => {
+      if (this.t !== t || this.ready || this.closed) return;
+      t.onopen = t.onmessage = t.onclose = null; t.close?.();
+      this._closed(t);
+    }, this.opts.openTimeout ?? OPEN_TIMEOUT));
     if (t.open) t.onopen();   // a test transport may be open already
   }
 

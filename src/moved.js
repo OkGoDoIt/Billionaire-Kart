@@ -33,29 +33,52 @@
   }
 
   if (location.hash.indexOf(MARK) !== 0) return;
+  // All or nothing: every entry is read and checked before anything is written, so a damaged or cut-off fragment
+  // leaves this address's storage as it was. (The game's own load then checks every field: src/core/save.js.)
+  var writes = [], before = [], key, i;
   try {
     var came = unpack(location.hash.slice(MARK.length));
-    for (var key in came) {
-      if (key !== KEY && key.indexOf(KEY + ':') !== 0) continue;
-      var theirs = came[key], mine = localStorage.getItem(key);
-      if (typeof theirs !== 'string') continue;
-      if (mine == null) { localStorage.setItem(key, theirs); continue; }
-      if (key !== KEY) continue;                         // a ghost already here stays
-      // progress on both addresses: keep this one's settings, and the better of each record
-      var a = JSON.parse(mine), b = JSON.parse(theirs), id;
-      a.best = a.best || {}; a.trophies = a.trophies || {}; a.stats = a.stats || {};
-      for (id in b.best || {}) {
-        var x = a.best[id] || (a.best[id] = {}), y = b.best[id] || {};
-        if (isFinite(y.race) && y.race > 0 && (!x.race || y.race < x.race)) { x.race = y.race; x.racer = y.racer; }
-        if (isFinite(y.lap) && y.lap > 0 && (!x.lap || y.lap < x.lap)) x.lap = y.lap;
-      }
-      for (id in b.trophies || {}) {
-        var t = a.trophies[id], u = b.trophies[id];
-        if (u && (!t || u.rank < t.rank || (u.rank === t.rank && u.points > t.points))) a.trophies[id] = u;
-      }
-      for (id in b.stats || {}) if (typeof b.stats[id] === 'number') a.stats[id] = Math.max(a.stats[id] || 0, b.stats[id]);
-      localStorage.setItem(key, JSON.stringify(a));
+    if (!isObj(came)) throw new Error('not a save');
+    for (key in came) {
+      if (!own(came, key) || (key !== KEY && key.indexOf(KEY + ':') !== 0)) continue;
+      var theirs = came[key];
+      if (typeof theirs !== 'string' || !isObj(JSON.parse(theirs))) throw new Error('a damaged entry');
+      var mine = localStorage.getItem(key), a = null;
+      try { a = mine == null ? null : JSON.parse(mine); } catch (e) { a = null; }
+      if (!isObj(a)) { writes.push([key, theirs]); continue; }   // nothing readable here: theirs
+      if (key !== KEY) continue;                                 // a ghost already here stays
+      writes.push([key, JSON.stringify(better(a, JSON.parse(theirs)))]);
     }
-  } catch (e) { /* a damaged or cut-off save: start with what is here */ }
+  } catch (e) { writes = []; /* a damaged or cut-off save: start with what is here */ }
+  try {
+    for (i = 0; i < writes.length; i++) { before.push([writes[i][0], localStorage.getItem(writes[i][0])]); localStorage.setItem(writes[i][0], writes[i][1]); }
+  } catch (e) {
+    // storage filled up part way: put back what was there
+    for (i = before.length - 1; i >= 0; i--) try { if (before[i][1] == null) localStorage.removeItem(before[i][0]); else localStorage.setItem(before[i][0], before[i][1]); } catch (e2) { /* nothing more to do */ }
+  }
   try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { location.hash = ''; }
+
+  function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+  function own(o, k) { return k !== '__proto__' && Object.prototype.hasOwnProperty.call(o, k); }
+  function pos(v) { return typeof v === 'number' && isFinite(v) && v > 0; }
+  /** Progress on both addresses: this one's settings, and the better of each record. */
+  function better(a, b) {
+    var id, x, y, t, u, bb = isObj(b.best) ? b.best : {}, bt = isObj(b.trophies) ? b.trophies : {}, bs = isObj(b.stats) ? b.stats : {};
+    if (!isObj(a.best)) a.best = {};
+    if (!isObj(a.trophies)) a.trophies = {};
+    if (!isObj(a.stats)) a.stats = {};
+    for (id in bb) {
+      if (!own(bb, id) || !isObj(y = bb[id])) continue;
+      x = own(a.best, id) && isObj(a.best[id]) ? a.best[id] : (a.best[id] = {});
+      if (pos(y.race) && !(pos(x.race) && x.race <= y.race)) { x.race = y.race; x.racer = y.racer; }
+      if (pos(y.lap) && !(pos(x.lap) && x.lap <= y.lap)) x.lap = y.lap;
+    }
+    for (id in bt) {
+      if (!own(bt, id) || !isObj(u = bt[id]) || !pos(u.rank)) continue;
+      t = own(a.trophies, id) && isObj(a.trophies[id]) ? a.trophies[id] : null;
+      if (!t || !pos(t.rank) || u.rank < t.rank || (u.rank === t.rank && u.points > t.points)) a.trophies[id] = u;
+    }
+    for (id in bs) if (own(bs, id) && pos(bs[id])) a.stats[id] = own(a.stats, id) && pos(a.stats[id]) ? Math.max(a.stats[id], bs[id]) : bs[id];
+    return a;
+  }
 })();

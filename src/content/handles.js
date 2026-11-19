@@ -50,5 +50,5 @@ if (HANDLE_TITLES.length !== 200 || new Set(HANDLE_TITLES).size !== 200) throw n
 export function handleName(handle) {
   if (!handle) return 'Racer';
   const title = HANDLE_TITLES[handle.title] || 'Racer';
-  return `${title} ${String(handle.number).padStart(4, '0')}`;
+  return Number.isInteger(handle.number) && handle.number >= 0 ? `${title} ${String(handle.number).padStart(4, '0')}` : title;
 }

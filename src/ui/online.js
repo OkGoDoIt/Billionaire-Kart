@@ -828,12 +828,14 @@ export class Online {
 
   /** The pause menu online: the race goes on, so it offers only Resume, Options, and Leave race. */
   s_onlinePause() {
-    const M = this.menus, A = this.app, turn = A.mustTurn(), room = this.room;
+    const M = this.menus, A = this.app, lost = A.padNotice(), turn = !lost && A.mustTurn(), room = this.room;
     const def = TRACK_BY_ID[A.session?.config?.trackId];
     const leave = M.btn('Leave race', () => this.leaveRace(), { cls: 'danger', sub: room?.public ? 'Leaving counts as last place.' : null });
-    const el = h('div', { class: 'screen-pause' }, h('div', { class: 'panel narrow' + (turn ? ' turn' : '') },
-      turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), M.btn('Resume anyway', () => A.resume(), { def: true })]
+    const el = h('div', { class: 'screen-pause' }, h('div', { class: 'panel narrow' + (turn ? ' turn' : lost ? ' notice' : '') },
+      lost ? [h('h1', {}, lost[0]), h('p', { class: 'turn-sub' }, lost[1]), M.btn('Resume', () => A.resume(), { def: true })]   // a controller dropped out (#353): the race goes on
+        : turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), M.btn('Resume anyway', () => A.resume(), { def: true })]
         : [h('h1', {}, def?.name || 'Online'), M.btn('Resume', () => A.resume(), { def: true })],
+      A.canRescue() && M.btn('Rescue kart', () => { A.resume(); A.rescue(0); }),
       M.btn('Options', () => M.open('options')), leave));
     return { el, onBack: () => { A.resume(); return false; }, onAction: a => { if (a === 'pause') { A.resume(); return true; } } };
   }

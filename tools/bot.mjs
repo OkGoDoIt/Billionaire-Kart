@@ -149,6 +149,22 @@ try {
     await page.evaluate("BK.race.items.give(BK.race.players[0], 'boost')"); await page.waitForTimeout(200);
     await touch('.tc-left', 'pointerdown', 2, vw.width * 0.25, vw.height * 0.5); await page.waitForTimeout(60); await touch('.tc-left', 'pointerup', 2, vw.width * 0.25, vw.height * 0.5); await page.waitForTimeout(400);
     if (await page.evaluate('BK.race.players[0].item')) fails.push('touch: a tap on the left side did not use the item');
+    // real fingers (hit-tested browser touch events). A finger that might still be a tap does not steer yet; and a quick tap
+    // whose lift waits behind a busy frame, the way a slow phone delays the page's handlers, is still a tap (#374).
+    {
+      const cdp = await ctx.newCDPSession(page), tx = Math.round(vw.width * 0.3), ty = Math.round(vw.height * 0.45);
+      const finger = (type, x = tx) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: ty, id: 3 }] });
+      await finger('touchStart'); await finger('touchMove', tx + 6); await page.waitForTimeout(30);
+      const tapSteer = await page.evaluate(`${T}.steer`);
+      await finger('touchMove', tx + 60); await page.waitForTimeout(150); await finger('touchEnd'); await page.waitForTimeout(150);   // then a slide: steering, no item
+      if (tapSteer !== 0) fails.push(`touch: a still finger on the left steered (${tapSteer}) before it could tell a tap from a slide`);
+      await page.evaluate("BK.race.items.give(BK.race.players[0], 'leak')"); await page.waitForTimeout(200);
+      // the touch is handled, then the page is busy for 400 ms; the lift arrives 40 ms in, stamped by the browser as it arrives
+      await finger('touchStart'); const busy = page.evaluate(() => { const t = performance.now(); while (performance.now() - t < 400); });
+      await page.waitForTimeout(40); await finger('touchEnd'); await busy; await page.waitForTimeout(400);
+      if (await page.evaluate('BK.race.players[0].item')) fails.push('touch: a quick real tap on the left half, lifted during a busy frame, did not use the item');
+      await cdp.detach();
+    }
     await page.evaluate("BK.race.items.give(BK.race.players[0], 'leak')"); await page.waitForTimeout(200);
     await touch('.tc-right', 'pointermove', 1, vw.width * 0.8, vw.height * 0.6 + 60); await page.waitForTimeout(150);
     if (await page.evaluate(`${T}.brake`) !== 1) fails.push('touch: pulling the right thumb down does not brake');

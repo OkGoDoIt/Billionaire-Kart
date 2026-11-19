@@ -44,9 +44,10 @@ If you placed signs, boards, posters, or anything near them (trees, stands, wall
 
 ```bash
 node tools/sign-clip-check.mjs  # no sign on any track buried in a wall, the ground, or another prop: prints "sign-clip-check: ok"
+node tools/sign-sight-check.mjs # every sign reads whole from the racing line at racing speed: prints "sign-sight-check: ok"
 ```
 
-It names each buried sign with its lap position and saves a crop of it; add `--shots` for a close-up of each one as a player would see it.
+The clip check names each buried sign with its lap position and saves a crop of it; add `--shots` for a close-up of each one as a player would see it. The sight check drives the race camera round the racing line and names each sign that is never on screen whole, unhidden, facing the road, and big enough to read for about two thirds of a second; `--shots` saves the race-camera view at its best moment beside an ID view that shows what hides it. A sign that is meant to be read some other way goes in its `ALLOW` list with a reason.
 
 If you added scenery, props, or a whole track, also run the draw-call check:
 

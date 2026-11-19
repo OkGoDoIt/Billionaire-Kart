@@ -633,12 +633,13 @@ export class Online {
       if (M.focusEl?.disabled || (M.focusEl && (!M.focusEl.isConnected || M.focusEl.offsetParent === null) && M.focusEl !== big)) M.focus(M.screen?.el.querySelector('[data-f]:not(.back):not(:disabled)'), false);
       // a cup that just ended: its final standings over the room, until the player is done with them
       const cs = r.cupState, cup = CUP_BY_ID[r.rules.cup], key = cs && Array.isArray(cs.tracks) && r.last && `${code}:${cs.tracks.join()}:${r.last.trackId}`;
-      if (key && cup && cs.index >= cs.tracks.length - 1 && this.standingsSeen !== key) {
+      if (key && cup && (cs.index >= cs.tracks.length - 1 || cs.ended) && this.standingsSeen !== key) {
         if (!standings.firstChild) {
           const totals = cs.totals || {}, rows = cupOrder(totals, cs.places || {}).map(id => [id, totals[id]]);   // ties on countback; a server without places sorts on points alone
           const humans = new Map(listOf(r.last.results).filter(x => x.member).map(x => [x.racer, x.member]));
           const done = M.btn('Done', () => { this.standingsSeen = key; standings.replaceChildren(); M.focus(M.screen.el.querySelector('[data-f]:not(.back):not(:disabled)'), false); }, { cls: 'small go', def: true });
           standings.replaceChildren(h('div', { class: 'panel ol-standings' }, h('h3', {}, `${cup.name} · Final standings`),
+            cs.ended && h('p', { class: 'ol-line' }, `Ended after race ${cs.index + 1} of ${cs.tracks.length}. Everyone else left.`),
             h('div', { class: 'res-table final' }, rows.map(([id, pts], i) => { const racer = RACER_BY_ID[id], who = humans.get(id); return h('div', { class: 'res-row' + (who === this.you ? ' me' : ''), style: `--d:${i * 50}ms;--rc:${hex(racer?.color || 0xffffff)}` + (who ? `;--pc:${this.colorOf(who, r)}` : '') }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: racer?.portrait, alt: '' }), h('span', { class: 'res-name' }, racer?.name || id), h('span', { class: 'res-total' }, String(pts))); })),
             h('div', { class: 'foot' }, done)));
           M.focus(done, false);

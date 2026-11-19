@@ -368,3 +368,41 @@ export function screensaverPipe(points, color) {
   }
   return b.build({ pipe: plastic(color, 0.24, 0.44), cuff: plastic(0xc6d9ea, 0.3, 0.6) });
 }
+
+let zuneMat = null;
+/** The 2006 brown music player as a hilltop monument, H metres tall, screen and pad on +Z. One mesh: each part's UVs
+    point at its colour in a five-texel palette. The screen itself is left to the caller (a canvas plane):
+    userData.screen = { y, z, w, h } gives its centre and size in this group's frame. */
+export function zune({ H = 40 } = {}) {
+  const PALETTE = ['#8e5a34', '#7d4b2a', '#b0794b', '#3cc4bd', '#0b0b0e'], [BODY, FACE, PAD, TRIM, GLASS] = [0, 1, 2, 3, 4];
+  if (!zuneMat) {
+    const map = canvasTex(PALETTE.length, 1, g => PALETTE.forEach((c, i) => { g.fillStyle = c; g.fillRect(i, 0, 1, 1); }), { repeat: false, mip: false, aniso: 1 });
+    map.magFilter = THREE.NearestFilter;
+    // a little warmth of its own, so the browns stay brown with the sun behind it (it faces the road, away from the sun)
+    zuneMat = new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.17, roughness: 0.5, envMapIntensity: 0.6 });
+  }
+  const k = H / 40, W = 22 * k, D = 5.8 * k, b = new ModelBuilder(), front = D / 2;
+  const add = (i, geo, at) => { const uv = geo.attributes.uv; for (let j = 0; j < uv.count; j++) uv.setXY(j, (i + 0.5) / PALETTE.length, 0.5); b.add('zune', geo, at); };
+  add(BODY, box(W, H, D, 3 * k, 4), { p: [0, H / 2, 0] });
+  // the two-tone band round the edge, just proud of the body
+  add(TRIM, box(W + 0.7 * k, H + 0.7 * k, D * 0.3, 3.3 * k, 4), { p: [0, H / 2, -D * 0.08] });
+  // the front, the black glass over the screen, and the squircle pad with its two buttons
+  add(FACE, box(W - 1.3 * k, H - 1.3 * k, 0.6 * k, 2.4 * k, 3), { p: [0, H / 2, front] });
+  const sw = 16.4 * k, sh = 21.9 * k, sy = H - 3 * k - sh / 2;
+  add(GLASS, box(sw + 1.4 * k, sh + 1.4 * k, 0.5 * k, 1 * k, 2), { p: [0, sy, front + 0.2 * k] });
+  const py = 8 * k;
+  add(PAD, box(10.4 * k, 10.4 * k, 1.1 * k, 3.8 * k, 4), { p: [0, py, front + 0.15 * k] });
+  add(FACE, cyl(2.4 * k, 2.4 * k, 0.5 * k, 28), { p: [0, py, front + 0.75 * k], r: [Math.PI / 2, 0, 0] });
+  const by = 3.5 * k, bx = 8.3 * k;
+  for (const s of [-1, 1]) add(PAD, box(2.8 * k, 2.8 * k, 0.8 * k, 1 * k, 2), { p: [s * bx, by, front + 0.1 * k] });
+  // back arrow and play/pause on the buttons
+  add(TRIM, prism(1.2 * k, 1 * k, 0.4 * k), { p: [-bx - 0.15 * k, by, front + 0.55 * k], r: [0, 0, Math.PI / 2] });
+  add(TRIM, prism(1 * k, 0.85 * k, 0.4 * k), { p: [bx - 0.4 * k, by, front + 0.55 * k], r: [0, 0, -Math.PI / 2] });
+  for (const x of [0.32, 0.72]) add(TRIM, new THREE.BoxGeometry(0.2 * k, 1 * k, 0.4 * k), { p: [bx + x * k, by, front + 0.55 * k] });
+  // the headphone socket and the hold switch on top
+  add(GLASS, cyl(0.75 * k, 0.75 * k, 0.4 * k, 16), { p: [-6 * k, H + 0.05 * k, 0] });
+  add(TRIM, box(2.6 * k, 0.6 * k, 1.2 * k, 0.25 * k, 1), { p: [5.5 * k, H + 0.1 * k, 0] });
+  const grp = b.build({ zune: zuneMat });
+  grp.userData.screen = { y: sy, z: front + 0.5 * k, w: sw, h: sh };
+  return grp;
+}

@@ -237,11 +237,12 @@ export default {
       };
     })();
     /** Poster k on a board at (x, z) facing yaw, with a lettered back. */
-    const posterAt = (x, z, yaw, k, back, { w = 15, h = 10, up = 9, legs = 2 } = {}) => {
+    /** backArt: the painted art on the back too (a two-sided billboard), for a poster whose back faces a road it cannot read from */
+    const posterAt = (x, z, yaw, k, back, { w = 15, h = 10, up = 9, legs = 2, backArt = false } = {}) => {
       const y0 = sc.y(x, z), f = B.signFrame(w, h, up, { color: 0x3a2c34, legs }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f); take(x, z, w * 0.55);
       posters.place(k, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h);
-      const r = atlas.add(768, 512, B.board(back, { bg: '#1a1d29', fg: '#ffd23c', size: 120, stripe: '#ff6a2a' }));
-      atlas.place(r, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
+      if (backArt) posters.place(k, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
+      else { const r = atlas.add(768, 512, B.board(back, { bg: '#1a1d29', fg: '#ffd23c', size: 120, stripe: '#ff6a2a' })); atlas.place(r, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h); }
       // The payoff belongs under the poster art on its approach face. Both share the same frame.
       const bandH = Math.min(3.5, h * 0.26), bandY = y0 + up - (h + bandH) / 2;
       const rail = new ModelBuilder();
@@ -857,8 +858,11 @@ export default {
 
     // the painted posters: the gig poster round the Bowl, the valet stand on the slalom, the playa's terms by the camp
     poster(6.3, -1, 22, 0, 'NO REQUESTS', { up: 12.5 });   // its caption clears the Bowl's banked rim
-    // the valet stand: on the outside of the right-hander off the Bowl, square to the road out of it
-    { const p = sc.beside(9.2, 1, 20), i = track.indexAtCp(8.3); if (clear(p.x, p.z, 4)) posterAt(p.x, p.z, Math.atan2(-track.tx[i], -track.tz[i]), 2, 'KEYS LEFT IN IGNITION', { w: 18, h: 12, up: 10 }); }
+    // the valet stand: on the outside of the right-hander onto the slalom, where the road out of the Bowl points
+    {
+      const P0 = { x: 62, z: -52 }, i = track.indexAtCp(9.3), yaw = Math.atan2(track.px[i] - P0.x, track.pz[i] - P0.z), rx = Math.cos(yaw) * 9, rz = -Math.sin(yaw) * 9;
+      if (clear(P0.x, P0.z, 0.5) && clear(P0.x + rx, P0.z + rz, 0.5) && clear(P0.x - rx, P0.z - rz, 0.5)) posterAt(P0.x, P0.z, yaw, 2, 'KEYS LEFT IN IGNITION', { w: 18, h: 12, up: 13.5, backArt: true });   // its back faces the Esplanade, behind the stands there
+    }
     poster(24.6, -1, 19, 1, 'RADICAL SELF-RELIANCE (CATERED)');
     posters.flush();
     bake.flush();

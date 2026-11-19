@@ -255,10 +255,11 @@ export class RaceSession {
     app.gfx.render(dt, dt);
   }
 
-  /** The server's results (room.last), shaped like race.results() plus slot, member, and the valuation before and after. */
+  /** The server's results (room.last), shaped like race.results() plus slot, member, and the valuation before and after.
+      A row naming no kart in this race is left out, so an unexpected answer cannot break the results screen. */
   onlineResults() {
-    const karts = this.race.karts;
-    return this.net.room.last.results.slice().sort((a, b) => a.rank - b.rank).map(r => {
+    const karts = this.race.karts, list = this.net.room.last?.results;
+    return (Array.isArray(list) ? list : []).filter(r => r && karts[r.slot]).sort((a, b) => a.rank - b.rank).map(r => {
       const k = karts[r.slot];
       return { kart: k, racer: k.racer, rank: r.rank, time: r.time ?? k.finishTime, bestLap: k.bestLap, points: r.points ?? 0, isPlayer: k.isPlayer, playerIndex: k.playerIndex,
         estimated: !!r.estimated, stats: k.stats, slot: r.slot, member: r.member, before: r.before ?? null, after: r.after ?? null };

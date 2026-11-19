@@ -15,16 +15,17 @@ import { RaceSession } from '../game/session.js';
 import { fmtTime } from '../core/util.js';
 import { HANDLE_TITLES, handleName } from '../content/handles.js';
 import { tierOf, fmtMoney, fmtMoneyChange } from '../content/valuation.js';
+import { ROOM_LETTERS as CODE_LETTERS, ROOM_RE } from './install.js';
 
 /* eight members, eight colors: the four player colors, then four more in the same bright family */
 const COLORS = [...PLAYER_COLORS, '#a66bff', '#ff9f43', '#ff8ad8', '#b4f05a'];
-const CODE_LETTERS = 'BCDFGHJKLMNPQRSTVWXZ';
 const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const QS = new URLSearchParams(location.search);
 const BACKSPACE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h11v14H9l-6-7z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="m12 9 5 6m0-6-5 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
 const CAMERA_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.6-2h5.8l1.6 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>';
 const KEYS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M6.5 10h1M10.5 10h1M14.5 10h1M8 14h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
-const CLOSED = 'That room has closed.', UNREACHABLE = 'Can’t reach the race server.';
+const CLOSED = 'That room has closed.', UNREACHABLE = 'Can’t reach the online server', CHECK_CONNECTION = 'Check your connection and try again.';
+const CONNECT_MS = 10000, LOST_MS = 30000, ASK_MS = 10000;   // the way in, per leg; a lost connection; any other request
 const NBSP = '\u00a0';
 const UPDATING = 'The race server is updating. Back in a moment.', UPDATED = 'That room closed for an update.';
 const JOIN_ERRORS = { no_room: 'No room has that code.', full: 'That room is full.' };
@@ -34,8 +35,10 @@ function roomFromText(text) {
   let code = String(text || '').trim();
   try { code = new URL(code).searchParams.get('room') || ''; } catch { /* not a link: maybe the code itself */ }
   code = code.toUpperCase();
-  return code.length === 4 && [...code].every(c => CODE_LETTERS.includes(c)) ? code : null;
+  return ROOM_RE.test(code) ? code : null;
 }
+/** The objects in a list from the server, or none if it is not a list. */
+const listOf = v => (Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : []);
 /** A room's address: what Share sends and what the QR code holds. */
 const roomUrl = code => location.origin + location.pathname + '?room=' + code;
 /** The QR code for a room's address as SVG: dark modules on white, with the quiet zone the readers need. */
@@ -72,6 +75,7 @@ export class Online {
     this.css = new Promise(resolve => {
       const link = h('link', { rel: 'stylesheet', href: new URL('../../styles/online.css', import.meta.url).href });
       link.addEventListener('load', resolve); link.addEventListener('error', resolve);
+      setTimeout(resolve, CONNECT_MS);   // a stalled stylesheet must not hold the screen back for good
       document.head.appendChild(link);
     });
     for (const name of ['online', 'onlineName', 'onlineJoin', 'onlineRoom', 'onlinePublic', 'onlineRacers', 'onlineRules', 'onlineTrack', 'onlineResults', 'onlineBoard', 'onlinePause'])
@@ -100,7 +104,7 @@ export class Online {
     if (code) { const u = new URL(location.href); u.searchParams.delete('room'); history.replaceState(history.state, '', u); }
     await this.css;
     this.notice = null;
-    this.pendingJoin = code ? String(code).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) : null;
+    this.pendingJoin = code ? roomFromText(code) : null;
     this.show('online');
     if (!this.conn) this.connect();
     else if (this.conn.ready && this.pendingJoin) { this.join(this.pendingJoin); this.pendingJoin = null; }
@@ -109,8 +113,12 @@ export class Online {
   async connect() {
     const attempt = ++this.attempt;
     this.state = 'connecting'; this.refreshHub();
+    // each leg of the way in (the session and the netcode, then the socket and its welcome) gets CONNECT_MS; a leg
+    // that goes quiet ends on the can't-reach screen instead of "Connecting…" forever
+    const deadline = () => { clearTimeout(this.welcomeTimer); this.welcomeTimer = setTimeout(() => this.unreachable(attempt), CONNECT_MS); };
+    deadline();
     try {
-      const res = await fetch('/api/session', { method: 'POST', credentials: 'same-origin' });
+      const res = await fetch('/api/session', { method: 'POST', credentials: 'same-origin', signal: AbortSignal.timeout(CONNECT_MS) });
       if (!res.ok) throw new Error('session ' + res.status);
       const me = await res.json();
       if (!this.NetRace) {
@@ -120,9 +128,10 @@ export class Online {
       if (attempt !== this.attempt) return;
       this.me = me;
     } catch {
-      if (attempt === this.attempt) { this.state = 'failed'; this.refreshHub(); }
+      this.unreachable(attempt);
       return;
     }
+    deadline();
     const conn = this.conn = this.Conn.open({ build: '' });
     conn.on('welcome', () => this._welcome(conn));
     conn.on('room', m => { if (conn === this.conn) this.route(m.room); });
@@ -132,20 +141,37 @@ export class Online {
     conn.on('bye', () => { if (conn === this.conn) { this.bye = true; this.setPill(UPDATING, true); } });
     conn.on('close', () => {
       if (conn !== this.conn) return;
-      if (!this.bye) { this.setPill('Reconnecting…'); return; }
+      if (!this.bye) {
+        // Conn reconnects on its own; a connection still gone after LOST_MS is given up on, out loud
+        this.setPill('Reconnecting…');
+        clearTimeout(this.goneTimer); this.goneTimer = setTimeout(() => { if (conn === this.conn && !conn.ready && !this.bye) this.unreachable(); }, LOST_MS);
+        return;
+      }
       this.byeClosed = true; this.setPill(UPDATING, true);
       // cut off mid-race: the race is over; lobbies, track picks, and results wait for the server to come back
       if (this.room?.phase === 'race' && this.inRace()) this.roomClosed(UPDATED);
     });
     conn.on('old', () => this._old());
-    // the socket cannot be reached: Conn keeps retrying on its own, but the player is told after a few seconds
-    clearTimeout(this.welcomeTimer);
-    this.welcomeTimer = setTimeout(() => { if (conn === this.conn && !conn.ready && this.state === 'connecting') { conn.close(); this.conn = null; this.state = 'failed'; this.refreshHub(); } }, 8000);
+  }
+
+  /** The way in failed, or the connection has been gone too long: close it and show the hub's can't-reach screen
+      (Try again, Back), from wherever online the player is. A stale attempt (the player left, or tried again) is ignored. */
+  unreachable(attempt = this.attempt) {
+    if (attempt !== this.attempt) return;
+    this.attempt++; clearTimeout(this.welcomeTimer); clearTimeout(this.goneTimer);
+    const racing = this.inRace(), onScreen = /^online/.test(this.menus.screen?.spec.name || '');
+    if (this.room) this.leaveRoom();
+    this.bye = this.byeClosed = false;
+    this.conn?.close(); this.conn = null; this.state = 'failed';
+    this.setPill(null); this.setBanner(null);
+    if (racing) this.toScene(() => this.show('online'));
+    else if (onScreen && this.menus.screen.spec.name !== 'online') this.show('online');
+    else this.refreshHub();
   }
 
   _welcome(conn) {
     if (conn !== this.conn) return;
-    clearTimeout(this.welcomeTimer);
+    clearTimeout(this.welcomeTimer); clearTimeout(this.goneTimer);
     this.setPill(null);
     const first = this.state !== 'ready', updated = this.byeClosed;
     this.state = 'ready'; this.bye = this.byeClosed = false;
@@ -192,7 +218,7 @@ export class Online {
   /** Back to the main menu: leave any room and close the connection. */
   exit() {
     this.leaveRoom();
-    this.attempt++; clearTimeout(this.welcomeTimer); clearTimeout(this.lostTimer); this.bye = this.byeClosed = false;
+    this.attempt++; clearTimeout(this.welcomeTimer); clearTimeout(this.lostTimer); clearTimeout(this.goneTimer); this.bye = this.byeClosed = false;
     this.conn?.close(); this.conn = null; this.state = 'idle';
     this.setPill(null); this.setBanner(null);
   }
@@ -364,7 +390,7 @@ export class Online {
     const M = this.menus, body = h('div', { class: 'ol-hub' });
     const draw = () => {
       if (this.state === 'failed') {
-        body.replaceChildren(h('div', { class: 'ol-state' }, h('h2', {}, UNREACHABLE), h('div', { class: 'foot' }, M.btn('Try again', () => this.connect(), { cls: 'go', def: true }), M.btn('Back', () => M.back()))));
+        body.replaceChildren(h('div', { class: 'ol-state' }, h('h2', {}, UNREACHABLE), h('p', { class: 'ol-line' }, CHECK_CONNECTION), h('div', { class: 'foot' }, M.btn('Try again', () => this.connect(), { cls: 'go', def: true }), M.btn('Back', () => M.back()))));
       } else if (this.state !== 'ready' || !this.me) {
         body.replaceChildren(h('div', { class: 'ol-state' }, h('h2', {}, 'Connecting…')));
       } else {
@@ -394,14 +420,19 @@ export class Online {
     let busy = false;
     const pick = async i => {
       if (busy) return; busy = true;
+      let done = false;
       try {
-        const res = await fetch('/api/handle', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: i }) });
-        if (res.ok) this.me = { ...this.me, ...(await res.json()) };
+        const res = await fetch('/api/handle', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: i }), signal: AbortSignal.timeout(ASK_MS) });
+        if (res.ok) { this.me = { ...this.me, ...(await res.json()) }; done = true; }
       } catch { /* unchanged */ }
-      if (M.screen?.spec.name === 'onlineName') M.back();
+      busy = false;
+      if (M.screen?.el !== el) return;
+      if (done) M.back(); else sub.textContent = `${UNREACHABLE}. Try again.`;
     };
     const chips = HANDLE_TITLES.map((t, i) => h('button', { class: 'chip' + (i === cur ? ' sel' : ''), 'data-f': true, 'data-default': i === cur, onclick: () => pick(i) }, t));
-    return { el: h('div', {}, M.header('Pick your title', 'Your number stays yours.'), h('div', { class: 'panel ol-names' }, chips)) };
+    const head = M.header('Pick your title', 'Your number stays yours.'), sub = head.querySelector('p');
+    const el = h('div', {}, head, h('div', { class: 'panel ol-names' }, chips));
+    return { el };
   }
 
   /** Join with a code: four boxes, twenty letters, and a delete key; typing works too. Or the camera: point it at
@@ -601,11 +632,11 @@ export class Online {
       }
       if (M.focusEl?.disabled || (M.focusEl && (!M.focusEl.isConnected || M.focusEl.offsetParent === null) && M.focusEl !== big)) M.focus(M.screen?.el.querySelector('[data-f]:not(.back):not(:disabled)'), false);
       // a cup that just ended: its final standings over the room, until the player is done with them
-      const cs = r.cupState, cup = CUP_BY_ID[r.rules.cup], key = cs && r.last && `${code}:${cs.tracks.join()}:${r.last.trackId}`;
+      const cs = r.cupState, cup = CUP_BY_ID[r.rules.cup], key = cs && Array.isArray(cs.tracks) && r.last && `${code}:${cs.tracks.join()}:${r.last.trackId}`;
       if (key && cup && cs.index >= cs.tracks.length - 1 && this.standingsSeen !== key) {
         if (!standings.firstChild) {
-          const rows = cupOrder(cs.totals, cs.places).map(id => [id, cs.totals[id]]);   // ties on countback; a server without places sorts on points alone
-          const humans = new Map(r.last.results.filter(x => x.member).map(x => [x.racer, x.member]));
+          const totals = cs.totals || {}, rows = cupOrder(totals, cs.places || {}).map(id => [id, totals[id]]);   // ties on countback; a server without places sorts on points alone
+          const humans = new Map(listOf(r.last.results).filter(x => x.member).map(x => [x.racer, x.member]));
           const done = M.btn('Done', () => { this.standingsSeen = key; standings.replaceChildren(); M.focus(M.screen.el.querySelector('[data-f]:not(.back):not(:disabled)'), false); }, { cls: 'small go', def: true });
           standings.replaceChildren(h('div', { class: 'panel ol-standings' }, h('h3', {}, `${cup.name} · Final standings`),
             h('div', { class: 'res-table final' }, rows.map(([id, pts], i) => { const racer = RACER_BY_ID[id], who = humans.get(id); return h('div', { class: 'res-row' + (who === this.you ? ' me' : ''), style: `--d:${i * 50}ms;--rc:${hex(racer?.color || 0xffffff)}` + (who ? `;--pc:${this.colorOf(who, r)}` : '') }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: racer?.portrait, alt: '' }), h('span', { class: 'res-name' }, racer?.name || id), h('span', { class: 'res-total' }, String(pts))); })),
@@ -752,7 +783,7 @@ export class Online {
     const M = this.menus, room = this.room, last = room?.last;
     if (!last) return this.s_online();
     const pub = room.public, cs = room.cupState, inCup = room.rules.mode === 'cup' && !!cs, track = TRACK_BY_ID[last.trackId];
-    const results = last.results.slice().sort((a, b) => a.rank - b.rank);
+    const results = listOf(last.results).sort((a, b) => a.rank - b.rank);
     const rows = results.map((r, i) => {
       const racer = RACER_BY_ID[r.racer], me = r.member && r.member === this.you;
       const who = r.member ? this.nameOf(r.member, room) : 'CPU';
@@ -812,12 +843,18 @@ export class Online {
       const n = ++seq;
       for (const [id, b] of chips) { b.classList.toggle('sel', id === board); b.setAttribute('aria-pressed', String(id === board)); }
       let data;
-      try { const res = await fetch(`/api/leaderboard?board=${board}&limit=50`, { credentials: 'same-origin' }); if (!res.ok) throw 0; data = await res.json(); }
-      catch { if (n === seq) { list.replaceChildren(h('p', { class: 'ol-line' }, UNREACHABLE)); meSlot.replaceChildren(); } return; }
+      try { const res = await fetch(`/api/leaderboard?board=${board}&limit=50`, { credentials: 'same-origin', signal: AbortSignal.timeout(ASK_MS) }); if (!res.ok) throw 0; data = await res.json(); if (!Array.isArray(data?.rows)) throw 0; }
+      catch {
+        if (n !== seq) return;
+        const again = M.btn('Try again', () => { const f = M.focusEl === again; load().then(() => { if (f && !again.isConnected) M.focus(list.querySelector('[data-f]') || chips.find(([id]) => id === board)[1], false); }); }, { cls: 'small' });
+        list.replaceChildren(h('div', { class: 'ol-state' }, h('p', { class: 'ol-line' }, UNREACHABLE + '.'), again)); meSlot.replaceChildren();
+        return;
+      }
       if (n !== seq) return;
-      list.replaceChildren(...(data.rows.length ? data.rows.map(r => row(r, r.me)) : [h('p', { class: 'ol-line' }, 'Nobody has raced yet. Somebody has to be first.')]));
-      const listed = data.rows.some(r => r.me);
-      meSlot.replaceChildren(...(!listed && data.me && this.me ? [row({ rank: data.me.rank, handle: this.me.handle, valuation: data.me.valuation, current: this.me.rating?.valuation }, true)] : []));
+      const rows = listOf(data.rows).filter(r => Number.isFinite(r.valuation));
+      list.replaceChildren(...(rows.length ? rows.map(r => row(r, r.me)) : [h('p', { class: 'ol-line' }, 'Nobody has raced yet. Somebody has to be first.')]));
+      const listed = rows.some(r => r.me);
+      meSlot.replaceChildren(...(!listed && Number.isFinite(data.me?.valuation) && this.me ? [row({ rank: data.me.rank, handle: this.me.handle, valuation: data.me.valuation, current: this.me.rating?.valuation }, true)] : []));
       M.screen?._scrollCheck?.();
     };
     const chips = [['all', 'All time'], ['week', 'This week']].map(([id, label]) => [id, h('button', { class: 'chip', 'data-f': true, 'data-default': id === 'all', onclick: () => { if (board !== id) { board = id; load(); } } }, label)]);

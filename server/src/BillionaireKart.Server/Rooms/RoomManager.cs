@@ -224,6 +224,10 @@ public sealed class RoomManager(SettingsService settings, RatingService rating, 
                 case "track": await r.PickTrackAsync(id, Str(msg, "id"), now); break;
                 case "ready": await r.ReadyAsync(id, now); break;
                 case "loaded": break;
+                case "away":
+                    if (msg.TryGetProperty("on", out var on) && on.ValueKind is JsonValueKind.True or JsonValueKind.False) r.SetAway(id, on.GetBoolean());
+                    else conn.SendText("""{"t":"err","code":"bad"}""");
+                    break;
                 case "ev":
                     if (msg.TryGetProperty("e", out var e)) r.RelayEvent(id, e);
                     break;

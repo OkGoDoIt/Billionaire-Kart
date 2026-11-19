@@ -217,15 +217,29 @@ try {
   await A.waitForFunction(() => BK.app.session.race.time > 4, null, { timeout: 40000 });
   await A.screenshot({ path: join(out, '15-race-A.jpg'), type: 'jpeg', quality: 80 });
   await B.screenshot({ path: join(out, '15-race-B.jpg'), type: 'jpeg', quality: 80 });
+  // A drives for real now (no test autopilot), so what moves A's kart under the menu is the stand-in
+  await A.waitForFunction(() => !BK.app.session.race.frozen, null, { timeout: 20000 });
+  await A.evaluate(() => { const s = BK.app.session; s._testAuto = s.autopilots; s.autopilots = null; });
   await A.keyboard.press('Escape'); await waitScreen(A, 'onlinePause');
   if (await A.evaluate(() => BK.app.session.paused)) fail('A: the online pause menu stopped the race');
+  if (!(await A.locator('.screen-onlinePause').textContent()).includes('Your kart is on autopilot.')) fail('A: the online pause menu does not say the kart is on autopilot');
+  const awayOnB = () => B.evaluate(() => BK.app.session.view.karts.filter(v => v.kart.human && !v.kart.isPlayer).map(v => !!v.tag.userData.away));
+  await B.waitForFunction(() => BK.app.session.view.karts.some(v => v.kart.human && !v.kart.isPlayer && v.tag.userData.away), null, { timeout: 4000 }).catch(() => {});
+  if (!(await awayOnB()).every(Boolean)) fail('B: A\'s name tag does not show A is away');
+  const d0 = await A.evaluate(() => BK.app.session.race.players[0].raceDistance); await A.waitForTimeout(1500);
+  const moved = await A.evaluate(d => BK.app.session.race.players[0].raceDistance - d, d0);
+  if (!(moved > 15)) fail(`A: the stand-in did not drive A's kart under the menu (moved ${moved?.toFixed?.(1)} m in 1.5 s)`);
+  await B.screenshot({ path: join(out, '16-away-B.jpg'), type: 'jpeg', quality: 85 });
   const pauseButtons = await A.locator('.screen-onlinePause .btn .btn-label').allTextContents();
-  if (pauseButtons.join('|') !== 'Resume|Options|Leave race') fail('A: pause menu offers ' + pauseButtons.join(', '));
+  // after the countdown, so the rescue is on offer
+  if (pauseButtons.join('|') !== 'Resume|Rescue kart|Options|Leave race') fail('A: pause menu offers ' + pauseButtons.join(', '));
   const t0 = await A.evaluate(() => BK.app.session.race.time); await A.waitForTimeout(600);
   if (await A.evaluate(() => BK.app.session.race.time) <= t0) fail('A: the race clock stood still under the pause menu');
   await shoot(A, '16-pause', { check: false });
   await A.keyboard.press('Escape'); await A.waitForTimeout(300);
   if (await screen(A)) fail('A: Escape did not close the online pause menu');
+  await B.waitForFunction(() => BK.app.session.view.karts.every(v => !v.tag?.userData.away), null, { timeout: 4000 }).catch(() => fail('B: A still shows as away after resuming'));
+  await A.evaluate(() => { const s = BK.app.session; s.autopilots = s._testAuto; });
 
   await Promise.all([A, B].map(p => waitScreen(p, 'onlineResults', 300000)));
   const order = p => p.evaluate(() => [...document.querySelectorAll('.ol-table .res-row')].map(r => r.querySelector('.res-name').firstChild.textContent));

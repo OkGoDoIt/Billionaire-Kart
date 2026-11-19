@@ -101,6 +101,7 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
         var m = Members.Find(x => x.Conn == conn);
         if (m == null) return;
         m.Conn = null;
+        m.Away = false;   // a dropped device shows as reconnecting, not away
         m.DisconnectedAt = now;
         if (Host == m.Id && IsPublic) Host = PickHost();
         ReassignOwners(now);
@@ -307,7 +308,7 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
     {
         var s = S;
         var humans = Members.Where(m => m.Connected).OrderBy(_ => Rng.Next()).ToList();
-        foreach (var m in Members) { m.Spectating = !m.Connected; m.Ready = false; }
+        foreach (var m in Members) { m.Spectating = !m.Connected; m.Ready = false; m.Away = false; }
 
         // Anyone without a racer gets a random free one.
         foreach (var m in humans.Where(m => m.Racer == null))
@@ -381,6 +382,17 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
         bool wasSilent = Silent(m, now);
         m.LastFrameAt = now;
         if (wasSilent && ReassignOwners(now)) Broadcast();
+    }
+
+    /// <summary>A racer opened or closed their pause menu. Only someone with a kart in the race can be away.</summary>
+    public void SetAway(Guid id, bool on)
+    {
+        var m = Find(id);
+        if (m == null) return;
+        on &= Phase == Phase.Race && Race != null && Race.Slots.Any(sl => sl.Member == id);
+        if (m.Away == on) return;
+        m.Away = on;
+        Broadcast();
     }
 
     public void RelayEvent(Guid id, JsonElement e)
@@ -498,7 +510,7 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
         Race = null;
         Phase = Phase.Results;
         Until = now + Ms(s.ResultsSeconds);
-        foreach (var m in Members) { m.Ready = false; m.Spectating = false; }
+        foreach (var m in Members) { m.Ready = false; m.Spectating = false; m.Away = false; }
         Broadcast();
     }
 

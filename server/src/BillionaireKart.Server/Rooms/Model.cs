@@ -87,6 +87,8 @@ public sealed class Member
     public long ConnectedSince { get; set; }
     public long DisconnectedAt { get; set; }
     public long LastFrameAt { get; set; }
+    /// <summary>In a race with their pause menu open (or the game in the background): their kart drives itself. Shown to the others.</summary>
+    public bool Away { get; set; }
 }
 
 public sealed class Slot

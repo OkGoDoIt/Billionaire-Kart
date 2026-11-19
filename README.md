@@ -51,9 +51,10 @@ Every racer drives a kart of their own: a steel wedge, a rocket with a parcel st
 | Use item | Space, E, Enter, or X | Left bumper or Y | Tap the left side, or flick your right thumb up |
 | Brake and reverse | S or ↓ | B or left trigger | Pull your right thumb down |
 | Look behind | Q or C | Click the right stick | |
+| Rescue | R | View | Pause, then Rescue kart |
 | Pause | Esc | Start | Pause button |
 
-**Sharing a keyboard.** Player 1 drives with WASD, drifts with Left Shift, uses items with Space or E, and looks behind with Q. Player 2 drives with the arrows, drifts with Right Shift or /, uses items with . or Enter, and looks behind with the comma key.
+**Sharing a keyboard.** Player 1 drives with WASD, drifts with Left Shift, uses items with Space or E, and looks behind with Q. Player 2 drives with the arrows, drifts with Right Shift or /, uses items with . or Enter, and looks behind with the comma key. Player 1 rescues with R, and Player 2 with the backslash key.
 
 In **Options → Keyboard**, choose Solo, Player 1, or Player 2. Select a key to replace it, or use + to add an alternate. Each layout has its own reset. Esc cancels a change.
 

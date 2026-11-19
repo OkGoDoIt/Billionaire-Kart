@@ -42,6 +42,9 @@ export class App {
     this.input.onMenu = (a, d) => this.onMenu(a, d);
     this.input.onJoinKey = device => this.menus.screen?.spec.name === 'join' && device !== 'kb' && this.menus.handle('confirm', device);
     this.input.onAnyInput = () => this.audio?.unlock?.();
+    this.padsLost = [];   // local players whose controller dropped out mid-race (#353)
+    this.input.onPadLost = i => this._padLost('pad' + i);
+    this.input.onPadFound = i => this._padFound('pad' + i);
     // sound may only start from a gesture, and which gestures count differs by browser: listen for all of them
     for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, () => this.audio?.unlock?.(), { passive: true, capture: true });
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.audio?.suspend?.(); else this.audio?.resumeIfAllowed?.(); });
@@ -107,8 +110,19 @@ export class App {
     if (action === 'pause' || (action === 'back' && device.startsWith('kb'))) { if (s.phase !== 'intro' && s.race.state !== 'done') this.pause(); else s.skipIntro(); }
     else if (action === 'confirm' && s.phase === 'intro') s.skipIntro();
     else if ((action === 'left' || action === 'right') && s.after) s.after.step(s.after.paneFor(device), action === 'left' ? -1 : 1);   // after the line, online: who to watch
-    else if (action === 'reset') { const k = s.race.players[0]; if (k && !k.finished && !s.race.frozen) k.startRescue(); }
+    else if (action === 'reset') this.rescue(this.playerFor(device));
   }
+
+  /** The local player a device drives: in solo play every device drives player 0; in split screen, whoever joined with it. -1 for nobody. */
+  playerFor(device) { const a = this.input.assign; return a.length === 1 && a[0] === 'any' ? 0 : a.indexOf(device); }
+  /** Rescue one local player's kart, under the kart's own guards (once per rescue, never past the line or before the start). */
+  rescue(player) {
+    const s = this.session, k = s?.race.players[player];
+    if (!s || this.attract || !k || k.finished || s.race.frozen || k.rescueT > 0) return false;
+    k.startRescue(); return true;
+  }
+  /** The pause menu offers a rescue in solo play, where the player's device has no rescue button of its own (touch). */
+  canRescue() { const s = this.session, k = s?.race.players[0]; return !!s && !this.attract && this.input.assign.length === 1 && !!k && !k.finished && !s.race.frozen && s.race.state !== 'done' && !(k.rescueT > 0); }
 
   applySettings(initial = false) {
     const S = this.save.settings;
@@ -220,6 +234,55 @@ export class App {
     if (turn && !this.session.paused) this.pause();
     else if (this.session.paused && this.menus.screen?.spec.name === 'pause' && !this.menus.stack.length && !!this.menus.screen.el.querySelector('.turn') !== turn) this.menus.reset('pause');
   }
+  /* ---------- a controller drops out mid-race (#353) ----------
+     Like turning the phone upright or switching away, losing a controller pauses the race, and the pause panel
+     says whose it was. Online the race cannot stop, so the panel shows without pausing. Plugging a controller back
+     in hands it to that player; the race waits for a press of Resume, as any pause does. */
+  _padLost(device) {
+    const s = this.session;
+    if (!s || this.attract || s.race.state === 'done' || this.menus.screen?.spec.name === 'results') return;
+    // solo play merges every device: the pad only matters when it was the one driving
+    const player = this.input.assign.length === 1 ? (this.input.lastDevice === device ? 0 : -1) : this.input.assign.indexOf(device);
+    const k = s.race.players[player];
+    if (!k || k.finished || this.padsLost.includes(player)) return;
+    this.padsLost.push(player);
+    if (s.phase !== 'intro') this._showPadNotice();   // over the flyover it waits for the countdown (onCountdown)
+  }
+  _padFound(device) {
+    if (!this.padsLost.length) return;
+    const a = this.input.assign, solo = a.length === 1;
+    // the same controller back in its old slot, or any controller nobody is using: it goes to the first player without one
+    const back = solo ? 0 : a.indexOf(device), player = back >= 0 ? back : this.padsLost[0];
+    if (!this.padsLost.includes(player)) return;
+    if (!solo && back < 0) {
+      a[player] = device;
+      const cfg = this.session?.config?.players?.[player]; if (cfg) cfg.device = device;   // a restart keeps the new pairing
+      if (this.flow.devices?.[player] != null) this.flow.devices[player] = device;
+    }
+    this.padsLost = this.padsLost.filter(p => p !== player);
+    this._redrawPause();
+  }
+  _showPadNotice() {
+    const s = this.session;
+    if (!s || this.attract || !this.padsLost.length) return;
+    if (s.paused || s.menuOpen) this._redrawPause(); else this.pause();
+  }
+  /** Redraw the pause panel in place when what it should say has changed (but not over a screen opened from it). */
+  _redrawPause() {
+    const name = this.menus.screen?.spec.name;
+    if ((name === 'pause' || name === 'onlinePause') && !this.menus.stack.length) this.menus.reset(name);
+  }
+  /** The pause panel's notice for a lost controller: a heading and one line, or null. */
+  padNotice() {
+    const lost = this.padsLost;
+    if (!lost.length || !this.session || this.attract) return null;
+    if (this.input.assign.length === 1) return ['Controller disconnected', 'Reconnect it to keep racing.'];
+    const names = lost.map(p => `Player ${p + 1}`);
+    if (names.length === 1) return [`${names[0]}’s controller disconnected`, 'Reconnect it to keep racing.'];
+    const list = names.length === 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')}, and ${names.at(-1)}`;
+    return [`Controllers disconnected for ${list}`, 'Reconnect them to keep racing.'];
+  }
+
   /** Keep the screen awake while racing (phones dim otherwise, especially with tilt steering). */
   async _wake(on) {
     try { if (on && !this.wakeLock && navigator.wakeLock) { this.wakeLock = await navigator.wakeLock.request('screen'); this.wakeLock.addEventListener('release', () => { this.wakeLock = null; }); } else if (!on && this.wakeLock) { await this.wakeLock.release(); this.wakeLock = null; } } catch { /* unsupported or denied */ }
@@ -228,7 +291,7 @@ export class App {
   /** Checker wipe: cover the screen, swap the scene, reveal. */
   async transition(fn) { await this.wipe.through(fn, { sound: true }); }
   _clearScene() {
-    this.session?.dispose(); this.session = null; this.attract = false; document.body.classList.remove('must-turn');
+    this.session?.dispose(); this.session = null; this.attract = false; this.padsLost = []; document.body.classList.remove('must-turn');
     this.showroom?.dispose(); this.showroom = null;
     this.trackCard?.remove(); this.trackCard = null;
   }
@@ -338,7 +401,7 @@ export class App {
     });
   }
   /** Called by the session when the flyover ends. */
-  onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
+  onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } this._showPadNotice(); }
 
   restartRace() {
     const config = this.lastConfig;

@@ -11,12 +11,13 @@ const blank = () => ({ steer: 0, throttle: 0, brake: 0, drift: false, item: fals
    jolt (m/s² beyond gravity). Twisting the device like a wheel is the axis tilt
    steering reads, so with tilt on that axis needs a harder twist to count. A hard
    enough twist picks the spin direction; anything else is a flip. Tuning numbers. */
-/** 1 or -1 when the screen is landscape (which way round), 0 when upright. iOS reports
-    the left-hand turn as 270 through screen.orientation and as -90 through window.orientation. */
-const landscapeSide = () => {
-  const a = (((screen.orientation?.angle ?? window.orientation ?? 0) % 360) + 360) % 360;
-  return a === 90 ? 1 : a === 270 ? -1 : 0;
-};
+/** How far the screen is turned from upright: 0, 90, 180, or 270. iOS reports the left-hand turn as 270
+    through screen.orientation and as -90 through window.orientation; both come out as 270 here. */
+const screenTurn = () => ((Math.round((globalThis.screen?.orientation?.angle ?? globalThis.orientation ?? 0) / 90) * 90) % 360 + 360) % 360;
+/** The device-frame axis a steering-wheel twist turns about, and its sign, for the way the screen is turned: in
+    landscape the roll is beta (either way round), upright it is gamma (upside down, a tablet, flips it).
+    `o` is a DeviceOrientationEvent or a rotationRate: both name the axes beta and gamma. */
+export const wheelAxis = (o, turn = screenTurn()) => (turn === 90 ? o?.beta : turn === 270 ? -o?.beta : turn === 180 ? -o?.gamma : o?.gamma) || 0;
 export const FLICK = { turn: 320, twist: 360, twistTilt: 520, jolt: 15, gap: 350, tiltHold: 300, tiltBack: 160 };
 
 export const DEVICE_LABEL = { kb: 'Keyboard', kb1: 'Keyboard P1', kb2: 'Keyboard P2', touch: 'Touch', pad0: 'Controller 1', pad1: 'Controller 2', pad2: 'Controller 3', pad3: 'Controller 4' };
@@ -48,9 +49,11 @@ export const PAD_ACTIONS = [
   { id: 'drift', label: 'Drift & hop', group: 'race' },
   { id: 'item', label: 'Use item', group: 'race' },
   { id: 'rear', label: 'Look behind', group: 'race' },
+  { id: 'rescue', label: 'Rescue', group: 'race' },   // racing: giving its button to another action trades, so View never both rescues and drives
   { id: 'pause', label: 'Pause', group: 'menu' },
 ];
-export const PAD_DEFAULTS = { accelerate: [0], brake: [1], drift: [5, 2], item: [4, 3], rear: [11, 13], pause: [9] };
+export const PAD_DEFAULTS = { accelerate: [0], brake: [1], drift: [5, 2], item: [4, 3], rear: [11, 13], rescue: [8], pause: [9] };
+const RESCUE_SPARES = [8, 10, 16];   // View, then the left stick click, then Guide: for a save that already gave View to something else
 export const PAD_STEER_SOURCES = [['both', 'Left stick + D-pad'], ['stick', 'Left stick'], ['dpad', 'D-pad']];
 export const defaultPadBindings = () => Object.fromEntries(PAD_ACTIONS.map(a => [a.id, [...PAD_DEFAULTS[a.id]]]));
 const padGroup = id => PAD_ACTIONS.find(a => a.id === id)?.group;
@@ -59,11 +62,17 @@ const padGroup = id => PAD_ACTIONS.find(a => a.id === id)?.group;
 export function sanitizePadBindings(raw) {
   const out = defaultPadBindings();
   if (!raw || typeof raw !== 'object') return out;
+  let spare = false;
   for (const a of PAD_ACTIONS) {
     const list = raw[a.id];
-    if (!Array.isArray(list)) continue;
+    if (!Array.isArray(list)) { if (a.id === 'rescue') spare = true; continue; }
     const clean = [...new Set(list.filter(n => Number.isInteger(n) && n >= 0 && n <= 31))].slice(0, 3);
-    if (clean.length) out[a.id] = clean;
+    if (clean.length) out[a.id] = clean; else if (a.id === 'rescue') spare = true;
+  }
+  // a save from before Rescue existed may have put View on another action: Rescue then takes a button nothing uses
+  if (spare) {
+    const used = new Set(PAD_ACTIONS.filter(a => a.id !== 'rescue').flatMap(a => out[a.id]));
+    out.rescue = [RESCUE_SPARES.find(n => !used.has(n)) ?? RESCUE_SPARES[0]];
   }
   return out;
 }
@@ -93,6 +102,9 @@ export function applyPadBind(bindings, action, index) {
 /** The binding as one friendly name — the primary only. The "also" buttons
     keep working underneath, but no UI lists them (issue #194). */
 export const describePadBind = (bindings, action, family = 'xb') => { const l = bindings[action] || []; return l.length ? buttonName(l[0], family) : '—'; };
+/** The rescue key for a keyboard layout, or null: R for solo and Player 1, and backslash for Player 2 on a shared
+    keyboard while no layout has taken that key for driving. R is reserved (src/core/keyboard.js); backslash is not. */
+export const rescueKey = (layout, keyBinds) => layout !== 'kb2' ? 'KeyR' : Object.values(keyBinds || {}).some(l => Object.values(l).some(k => k.includes('Backslash'))) ? null : 'Backslash';
 const MENU_KEYS = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Enter: 'confirm', Space: 'confirm', Escape: 'back', Backspace: 'back', KeyP: 'pause' };
 
 export class Input {
@@ -111,6 +123,7 @@ export class Input {
     this._tiltHist = []; this._tiltHoldUntil = 0;
     this.onMenu = null;                    // (action, device) => void
     this.onAnyInput = null;                // first interaction (to unlock audio)
+    this.onPadLost = null; this.onPadFound = null; this.padsSeen = new Set();   // (index) => void, see _watchPads
     this.lastDevice = 'kb'; this.kbUsed = false; this.padPrev = [{}, {}, {}, {}]; this.padRepeat = [0, 0, 0, 0];
     this.states = [blank(), blank(), blank(), blank()];
 
@@ -133,19 +146,14 @@ export class Input {
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && !(e.target instanceof HTMLInputElement)) e.preventDefault();
       if (this.onJoinKey?.(this._kbDeviceFor(e.code))) { e.preventDefault(); return; }
       if (MENU_KEYS[e.code] && this._menu(MENU_KEYS[e.code], this._kbDeviceFor(e.code))) e.preventDefault();
-      if (e.code === 'KeyR') this._menu('reset', 'kb');
+      if (e.code === 'KeyR' || e.code === 'Backslash') { const d = this._rescueDevice(e.code); if (d) this._menu('reset', d); }
       if (e.code === 'KeyM') this._menu('mute', 'kb');
       if (e.code === 'KeyF' && e.altKey || e.code === 'F11') this._menu('fullscreen', 'kb');
     });
     addEventListener('keyup', e => { this.keys.delete(e.code); this.suppressed.delete(e.code); });
     addEventListener('blur', () => { this.keys.clear(); this.suppressed.clear(); });
     addEventListener('gamepadconnected', e => { this.lastDevice = 'pad' + e.gamepad.index; this.onPads?.(); });
-    addEventListener('gamepaddisconnected', e => {
-      const index = e.gamepad.index;
-      this._endPulse(index);
-      if (index < this.padPrev.length) this.padPrev[index] = {};
-      this.onPads?.();
-    });
+    addEventListener('gamepaddisconnected', e => { this._padGone(e.gamepad.index); this.onPads?.(); });
     addEventListener('blur', () => { this.rumbleFocused = false; this.stopRumble(); });
     addEventListener('focus', () => { this.rumbleFocused = true; });
     addEventListener('pagehide', () => this.stopRumble());
@@ -164,6 +172,13 @@ export class Input {
     if (PAD_STEER_SOURCES.some(([id]) => id === steer)) this.padSteer = steer;
   }
 
+  /** Which keyboard player a rescue key belongs to: R is the keyboard player's (Player 1 when two share it), backslash Player 2's. */
+  _rescueDevice(code) {
+    const a = this.assign;
+    if (a.length === 1 && a[0] === 'any') return code === rescueKey('kb', this.keyBinds) ? 'kb' : null;
+    const owner = ['kb1', 'kb2'].filter(d => a.includes(d)).find(d => code === rescueKey(d, this.keyBinds));
+    return owner || (code === 'KeyR' ? a.find(d => d === 'kb1' || d === 'kb2') : null) || null;
+  }
   _kbDeviceFor(code) { for (const d of ['kb1', 'kb2']) for (const keys of Object.values(this.keyBinds[d])) if (keys.includes(code)) return d; return 'kb'; }
   _menu(action, device) { return this.onMenu?.(action, device); }
 
@@ -215,6 +230,7 @@ export class Input {
 
   /** Read driving input for every local player. Call once per rendered frame. */
   poll(dt) {
+    this._watchPads();
     this._padMenus(dt);
     for (let p = 0; p < this.assign.length; p++) {
       const dev = this.assign[p], out = this.states[p];
@@ -237,6 +253,22 @@ export class Input {
     return this.states;
   }
 
+  /** Pads that come and go. Some browsers drop a pad from getGamepads() without a gamepaddisconnected event,
+      so each poll compares the pads it sees with the last poll's; the event and the poll report a pad once. */
+  _watchPads() {
+    const gps = navigator.getGamepads ? navigator.getGamepads() : [], now = new Set();
+    for (let i = 0; i < Math.min(4, gps.length); i++) if (gps[i]?.connected) now.add(i);
+    // a page in the background may be shown no pads at all: only a page in front can tell a pad is gone
+    const front = !globalThis.document || (!document.hidden && document.hasFocus?.() !== false);
+    if (front) for (const i of this.padsSeen) if (!now.has(i)) this._padGone(i);
+    for (const i of now) if (!this.padsSeen.has(i)) { this.padsSeen.add(i); this.onPadFound?.(i); }
+  }
+  _padGone(index) {
+    this._endPulse(index);
+    if (index < this.padPrev.length) this.padPrev[index] = {};
+    if (this.padsSeen.delete(index)) this.onPadLost?.(index);
+  }
+
   /** Menu navigation from gamepads, with auto-repeat on directions. */
   _padMenus(dt) {
     const gps = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -257,7 +289,7 @@ export class Input {
          confirm and back DERIVE from the Accelerate and Brake buttons — menus have no
          bindings of their own, and the derivation is exactly the shipped behaviour
          (A confirms, B goes back). alt/alt2 stay on X/Y as before (nothing remaps them) */
-      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: confirm.some(b), back: back.some(b), pause: !editor && has('pause'), alt: b(2), alt2: b(3) };
+      const now = { up: b(12) || gp.axes[1] < -0.6, down: b(13) || gp.axes[1] > 0.6, left: b(14) || gp.axes[0] < -0.6, right: b(15) || gp.axes[0] > 0.6, confirm: confirm.some(b), back: back.some(b), pause: !editor && has('pause'), reset: !editor && has('rescue'), alt: b(2), alt2: b(3) };
       // A trigger or shoulder button can be the first driving input on a hybrid device.
       if (gp.buttons.some((button, j) => button.pressed && !prev.buttons?.[j])) this.lastDevice = dev;
       this.padPrev[i] = { ...now, buttons: gp.buttons.map(button => button.pressed) };
@@ -325,10 +357,7 @@ export class Input {
         addEventListener('deviceorientation', e => {
           if (e.beta == null) return;
           this.tilt.available = true;
-          // in landscape the roll axis is beta; sign depends on which way the phone is turned
-          const side = landscapeSide();
-          let v = side ? side * e.beta : e.gamma;
-          const value = clamp((v || 0) / 28, -1, 1), now = performance.now();
+          const value = clamp(wheelAxis(e) / 28, -1, 1), now = performance.now();
           this._tiltHist.push({ t: now, v: value }); if (this._tiltHist.length > 30) this._tiltHist.shift();
           if (now < this._tiltHoldUntil) return;   // a flick just happened: it is not a steer
           this.tilt.value = value;
@@ -364,9 +393,9 @@ export class Input {
     if (r?.beta == null && a?.x == null) return;   // the browser fires empty events where there is no sensor
     m.available = true;
     if (!m.enabled) return;
-    const side = landscapeSide();
+    const side = screenTurn() % 180 !== 0;
     // twist: the same axis and sign tilt steering reads, so a twist right is positive
-    const twist = (side ? side * (r?.beta || 0) : r?.gamma) || 0;
+    const twist = wheelAxis(r);
     const turn = side ? Math.hypot(r?.alpha || 0, r?.gamma || 0) : Math.hypot(r?.alpha || 0, r?.beta || 0);
     const jolt = a ? Math.hypot(a.x || 0, a.y || 0, a.z || 0) : 0;
     const pk = m.peak; pk.turn = Math.max(pk.turn * 0.98, turn); pk.twist = Math.max(pk.twist * 0.98, Math.abs(twist)); pk.jolt = Math.max(pk.jolt * 0.98, jolt);

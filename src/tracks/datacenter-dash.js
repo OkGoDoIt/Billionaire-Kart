@@ -269,12 +269,14 @@ const TOWERS = [{ x: 252, z: -168 }, { x: 106, z: -262 }];
 const PIPE_X = [2, 8, 14];
 const RACK_TILE = 4.8;   // metres of rack front per repeat of the rack texture (four 1.2 m cabinets)
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif', SANS = '"Arial Black", "Helvetica Neue", Arial, sans-serif', MONO = '"Courier New", Courier, monospace';
+/* roadside boards [cp, side, offset, text, bg, fg]: all on the open-air stretches (4-6, 9.15-15, 17.55-21.85), since a board
+   beside a hall faces its wall */
 const BOARDS = [
-  [6.6, -1, 16, 'YOUR LAKE, NOW IN THE CLOUD', '#1f6bff', '#ffffff'], [16.3, -1, 16, 'CARBON NEUTRAL BY 2099', '#16a34a', '#ffffff'],
-  [20.0, 1, 16, 'POWERED BY GAS AND VIBES', '#ffd23c', '#1a1d29'], [23.6, 1, 15, 'ASK US ABOUT OUR LAKE', '#ffffff', '#1f6bff'],
-  [25.2, 1, 15, 'NOW TRAINING ON YOU', '#db2777', '#ffffff'], [7.6, 1, 16, 'THIRSTY? SO ARE WE', '#0ea5e9', '#ffffff'],
-  [17.2, 1, 16, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
-  [22.9, -1, 16, 'WE ARE OUT OF GPUS', '#ffffff', '#e23b3b'], [26.2, -1, 16, 'SKY STILL MOSTLY BLUE', '#7b5cff', '#ffffff'],
+  [6.4, -1, 26, 'YOUR LAKE, NOW IN THE CLOUD', '#1f6bff', '#ffffff'], [13, -1, 16, 'CARBON NEUTRAL BY 2099', '#16a34a', '#ffffff'],
+  [20.0, 1, 16, 'POWERED BY GAS AND VIBES', '#ffd23c', '#1a1d29'], [11.4, -1, 16, 'ASK US ABOUT OUR LAKE', '#ffffff', '#1f6bff'],
+  [21.2, 1, 14, 'NOW TRAINING ON YOU', '#db2777', '#ffffff'], [4.8, 1, 16, 'THIRSTY? SO ARE WE', '#0ea5e9', '#ffffff'],
+  [18.3, -1, 14, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
+  [22.9, -1, 16, 'WE ARE OUT OF GPUS', '#ffffff', '#e23b3b'], [14.6, -1, 16, 'SKY STILL MOSTLY BLUE', '#7b5cff', '#ffffff'],
   [10.55, -1, 13, 'BEFORE', '#0ea5e9', '#ffffff'], [12.0, -1, 14, 'DRINK RESPONSIBLY. WE WILL.', '#ffffff', '#1f6bff'], [13.4, -1, 14, 'SHORTCUT OPENS AT 1%', '#ffd23c', '#1a1d29'],
 ];
 const PROTEST = ['WATER IS NOT A FEATURE', 'MY LAKE ≠ YOUR CACHE', 'BRING BACK THE FISH', "HONK IF YOU'RE THIRSTY", 'THE FISH WERE HERE FIRST', 'LEAVE SOME FOR US', 'UNPLUG IT', 'NOT MY RESERVOIR', 'TOUCH GRASS (WHILE IT LASTS)'];

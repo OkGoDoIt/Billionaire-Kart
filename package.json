@@ -8,7 +8,7 @@
     "start": "python3 -m http.server 8765 --bind 127.0.0.1",
     "sim": "node tools/sim.mjs",
     "test:race": "node tools/split-layout-check.mjs && node tools/standings-check.mjs && node tools/box-access-check.mjs && node tools/slipstream-check.mjs && node tools/boost-brake-check.mjs && node tools/bailout-gap-check.mjs && node tools/ramp-trick-check.mjs && node tools/antitrust-check.mjs && node tools/smear-check.mjs && node tools/pedal-check.mjs && node tools/race-clock-check.mjs && node tools/rumble-check.mjs && node tools/keyboard-test.mjs && node tools/pad-binds-test.mjs && node tools/save-check.mjs && node tools/item-rules-check.mjs && node tools/race-distance-check.mjs && node tools/finish-cruise-check.mjs && node tools/traffic.mjs --tracks silicon-valley,davos,international-waters,datacenter-dash --seeds 2 --check && node tools/sim.mjs --quick",
-    "test": "npm run test:race && node tools/audio-check.mjs && node tools/boot-check.mjs && node tools/sign-clip-check.mjs && node tools/bot.mjs",
+    "test": "npm run test:race && node tools/audio-check.mjs && node tools/boot-check.mjs && node tools/sign-clip-check.mjs && node tools/sign-sight-check.mjs && node tools/bot.mjs",
     "site": "node tools/build-site.mjs"
   },
   "devDependencies": {

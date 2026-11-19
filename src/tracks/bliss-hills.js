@@ -52,15 +52,15 @@ const CLIPPY = { x: 55, z: 60, yaw: Math.atan2(-105, -50), H: 44 };
 /* Billboards: [cp, side, metres beyond the road edge, text, background, ink]. */
 const BOARDS = [
   [1.3, 1, 30, '640K OUGHT TO BE ENOUGH', '#1a1d29', '#37ff6a'],
-  [7.6, -1, 20, 'INSERT DISK 2 OF 47', '#ffd23c', '#1a1d29'],
-  [10.4, 1, 22, 'YOU HAVE (1) NEW VIRUS', '#e5352b', '#ffffff'],
-  [13.4, -1, 20, 'BEST VIEWED AT 800X600', '#ffffff', '#0a4fd6'],
-  [16.5, -1, 22, 'NOW DEFRAGMENTING YOUR LAP', '#7b5cff', '#ffffff'],
-  [21.0, -1, 26, 'PRESS ANY KEY (NOT THAT ONE)', '#ece9d8', '#12142b'],
+  [7.6, -1, 18, 'INSERT DISK 2 OF 47', '#ffd23c', '#1a1d29'],
+  [10.4, 1, 18, 'YOU HAVE (1) NEW VIRUS', '#e5352b', '#ffffff'],
+  [13.4, -1, 12, 'BEST VIEWED AT 800X600', '#ffffff', '#0a4fd6'],
+  [16.5, -1, 15, 'NOW DEFRAGMENTING YOUR LAP', '#7b5cff', '#ffffff'],
+  [21, -1, 18, 'PRESS ANY KEY (NOT THAT ONE)', '#ece9d8', '#12142b'],
   [27.5, -1, 18, 'FREE SMILEY TOOLBAR! CLICK HERE', '#ff8ac4', '#12142b'],
   [29.9, 1, 24, 'YOUR TRIAL HAS EXPIRED', '#12142b', '#ffd23c'],
   [31.5, -1, 20, 'UNDER CONSTRUCTION SINCE 1998', '#ffd23c', '#12142b'],
-  [33.6, -1, 22, 'TURN IT OFF AND ON AGAIN', '#3a8cff', '#ffffff'],
+  [33.4, -1, 22, 'TURN IT OFF AND ON AGAIN', '#3a8cff', '#ffffff'],
   [16.0, 1, 20, 'BUFFERING... (FOREVER)', '#ffffff', '#12142b'],
 ];
 const STANDS = ['ADMINISTRATORS ONLY', 'GUEST ACCOUNT SEATING', 'SAFE MODE SECTION', 'DIAL-UP SECTION (PLEASE WAIT)'];
@@ -603,8 +603,8 @@ function gags({ THREE, track, group, sc, rng, atlas, bake, taken, free, local, b
     });
     atlas.place(board('RECYCLE BIN', { bg: '#ffffff', fg: '#0a4fd6', size: 120, border: '#0a4fd6', font: SANS, lines: 1 }, 768, 160), local(p, 0, R + 0.3, p.y + H * 0.55), p.yaw, 12, 2.5);
     const sp = { ...p, ...(([x, , z]) => ({ x, z }))(local(p, 0, -R - 4, 0)) };
-    legs(sp, 22, H + 12);
-    atlas.place(board('EMPTY RECYCLE BIN? [NO]', { bg: '#ece9d8', fg: '#12142b', size: 120, kicker: 'ARE YOU SURE?', kfg: '#0a4fd6', border: '#0a4fd6' }, 768, 300), local(sp, 0, 0, p.y + H + 12.5), p.yaw, 22, 8.6);
+    legs(sp, 22, H + 15);   // high enough that the dead products' tombstones stand below it, not across it
+    atlas.place(board('EMPTY RECYCLE BIN? [NO]', { bg: '#ece9d8', fg: '#12142b', size: 120, kicker: 'ARE YOU SURE?', kfg: '#0a4fd6', border: '#0a4fd6' }, 768, 300), local(sp, 0, 0, p.y + H + 15.5), p.yaw, 22, 8.6);
     taken.push([p.x, p.z, 18]);
   }
 

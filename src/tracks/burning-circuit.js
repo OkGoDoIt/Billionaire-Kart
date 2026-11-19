@@ -648,8 +648,8 @@ export default {
       sc.instances(partsOf(B.satDish()), dishes, { scale: [1.2, 1.6], cast: false });
       dishes.forEach(q => take(q.x, q.z, 5));
       const d = sc.beside(20.45, -1, 52); if (clear(d.x, d.z, 8)) bake.add(sc.place(B.dome(6, { door: 0x46d6ff }), d.x, d.z, { yaw: d.yaw, y: d.y - 0.3 }));
-      sign(19.85, -1, 38, B.board('DIGITAL DETOX CAMP', { bg: '#ffffff', fg: '#7b5cff', size: 150, border: '#7b5cff' }), 20, 6.5, 11, { turn: 0.6 });
-      sign(21.0, -1, 36, B.board('WIFI PASSWORD: NAMASTE123', { bg: '#7b5cff', fg: '#ffffff', size: 120 }), 16, 5.2, 8, { turn: 0.6 });
+      sign(20.25, -1, 38, B.board('DIGITAL DETOX CAMP', { bg: '#ffffff', fg: '#7b5cff', size: 150, border: '#7b5cff' }), 20, 6.5, 11, { turn: 0.6 });
+      sign(20.6, -1, 36, B.board('WIFI PASSWORD: NAMASTE123', { bg: '#7b5cff', fg: '#ffffff', size: 120 }), 16, 5.2, 8, { turn: 0.6 });
     }
 
     // Stranded marina: the sails trace the boost cut, the big hull marks the drift ridge.
@@ -839,16 +839,16 @@ export default {
 
     // billboards where you are looking anyway
     const BOARDS = [
-      [2.3, -1, 19, 'OUT OF OFFICE SINCE 1998', 'sun', '- LARRY & SERGEY'], [7.2, -1, 20, 'MY SHAMAN TAKES EQUITY', 'hot'],
+      [2.1, -1, 19, 'OUT OF OFFICE SINCE 1998', 'sun', '- LARRY & SERGEY'], [7.2, -1, 20, 'MY SHAMAN TAKES EQUITY', 'hot'],
       [10.7, -1, 19, 'BURNING MAN IS SILICON VALLEY', 'ink', '- ELON MUSK'],
-      [21.2, 1, 37, 'NO SPECTATORS (EXCEPT INVESTORS)', 'red'],
+      [21.2, -1, 26, 'NO SPECTATORS (EXCEPT INVESTORS)', 'red'],
       [23.6, -1, 20, 'FOUND MYSELF. RAISED A SERIES B.', 'sky'],
     ];
     for (const [at, side, off, text, st, sub] of BOARDS) sign(at, side, off, B.board(text, { ...STYLE[st], size: 130, sub, subFg: sub ? STYLE[st].fg : null, subScale: 0.55 }), 20, 6.6, 10, { turn: 0.45 });
 
     // the painted posters: the gig poster round the Bowl, the valet stand on the slalom, the playa's terms by the camp
     poster(6.3, -1, 22, 0, 'NO REQUESTS');
-    poster(10.35, 1, 18, 2, 'KEYS LEFT IN IGNITION', { turn: 0.35 });
+    poster(9.95, 1, 26, 2, 'KEYS LEFT IN IGNITION', { turn: 0.35 });
     poster(24.6, -1, 19, 1, 'RADICAL SELF-RELIANCE (CATERED)');
     posters.flush();
     bake.flush();

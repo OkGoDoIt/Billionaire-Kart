@@ -124,6 +124,7 @@ export default {
     { from: 19.3, to: 20.0, edge: 'wall' },                                     // forecourt walls either side of the capitol
     { from: 22.0, to: 22.35, edge: 'wall' },
     { from: 23.0, to: 29.0, side: 'R', outer: 2.2 },                            // hairpins one and three: the infields hold their set pieces
+    { from: 22.9, to: 23.9, side: 'R', hoarding: false },                       // no sponsor wall across the bottom of the filibuster's clock
     { from: 37.0, to: 43.0, side: 'R', outer: 2.2 },
     { from: 29.48, to: 36.6, side: 'L', outer: 18.5, hoarding: false },         // hairpin two's infield and the cloture steps: open ground,
                                                                                  // fenced off (decorate) until the final lap
@@ -391,10 +392,18 @@ export default {
     cherrySpots.push(...sc.scatter({ count: 60, min: 14, max: 70, maxSlope: 0.5, minGap: 7, where: (x, z) => (onPlateau(x, z, 1.6) && !onPlateau(x, z, 1.02)) || (x > -60 && x < 100 && z > 20 && z < 95) }));
     const cafe = sc.beside(CAFE_CP, -1, 19);
     taken.push([cafe.x, cafe.z, 9]);
-    const sightlines = BOARDS.map(([cp, side, offset]) => {
-      const board = sc.beside(cp, side, offset), i = track.indexAtCp(cp);
-      return [board.x, board.z, track.px[i] - track.tx[i] * 29, track.pz[i] - track.tz[i] * 29];
+    // each board's sight line, to its middle and both ends: a 15 m board is wider than one line's clearance
+    const sightlines = BOARDS.flatMap(([cp, side, offset, , , , face]) => {
+      const board = sc.beside(cp, side, offset), i = track.indexAtCp(cp), a = face != null ? track.indexAtCp(face) : -1;
+      const ax = a >= 0 ? track.px[a] : track.px[i] - track.tx[i] * 29, az = a >= 0 ? track.pz[a] : track.pz[i] - track.tz[i] * 29;
+      const l = Math.hypot(ax - board.x, az - board.z) || 1, ux = -(az - board.z) / l * 6.5, uz = (ax - board.x) / l * 6.5;
+      return [-1, 0, 1].map(k => [board.x + ux * k, board.z + uz * k, ax, az]);
     });
+    // the hedge maze's board is 22 m wide: keep both its ends and its middle clear from the hairpin three approach
+    for (const cp of [36.0, 36.8, 37.5]) {
+      const a = track.indexAtCp(cp), m = MAZE_SIGN, fy = Math.atan2(track.px[track.indexAtCp(37.0)] - m.x, track.pz[track.indexAtCp(37.0)] - m.z);
+      for (const d of [-10, 0, 10]) sightlines.push([m.x + Math.cos(fy) * d, m.z - Math.sin(fy) * d, track.px[a], track.pz[a]]);
+    }
     const cafeApproach = track.indexAtCp(14.05);
     sightlines.push([cafe.x, cafe.z, track.px[cafeApproach], track.pz[cafeApproach]]);
     const blocksBoard = (x, z) => sightlines.some(([bx, bz, ax, az]) => segDist(x, z, ax, az, bx, bz) < 7.4);
@@ -817,15 +826,18 @@ const STATUE = { x: 112, z: 236 };        // in the middle of the bend at the fo
 const CANNON = { x: 121, z: 114 };        // beside the Climb, aimed at the dome
 const LECTERN = { x: -167, z: 122.5 };    // in the infield of hairpin one: you drive round him
 const MAZE = { x: -222, z: 18 };
+const MAZE_SIGN = { x: MAZE.x + 30, z: MAZE.z + 12 };   // its DISTRICT 7 board, facing the hairpin three approach
 const PERMIT = { x: -146, z: 24.5 };      // in the infield of hairpin three: the red tape, at the scale it is really issued          // beyond hairpin three
+/* roadside boards: [cp, side, offset, text, bg, fg, face]. A board turns toward the oncoming road, or toward the road at cp `face`. */
 const BOARDS = [
   [4.2, -1, 18, 'TERM LIMITS: STILL IN COMMITTEE', '#d4af37', '#12142b'],
-  [9.8, 1, 24, 'DOES TIKTOK USE WIFI?', '#12142b', '#ffd23c'], [12.9, -1, 22, 'THE INTERNET IS A SERIES OF TUBES', '#ffffff', '#1f3f8a'],
+  [9.8, 1, 24, 'DOES TIKTOK USE WIFI?', '#12142b', '#ffd23c'], [13.4, -1, 14, 'THE INTERNET IS A SERIES OF TUBES', '#ffffff', '#1f3f8a'],
   [16.8, -1, 18, 'I YIELD MY TIME TO MY DONORS', '#1f3f8a', '#ffd23c'],
-  [24.0, 1, 22, 'INSIDER TRADING: MEMBERS ONLY', '#16a34a', '#ffffff'], [28.0, 1, 16, 'BILL: 4,000 PAGES. READ: 0', '#ffffff', '#12142b'],
-  [31.5, -1, 20, 'PASS IT. READ IT LATER.', '#b3122a', '#ffffff'], [31.8, -1, 19, 'SHUTDOWN SEASON TICKETS ON SALE', '#ffd23c', '#12142b'],
-  [38.15, -1, 18, 'NEW TARIFF? CHECK YOUR NOTIFICATIONS', '#12142b', '#ffffff'], [42.0, 1, 18, 'CAMPAIGN PROMISES RECYCLED HERE', '#16a34a', '#ffffff'],
-  [44.3, 1, 26, 'LOBBYISTS: USE SIDE ENTRANCE', '#d4af37', '#12142b'],
+  [24.4, 1, 14, 'INSIDER TRADING: MEMBERS ONLY', '#16a34a', '#ffffff'], [28.0, 1, 16, 'BILL: 4,000 PAGES. READ: 0', '#ffffff', '#12142b'],
+  [31.5, -1, 20, 'PASS IT. READ IT LATER.', '#b3122a', '#ffffff'], [32.4, -1, 16, 'SHUTDOWN SEASON TICKETS ON SALE', '#ffd23c', '#12142b'],
+  [38.8, 1, 12, 'NEW TARIFF? CHECK YOUR NOTIFICATIONS', '#12142b', '#ffffff', 36.4],   // dead ahead at the end of the hairpin three approach
+  [42.4, 1, 14, 'CAMPAIGN PROMISES RECYCLED HERE', '#16a34a', '#ffffff'],
+  [43.6, 1, 14, 'LOBBYISTS: USE SIDE ENTRANCE', '#d4af37', '#12142b', 42.2],
 ];
 const CROWD = ['OBJECTION!', 'I YIELD', 'NO COMMENT', 'PAY TO PLAY', 'SO MOVED', 'RECESS!', 'FILIBUSTER!', 'SPEAK UP, SENATOR', 'HONK FOR GRIDLOCK', 'MORE HEARINGS'];
 const MONO = '"Courier New", Courier, monospace';
@@ -897,9 +909,10 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
     fitText(g, 'SAME PEOPLE, NEW BUSINESS CARDS', w / 2, h * 0.76, w * 0.84, 62, SANS, '#ffffff', { lines: 1 });
     for (const [x0, dir] of [[w * 0.06, 1], [w * 0.94, -1]]) { g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.beginPath(); g.arc(x0, h * 0.4, 30, dir > 0 ? 0.3 : 3.4, dir > 0 ? 5.5 : 8.6); g.stroke(); }
   });
-  atlas.place2(sDoor, toWorld(co, sg.door), co.yaw, 21, 6.8);
+  const doorLift = 1.8;   // up off the drum's roof, which otherwise covers the bottom line from the road
+  atlas.place2(sDoor, toWorld(co, [sg.door[0], sg.door[1] + doorLift, sg.door[2]]), co.yaw, 21, 6.8);
   for (const k of ['reg', 'ind']) for (const d of [-7, 7]) { const p = toWorld(co, [sg[k][0] + d, 0, 0]); pole(p[0], p[2], cy + sg[k][1] - 7, cy + sg[k][1] - 2.4, 0.3); }
-  for (const d of [-6, 6]) { const q = toWorld(co, [d, 0, 0]); pole(q[0], q[2], cy + DOOR.deckY + 11, cy + sg.door[1] - 3.2, 0.3); }
+  for (const d of [-6, 6]) { const q = toWorld(co, [d, 0, 0]); pole(q[0], q[2], cy + DOOR.deckY + 11, cy + sg.door[1] + doorLift - 3.2, 0.3); }
   // the suits, going round with the door
   const SUITS = [0, 1, 2, 3].flatMap(k => [[2.6, k * Math.PI / 2 - 0.3], [5.1, k * Math.PI / 2 + 0.35]]);   // two per quarter of the door
   const suits = sc.instances(partsOf(C.suit()), SUITS.map(() => ({ x: drum[0], y: drum[1], z: drum[2], yaw: 0 })), { tints: C.SUIT_TINTS, cast: false });
@@ -1081,7 +1094,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
     outline.forEach((p, k) => add(p, outline[(k + 1) % outline.length]));
     walls.forEach(([a, b]) => add(a, b));
     sc.instances(partsOf(C.hedge(3.4, { h: 2.8, color: 0x2f7d34 })), spots, { sink: 0.1 });
-    const signAt = { x: MAZE.x + 30, z: MAZE.z + 12 }, y0 = sc.y(signAt.x, signAt.z), fy = yawTo(signAt, roadPt(37.0));
+    const signAt = MAZE_SIGN, y0 = sc.y(signAt.x, signAt.z), fy = yawTo(signAt, roadPt(37.0));
     const s = atlas.add(1024, 300, (g, w, h) => { g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h); g.fillStyle = '#1f3f8a'; g.fillRect(0, 0, w, h * 0.2); fitText(g, 'HEDGE MAZE', w / 2, h * 0.1, w * 0.5, 44, SANS, '#ffffff', { lines: 1 }); fitText(g, 'DISTRICT 7', w / 2, h * 0.47, w * 0.8, 130, F, '#12142b', { lines: 1 }); fitText(g, '(FINAL SHAPE, DRAWN BY THE WINNER)', w / 2, h * 0.8, w * 0.86, 48, SANS, '#b3122a', { lines: 1 }); });
     atlas.place2(s, [signAt.x, y0 + 8.4, signAt.z], fy, 22, 6.45);
     for (const d of [-8, 8]) pole(signAt.x + Math.cos(fy) * d, signAt.z - Math.sin(fy) * d, y0 - 0.5, y0 + 5.2, 0.3);
@@ -1110,9 +1123,9 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
 
   /* ---- 10. the boards ---- */
   const frame = P.billboard(null, { w: 15, h: 5, legs: 6, frame: 0x2a2d36 }); frame.remove(frame.children[frame.children.length - 1]);
-  BOARDS.forEach(([cp, side, off, text, bg, fg]) => {
+  BOARDS.forEach(([cp, side, off, text, bg, fg, face]) => {
     const p = sc.beside(cp, side, off); if (reach(p.x, p.z, 1.5)) return;
-    const i = p.i, fx = Math.sin(p.yaw) - 0.75 * track.tx[i], fz = Math.cos(p.yaw) - 0.75 * track.tz[i], yaw = Math.atan2(fx, fz);
+    const i = p.i, fx = Math.sin(p.yaw) - 0.75 * track.tx[i], fz = Math.cos(p.yaw) - 0.75 * track.tz[i], yaw = face != null ? yawTo(p, roadPt(face)) : Math.atan2(fx, fz);
     const f = frame.clone(); sc.place(f, p.x, p.z, { yaw }); bake.add(f);
     const r = atlas.add(768, 256, (g, w, h) => {
       g.fillStyle = bg; g.fillRect(0, 0, w, h);

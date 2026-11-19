@@ -244,7 +244,9 @@ export class Kart {
     // a trick on its own (a flicked phone): the ramp half of the drift button, with no hop
     const trickPressed = controllable && !!input.trick && !this.prevTrick;
     this.prevTrick = !!input.trick;
-    if (this.finished) { throttle = 0.5; brake = 0; }
+    // past the line: a cool-down pace. Its driver (the AI, or Race._cruise for a player) keeps the brake, to slow
+    // for a corner and to reverse off a wall or an island it has run into
+    if (this.finished) throttle = Math.min(throttle, 0.5);
     // special: a drivetrain that now and then loses power for a moment
     const spt = this.sp.sputter;
     if (spt && controllable && !this.finished) {

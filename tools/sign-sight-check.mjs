@@ -66,14 +66,12 @@ const ALLOW = [
   ...['90 M', '120 M', 'K 140'].map(text => ({ track: 'davos', text, why: 'distance boards down the ski jump\'s landing hill, numbers on the slope rather than a joke' })),
   ...['OFFSHORE ACCOUNT', 'TAX EXEMPT'].map(text => ({ track: 'international-waters', text, why: 'a yacht\'s name runs round its bow in strips that follow the hull, and this check sees one strip at a time; the whole name reads along the quay' })),
   { track: 'bliss-hills', text: '56K', why: 'the badge on the giant modem\'s front, part of the prop; the board above it carries the joke' },
+  { track: 'singularity-speedway', text: 'SINGULARITY SPEEDWAY', why: 'the start gantry\'s name board on its far side: on the grid side the AGI countdown has taken it over (the gag), so this face is only seen from the far straight' },
 ];
 /* Signs this check found hidden that are not moved yet, listed for their tracks' owners in issue #397: [track, start of text].
    They print as "known" with --all and do not fail the check; once one reads, the check says to take it out of this list.
    Matched anywhere in the sign's text (a counter's digits change). */
 const KNOWN = [
-  ...["ELITE FORUM", "JETS ONLY", "STAKEHOLDER", "THE GREAT RESET", "VIP IGLOO"].map(text => ['davos', text]),
-  ...["BLOCKERS:", "DONGLE SOLD SEPARATELY", "LAYOFFS (WE'RE", "OPENING BELL", "RIGHT. EVENTUALLY.", "THE OVAL", "THE QUAD", "WE'RE HIRING!", "WE'RE PIVOTING TO"].map(text => ['silicon-valley', text]),
-  ...["#1", "(GENERATED IN 4 SECONDS)", "AI BENCHMARK RESULTS", "CONSCIOUS. PROBABLY.", "GO HUMANS! (WHILE", "NOW CONVERTING: EVERYTHING", "PAPERCLIPS MADE", "SINGULARITY SPEEDWAY", "THANK YOU FOR"].map(text => ['singularity-speedway', text]),
 ].map(([track, text]) => ({ track, text }));
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');

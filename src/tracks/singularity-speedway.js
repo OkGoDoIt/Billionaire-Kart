@@ -23,8 +23,9 @@ const GAP_FROM = 41.0, GAP_TO = 41.44, COIN_AIR = 4.5;   // the Leap: a 22 m gap
 const FORK = { from: 4.12, to: 5.12, lat: 14 };   // nose pushed 0.12 cp into the fork (probe step 1e): karts wedged on the nose posts at cp 4.04-4.13 and needed progress rescues
 const ISLAND = []; for (let c = FORK.from; c <= FORK.to + 1e-6; c += 0.064) ISLAND.push({ kind: 'static', model: 'island', at: c, lat: FORK.lat, radius: c - FORK.from < 0.1 || FORK.to - c < 0.1 ? 1.4 : 2.0, effect: 'bump' });
 const ADS = ['AGI ACHIEVED INTERNALLY', 'COMPUTE OR DIE', 'YOU ARE THE TRAINING DATA', 'SCALE IS ALL YOU NEED', 'HUMAN IN THE LOOP (FOR NOW)', 'PAPERCLIPS MAXIMIZED', 'TRAINED ON YOUR GROUP CHAT', 'THE LINE GOES UP', 'PROMPT ENGINEER WANTED', 'DOOM: 12%'];
-const FACTORY = { x: 165, y: 5, z: -275, yaw: 0 };          // the paperclip maximizer, north of everything
+const FACTORY = { x: 165, y: 26, z: -275, yaw: 0 };         // the paperclip maximizer, north of everything; high enough that its counter and conversion sign clear the road deck (#397)
 const LAB_PARODIES = ['CLOSED AI', 'AUNTROPIC', 'GOOGOL', 'WHY AI', 'BETA'];   // the podium, until the final lap
+const PODIUM_CP = 5.0;
 const LEADER_PARODY = { elon: 'MELON', sam: 'SAM 2.0', zuck: 'ZUCKERBORG', bezos: 'PRIME BEZOS', jensen: 'THE JACKET', satya: 'MR. TEAMS', dario: 'SAFETY DARIO', demis: 'DR. DEMIS', trump: 'THE DONALD', cook: 'TIM APPLE', larrysergey: 'PAGE & BRIN', bill: 'BILL G.', thiel: 'THE SEER', holmes: 'LADY VAPOR', ellison: 'LARRY E.', murdoch: 'RUPERT M.' };
 
 export default {
@@ -35,7 +36,7 @@ export default {
   // the opening shots: the Singularity looks up and smiles at you; then the paperclip maximizer at work on the skyline
   intro: [
     { pos: [120, 78, 96], pos1: [100, 74, 80], look: [-11, 63, 23], look1: [-11, 67, 23], fov: 42, dur: 3.2 },
-    { pos: [214, 34, -40], pos1: [182, 46, -100], look: [128, 64, -275], look1: [138, 72, -275], fov: 52, dur: 3.0 },
+    { pos: [214, 55, -40], pos1: [182, 67, -100], look: [128, 85, -275], look1: [138, 93, -275], fov: 52, dur: 3.0 },
   ],
   laps: 3,
   driftEntries: [
@@ -239,17 +240,20 @@ function decorate(ctx) {
   const agi = countdownBoard(ctx, fixed, i0, at, facing);
 
   /* ----- floating viewing platforms beside the start straight: a crowd of robots, grateful ----- */
-  const crowd = [], platformSpots = [], platformModel = S.platform({ r: 7 }), FANS = ['THANK YOU FOR THE TRAINING DATA', 'GO HUMANS! (WHILE SUPPLIES LAST)', 'NICE KART. WE WILL DRIVE NOW.', 'WE ARE NOT CONSCIOUS. PROBABLY.'];
-  [[50.35, 1], [0.5, 1], [50.6, -1], [0.75, -1]].forEach(([cp, side], k) => {
+  const crowd = [], platformSpots = [], PR = 8.5, platformModel = S.platform({ r: PR }), FANS = ['THANK YOU FOR THE TRAINING DATA', 'GO HUMANS! (WHILE SUPPLIES LAST)', 'NICE KART. WE WILL DRIVE NOW.', 'WE ARE NOT CONSCIOUS. PROBABLY.'];
+  // none stands among the light rings, whose tubes ran across their banners: THANK YOU moves to the head of the final
+  // straight, NICE KART to the outside of turn one (#397)
+  [[48.8, 1], [0.5, 1], [1.85, -1], [0.75, -1]].forEach(([cp, side], k) => {
     const i = I(cp), p = at(i, side * (edge(i, side) + 13), -0.8);
-    const seats = S.platformSeats(7, k + 3);
     platformSpots.push(p);
-    for (const s of seats) crowd.push({ x: p.x + s[0], y: p.y + s[1], z: p.z + s[2], yaw: faceRoad(i, side) + rng.range(-0.5, 0.5) });
-    // the banner they hold up, on the edge of the platform nearest the road
-    const dx = -side * tr.lx[i], dz = -side * tr.lz[i], yaw = faceRoad(i, side), bw = 13, bh = 2.6;
-    const c = [p.x + dx * 6.2, p.y + 1.1 + bh / 2, p.z + dz * 6.2], r = atlas.add(1024, 205, signDraw(FANS[k], { bg: ['#ffffff', '#ffd23c', '#35e0ff', '#ff9ad5'][k], fg: '#12142b', size: 120, border: '#12142b' }));
+    // The banner they hold up is turned toward the karts coming at it (square to the road it was read side-on, and
+    // only in passing: #397). It runs as a chord across the front of the platform, so both poles stand on the deck,
+    // and the fans who would stand in front of it stand behind it instead.
+    const yaw = boardYaw(i, side, 0.75), nx = Math.sin(yaw), nz = Math.cos(yaw), bw = 15, bh = 4.4, CH = 3.7;
+    for (const st of S.platformSeats(PR, k + 3)) if (st[0] * nx + st[2] * nz < CH - 0.9) crowd.push({ x: p.x + st[0], y: p.y + st[1], z: p.z + st[2], yaw: faceRoad(i, side) + rng.range(-0.5, 0.5) });
+    const c = [p.x + nx * CH, p.y + 1.1 + bh / 2, p.z + nz * CH], r = atlas.add(1024, 300, signDraw(FANS[k], { bg: ['#ffffff', '#ffd23c', '#35e0ff', '#ff9ad5'][k], fg: '#12142b', size: 160, border: '#12142b' }));
     atlas.place(r, c, yaw, bw, bh); backer(fixed, c, yaw, bw, bh);
-    for (const s of [-1, 1]) fixed.add('pole', cyl(0.07, 0.07, 1.1 + bh + 0.3, 6), { p: [c[0] + Math.cos(yaw) * s * (bw / 2 + 0.1) - dx * 0.05, p.y + (1.1 + bh + 0.3) / 2, c[2] - Math.sin(yaw) * s * (bw / 2 + 0.1) - dz * 0.05] });
+    for (const s of [-1, 1]) fixed.add('pole', cyl(0.07, 0.07, 1.1 + bh + 0.3, 6), { p: [c[0] + Math.cos(yaw) * s * (bw / 2 + 0.1) - nx * 0.05, p.y + (1.1 + bh + 0.3) / 2, c[2] - Math.sin(yaw) * s * (bw / 2 + 0.1) - nz * 0.05] });
   });
   sc.instances(partsOf(platformModel), platformSpots, { cast: false });
   sc.instances(partsOf(S.robotFan()), crowd, { scale: [0.95, 1.15], tints: P.CROWD_TINTS, cast: false });
@@ -664,7 +668,7 @@ function decorate(ctx) {
 const BOARDS = [
   // [cp, side (1 left, -1 right), metres beyond the edge, height, text]
   [0.86, 1, 6, 7, 'GUARDRAILS: ON (MOSTLY)'],
-  [1.05, -1, 9, 6, 'AGI ACHIEVED INTERNALLY (AGAIN)'],
+  [1.12, -1, 9, 8.5, 'AGI ACHIEVED INTERNALLY (AGAIN)'],   // over the fans' banner, which stands in front of it from the line (#397)
   [2.35, -1, 8, 5, 'AS AN AI, I CANNOT LOSE'],
   [8.85, -1, 5, 10, 'DOOM: 12% (ROUNDED DOWN)', true],
   [12.3, 1, 6.5, 9, 'YOUR JOB IS SAFE (UNTIL FRIDAY)', true],
@@ -1002,8 +1006,12 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
     });
     atlas.place(title, W(0, 39.5, zf), F.yaw, 140, 17.2);
     const conv = atlas.add(1600, 150, (g, w, h) => signDraw(lapFx.conv, { bg: '#ffd23c', fg: '#12142b', size: 120, lines: 1, border: '#12142b' })(g, w, h));
-    atlas.place(conv, W(0, 5.6, zf), F.yaw, 116, 10.9);
-    const counter = liveSign(THREE, ctx.group, 1024, 200, W(0, 21, zf), F.yaw, 96, 18.75, { intensity: 1.2 });
+    // The counter and the conversion band sit right of the hall's middle, toward the road, which passes the factory
+    // with it at the left edge of the screen; the band no wider than the counter (at 116 m wide and centred, it ran off
+    // the screen and under the road's rail before it read: #397).
+    const CX = 20;
+    atlas.place(conv, W(CX, 5.6, zf), F.yaw, 92, 8.6);
+    const counter = liveSign(THREE, ctx.group, 1024, 200, W(CX, 21, zf), F.yaw, 96, 18.75, { intensity: 1.2 });
     let made = 41337421906, shown = -1, tick = 0;
     const drawCounter = () => counter.draw((g, w, h) => {
       g.fillStyle = '#07060f'; g.fillRect(0, 0, w, h);
@@ -1066,7 +1074,9 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
 
   /* --- the climb: the benchmark podium, where every lab is first --- */
   {
-    const i = I(4.5), p = at(i, edge(i, 1) + 17, -2), yaw = boardYaw(i, 1, 0.8);
+    // Past the fork's overhead lane sign, which stood in front of its title all the way up the climb, and 4 m over the
+    // road, not 2 m under it, where the rising deck cut across the cards' names (#397)
+    const i = I(PODIUM_CP), p = at(i, edge(i, 1) + 17, 4), yaw = boardYaw(i, 1, 0.8), TY = 17.5;
     const pod = S.podium({ n: 5, w: 7, h: 9, d: 7 }); pod.position.copy(p); pod.rotation.y = yaw; ctx.group.add(pod);
     const W = frame(p.x, p.y, p.z, yaw);
     for (let k = 0; k < 5; k++) {
@@ -1083,8 +1093,8 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
       fitText(g, 'AI BENCHMARK RESULTS', w / 2, 112, w - 80, 140, FONT, '#ffd23c', { lines: 1 });
       fitText(g, '(ALL SCORES SELF-REPORTED)', w / 2, 230, w - 120, 70, SANS, '#ffffff', { lines: 1 });
     });
-    atlas.place(title, W(0, 19.5, 0), yaw, 36, 7.7); backer(fixed, W(0, 19.5, 0), yaw, 36, 7.7);
-    for (const s of [-1, 1]) { const q = W(s * 17, 13.5, -0.3); fixed.add('pole', cyl(0.35, 0.35, 16, 8), { p: [q[0], q[1] - 2.5, q[2]] }); }
+    atlas.place(title, W(0, TY, 0), yaw, 36, 7.7); backer(fixed, W(0, TY, 0), yaw, 36, 7.7);
+    for (const s of [-1, 1]) { const q = W(s * 17, 3 + (TY - 3.5) / 2, -0.3); fixed.add('pole', cyl(0.35, 0.35, TY - 3.5, 8), { p: q }); }
     anchors.push({ x: p.x, z: p.z, r: 40 });
   }
 
@@ -1177,15 +1187,19 @@ function landmarks({ THREE, ctx, tr, I, at, edge, boardYaw, facing, atlas, fixed
 
   /* --- the Leap: a monument to human art, with seven fingers --- */
   {
-    const HX = 338, HY = 30, HZ = 198, hyaw = Math.atan2(-1, -0.25);   // square to the road, so it reads coming and going
+    // Turned toward the karts climbing to the Leap, its plinth level with the road: square to the road and 15 m under
+    // the crest, the deck hid its plaque and the karts saw it side-on (#397).
+    const HX = 338, HY = 42, HZ = 198, hyaw = Math.atan2(-1, -0.65);
     const hand = S.sevenFingerHand(); hand.position.set(HX, HY, HZ); hand.rotation.y = hyaw; ctx.group.add(hand);
     const W = frame(HX, HY, HZ, hyaw);
-    const r = atlas.add(1200, 360, g => {
-      const w = 1200, h = 360; g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.strokeRect(6, 6, w - 12, h - 12);
-      fitText(g, 'A MONUMENT TO HUMAN ART', w / 2, 120, w - 80, 120, FONT, '#ffffff', { lines: 1 });
-      fitText(g, '(GENERATED IN 4 SECONDS)', w / 2, 255, w - 100, 100, FONT, '#ffd23c', { lines: 1 });
+    // the plaque fills the plinth's face, its name on two lines: on one, it was too small to read before the karts
+    // turned away from it (#397)
+    const r = atlas.add(1200, 400, g => {
+      const w = 1200, h = 400; g.fillStyle = '#12142b'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffd23c'; g.lineWidth = 12; g.strokeRect(6, 6, w - 12, h - 12);
+      fitText(g, 'A MONUMENT TO HUMAN ART', w / 2, 150, w - 90, 150, FONT, '#ffffff', { lines: 2, maxH: 250 });
+      fitText(g, '(GENERATED IN 4 SECONDS)', w / 2, 340, w - 140, 70, FONT, '#ffd23c', { lines: 1 });
     });
-    atlas.place(r, W(0, -6, 11.1), hyaw, 28, 8.4);
+    atlas.place(r, W(0, -6, 11.1), hyaw, 29, 9.6);
     anchors.push({ x: HX, z: HZ, r: 40 });
   }
 

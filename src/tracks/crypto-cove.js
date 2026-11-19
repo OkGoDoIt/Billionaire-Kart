@@ -506,8 +506,8 @@ const BOARDS = [
   [0.3, -1, 15, 'FULLY BACKED (BY VIBES)', '#ffd23c', '#1a1d29'], [1.5, 1, 22, 'IN IT FOR THE TECHNOLOGY', '#14213d', '#ffffff'],   // clear of the last grandstand, which hid it at 1.2 (#376)
   [2.3, 1, 22, 'FUNDS ARE SAFU (PROBABLY)', '#16a34a', '#ffffff'], [3.0, 1, 30, 'YOUR KEYS, OUR COINS', '#ef4444', '#ffffff'],
   [4.95, 1, 24, 'AUDITED BY MY COUSIN', '#ffffff', '#7b5cff'],   // past the rug: at 4.4 it stood right behind the RUG PULL sign (#376) [10.4, 1, 15, 'DOWN 99%: STILL EARLY', '#1a1d29', '#38ff74'],
-  [11.2, 1, 22, 'BUY HIGH, SELL LOW', '#ff6a3d', '#ffffff'], [12.6, -1, 22, 'ONE TWEET FROM ZERO', '#0ea5e9', '#ffffff'],
-  [14.6, 1, 22, 'COMMUNITY OWNED, FOUNDER SOLD', '#ffffff', '#ef4444'], [15.4, -1, 18, 'PRESIDENTIAL MEMECOIN: DOWN BIGLY', '#ffd23c', '#1a1d29'],
+  [11.2, 1, 22, 'BUY HIGH, SELL LOW', '#ff6a3d', '#ffffff'], [12.8, -1, 12, 'ONE TWEET FROM ZERO', '#0ea5e9', '#ffffff'],
+  [15, 1, 18, 'COMMUNITY OWNED, FOUNDER SOLD', '#ffffff', '#ef4444'], [15.4, -1, 12, 'PRESIDENTIAL MEMECOIN: DOWN BIGLY', '#ffd23c', '#1a1d29'],
   [16.2, -1, 24, 'FDIC INSURED (IT IS NOT)', '#7b5cff', '#ffffff'], [17.2, 1, 24, 'ROADMAP: MOON, THEN ???', '#1fc3c8', '#14213d'],
   [18.2, -1, 15, 'LOST MY SEED PHRASE AGAIN', '#ffffff', '#1a1d29'],
 ];

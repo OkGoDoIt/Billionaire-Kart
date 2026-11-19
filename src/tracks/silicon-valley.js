@@ -51,7 +51,7 @@ const BOARDS = [
   [6.0, -1, 12, 'RETURN TO OFFICE. OR ELSE.', '#ffd23c', '#1a1d29'],
   [7.5, -1, 12, 'FREE KOMBUCHA. NO RAISES.', '#ff8a3c', '#1a1d29'],
   [13.3, 1, 15, 'MOVE FAST. BREAK LAWS.', '#1a1d29', '#ffffff'],
-  [14.1, -1, 13, 'PRE-REVENUE. POST-SHAME.', '#0ea5e9', '#ffffff'],
+  [14.3, -1, 13, 'PRE-REVENUE. POST-SHAME.', '#0ea5e9', '#ffffff'],
 ];
 const STANDS = ['SEATS PAID IN EQUITY', 'INTERN SECTION (UNPAID)', "VC BOX: LET'S CIRCLE BACK", 'LAID OFF? FREE SEATS!'];
 const PLACARDS = ['SHIP IT!', 'IS IT AGI YET?', "MOM, I'M A UNICORN", 'WHERE IS MY EQUITY', 'PIVOT!', '996 OR BUST', 'NO REVENUE, NO PROBLEM', 'I FUNDED THIS'];

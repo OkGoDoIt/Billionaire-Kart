@@ -697,7 +697,7 @@ function dress(ctx) {
 
   // Sponsor boards stand further up the slope so their faces clear the parapets.
   // Each slides on along the road past any sign already standing there, so no two faces pass through each other.
-  [[1.95, -1, 17, 'SUMMIT NOW, PAY LATER'], [10.0, 1, 16, 'CONSCIOUS COCOA'], [16.8, -1, 16, 'NO PUBLIC MONEY BEYOND THIS POINT'], [25.9, 1, 14, 'BUILD BACK BUTTER'], [28.2, -1, 30, 'AGENDA COLA']].forEach(([at, side, off, text], i) => {
+  [[3.7, 1, 16, 'SUMMIT NOW, PAY LATER'], [10.0, 1, 16, 'CONSCIOUS COCOA'], [16.8, -1, 16, 'NO PUBLIC MONEY BEYOND THIS POINT'], [25.9, 1, 14, 'BUILD BACK BUTTER'], [28.2, -1, 30, 'AGENDA COLA']].forEach(([at, side, off, text], i) => {
     const apart = q => signSpots.every(t => !near(q.x, q.z, t, t.r + 8));
     for (let k = 0; k < 12 && !apart(sc.beside(at, side, off)); k++) at += 0.05;
     const p = sc.beside(at, side, off);

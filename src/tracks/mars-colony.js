@@ -1030,7 +1030,7 @@ function dress(ctx) {
 
   // ---- billboards where you are looking anyway ----
   const BOARDS = [
-    [1.35, 1, 18, 'FUNDING SECURED', INK, '#38ff74'], [4.2, -1, 18, 'FULL SELF-LANDING: NEXT YEAR', CREAM, RUST_HEX],
+    [1.35, 1, 22, 'FUNDING SECURED', INK, '#38ff74'], [4.2, -1, 18, 'FULL SELF-LANDING: NEXT YEAR', CREAM, RUST_HEX],
     [18.4, 1, 18, 'BREATHING IS NOW A SUBSCRIPTION', '#ffd23c', INK],
     [25.6, -1, 18, 'MARS: NO REGULATORS', RUST_HEX, '#ffffff', '(OR ATMOSPHERE)'],
   ];
@@ -1039,7 +1039,7 @@ function dress(ctx) {
   // poster on the rim road, and the terraforming promise inside the dome
   poster(8.32, -1, 10, 0, 'NO REFUNDS', { w: 17, h: 11.3, up: 10, turn: 2.4, roadLevel: true });
   poster(13.9, -1, 18, 1, 'EARTH: HAD ITS CHANCE');
-  poster(5.58, -1, 10.5, 2, 'MUST BRING OWN OXYGEN', { w: 18, h: 12, up: 9.5, turn: 2, roadLevel: true });
+  poster(5.38, -1, 10.5, 2, 'MUST BRING OWN OXYGEN', { w: 18, h: 12, up: 9.5, turn: 2, roadLevel: true });
   poster(22.28, -1, 20.5, 3, 'WORK FROM DOME: MANDATORY', { w: 14, h: 9.3, up: 8.2, turn: 2.7 });
   posters.flush();
 

@@ -31,8 +31,9 @@ function placePane(root, rect, inset = false) {
   }
 }
 
-/** The track drawn top-down on a size x size canvas (+x right, +z down), and the function that places a world point on it. */
-function mapBase(tr, size) {
+/** The track drawn top-down on a size x size canvas (+x right, +z down), and the function that places a world point on it.
+    k scales the line and the start mark, for a canvas shown much smaller than it is drawn. */
+function mapBase(tr, size, k = 1) {
   const b = tr.bounds, pad = size * 0.05, span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
   const sc = (size - pad * 2) / span, ox = (size - (b.maxX - b.minX) * sc) / 2, oz = (size - (b.maxZ - b.minZ) * sc) / 2;
   const xy = (x, z) => [(x - b.minX) * sc + ox, (z - b.minZ) * sc + oz];
@@ -41,10 +42,10 @@ function mapBase(tr, size) {
   for (let i = 0; i <= tr.N; i += 2) { const k = i % tr.N, [x, y] = xy(tr.px[k], tr.pz[k]); if (i) path.lineTo(x, y); else path.moveTo(x, y); }
   path.closePath();
   g.lineJoin = g.lineCap = 'round';
-  g.strokeStyle = 'rgba(10,12,30,0.75)'; g.lineWidth = 22; g.stroke(path);
-  g.strokeStyle = 'rgba(255,255,255,0.92)'; g.lineWidth = 12; g.stroke(path);
+  g.strokeStyle = 'rgba(10,12,30,0.75)'; g.lineWidth = 22 * k; g.stroke(path);
+  g.strokeStyle = 'rgba(255,255,255,0.92)'; g.lineWidth = 12 * k; g.stroke(path);
   // start line tick
-  const [sx, sy] = xy(tr.px[0], tr.pz[0]); g.fillStyle = '#12142b'; g.beginPath(); g.arc(sx, sy, 7, 0, 7); g.fill(); g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(sx, sy, 4, 0, 7); g.fill();
+  const [sx, sy] = xy(tr.px[0], tr.pz[0]); g.fillStyle = '#12142b'; g.beginPath(); g.arc(sx, sy, 7 * k, 0, 7); g.fill(); g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(sx, sy, 4 * k, 0, 7); g.fill();
   return { bg, xy };
 }
 /** Portraits for map markers, loaded once; a kart whose portrait has not arrived yet keeps its colored dot. */
@@ -54,11 +55,12 @@ function loadFaces(karts) {
   return faces;
 }
 /* A round portrait in the map: the dark ring every marker wears, an optional bright ring for the
-   player, and the face clipped to the circle, framed on the top of the portrait where the face is. */
-function mapFace(g, img, x, y, r, ring) {
+   player, and the face clipped to the circle, framed on the top of the portrait where the face is.
+   w thickens the rings for a map drawn small. */
+function mapFace(g, img, x, y, r, ring, w = 1) {
   g.save();
-  g.beginPath(); g.arc(x, y, r + 3, 0, 7); g.fillStyle = '#12142b'; g.fill();
-  if (ring) { g.beginPath(); g.arc(x, y, r + 1.5, 0, 7); g.fillStyle = ring; g.fill(); }
+  g.beginPath(); g.arc(x, y, r + 3 * w, 0, 7); g.fillStyle = '#12142b'; g.fill();
+  if (ring) { g.beginPath(); g.arc(x, y, r + 1.5 * w, 0, 7); g.fillStyle = ring; g.fill(); }
   g.beginPath(); g.arc(x, y, r, 0, 7); g.clip();
   // the portraits are square with the head in the top two-thirds: zoom in and center on it (35% down)
   const D = 2.8 * r;
@@ -297,6 +299,15 @@ export class Hud {
   /** Place the HUD over its pane: rect is [x, y (from the bottom), w, h] in screen fractions. A pane edge inside the
       screen is not next to a notch or a rounded corner, so it drops that safe-area inset. */
   setRect(rect) { placePane(this.root, rect, true); }
+  /** The shared field map's clearance at each corner, in CSS px (splitlayout.js hubClearance): that corner's readouts
+      move along the seam to make way for it. Null or zeros when the hub is elsewhere. A pane that keeps its own
+      minimap (Thiel's) keeps it in the corner, dropped below the hub with the speed under it: moved along the seam,
+      the map would reach into the centre lane. */
+  setHub(c, keepsMap = false) {
+    const v = { tl: c?.tl, tr: c?.tr, bl: c?.bl, br: c?.br, ty: 0 };
+    if (keepsMap && v.tr) { v.ty = c.ty; v.tr = 0; }
+    for (const k in v) this.root.style.setProperty('--hub-' + k, Math.round(v[k] || 0) + 'px');
+  }
   setVisible(v) { this.root.classList.toggle('hidden', !v); }
   dispose() { this.root.remove(); clearTimeout(this._bt); this._bNext = null; clearTimeout(this._wt); clearTimeout(this._kt); clearTimeout(this._ct); }
 }
@@ -304,15 +315,19 @@ export class Hud {
 /** P1 to P4, the colors the join screen and the results use. */
 const PLAYER_COLORS = ['#ff4d6d', '#38b6ff', '#ffd23c', '#2ee6a6'];
 
-/* The board in a split screen's empty cell (three players on a two-by-two grid): the whole field on one big map,
-   each player ringed in their color, beside the running order. Shared by everyone, so it sits outside any pane. */
+/* The field for three or four players: one map of every kart, each player ringed in their color, and the race clock.
+   Shared by everyone, so it sits outside any pane. In a split screen's empty cell (three players on a two-by-two grid)
+   it is the board, with the running order beside the map. With no empty cell it is the hub: just the map and the
+   clock, small, where the panes meet (splitlayout.js fieldHub), as Mario Kart puts its one map mid-screen. */
 export class FieldBoard {
   constructor(parent, race) {
-    this.race = race; this.t = 0; this.order = '';
+    this.race = race; this.t = 0; this.order = ''; this.clockT = -1; this.size = 0;
     const root = this.root = el('div', 'board hidden');
-    const canvas = this.canvas = el('canvas', 'board-map'), S = 640; canvas.width = canvas.height = S;
-    const base = mapBase(race.track, S); this.xy = base.xy; this.bg = base.bg; this.g = canvas.getContext('2d');
+    const canvas = this.canvas = el('canvas', 'board-map');
+    this.g = canvas.getContext('2d');
     this.faces = loadFaces(race.karts);
+    this.clock = el('div', 'board-clock');
+    const wrap = el('div', 'board-mapwrap'); wrap.append(canvas, this.clock);
     const list = el('ol', 'board-list');
     this.rows = new Map(race.karts.map(k => {
       const li = el('li', k.isPlayer ? 'me' : '');
@@ -323,25 +338,65 @@ export class FieldBoard {
       li.append(rank, img, name); list.append(li);
       return [k, { li, rank }];
     }));
-    const inner = el('div', 'board-in'); inner.append(canvas, list); root.append(inner); parent.appendChild(root);
+    const inner = el('div', 'board-in'); inner.append(wrap, list); root.append(inner); parent.appendChild(root);
+    this._canvas(640, 1);
     this.update(0);
   }
-  /** rect: the empty cell, or null when this layout has none. */
-  setRect(rect) { this.rect = rect; if (rect) placePane(this.root, rect); this._show(); }
+  /** Draw the map at S x S; k thickens the line for a map shown small. */
+  _canvas(S, k) {
+    if (S === this.size) return;
+    this.size = S; this.canvas.width = this.canvas.height = S;
+    const base = mapBase(this.race.track, S, k); this.xy = base.xy; this.bg = base.bg; this.t = 0;
+  }
+  /** rect: the empty cell, or null when this layout has none. hub: where the panes meet (splitlayout.js fieldHub),
+      used when there is no cell. */
+  setRect(rect, hub = null) {
+    this.rect = rect; this.hub = rect ? null : hub;
+    const s = this.root.style, h = this.hub;
+    this.root.classList.toggle('board-hub', !!h);
+    for (const p of ['left', 'right', 'top', 'bottom', 'width', 'height']) s[p] = '';
+    if (rect) { placePane(this.root, rect); this._canvas(640, 1); }
+    else if (h) {
+      const [l, t, r, b] = h.box, { W, H } = h;
+      // a hub on a screen edge stays inside that edge's safe-area inset, as the HUD blocks it was measured against do
+      if (h.kind === 'rows') s.right = `calc(var(--inset-r) + ${(W - r).toFixed(1)}px)`; else s.left = l.toFixed(1) + 'px';
+      if (h.kind === 'columns') s.bottom = `calc(var(--inset-b) + ${(H - b).toFixed(1)}px)`; else s.top = t.toFixed(1) + 'px';
+      s.width = (r - l).toFixed(1) + 'px'; s.height = (b - t).toFixed(1) + 'px';
+      s.setProperty('--d', h.d + 'px'); s.setProperty('--clock', h.clock + 'px'); s.setProperty('--pill', h.pill + 'px');
+      const S = Math.min(512, Math.round(h.d * Math.min(2, Math.max(1, devicePixelRatio || 1))));
+      this._canvas(S, 1.6 * S / 640);
+    }
+    this._show();
+  }
   setVisible(v) { this.visible = v; this._show(); }
-  _show() { this.root.classList.toggle('hidden', !this.rect || this.visible === false); }
+  _show() { this.root.classList.toggle('hidden', !(this.rect || this.hub) || this.visible === false); }
   update(dt) {
-    this.t -= dt; if (this.t > 0 || !this.rect) return; this.t = 0.05;
-    const order = this.race.order;
+    this.t -= dt; if (this.t > 0 || !(this.rect || this.hub)) return; this.t = 0.05;
+    const race = this.race, order = race.order;
+    // the race clock; once every player on this screen is home it stops on the last of their times
+    const done = race.players.length && race.players.every(k => k.finished);
+    const time = done ? Math.max(...race.players.map(k => k.finishTime)) : race.time, tt = Math.floor(time * 10);
+    if (tt !== this.clockT) { this.clockT = tt; this.clock.textContent = fmtTime(time).slice(0, -2); }
     const sig = order.map(k => k.id).join();
     if (sig !== this.order) { this.order = sig; order.forEach((k, i) => { const r = this.rows.get(k); if (r) { r.li.style.order = i; r.rank.textContent = i + 1; } }); }
-    const g = this.g; g.clearRect(0, 0, 640, 640); g.drawImage(this.bg, 0, 0);
+    const S = this.size, g = this.g; g.clearRect(0, 0, S, S); g.drawImage(this.bg, 0, 0);
     // rivals first, then the players on top, leader last so the front of the race is never hidden
     const marks = [...order].reverse().sort((a, b) => a.isPlayer - b.isPlayer);
+    // the hub is small: rivals are dots in their color, players their face in a thick ring of their color (a dot when too small for a face)
+    const hub = !!this.hub, px = hub ? S / this.hub.d : 1;
     for (const k of marks) {
-      const [x, y] = this.xy(k.x, k.z), face = this.faces.get(k.racer.portrait), r = k.isPlayer ? 24 : 17;
-      if (face?.complete && face.naturalWidth) mapFace(g, face, x, y, r, k.isPlayer ? PLAYER_COLORS[k.playerIndex] : null);
-      else { g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, r * 0.75, 0, 7); g.fill(); g.fillStyle = k.isPlayer ? PLAYER_COLORS[k.playerIndex] : hex(k.racer.color); g.beginPath(); g.arc(x, y, r * 0.55, 0, 7); g.fill(); }
+      const [x, y] = this.xy(k.x, k.z), face = this.faces.get(k.racer.portrait), color = k.isPlayer ? PLAYER_COLORS[k.playerIndex] : hex(k.racer.color);
+      const hasFace = face?.complete && face.naturalWidth;
+      if (hub) {
+        const r = (k.isPlayer ? 0.055 : 0.034) * this.hub.d * px;
+        if (k.isPlayer && hasFace && r >= 6.5 * px) { mapFace(g, face, x, y, r, color, 1.4 * px); continue; }
+        g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, r + 1.3 * px, 0, 7); g.fill();
+        g.fillStyle = color; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+        continue;
+      }
+      const r = k.isPlayer ? 24 : 17;
+      if (hasFace) mapFace(g, face, x, y, r, k.isPlayer ? PLAYER_COLORS[k.playerIndex] : null);
+      else { g.fillStyle = '#12142b'; g.beginPath(); g.arc(x, y, r * 0.75, 0, 7); g.fill(); g.fillStyle = color; g.beginPath(); g.arc(x, y, r * 0.55, 0, 7); g.fill(); }
     }
   }
   dispose() { this.root.remove(); }

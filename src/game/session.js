@@ -3,6 +3,7 @@
 import { Race } from '../race/race.js';
 import { AIDriver } from '../race/ai.js';
 import { RaceView } from '../render/raceview.js';
+import { fieldHub, hubClearance } from '../render/splitlayout.js';
 import { DrivingGuide } from '../ui/driving-guide.js';
 import { AfterFinish } from './afterfinish.js';
 import { Hud, FieldBoard } from '../ui/hud.js';
@@ -58,14 +59,17 @@ export class RaceSession {
     const n = this.race.players.length;
     this.huds = this.race.players.map((k, i) => new Hud(app.ui, this.race, k, this.view.views[i].rect, { compact: n > 2, showMap: true, trialBest: this.trialBest }));
     this.hudOf = new Map(this.race.players.map((k, i) => [k, this.huds[i]]));
-    // three players on a two-by-two grid leave a cell empty: the whole field goes there
-    this.board = n === 3 ? new FieldBoard(app.ui, this.race) : null;
+    // three or four players share one field map and race clock, as in Mario Kart: on the board in the empty cell
+    // when the grid leaves one (three on a two-by-two), otherwise small where the panes meet
+    this.board = n >= 3 ? new FieldBoard(app.ui, this.race) : null;
     // the split follows the window's shape, so the HUDs and the board move whenever it is laid out again
     this.view.onLayout = view => {
-      const board = !!(this.board && view.spare.length);
-      this.board?.setRect(view.spare[0] || null);
-      // with the board up, the panes' own minimaps repeat it; Thiel keeps his, where his special shows rivals' items
-      this.huds.forEach((h, i) => { h.setRect(view.views[i].rect); h.root.classList.toggle('hud-nomap', board && !h.kart.sp?.seeItems); });
+      const W = view.gfx.width, H = view.gfx.height;
+      const hub = this.board && !view.spare.length ? fieldHub(view.split, W, H) : null;
+      this.board?.setRect(view.spare[0] || null, hub);
+      const clear = view.split ? hubClearance(view.split, W, H, hub) : [];
+      // with the shared map up, the panes' own minimaps would repeat it; Thiel keeps his, where his special shows rivals' items
+      this.huds.forEach((h, i) => { h.setRect(view.views[i].rect); h.setHub(clear[i], !!h.kart.sp?.seeItems); h.root.classList.toggle('hud-nomap', !!this.board && !h.kart.sp?.seeItems); });
     };
     this.view.onLayout(this.view);
     // touch controls for a solo player on a touch screen

@@ -16,7 +16,11 @@
   /* One boundary between the held-item card on the left and the centre lane (feed and banners): 50.5 units in on a 16:9
      pane, and on a wider pane 41.5 units left of centre, which clears the widest banner. The card ends there wherever it
      starts (a notch moves it right; it never squeezes it), the feed keeps 3 units clear of it, and no banner reaches it. */
-  --card-r: max(calc(var(--u) * 50.5), calc(50cqw - var(--u) * 41.5)); --side: calc(var(--card-r) + var(--u) * 3); }
+  --card-r: max(calc(var(--u) * 50.5), calc(50cqw - var(--u) * 41.5)); --side: calc(var(--card-r) + var(--u) * 3);
+  /* Three or four players share one field map where the panes meet (hud.js FieldBoard). The corner it reaches into
+     moves its readouts along the seam by this much (splitlayout.js hubClearance); a moved item slot takes its card
+     and the centre lane (feed and banners) with it, so nothing in the top lane narrows. */
+  --hub-tl: 0px; --hub-tr: 0px; --hub-bl: 0px; --hub-br: 0px; --hub-ty: 0px; }
 .hud.hidden { visibility: hidden; }
 .hud * { pointer-events: none; }
 .hud b { font-weight: normal; }
@@ -25,7 +29,7 @@
 .hud-rank, .hud-banner, .hud-pill, .hud-time, .hud-item-count, .hud-wrong, .hud-speed, .hud-coin-pop { paint-order: stroke fill; -webkit-text-stroke: 0.16em var(--ink); letter-spacing: 0.01em; }
 
 /* item slot, top-left */
-.hud-item { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 17); height: calc(var(--u) * 17); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3a4170 0%, #171a36 55%, #0b0d20 100%); box-shadow: 0 0 0 calc(var(--u) * 0.7) #0b0d20, 0 0 0 calc(var(--u) * 1.1) rgba(255,255,255,0.85), 0 calc(var(--u) * 1.2) calc(var(--u) * 2.4) rgba(0,0,0,0.45); display: grid; place-items: center; opacity: 0.55; transition: opacity 0.2s; }
+.hud-item { position: absolute; left: calc(var(--edge) + var(--safe-l) + var(--hub-tl)); top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 17); height: calc(var(--u) * 17); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3a4170 0%, #171a36 55%, #0b0d20 100%); box-shadow: 0 0 0 calc(var(--u) * 0.7) #0b0d20, 0 0 0 calc(var(--u) * 1.1) rgba(255,255,255,0.85), 0 calc(var(--u) * 1.2) calc(var(--u) * 2.4) rgba(0,0,0,0.45); display: grid; place-items: center; opacity: 0.55; transition: opacity 0.2s; }
 .hud-item.has { opacity: 1; }
 .hud-item-ring { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, rgba(255,255,255,0.0), rgba(255,255,255,0.28), rgba(255,255,255,0) 40%); opacity: 0; }
 .hud-item.rolling .hud-item-ring { opacity: 1; animation: hud-spin 0.5s linear infinite; }
@@ -37,7 +41,7 @@
 .hud-item.has .hud-item-coin { display: block; }
 .hud-item-count { position: absolute; right: calc(var(--u) * -1); bottom: calc(var(--u) * -0.6); font-size: calc(var(--u) * 6.2); color: var(--gold); }
 .hud-item.pop { animation: hud-pop 0.32s cubic-bezier(.2,1.6,.4,1); }
-.hud-item-info { position: absolute; left: calc(var(--edge) + var(--safe-l) + calc(var(--u) * 19.5)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 1.5)); max-width: max(calc(var(--u) * 24), calc(var(--card-r) - var(--edge) - var(--safe-l) - var(--u) * 19.5)); font-family: var(--body); background: rgba(11,13,32,0.78); padding: calc(var(--u) * 0.9) calc(var(--u) * 2) calc(var(--u) * 1.1); border-radius: calc(var(--u) * 2.4); opacity: 0; transform: translateX(calc(var(--u) * -1.5)); transition: opacity 0.2s, transform 0.2s; }
+.hud-item-info { position: absolute; left: calc(var(--edge) + var(--safe-l) + var(--hub-tl) + calc(var(--u) * 19.5)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 1.5)); max-width: max(calc(var(--u) * 24), calc(var(--card-r) - var(--edge) - var(--safe-l) - var(--u) * 19.5)); font-family: var(--body); background: rgba(11,13,32,0.78); padding: calc(var(--u) * 0.9) calc(var(--u) * 2) calc(var(--u) * 1.1); border-radius: calc(var(--u) * 2.4); opacity: 0; transform: translateX(calc(var(--u) * -1.5)); transition: opacity 0.2s, transform 0.2s; }
 .hud-item-info.show { opacity: 1; transform: none; }
 .hud-item-info b { display: block; font-weight: 700; font-size: calc(var(--u) * 3.5); line-height: 1.15; color: var(--gold); max-width: calc(var(--u) * 26); }
 .hud-item-info span { display: block; font-weight: 500; font-size: calc(var(--u) * 3); line-height: 1.22; }
@@ -51,11 +55,11 @@
    screen; they do not borrow this one, and neither does a timer. hud-check guards this: it fails if any rule
    hides .hud-item-info span again. */
 /* Control reminders belong to each racer's bottom lane. The item warning takes precedence. */
-.hint-card { position: absolute; bottom: calc(var(--edge) + var(--safe-b)); left: 50%; transform: translateX(-50%); width: max-content; max-width: 60%; box-sizing: border-box; padding: 0.3em 0.7em; border-radius: 1em; border: 0.1em solid rgba(255,255,255,0.72); background: rgba(18,20,43,0.88); font: 600 clamp(11px, calc(var(--u) * 2.9), 23px)/1.45 var(--body); text-align: center; text-wrap: balance; }
+.hint-card { position: absolute; bottom: calc(var(--edge) + var(--safe-b)); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(60%, calc(100% - 2 * (max(var(--hub-bl), var(--hub-br)) + var(--u) * 36))); box-sizing: border-box; padding: 0.3em 0.7em; border-radius: 1em; border: 0.1em solid rgba(255,255,255,0.72); background: rgba(18,20,43,0.88); font: 600 clamp(11px, calc(var(--u) * 2.9), 23px)/1.45 var(--body); text-align: center; text-wrap: balance; }
 .hint-card[hidden], .hud:has(.hud-warn.show) .hint-card { display: none; }
 .hint-card kbd { display: inline-block; line-height: 1.15; white-space: nowrap; }
 /* coins and lap, bottom-left */
-.hud-bl { position: absolute; left: calc(var(--edge) + var(--safe-l)); bottom: calc(var(--edge) + var(--safe-b)); display: flex; gap: calc(var(--u) * 1.6); align-items: center; }
+.hud-bl { position: absolute; left: calc(var(--edge) + var(--safe-l) + var(--hub-bl)); bottom: calc(var(--edge) + var(--safe-b)); display: flex; gap: calc(var(--u) * 1.6); align-items: center; }
 .hud-pill { display: flex; align-items: center; gap: calc(var(--u) * 1); font-size: calc(var(--u) * 6); line-height: 1; background: rgba(11,13,32,0.6); border-radius: calc(var(--u) * 5); padding: calc(var(--u) * 0.9) calc(var(--u) * 2.2) calc(var(--u) * 0.5) calc(var(--u) * 1.3); }
 .hud-pill span { font-size: calc(var(--u) * 4); opacity: 0.85; margin-left: calc(var(--u) * -0.6); }
 .hud-pill.pop { animation: hud-pop 0.28s cubic-bezier(.2,1.6,.4,1); }
@@ -77,7 +81,7 @@
 .ico-flag { width: calc(var(--u) * 5.4); height: calc(var(--u) * 4.4); border-radius: calc(var(--u) * 0.5); margin-bottom: calc(var(--u) * 0.4); box-shadow: 0 0 0 calc(var(--u) * 0.35) var(--ink); background: conic-gradient(#fff 25%, #12142b 0 50%, #fff 0 75%, #12142b 0) 0 0 / calc(var(--u) * 2.7) calc(var(--u) * 2.2); }
 
 /* rank, bottom-right */
-.hud-rank { position: absolute; right: calc(var(--edge) + var(--safe-r) + calc(var(--u) * 1)); bottom: calc(var(--edge) + var(--safe-b) - calc(var(--u) * 1.5)); font-size: calc(var(--u) * 19); line-height: 1; color: #fff; transform-origin: 80% 90%; filter: drop-shadow(0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.35)); }
+.hud-rank { position: absolute; right: calc(var(--edge) + var(--safe-r) + var(--hub-br) + calc(var(--u) * 1)); bottom: calc(var(--edge) + var(--safe-b) - calc(var(--u) * 1.5)); font-size: calc(var(--u) * 19); line-height: 1; color: #fff; transform-origin: 80% 90%; filter: drop-shadow(0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.35)); }
 .hud-rank span { font-size: calc(var(--u) * 7.5); margin-left: calc(var(--u) * 0.3); }
 .hud-rank[data-r="1"] { color: var(--gold); }
 .hud-rank[data-r="2"] { color: #dfe7f2; }
@@ -94,16 +98,16 @@
 .hud-rank.done { filter: drop-shadow(0 calc(var(--u) * 0.8) 0 rgba(0,0,0,0.35)) drop-shadow(0 0 calc(var(--u) * 2.4) currentColor); }
 
 /* timer, top-right; minimap below it */
-.hud-time { position: absolute; right: calc(var(--edge) + var(--safe-r)); top: calc(var(--edge) + var(--safe-t)); font-size: calc(var(--u) * 4.4); opacity: 0.95; }
-.hud-map { position: absolute; right: calc(var(--edge) + var(--safe-r) - calc(var(--u) * 1)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 6.5)); width: calc(var(--u) * 30); height: calc(var(--u) * 30); opacity: 0.92; }
+.hud-time { position: absolute; right: calc(var(--edge) + var(--safe-r) + var(--hub-tr)); top: calc(var(--edge) + var(--safe-t)); font-size: calc(var(--u) * 4.4); opacity: 0.95; }
+.hud-map { position: absolute; right: calc(var(--edge) + var(--safe-r) + var(--hub-tr) - calc(var(--u) * 1)); top: calc(var(--edge) + var(--safe-t) + var(--hub-ty) + calc(var(--u) * 6.5)); width: calc(var(--u) * 30); height: calc(var(--u) * 30); opacity: 0.92; }
 /* speed readout, in the right-hand lane under the minimap: honest mph (kart speed is m/s in the sim) */
-.hud-speed { position: absolute; right: calc(var(--edge) + var(--safe-r) - calc(var(--u) * 1)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 38)); font-size: calc(var(--u) * 6); line-height: 1; color: #fff; text-align: right; filter: drop-shadow(0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.35)); }
+.hud-speed { position: absolute; right: calc(var(--edge) + var(--safe-r) + var(--hub-tr) - calc(var(--u) * 1)); top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 38)); font-size: calc(var(--u) * 6); line-height: 1; color: #fff; text-align: right; filter: drop-shadow(0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.35)); }
 .hud-speed span { font-size: calc(var(--u) * 3.4); opacity: 0.85; margin-left: calc(var(--u) * 0.9); }
-.hud-compact .hud-speed { top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 27.5)); }
+.hud-compact .hud-speed { top: calc(var(--edge) + var(--safe-t) + var(--hub-ty) + calc(var(--u) * 27.5)); }
 .hud.hud-touch .hud-speed { top: calc(var(--edge) + var(--safe-t) + calc(var(--u) * 28.5)); }
 
 /* banners (countdown, final lap, finish): brief, upper-centre */
-.hud-banner { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%) scale(0.6); font-size: calc(var(--u) * 11); width: max-content; max-width: calc(100cqw - var(--card-r) * 2 - var(--u)); line-height: 1.02; text-wrap: balance; opacity: 0; color: #fff; text-align: center; filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)); }
+.hud-banner { position: absolute; left: calc(50% + var(--hub-tl)); top: 22%; transform: translate(-50%, -50%) scale(0.6); font-size: calc(var(--u) * 11); width: max-content; max-width: calc(100cqw - var(--card-r) * 2 - var(--u)); line-height: 1.02; text-wrap: balance; opacity: 0; color: #fff; text-align: center; filter: drop-shadow(0 calc(var(--u) * 0.9) 0 rgba(0,0,0,0.35)); }
 .hud-banner.show { animation: hud-banner 0.28s cubic-bezier(.2,1.6,.4,1) forwards; }
 /* the countdown sits under the start gantry's sign, not on it: the track name stays readable through 3, 2, 1 */
 .hud-banner.count { font-size: calc(var(--u) * 24); top: 37.5%; color: var(--gold); }
@@ -142,7 +146,7 @@
 .hud-warn.show { animation: hud-warn 0.36s ease-in-out infinite alternate; transform: translateX(-50%) scale(1); }
 
 /* event feed, top-centre */
-.hud-feed { position: absolute; left: 50%; top: calc(var(--edge) + var(--safe-t)); transform: translateX(-50%); display: flex; flex-direction: column; gap: calc(var(--u) * 0.6); align-items: center; }
+.hud-feed { position: absolute; left: calc(50% + var(--hub-tl)); top: calc(var(--edge) + var(--safe-t)); transform: translateX(-50%); display: flex; flex-direction: column; gap: calc(var(--u) * 0.6); align-items: center; }
 .hud-feed-row { font-family: var(--body); font-weight: 500; font-size: calc(var(--u) * 2.7); background: rgba(11,13,32,0.72); padding: calc(var(--u) * 0.6) calc(var(--u) * 2); border-radius: calc(var(--u) * 3); width: max-content; max-width: calc(100cqw - var(--side) * 2); text-align: center; text-wrap: balance; line-height: 1.2; animation: hud-feed 0.25s ease-out; transition: opacity 0.3s; }
 .hud-feed-row b { font-weight: 700; color: var(--gold); }
 .hud-feed-row.out { opacity: 0; }
@@ -164,8 +168,8 @@
 /* tighter layout for small split-screen panes */
 .hud-compact .hud-map { width: calc(var(--u) * 26); height: calc(var(--u) * 26); }
 .hud-compact .hud-time { display: none; }
-.hud-compact .hud-map { top: calc(var(--edge) + var(--safe-t)); }
-/* three players on a two-by-two grid: the board in the spare cell shows the whole field, so a pane's own map steps aside */
+.hud-compact .hud-map { top: calc(var(--edge) + var(--safe-t) + var(--hub-ty)); }
+/* three or four players: the shared field map (the board, or the hub where the panes meet) shows the whole field, so a pane's own map steps aside */
 .hud-nomap .hud-map { display: none; }
 .hud-nomap .hud-speed { top: calc(var(--edge) + var(--safe-t)); }
 
@@ -210,7 +214,10 @@
 .board { position: absolute; container-type: size; pointer-events: none; overflow: hidden; background: radial-gradient(120% 120% at 30% 20%, #232a5c 0%, #12142b 70%); color: #fff; font-family: var(--body); }
 .board.hidden { display: none; }
 .board-in { --u: min(1cqh, 0.5625cqw); --pad: calc(var(--u) * 5); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: var(--pad); padding: var(--pad) calc(var(--pad) + var(--safe-r)) calc(var(--pad) + var(--safe-b)) calc(var(--pad) + var(--safe-l)); }
-.board-map { flex: none; width: min(100cqh - var(--pad) * 2, 50cqw); height: auto; aspect-ratio: 1; }
+.board-mapwrap { position: relative; flex: none; width: min(100cqh - var(--pad) * 2, 50cqw); aspect-ratio: 1; }
+.board-map { display: block; width: 100%; height: 100%; }
+/* the race clock: in the map's top-left corner on the board, in the HUD's outlined lettering */
+.board-clock { position: absolute; left: 0; top: 0; font-family: var(--display); font-size: calc(var(--u) * 6); line-height: 1; color: #fff; white-space: nowrap; paint-order: stroke fill; -webkit-text-stroke: 0.16em var(--ink); letter-spacing: 0.01em; }
 .board-list { list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-width: 0; max-width: calc(var(--u) * 72); height: min(100%, calc(var(--u) * 84)); display: flex; flex-direction: column; gap: calc(var(--u) * 1.2); }
 .board-list li { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: calc(var(--u) * 6) calc(var(--u) * 7.4) 1fr; align-items: center; gap: calc(var(--u) * 1.6); padding: 0 calc(var(--u) * 2) 0 calc(var(--u) * 1); border-radius: calc(var(--u) * 1.8); border-left: calc(var(--u) * 1.1) solid var(--rc); background: rgba(255,255,255,0.08); font-weight: 600; font-size: calc(var(--u) * 3.6); line-height: 1; white-space: nowrap; }
 .board-list li.me { background: var(--pc); color: var(--ink); }
@@ -221,9 +228,17 @@
 /* an upright cell: the map on top, the order under it */
 @container (aspect-ratio < 1.15) {
   .board-in { flex-direction: column; --u: min(0.75cqh, 1.15cqw); --pad: calc(var(--u) * 4); }
-  .board-map { width: min(100cqw - var(--pad) * 2, 42cqh); }
+  .board-mapwrap { width: min(100cqw - var(--pad) * 2, 42cqh); }
   .board-list { width: 100%; max-width: none; height: auto; flex: 1 1 0; min-height: 0; }
 }
+
+/* The hub: with no empty cell, the same map and clock, small, where the panes meet (splitlayout.js fieldHub places and
+   sizes it in px). A plate in the item slot's dark-and-white rings, and the clock in a pill across its lower edge. */
+.board.board-hub { container-type: normal; overflow: visible; background: none; }
+.board-hub .board-in { display: block; padding: 0; }
+.board-hub .board-list { display: none; }
+.board-hub .board-mapwrap { position: absolute; left: 0; top: 0; width: var(--d); height: var(--d); border-radius: calc(var(--d) * 0.18); background: radial-gradient(120% 120% at 30% 20%, rgba(35, 42, 92, 0.95) 0%, rgba(18, 20, 43, 0.95) 70%); box-shadow: 0 0 0 max(2px, calc(var(--d) * 0.018)) #0b0d20, 0 0 0 max(3.5px, calc(var(--d) * 0.03)) rgba(255,255,255,0.85), 0 calc(var(--d) * 0.03) calc(var(--d) * 0.06) rgba(0,0,0,0.4); }
+.board-hub .board-clock { left: 50%; top: auto; bottom: calc(var(--pill) / -2); transform: translateX(-50%); height: var(--pill); min-width: 4.4em; padding: 0.08em 0.55em 0; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: var(--clock); border-radius: calc(var(--pill) / 2); background: rgba(11, 13, 32, 0.92); box-shadow: 0 0 0 max(1.5px, calc(var(--clock) * 0.1)) rgba(255,255,255,0.85); -webkit-text-stroke: 0; }
 
 /* After the line (src/game/afterfinish.js). Racing is over for this player, so what was for driving goes: the item,
    coins and lap, speed, rivals' bubbles, and control reminders. The place, the time, the map, and the feed stay. */
@@ -244,7 +259,7 @@
 .wa-who span small, .wa-rank small { font-size: 0.7em; }
 /* online: every human's race, top-left where the item slot was. Place, face, name, and a bar for how far through the
    race they are (their time once they are home). The one on screen is lit; tap or click a row to watch them. */
-.wa-board { position: absolute; left: calc(var(--edge) + var(--safe-l)); top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 60); opacity: 0; transform: translateX(calc(var(--u) * -3)); transition: opacity 0.25s, transform 0.3s ease-out; }
+.wa-board { position: absolute; left: calc(var(--edge) + var(--safe-l) + var(--hub-tl)); top: calc(var(--edge) + var(--safe-t)); width: calc(var(--u) * 60); opacity: 0; transform: translateX(calc(var(--u) * -3)); transition: opacity 0.25s, transform 0.3s ease-out; }
 .wa-board.show { opacity: 1; transform: none; }
 .wa-list { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--u) * 0.8); }
 .wa-row { display: grid; grid-template-columns: calc(var(--u) * 4.4) calc(var(--u) * 6) minmax(0, 1fr) calc(var(--u) * 14); align-items: center; gap: calc(var(--u) * 1.2); height: calc(var(--u) * 7); padding: 0 calc(var(--u) * 1.6) 0 calc(var(--u) * 1); border-radius: calc(var(--u) * 3.5); background: rgba(11,13,32,0.72); box-shadow: inset calc(var(--u) * 0.9) 0 0 var(--wc, #fff); cursor: pointer; transition: background 0.2s, box-shadow 0.2s; }

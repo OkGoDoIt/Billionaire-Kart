@@ -4,7 +4,7 @@ import { RACERS, RACER_BY_ID } from '../content/racers.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { CUPS, cupTracks } from '../content/cups.js';
 import { CLASSES } from '../race/kart.js';
-import { Input, DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindings, applyPadBind, padFamily } from '../core/input.js';
+import { Input, DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultPadBindings, applyPadBind, padFamily, rescueKey } from '../core/input.js';
 import { handheldWord } from './touch.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
@@ -443,11 +443,15 @@ export class Menus {
 
   /* ---------- pause ---------- */
   s_pause() {
-    const A = this.app, turn = A.mustTurn();
+    const A = this.app, lost = A.padNotice(), turn = !lost && A.mustTurn();
     // a phone held upright races best sideways: say so, but Resume stays on the panel — a player who can
-    // only hold the device upright (a controller cradle, say) races on, and the prompt stays away for the race
-    const el = h('div', {}, h('div', { class: 'panel narrow' + (turn ? ' turn' : '') },
-      turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), h('p', { class: 'turn-sub' }, 'The race is paused.'), this.btn('Resume anyway', () => A.resume(), { def: true })] : [h('h1', {}, 'Paused'), this.btn('Resume', () => A.resume(), { def: true })],
+    // only hold the device upright (a controller cradle, say) races on, and the prompt stays away for the race.
+    // A controller that dropped out says whose it was (#353); Resume stays, for anyone who wants to race on without it.
+    const el = h('div', {}, h('div', { class: 'panel narrow' + (turn ? ' turn' : lost ? ' notice' : '') },
+      lost ? [h('h1', {}, lost[0]), h('p', { class: 'turn-sub' }, lost[1]), this.btn('Resume', () => A.resume(), { def: true })]
+        : turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), h('p', { class: 'turn-sub' }, 'The race is paused.'), this.btn('Resume anyway', () => A.resume(), { def: true })] : [h('h1', {}, 'Paused'), this.btn('Resume', () => A.resume(), { def: true })],
+      // solo play: a rescue for the player whose controls have no rescue button (touch); split screen has one per device
+      A.canRescue() && this.btn('Rescue kart', () => { A.resume(); A.rescue(0); }),
       this.btn('Restart race', () => A.restartRace()), this.btn('How to play', () => this.open('howto')), this.btn('Options', () => this.open('options')), this.btn('Quit to menu', () => A.quitToMenu(), { cls: 'danger' })));
     return { el, onBack: () => { A.resume(); return false; }, onAction: a => { if (a === 'pause') { A.resume(); return true; } } };
   }
@@ -851,10 +855,10 @@ export class Menus {
     const B = this.app.input.padBinds, gp0 = (navigator.getGamepads ? [...navigator.getGamepads()] : []).find(g => g && g.connected), D = a => describePadBind(B, a, padFamily(gp0?.id)), withTrig = (a, idx, word) => this.app.input.pedals[a].includes(idx) && !B[a].includes(idx) ? `${D(a)} or ${word}` : D(a);
     const padRows = [['Steer', this.app.input.padSteer === 'dpad' ? 'D-pad' : this.app.input.padSteer === 'stick' ? 'Left stick' : 'Left stick or D-pad'],
       ['Accelerate', withTrig('accelerate', 7, 'right trigger')], ['Drift and hop', D('drift')], ['Use item', D('item')],
-      ['Brake and reverse', withTrig('brake', 6, 'left trigger')], ['Look behind', D('rear')], ['Pause', D('pause')]];
+      ['Brake and reverse', withTrig('brake', 6, 'left trigger')], ['Look behind', D('rear')], ['Rescue', D('rescue')], ['Pause', D('pause')]];
     const keyboardHelp = layout => {
-      const keys = this.app.input.keyBinds[layout];
-      return [...Object.entries(KEY_ACTIONS).map(([action, label]) => [label, key(...keys[action].map(keyName))]), ['Pause', key('Esc')]];
+      const keys = this.app.input.keyBinds[layout], rescue = rescueKey(layout, this.app.input.keyBinds);
+      return [...Object.entries(KEY_ACTIONS).map(([action, label]) => [label, key(...keys[action].map(keyName))]), rescue && ['Rescue', key(keyName(rescue))], ['Pause', key('Esc')]].filter(Boolean);
     };
     const tips = touch ? [
       ['Drift for speed', 'Steer hard through a turn and the kart hops into a drift. Sparks go blue, orange, then purple. Straighten up to boost.'],
@@ -876,10 +880,14 @@ export class Menus {
     const half = (who, ...lines) => h('div', { class: 'pd-half' }, h('b', {}, who), lines.map(l => h('span', {}, l)));
     const content = h('div');
     const show = () => {
-      if (kind === 'touch') content.replaceChildren(h('div', { class: 'pad-diagram' },
-        half('Left thumb', 'Slide to steer', 'Tap to use an item'), half('Right thumb', 'Hold to accelerate', 'Pull down to brake', 'Flick up to use an item'),
-        // flick to trick, only where this player is set up for it (otherwise ramps trick by themselves)
-        this.app.flickChosen() && h('div', { class: 'pd-whole' }, h('b', {}, `Whole ${handheldWord()}`), h('span', {}, 'Flick off a ramp to trick'))));
+      if (kind === 'touch') {
+        // the gestures this player's settings actually use: automatic accelerate leaves the right thumb only braking and items;
+        // tilt steering and flick to trick appear only when they are on (otherwise ramps trick by themselves)
+        const S = this.app.save.settings, whole = [S.tilt && 'Tilt to steer', this.app.flickChosen() && 'Flick off a ramp to trick'].filter(Boolean);
+        content.replaceChildren(h('div', { class: 'pad-diagram' },
+          half('Left thumb', 'Slide to steer', 'Tap to use an item'), half('Right thumb', ...[!S.autoGo && 'Hold to accelerate', 'Pull down to brake', 'Flick up to use an item'].filter(Boolean)),
+          whole.length > 0 && h('div', { class: 'pd-whole' }, h('b', {}, `Whole ${handheldWord()}`), whole.map(line => h('span', {}, line)))));
+      }
       else {
         const rows = kind === 'pad' ? padRows : keyboardHelp(kind);
         content.replaceChildren(h('table', { class: 'ctl' }, h('tbody', {}, rows.map(([label, how]) => h('tr', {}, h('th', {}, label), h('td', {}, h('span', { class: 'ctl-how' }, how)))))));

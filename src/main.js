@@ -69,7 +69,7 @@ if (q.get('view') === 'kart') {
   };
   app.onRaceDone = () => setTimeout(start, 5000);
   app.pause = () => app.session.setPaused(!app.session.paused);
-  app.onMenu = action => { if (action === 'pause' || action === 'back') app.pause(); if (action === 'confirm') app.session.skipIntro(); if (action === 'reset') app.session.race.players[0]?.startRescue(); };
+  app.onMenu = (action, device) => { if (action === 'pause' || action === 'back') app.pause(); if (action === 'confirm') app.session.skipIntro(); if (action === 'reset') app.rescue(app.playerFor(device)); };
   app.input.onMenu = (a, d) => app.onMenu(a, d);
   if (q.get('fly')) {
     const fly = BK.fly = { s: +(q.get('s') || 0), lat: 0, h: 5, back: 12, look: 22, top: q.get('fly') === 'top' };

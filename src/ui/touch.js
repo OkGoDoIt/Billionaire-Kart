@@ -13,7 +13,10 @@ import { itemIcon } from './hud.js';
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const buzz = ms => { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch { /* not allowed here */ } } };
 
-const TAP_MS = 230, TAP_MOVE = 12;      // a tap is shorter and stiller than this
+const TAP_MS = 230, TAP_MOVE = 12;      // a tap is shorter and stiller than this; until a touch is clearly not a tap, it does not steer
+/* When the finger touched and lifted, from the events themselves: a busy frame that delays the handlers
+   must not stretch a quick tap past TAP_MS (#374). Falls back to the handler's clock where a browser stamps nothing. */
+const stamp = e => e.timeStamp > 0 ? e.timeStamp : performance.now();
 const BRAKE_PULL = 26;                  // px the right thumb must drop to brake
 const FLICK_UP = 44, FLICK_MS = 260;    // px upward within this long fires the item
 const FLICK_AGAIN = 0.4;                // seconds before the same thumb can flick a second item
@@ -39,16 +42,19 @@ export class TouchControls {
     // ---- left thumb: steering, and tap for the item
     const R = () => Math.max(46, Math.min(innerWidth, innerHeight) * 0.15);
     let sid = null, ox = 0, sx = 0, sy = 0, st0 = 0, smax = 0;
+    this.tapWatch = null;   // { at, moved }: a touch that may still turn out to be a tap
     const placeStick = (x, y) => { const r = $.left.getBoundingClientRect(); $.stick.style.left = clamp(x - r.left, R() + 8, r.width - 8) + 'px'; $.stick.style.top = clamp(y - r.top, 40, r.height - 30) + 'px'; };
     $.left.addEventListener('pointerdown', e => {
       if (sid != null) return; this.input.lastDevice = 'touch';
-      sid = e.pointerId; ox = sx = e.clientX; sy = e.clientY; st0 = performance.now(); smax = 0;
+      sid = e.pointerId; ox = sx = e.clientX; sy = e.clientY; st0 = stamp(e); smax = 0;
+      this.tapWatch = { at: performance.now(), moved: false };
       try { $.left.setPointerCapture(sid); } catch { /* pointer already gone */ }
       placeStick(e.clientX, e.clientY); $.left.classList.add('on'); e.preventDefault();
     });
     $.left.addEventListener('pointermove', e => {
       if (e.pointerId !== sid) return;
       smax = Math.max(smax, Math.hypot(e.clientX - sx, e.clientY - sy));
+      if (this.tapWatch && smax >= TAP_MOVE) this.tapWatch.moved = true;
       let d = e.clientX - ox; const r = R();
       if (Math.abs(d) > r) { ox += d - Math.sign(d) * r; d = Math.sign(d) * r; placeStick(ox, e.clientY); }   // the stick follows a thumb that slides past its end
       const v = d / r, a = Math.abs(v);
@@ -56,9 +62,9 @@ export class TouchControls {
       $.knob.style.transform = `translate(calc(-50% + ${d}px), -50%)`;
     });
     const endSteer = e => {
-      if (e.pointerId !== sid) return; sid = null; this.raw = 0;
+      if (e.pointerId !== sid) return; sid = null; this.raw = 0; this.tapWatch = null;
       $.knob.style.transform = 'translate(-50%, -50%)'; $.left.classList.remove('on');
-      if (e.type === 'pointerup' && performance.now() - st0 < TAP_MS && smax < TAP_MOVE) this.useItem();
+      if (e.type === 'pointerup' && stamp(e) - st0 < TAP_MS && smax < TAP_MOVE) this.useItem();
     };
     $.left.addEventListener('pointerup', endSteer); $.left.addEventListener('pointercancel', endSteer);
 
@@ -68,13 +74,13 @@ export class TouchControls {
     const setBrake = on => { if (on === this.braking) return; this.braking = on; $.pedal.classList.toggle('braking', on); $.footLabel.textContent = on ? 'BRAKE' : 'GO'; if (on) buzz(30); };
     $.right.addEventListener('pointerdown', e => {
       if (pid != null) return; this.input.lastDevice = 'touch';
-      pid = e.pointerId; py = e.clientY; hist = [{ t: performance.now(), y: py }]; flickAt = -1e9;
+      pid = e.pointerId; py = e.clientY; hist = [{ t: stamp(e), y: py }]; flickAt = -1e9;
       try { $.right.setPointerCapture(pid); } catch { /* pointer already gone */ }
       this.pedal = true; setBrake(false); placePedal(e.clientX, e.clientY); $.right.classList.add('on'); buzz(8); e.preventDefault();
     });
     $.right.addEventListener('pointermove', e => {
       if (e.pointerId !== pid) return;
-      const dy = e.clientY - py, now = performance.now();
+      const dy = e.clientY - py, now = stamp(e);
       setBrake(dy > BRAKE_PULL);
       $.foot.style.transform = `translate(-50%, calc(-50% + ${clamp(dy, -FLICK_UP, BRAKE_PULL * 1.6)}px))`;
       // a flick is judged from recent upward motion that started at or above the touch point, so letting off the brake never fires the item
@@ -113,7 +119,9 @@ export class TouchControls {
     t.trick = this.trickT > 0; this.trickT -= dt;
 
     // steering, with the drift folded in: hard over hops into a drift, back to the middle lets it go
-    const raw = tilt.enabled && Math.abs(tilt.value) > Math.abs(this.raw) ? tilt.value : this.raw, mag = Math.abs(raw);
+    // a left touch that may still be a tap for the item holds the wheel straight, so the tap does not jerk the kart
+    const w = this.tapWatch, thumb = w && !w.moved && performance.now() - w.at < TAP_MS ? 0 : this.raw;
+    const raw = tilt.enabled && Math.abs(tilt.value) > Math.abs(thumb) ? tilt.value : thumb, mag = Math.abs(raw);
     if (mag < 0.5) this.needCentre = false;
     if (!this.vd) {
       const ready = mag >= DRIFT_AT && !this.needCentre && t.throttle > 0 && k.grounded && k.hitT <= 0 && !k.finished && race && !race.frozen && k.speed > k.baseTop * 0.52;
@@ -143,7 +151,7 @@ export class TouchControls {
     $.stick.dataset.tier = k.drifting ? k.driftTier : '';
     this.root.classList.toggle('drifting', !!k.drifting);
   }
-  setVisible(v) { this.root.classList.toggle('hidden', !v); if (!v) { const t = this.t; this.raw = 0; this.pedal = false; this.braking = false; this.gasT = 0; this.vd = 0; t.steer = 0; t.drift = false; t.item = false; t.trick = false; t.brake = 0; t.throttle = 0; } }
+  setVisible(v) { this.root.classList.toggle('hidden', !v); if (!v) { const t = this.t; this.raw = 0; this.tapWatch = null; this.pedal = false; this.braking = false; this.gasT = 0; this.vd = 0; t.steer = 0; t.drift = false; t.item = false; t.trick = false; t.brake = 0; t.throttle = 0; } }
   dispose() { this.setVisible(false); this.root.remove(); }
 }
 /** What the player is holding, for words like "flick your phone": a tablet once its short side is tablet-sized. */

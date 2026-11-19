@@ -101,7 +101,7 @@ room = {
   rules: { mode: "single"|"cup", cup: id|null, cc: 50|100|150|200, level: "easy"|"normal"|"hard",
            cpus: bool, pick: "vote"|"host" },
   members: [{ id, handle, name: string|null, racer: id|null, ready: bool, connected: bool, spectating: bool,
-              valuation: int|null, track: id|null }],
+              valuation: int|null, track: id|null, away: bool }],
   race: null | { n, trackId, seed, laps, startAt,
                  slots: [{ slot, racer, member: playerId|null, level: str|null, owner: playerId }],
                  finished: [{ slot, time, rank }] },
@@ -120,6 +120,7 @@ room = {
 - → `{t:"start"}` host only: lobby → track (or straight to race when the host picks and has picked).
 - → `{t:"track", id}` my pick. `id` may be `"random"`. In a public room it must be one of `offer` or `"random"`.
 - → `{t:"ready"}` in results: I am ready for the next race.
+- → `{t:"away", on}` in a race where I have a kart: my pause menu opened (`true`) or closed (`false`). The race never stops for it: the device keeps stepping and its kart drives itself while the menu is up. The others see `members[].away` and mark that kart's name tag. It clears when the race ends or the device drops.
 
 Phases:
 

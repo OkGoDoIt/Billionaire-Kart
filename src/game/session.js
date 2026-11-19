@@ -14,6 +14,15 @@ import { trialKey } from '../core/save.js';
 import { GhostRecorder } from '../core/ghost.js';
 import { makeRng } from '../core/util.js';
 
+/* Online, the stand-in that drives a kart while its player has the pause menu up keeps it in the race without
+   making pausing pay: it holds to STAND_IN_PACE of the class's top speed and leaves the player's item alone.
+   (Forza Motorsport's pause takeover runs at about 70% of race speed for the same reason.) */
+const STAND_IN_PACE = 0.7;
+function standIn(ai) {
+  const inp = ai.think(STEP), k = ai.kart;
+  return { ...inp, item: false, itemBack: false, throttle: k.speed > k.race.cls.top * STAND_IN_PACE ? 0 : inp.throttle, drift: false };
+}
+
 export const STEP = 1 / 60;
 // Keep a slow foreground race in real time down to 4 fps. Bound catch-up after
 // long interruptions, when replaying the last input for seconds would be unfair.
@@ -245,7 +254,9 @@ export class RaceSession {
     const { race, view, app, net } = this;
     const polled = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
     const inputs = this.menuOpen ? [] : this._withCarry(polled);   // the pause menu may be open, but the race goes on
-    const think = () => this.autopilots ? this.autopilots.map(a => a.kart.puppet ? undefined : a.think(STEP)) : inputs;
+    // with the pause menu up, a stand-in drives each of this screen's karts until the player resumes (a finished kart cruises as usual)
+    const stand = !this.autopilots && this.menuOpen, drivers = this.autopilots || (stand ? this._standIns() : null);
+    const think = () => drivers ? drivers.map(a => a.kart.puppet || a.kart.finished ? undefined : stand ? standIn(a) : a.think(STEP)) : inputs;
     let target = net.targetStep();
     if (target - net.n > 120) {
       net.wake();
@@ -281,8 +292,23 @@ export class RaceSession {
     });
   }
 
+  /** Online, the drivers that take this screen's karts while the pause menu is up: the room's CPU level, fresh each time it opens. */
+  _standIns() {
+    if (!this.standIns) {
+      const level = this.net.room.rules?.level || 'normal';
+      this.standIns = this.race.players.map((k, i) => new AIDriver(k, level, makeRng((((this.net.room.race?.seed | 0) ^ (k.slot * 7919 + i)) >>> 0) || 1)));
+    }
+    return this.standIns;
+  }
+
   setPaused(p) {
-    if (this.net) { this.menuOpen = p; if (p) this.app.input.stopRumble(); return; }   // online the race never stops
+    if (this.net) {   // online the race never stops: the menu opens over it, a stand-in drives, and the others see this player is away
+      if (p === this.menuOpen) return;
+      this.menuOpen = p;
+      if (p) { this.app.input.stopRumble(); for (const a of this._standIns()) Object.assign(a, { bestProg: null, progT: 0, stuckT: 0, reverseT: 0, driftPlan: null, cut: null }); }
+      this.net.conn?.send?.({ t: 'away', on: !!p });
+      return;
+    }
     if (p) this.app.input.stopRumble(); for (const g of this.guides) g.card.hidden = p || !g.active; this.paused = p; this.app.audio?.event(p ? 'pause' : 'resume');
   }
 

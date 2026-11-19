@@ -300,7 +300,7 @@ export class Online {
         break;
       case 'race': {
         const n = room.race?.n;
-        if (n == null || this.startedN === n || this.app.session?.net?.raceN === n) break;
+        if (n == null || this.startedN === n || this.app.session?.net?.raceN === n) { this.retag(this.app.session, room); break; }
         this.startedN = n;
         if (name === 'onlineTrack' && prev?.phase === 'track' && s.roulette) s.roulette(room, () => this.startRace());
         else this.startRace();
@@ -352,18 +352,40 @@ export class Online {
     for (const kv of session.view.karts) {
       const k = kv.kart, slot = room.race.slots.find(s => s.slot === k.slot);
       if (!k.human || k.isPlayer || !slot?.member || !kv.tag) continue;
-      const text = this.nameOf(slot.member, room), color = this.colorOf(slot.member, room);
-      const c = document.createElement('canvas'); c.width = 384; c.height = 72;
-      const g = c.getContext('2d');
-      g.font = '34px "Luckiest Guy", "Arial Black", sans-serif';
-      const tw = Math.min(c.width - 36, g.measureText(text).width), bw = tw + 44, x = (c.width - bw) / 2;
-      g.fillStyle = 'rgba(14,16,34,0.82)'; g.beginPath(); g.roundRect(x, 8, bw, 50, 25); g.fill();
-      g.fillStyle = color; g.beginPath(); g.roundRect(x, 8, 12, 50, [25, 0, 0, 25]); g.fill();
-      g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, c.width / 2 + 4, 35);
-      const old = kv.tag.material.map, tex = new THREE.CanvasTexture(c);
-      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = old.anisotropy; tex.minFilter = old.minFilter; tex.generateMipmaps = old.generateMipmaps;
-      kv.tag.material.map = tex; kv.tag.material.needsUpdate = true; old.dispose();
-      kv.tag.scale.x *= c.width / 256; kv.tag.userData.wFrac = bw / c.width;
+      this.drawTag(kv, this.nameOf(slot.member, room), this.colorOf(slot.member, room), !!room.members.find(m => m.id === slot.member)?.away);
+    }
+  }
+
+  /** One human's name tag: their name on their color, and a pause sign while their menu is open (their kart is driving itself). */
+  drawTag(kv, text, color, away) {
+    const c = document.createElement('canvas'); c.width = 384; c.height = 72;
+    const g = c.getContext('2d');
+    g.font = '34px "Luckiest Guy", "Arial Black", sans-serif';
+    const icon = away ? 26 : 0, tw = Math.min(c.width - 44 - icon, g.measureText(text).width), bw = tw + 44 + icon, x = (c.width - bw) / 2;
+    g.fillStyle = away ? 'rgba(14,16,34,0.6)' : 'rgba(14,16,34,0.82)'; g.beginPath(); g.roundRect(x, 8, bw, 50, 25); g.fill();
+    g.fillStyle = color; g.beginPath(); g.roundRect(x, 8, 12, 50, [25, 0, 0, 25]); g.fill();
+    g.fillStyle = away ? 'rgba(255,255,255,0.7)' : '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, x + 28 + tw / 2, 35, tw);
+    if (away) { g.fillStyle = '#fff'; const ix = x + 28 + tw + 8; g.beginPath(); g.roundRect(ix, 21, 6, 24, 2); g.roundRect(ix + 12, 21, 6, 24, 2); g.fill(); }
+    const old = kv.tag.material.map, tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = old.anisotropy; tex.minFilter = old.minFilter; tex.generateMipmaps = old.generateMipmaps;
+    kv.tag.material.map = tex; kv.tag.material.needsUpdate = true; old.dispose();
+    if (!kv.tag.userData.wide) { kv.tag.scale.x *= c.width / 256; kv.tag.userData.wide = true; }
+    kv.tag.userData.wFrac = bw / c.width; kv.tag.userData.away = away;
+  }
+
+  /** A room message during the race: redraw the tags of humans whose menu opened or closed, and make sure the server has ours right. */
+  retag(session, room) {
+    if (!session?.names || session.net?.raceN !== room.race?.n) return;
+    for (const kv of session.view.karts) {
+      const k = kv.kart, slot = room.race.slots.find(s => s.slot === k.slot);
+      if (!k.human || k.isPlayer || !slot?.member || !kv.tag?.userData.wide) continue;
+      const away = !!room.members.find(m => m.id === slot.member)?.away;
+      if (away !== !!kv.tag.userData.away) this.drawTag(kv, this.nameOf(slot.member, room), this.colorOf(slot.member, room), away);
+    }
+    const me = this.mine(room), racing = room.race.slots.some(s => s.member === this.you);
+    if (me && racing && !!me.away !== !!session.menuOpen && this.awaySent !== `${room.race.n}:${!!session.menuOpen}:${!!me.away}`) {
+      this.awaySent = `${room.race.n}:${!!session.menuOpen}:${!!me.away}`;   // once per disagreement, so a refusal cannot loop
+      this.conn.send({ t: 'away', on: !!session.menuOpen });
     }
   }
 
@@ -864,15 +886,16 @@ export class Online {
     return { el };
   }
 
-  /** The pause menu online: the race goes on, so it offers only Resume, Options, and Leave race. */
+  /** The pause menu online: the race goes on (nobody else stops, and a stand-in drives this player's kart), so it offers only Resume, Options, and Leave race. */
   s_onlinePause() {
     const M = this.menus, A = this.app, lost = A.padNotice(), turn = !lost && A.mustTurn(), room = this.room;
     const def = TRACK_BY_ID[A.session?.config?.trackId];
+    const driving = A.session?.race.players.some(k => !k.finished);   // the race goes on behind the menu, with a stand-in at the wheel
     const leave = M.btn('Leave race', () => this.leaveRace(), { cls: 'danger', sub: room?.public ? 'Leaving counts as last place.' : null });
     const el = h('div', { class: 'screen-pause' }, h('div', { class: 'panel narrow' + (turn ? ' turn' : lost ? ' notice' : '') },
       lost ? [h('h1', {}, lost[0]), h('p', { class: 'turn-sub' }, lost[1]), M.btn('Resume', () => A.resume(), { def: true })]   // a controller dropped out (#353): the race goes on
         : turn ? [h('div', { class: 'turn-phone', 'aria-hidden': 'true' }), h('h1', {}, 'Turn your phone sideways'), M.btn('Resume anyway', () => A.resume(), { def: true })]
-        : [h('h1', {}, def?.name || 'Online'), M.btn('Resume', () => A.resume(), { def: true })],
+        : [h('h1', {}, def?.name || 'Online'), driving && h('p', { class: 'turn-sub' }, 'Your kart is on autopilot.'), M.btn('Resume', () => A.resume(), { def: true })],
       A.canRescue() && M.btn('Rescue kart', () => { A.resume(); A.rescue(0); }),
       M.btn('Options', () => M.open('options')), leave));
     return { el, onBack: () => { A.resume(); return false; }, onAction: a => { if (a === 'pause') { A.resume(); return true; } } };

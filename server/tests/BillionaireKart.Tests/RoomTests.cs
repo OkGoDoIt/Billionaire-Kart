@@ -214,6 +214,37 @@ public sealed class RoomTests(TestApp app)
     }
 
     [Fact]
+    public async Task Away_shows_to_the_others_only_during_a_race_and_keeps_the_kart()
+    {
+        var (a, b, _) = await TwoInPrivate();
+        await using var _a = a; await using var _b = b;
+        // In the lobby there is no race to be away from.
+        await a.Send(new { t = "away", on = true });
+        Assert.True(await b.Quiet(f => f.Text?.Contains("\"away\":true") == true));
+
+        await a.Send(new { t = "rules", rules = new { cpus = false, pick = "host" } });
+        await a.Send(new { t = "track", id = "davos" });
+        await a.Send(new { t = "start" });
+        var race = await b.Room(r => r.Str("phase") == "race");
+        a.KeepAlive();
+        await a.Send(new { t = "away", on = true });
+        var away = await b.Room(r => r.MemberOf(a.Id).GetProperty("away").GetBoolean());
+        // the menu is up but the device still drives its own kart
+        Assert.Equal(a.Id.ToString(), away.GetProperty("race").Arr("slots").ElementAt(race.SlotOf(a.Id).Int("slot")).Str("owner"));
+        await a.Send(new { t = "away", on = false });
+        await b.Room(r => !r.MemberOf(a.Id).GetProperty("away").GetBoolean());
+
+        // It clears when the race ends.
+        await a.Send(new { t = "away", on = true });
+        await b.Room(r => r.MemberOf(a.Id).GetProperty("away").GetBoolean());
+        await Task.Delay(200);
+        await a.Send(new { t = "finish", slot = race.SlotOf(a.Id).Int("slot"), time = 0.2 });
+        await b.Send(new { t = "finish", slot = race.SlotOf(b.Id).Int("slot"), time = 0.3 });
+        var res = await b.Room(r => r.Str("phase") == "results");
+        Assert.False(res.MemberOf(a.Id).GetProperty("away").GetBoolean());
+    }
+
+    [Fact]
     public async Task Silent_owner_loses_kart_and_gets_it_back_and_host_leaving_moves_cpus()
     {
         await app.UseSettings(new() { ["OwnerSilenceSeconds"] = "0.5" });

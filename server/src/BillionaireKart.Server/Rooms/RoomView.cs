@@ -35,6 +35,7 @@ public static class RoomView
             spectating = m.Spectating,
             valuation = (long?)s.Valuation(m.Player.Mu, m.Player.Sigma),
             track = m.Track,
+            away = m.Away,
         }),
         race = r.Race is not { } race ? null : new
         {

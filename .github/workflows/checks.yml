@@ -156,7 +156,7 @@ jobs:
           DEPLOY_KEY: ${{ secrets.OKGODOIT_DEPLOY_KEY }}
           SHA: ${{ github.sha }}
         run: |
-          if [ -z "$DEPLOY_KEY" ]; then echo "::warning::OKGODOIT_DEPLOY_KEY is not set, so billionaire-kart.okgodoit.com was not updated"; exit 0; fi
+          if [ -z "$DEPLOY_KEY" ]; then echo "::error::OKGODOIT_DEPLOY_KEY is not set, so billionaire-kart.okgodoit.com was not updated (ops/site-deploy/README.md)"; exit 1; fi
           # a newer push to main is already on its way: let that one deploy instead of rolling back
           head=$(git ls-remote origin refs/heads/main | cut -f1)
           if [ "$head" != "$SHA" ]; then echo "main has moved on to $head; skipping $SHA"; exit 0; fi
@@ -178,10 +178,15 @@ jobs:
           install -m 600 /dev/null ~/deploy_key && printf '%s\n' "$DEPLOY_KEY" > ~/deploy_key
           ssh_cmd="ssh -i $HOME/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$PWD/ops/site-deploy/known_hosts"
           rsync -rt --chmod=D755,F644 -e "$ssh_cmd" _upload/ "billionaire-kart-deploy@178.128.11.103:$SHA/"
-          $ssh_cmd billionaire-kart-deploy@178.128.11.103 "activate $SHA"
-          for i in 1 2 3 4 5 6; do
-            live=$(curl -fsS https://billionaire-kart.okgodoit.com/version.txt || true)
-            health=$(curl -fsS https://billionaire-kart.okgodoit.com/healthz || true)
+          # The installer goes live with the newest request only; one that a later push overtook reports "superseded".
+          result=$($ssh_cmd billionaire-kart-deploy@178.128.11.103 "activate $SHA") || status=$?
+          echo "$result"
+          if echo "$result" | grep -q '"superseded"'; then echo "a newer push was requested while $SHA waited; it deploys instead"; exit 0; fi
+          [ -z "${status:-}" ] || { echo "::error::the installer refused $SHA"; exit 1; }
+          # Check from outside, past any cache, that the domain really serves this commit.
+          for i in $(seq 1 12); do
+            live=$(curl -fsS -H 'Cache-Control: no-cache' "https://billionaire-kart.okgodoit.com/version.txt?check=$SHA-$i" || true)
+            health=$(curl -fsS -H 'Cache-Control: no-cache' "https://billionaire-kart.okgodoit.com/healthz?check=$SHA-$i" || true)
             if [ "$live" = "$SHA" ] && { [ -z "$server" ] || echo "$health" | grep -q "$SHA"; }; then
               echo "live at https://billionaire-kart.okgodoit.com/ ($SHA${server:+, server included})"; exit 0
             fi

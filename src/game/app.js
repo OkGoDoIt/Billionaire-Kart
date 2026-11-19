@@ -13,13 +13,15 @@ import { RaceSession, MAX_FRAME_TIME } from './session.js';
 import { AudioEngine } from '../audio/audio.js';
 import { TRACKS, TRACK_BY_ID } from '../content/tracks.js';
 import { RACERS, RACER_BY_ID } from '../content/racers.js';
-import { CUPS, cupTracks, GP_POINTS, cupStars } from '../content/cups.js';
+import { CUPS, cupTracks, GP_POINTS, cupStars, cupOrder } from '../content/cups.js';
 import { makeRng } from '../core/util.js';
 
 /* The online protocol this build speaks (the same number as PROTO in src/net/conn.js, which is only loaded on demand). */
 const ONLINE_PROTO = 1;
 /* Where a race server lives beside the game: the live site, and the development server (server/README.md). */
 const ONLINE_HOSTS = ['billionaire-kart.okgodoit.com', 'localhost:5210', '127.0.0.1:5210', 'localhost:5211', '127.0.0.1:5211', 'localhost:5212', '127.0.0.1:5212'];   // 5212: a second local server while another session's test holds 5211
+/* While the race server does not answer: ask again after these waits, then once a minute while the main menu is up (App#checkOnline). */
+const ONLINE_RETRY_MS = [2000, 5000, 10000, 20000];
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 export class App {
@@ -40,6 +42,9 @@ export class App {
     this.input.onMenu = (a, d) => this.onMenu(a, d);
     this.input.onJoinKey = device => this.menus.screen?.spec.name === 'join' && device !== 'kb' && this.menus.handle('confirm', device);
     this.input.onAnyInput = () => this.audio?.unlock?.();
+    this.padsLost = [];   // local players whose controller dropped out mid-race (#353)
+    this.input.onPadLost = i => this._padLost('pad' + i);
+    this.input.onPadFound = i => this._padFound('pad' + i);
     // sound may only start from a gesture, and which gestures count differs by browser: listen for all of them
     for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, () => this.audio?.unlock?.(), { passive: true, capture: true });
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.audio?.suspend?.(); else this.audio?.resumeIfAllowed?.(); });
@@ -50,6 +55,10 @@ export class App {
     this.applySettings(true);
     this._motionStart();
     this.checkOnline();
+    // the network came back, or the game came back to the front: ask again now, and start the retries over
+    const recheck = () => { this._onlineTries = 0; this.checkOnline(); };
+    addEventListener('online', recheck);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) recheck(); });
     // an installed copy opened by a room link (Chrome on Android and computers): the manifest's launch_handler
     // keeps the running game, which takes the link here; the launch that started the page is the title's (?room=)
     const bootUrl = location.href;
@@ -101,8 +110,19 @@ export class App {
     if (action === 'pause' || (action === 'back' && device.startsWith('kb'))) { if (s.phase !== 'intro' && s.race.state !== 'done') this.pause(); else s.skipIntro(); }
     else if (action === 'confirm' && s.phase === 'intro') s.skipIntro();
     else if ((action === 'left' || action === 'right') && s.after) s.after.step(s.after.paneFor(device), action === 'left' ? -1 : 1);   // after the line, online: who to watch
-    else if (action === 'reset') { const k = s.race.players[0]; if (k && !k.finished && !s.race.frozen) k.startRescue(); }
+    else if (action === 'reset') this.rescue(this.playerFor(device));
   }
+
+  /** The local player a device drives: in solo play every device drives player 0; in split screen, whoever joined with it. -1 for nobody. */
+  playerFor(device) { const a = this.input.assign; return a.length === 1 && a[0] === 'any' ? 0 : a.indexOf(device); }
+  /** Rescue one local player's kart, under the kart's own guards (once per rescue, never past the line or before the start). */
+  rescue(player) {
+    const s = this.session, k = s?.race.players[player];
+    if (!s || this.attract || !k || k.finished || s.race.frozen || k.rescueT > 0) return false;
+    k.startRescue(); return true;
+  }
+  /** The pause menu offers a rescue in solo play, where the player's device has no rescue button of its own (touch). */
+  canRescue() { const s = this.session, k = s?.race.players[0]; return !!s && !this.attract && this.input.assign.length === 1 && !!k && !k.finished && !s.race.frozen && s.race.state !== 'done' && !(k.rescueT > 0); }
 
   applySettings(initial = false) {
     const S = this.save.settings;
@@ -214,6 +234,55 @@ export class App {
     if (turn && !this.session.paused) this.pause();
     else if (this.session.paused && this.menus.screen?.spec.name === 'pause' && !this.menus.stack.length && !!this.menus.screen.el.querySelector('.turn') !== turn) this.menus.reset('pause');
   }
+  /* ---------- a controller drops out mid-race (#353) ----------
+     Like turning the phone upright or switching away, losing a controller pauses the race, and the pause panel
+     says whose it was. Online the race cannot stop, so the panel shows without pausing. Plugging a controller back
+     in hands it to that player; the race waits for a press of Resume, as any pause does. */
+  _padLost(device) {
+    const s = this.session;
+    if (!s || this.attract || s.race.state === 'done' || this.menus.screen?.spec.name === 'results') return;
+    // solo play merges every device: the pad only matters when it was the one driving
+    const player = this.input.assign.length === 1 ? (this.input.lastDevice === device ? 0 : -1) : this.input.assign.indexOf(device);
+    const k = s.race.players[player];
+    if (!k || k.finished || this.padsLost.includes(player)) return;
+    this.padsLost.push(player);
+    if (s.phase !== 'intro') this._showPadNotice();   // over the flyover it waits for the countdown (onCountdown)
+  }
+  _padFound(device) {
+    if (!this.padsLost.length) return;
+    const a = this.input.assign, solo = a.length === 1;
+    // the same controller back in its old slot, or any controller nobody is using: it goes to the first player without one
+    const back = solo ? 0 : a.indexOf(device), player = back >= 0 ? back : this.padsLost[0];
+    if (!this.padsLost.includes(player)) return;
+    if (!solo && back < 0) {
+      a[player] = device;
+      const cfg = this.session?.config?.players?.[player]; if (cfg) cfg.device = device;   // a restart keeps the new pairing
+      if (this.flow.devices?.[player] != null) this.flow.devices[player] = device;
+    }
+    this.padsLost = this.padsLost.filter(p => p !== player);
+    this._redrawPause();
+  }
+  _showPadNotice() {
+    const s = this.session;
+    if (!s || this.attract || !this.padsLost.length) return;
+    if (s.paused || s.menuOpen) this._redrawPause(); else this.pause();
+  }
+  /** Redraw the pause panel in place when what it should say has changed (but not over a screen opened from it). */
+  _redrawPause() {
+    const name = this.menus.screen?.spec.name;
+    if ((name === 'pause' || name === 'onlinePause') && !this.menus.stack.length) this.menus.reset(name);
+  }
+  /** The pause panel's notice for a lost controller: a heading and one line, or null. */
+  padNotice() {
+    const lost = this.padsLost;
+    if (!lost.length || !this.session || this.attract) return null;
+    if (this.input.assign.length === 1) return ['Controller disconnected', 'Reconnect it to keep racing.'];
+    const names = lost.map(p => `Player ${p + 1}`);
+    if (names.length === 1) return [`${names[0]}’s controller disconnected`, 'Reconnect it to keep racing.'];
+    const list = names.length === 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')}, and ${names.at(-1)}`;
+    return [`Controllers disconnected for ${list}`, 'Reconnect them to keep racing.'];
+  }
+
   /** Keep the screen awake while racing (phones dim otherwise, especially with tilt steering). */
   async _wake(on) {
     try { if (on && !this.wakeLock && navigator.wakeLock) { this.wakeLock = await navigator.wakeLock.request('screen'); this.wakeLock.addEventListener('release', () => { this.wakeLock = null; }); } else if (!on && this.wakeLock) { await this.wakeLock.release(); this.wakeLock = null; } } catch { /* unsupported or denied */ }
@@ -222,7 +291,7 @@ export class App {
   /** Checker wipe: cover the screen, swap the scene, reveal. */
   async transition(fn) { await this.wipe.through(fn, { sound: true }); }
   _clearScene() {
-    this.session?.dispose(); this.session = null; this.attract = false; document.body.classList.remove('must-turn');
+    this.session?.dispose(); this.session = null; this.attract = false; this.padsLost = []; document.body.classList.remove('must-turn');
     this.showroom?.dispose(); this.showroom = null;
     this.trackCard?.remove(); this.trackCard = null;
   }
@@ -244,24 +313,42 @@ export class App {
   /* ---------- online ---------- */
   /** Online play is its own module (src/ui/online.js), fetched the first time the player goes online, so the offline game never loads it. */
   /** Is the race server there, and does it speak this build's protocol? 'ok', 'old' (this build is too old: reload), or 'down'.
-      Asked once at start and again whenever the main menu opens, so the Online button only shows when it will work,
-      whichever of the game and the server a deploy reached first. */
+      Asked at start, whenever the main menu opens, when the device comes back online or to the front, and, while the
+      answer is 'down', again and again (ONLINE_RETRY_MS, then once a minute while the main menu is up), so one slow
+      answer never hides Online for the visit. Only "this address has no race server" stops the asking. Each new answer
+      goes to onOnlineState (the main menu redraws its Online button in place), whichever of the game and the server a
+      deploy reached first. */
   checkOnline() {
+    if (this._onlineBusy) return this._onlineAsk;
+    clearTimeout(this._onlineRetry);
     const ask = async () => {
-      if (!ONLINE_HOSTS.includes(location.host)) return 'down';   // a plain file server or the old address: no race server to ask
+      if (!ONLINE_HOSTS.includes(location.host)) return 'none';   // a plain file server or the old address: no race server to ask
       try {
-        const r = await fetch('/healthz', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+        const r = await fetch('/healthz', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        if (r.status === 404) return 'none';
         const h = r.ok ? await r.json() : null;
         if (!h?.ok || !Number.isInteger(h.protocol)) return 'down';
         return ONLINE_PROTO > h.protocol ? 'down' : ONLINE_PROTO < (h.minProtocol ?? h.protocol) ? 'old' : 'ok';
       } catch { return 'down'; }
     };
-    return this._onlineAsk = ask().then(state => (this.onlineState = state));
+    this._onlineBusy = true;
+    return this._onlineAsk = ask().then(answer => {
+      this._onlineBusy = false;
+      const state = answer === 'none' ? 'down' : answer, was = this.onlineState;
+      this.onlineState = state;
+      this._onlineTries = state === 'down' ? (this._onlineTries || 0) + 1 : 0;
+      if (answer === 'down') {
+        const n = this._onlineTries - 1, wait = ONLINE_RETRY_MS[n] ?? 60000;
+        this._onlineRetry = setTimeout(() => { if (n < ONLINE_RETRY_MS.length || this.menus.screen?.spec.name === 'main') this.checkOnline(); }, wait);
+      }
+      if (state !== was) this.onOnlineState?.(state);
+      return state;
+    });
   }
   async goOnline(opts) {
     if (this.onlineState === 'old') { try { await (await navigator.serviceWorker?.getRegistration())?.update(); } catch { /* reload anyway */ } location.reload(); return; }
     try { if (!this.online) this.online = new (await import('../ui/online.js')).Online(this); }
-    catch { const sub = this.menus.screen?.el.querySelector('.btn.c4 .btn-sub'); if (sub) sub.textContent = 'Can’t reach the race server.'; return; }
+    catch { const sub = this.menus.screen?.el.querySelector('.btn.c4 .btn-sub'); if (sub) sub.textContent = 'Can’t reach the online server.'; return; }
     this.online.enter(opts);
   }
 
@@ -287,7 +374,9 @@ export class App {
     if (this._askFlick(() => this.startCup(cup, grid))) return;
     const f = this.flow, tracks = cupTracks(cup), humans = f.racers.map(id => RACER_BY_ID[id]);
     const rivals = grid || this.rng.shuffle(RACERS.filter(r => !humans.includes(r))).slice(0, 8 - humans.length).map(r => r.id);
-    this.gp = { cup, tracks, index: 0, grid: rivals, totals: Object.fromEntries([...rivals, ...f.racers].map(id => [id, 0])), order: null, cc: f.cc, level: f.level };
+    const field = [...rivals, ...f.racers];
+    // places: each racer's finish in every race so far, for the countback on a tie (cupOrder in content/cups.js)
+    this.gp = { cup, tracks, index: 0, grid: rivals, totals: Object.fromEntries(field.map(id => [id, 0])), places: Object.fromEntries(field.map(id => [id, []])), order: null, cc: f.cc, level: f.level };
     this._gpRace();
   }
   _gpRace() {
@@ -312,7 +401,7 @@ export class App {
     });
   }
   /** Called by the session when the flyover ends. */
-  onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } }
+  onCountdown() { const c = this.trackCard; if (c) { c.classList.add('out'); setTimeout(() => c.remove(), 450); this.trackCard = null; } this._showPadNotice(); }
 
   restartRace() {
     const config = this.lastConfig;
@@ -339,17 +428,25 @@ export class App {
   /* ---------- results ---------- */
   _finishRace(session, results) {
     const cfg = session.config, def = TRACK_BY_ID[cfg.trackId];
-    const mine = results.filter(r => r.isPlayer).sort((a, b) => a.rank - b.rank)[0];
+    const humans = results.filter(r => r.isPlayer).sort((a, b) => a.rank - b.rank), mine = humans[0];
     let records = null;
     if (mine) {
-      records = this.save.recordRace(cfg.trackId, cfg.mode === 'timetrial' ? trialKey(cfg.cc) : cfg.cc, mine.time, mine.bestLap, mine.racer.id, cfg.mode !== 'timetrial' && mine.rank === 1);
-      if (cfg.mode === 'timetrial' && session.rec && records.newBestRace) this.save.setGhost(cfg.trackId, cfg.cc, { racer: session.rec.racer, step: session.rec.step, time: mine.time, d: session.rec.d });
-      const st = this.save.data.stats; st.coins += mine.stats.coins; st.hitsGiven += mine.stats.hitsGiven; st.hitsTaken += mine.stats.hitsTaken; this.save.write();
+      // Every local player's run is up for the track's bests: the fastest finish and the fastest lap, whoever set them.
+      // The race counts once in the stats, and as a win when any of them won; coins and hits are each kart's own, so they add up.
+      const fastest = humans.filter(r => !r.estimated && isFinite(r.time)).reduce((b, r) => (b && b.time <= r.time ? b : r), null);
+      const lapper = humans.filter(r => isFinite(r.bestLap)).reduce((b, r) => (b && b.bestLap <= r.bestLap ? b : r), null);
+      const saved = this.save.recordRace(cfg.trackId, cfg.mode === 'timetrial' ? trialKey(cfg.cc) : cfg.cc, fastest ? fastest.time : NaN, lapper ? lapper.bestLap : NaN, (fastest || mine).racer.id, cfg.mode !== 'timetrial' && mine.rank === 1);
+      // who set each, so the results screen names the right player
+      records = { ...saved, raceBy: saved.newBestRace ? fastest.playerIndex : null, lapBy: saved.newBestLap ? lapper.playerIndex : null, players: humans.length };
+      if (cfg.mode === 'timetrial' && session.rec && saved.newBestRace && fastest.kart === session.race.players[0]) this.save.setGhost(cfg.trackId, cfg.cc, session.rec.ghost(fastest.time));
+      const st = this.save.data.stats;
+      for (const r of humans) { st.coins += r.stats.coins; st.hitsGiven += r.stats.hitsGiven; st.hitsTaken += r.stats.hitsTaken; }
+      this.save.write();
     }
     let gp = null;
     if (this.gp) {
       const g = this.gp;
-      for (const r of results) g.totals[r.racer.id] = (g.totals[r.racer.id] || 0) + (GP_POINTS[r.rank - 1] || 0);
+      for (const r of results) { const id = r.racer.id; g.totals[id] = (g.totals[id] || 0) + (GP_POINTS[r.rank - 1] || 0); (g.places[id] ||= [])[g.index] = r.rank; }
       g.order = results.map(r => r.racer.id);
       gp = { totals: g.totals, index: g.index, count: g.tracks.length, last: g.index === g.tracks.length - 1 };
     }
@@ -376,12 +473,16 @@ export class App {
       this.menus.reset('results', { results, gp: null, track, records, best });
     });
   }
+  /** The cup's standings, best first, ties settled by countback (cupOrder). */
+  cupStandings() {
+    const g = this.gp, humans = new Set(this.flow.racers);
+    return cupOrder(g.totals, g.places).map(id => ({ racer: RACER_BY_ID[id], points: g.totals[id], isPlayer: humans.has(id) }));
+  }
   gpNext() {
     const g = this.gp; if (!g) return;
     if (g.index < g.tracks.length - 1) { g.index++; this._gpRace(); return; }
     // final standings and podium
-    const humans = new Set(this.flow.racers);
-    const standings = Object.entries(g.totals).map(([id, points]) => ({ racer: RACER_BY_ID[id], points, isPlayer: humans.has(id) })).sort((a, b) => b.points - a.points);
+    const standings = this.cupStandings();
     const playerRanks = standings.map((s, i) => (s.isPlayer ? i + 1 : 99)).filter(r => r < 99);
     const best = Math.min(...playerRanks), bestPts = standings[best - 1].points, stars = cupStars(best, bestPts, g.tracks.length);
     this.save.recordCup(g.cup.id, g.cc, best, bestPts, stars);

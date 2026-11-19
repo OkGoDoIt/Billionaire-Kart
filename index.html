@@ -81,27 +81,41 @@ window.BKBoot = (() => {
   const racers = [['elon', 'd8322a'], ['sam', '10a37f'], ['zuck', '1877f2'], ['bezos', 'ff9900'], ['jensen', '76b900'], ['satya', '00a4ef'], ['dario', 'd97757'], ['demis', '7b4fd0'],
     ['trump', 'f2b01e'], ['cook', 'c7ccd4'], ['larrysergey', '4285f4'], ['bill', '00adef'], ['thiel', '3a3d48'], ['holmes', 'f2f2f0'], ['ellison', 'c8222a'], ['murdoch', '7a1626']];
   let shown = 0, lit = 1, over = false;
+  /* A load that goes quiet (a held connection, a captive portal) fails after 20 s of silence, not of slowness:
+     every finished download and every step counts as news, so a slow link keeps waiting. A late tick means the page
+     itself was busy or put away, which is not silence either. */
+  let heard = performance.now(), tick = heard;
+  const news = () => { heard = performance.now(); };
+  const watch = setInterval(() => {
+    const now = performance.now();
+    if (now - tick > 3000) heard = now;
+    tick = now;
+    if (now - heard > 20000) fail();
+  }, 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) news(); });
   for (const [id, color] of racers) {
     const img = new Image();
     img.alt = ''; img.decoding = 'async'; img.fetchPriority = 'low'; img.style.setProperty('--rc', '#' + color);
-    img.onload = () => { img.style.animationDelay = Math.max(0, shown++ * 45 - 30) + 'ms'; img.classList.add('in'); };
+    img.onload = () => { img.style.animationDelay = Math.max(0, shown++ * 45 - 30) + 'ms'; img.classList.add('in'); news(); };
+    img.onerror = news;
     img.src = 'assets/portraits/' + id + '.webp';
     grid.appendChild(img);
   }
-  const step = n => { lit = Math.max(lit, Math.min(5, n)); lights.forEach((l, i) => l.classList.toggle('on', i < lit)); root.setAttribute('aria-valuenow', lit); };
+  const step = n => { news(); lit = Math.max(lit, Math.min(5, n)); lights.forEach((l, i) => l.classList.toggle('on', i < lit)); root.setAttribute('aria-valuenow', lit); };
   try {
     const want = new Set((typeof SHELL !== 'undefined' ? SHELL : []).filter(p => /\.(js|css|woff2)$/.test(p)).map(p => new URL(p, location.href).href));
     const got = new Set(), total = want.size;
-    const count = list => { for (const e of list) if (want.has(e.name)) got.add(e.name); if (total) step(1 + Math.floor(got.size / total * 2.999)); };
-    if (total) { count(performance.getEntriesByType('resource')); new PerformanceObserver(l => count(l.getEntries())).observe({ type: 'resource', buffered: true }); }
+    const count = list => { if (list.length) news(); for (const e of list) if (want.has(e.name)) got.add(e.name); if (total) step(1 + Math.floor(got.size / total * 2.999)); };
+    count(performance.getEntriesByType('resource')); new PerformanceObserver(l => count(l.getEntries())).observe({ type: 'resource', buffered: true });
   } catch {}
+  function fail() { if (over) return; clearInterval(watch); root.classList.add('failed'); }
   return {
     step,
     done() {
-      if (over) return; over = true; step(5);
+      if (over) return; over = true; clearInterval(watch); step(5);
       setTimeout(() => { root.classList.add('go'); setTimeout(() => { root.classList.add('out'); setTimeout(() => root.remove(), 500); }, 260); }, 140);
     },
-    fail() { if (!over) root.classList.add('failed'); },
+    fail,
   };
 })();
 </script>

@@ -124,9 +124,10 @@ export class AIDriver {
     // stuck recovery
     if (k.speed < 2.5 && k.hitT <= 0) this.stuckT += dt; else this.stuckT = Math.max(0, this.stuckT - dt * 2);
     if (this.stuckT > 1.6 && this.reverseT <= 0) { this.reverseT = 1.0; }
-    if (this.stuckT > 5) { k.startRescue(); this.stuckT = 0; }
-    // past the line: a cool-down lap. Keep the stuck recovery above (a kart parked on a wall backs off it),
-    // but not the progress watch below, which counts race distance, and that stops at the finish.
+    if (this.stuckT > 5 && !k.finished) { k.startRescue(); this.stuckT = 0; }
+    // past the line: a cool-down lap. Keep the stuck recovery above (a kart parked on a wall backs off it, and
+    // keeps backing off and steering out until it is clear: past the line a rescue would show on screen for
+    // nothing), but not the progress watch below, which counts race distance, and that stops at the finish.
     if (k.finished && this.reverseT <= 0) return this._follow(dt, 0.6);
     // progress rescue: the speed timer above limit-cycles against a bump obstacle (reverse,
     // roll forward, bump again — stuckT drains while moving and never reaches 5), so also
@@ -280,6 +281,70 @@ export class AIDriver {
     return want;
   }
 
+  /** Past the line: where across the road the cruise aims, given where it would like to be. Racing, the aim is
+      held inside the narrower half of the road, and a static obstacle is a sideways nudge; on the racing line that
+      is enough. But the cruise starts wherever the player crossed the line, and from the far side of a fork's
+      island (Silicon Valley's VC office) that aim pointed straight across the island's tip. So here the road is
+      its full width on each side, less every island post, cone, and crate (padded by the kart's size), and the
+      kart follows one free stretch of it from where it is now. Where the road splits, that is the side it is on or
+      heading for, unless the wanted line's side is as near; and the aim is set so the straight run to it stays
+      inside the stretch all the way. */
+  _clearLat(want, look) {
+    const k = this.kart, race = k.race, tr = race.track, L = tr.length, N = tr.N, pad = k.radius + 1.1, edge = 1.4, STEP = 2.5;
+    const obs = this._clearObs || (this._clearObs = []);
+    obs.length = 0;
+    for (const o of race.obstacles) {
+      if (o.kind !== 'static' || o.hidden || !o.active || o.lift > 2) continue;
+      const w = o.radius + pad, ds = loopDelta(k.s, o.a.s, L);
+      if (ds > -w && ds < look + w) obs.push(ds, o.a.lat, w);
+    }
+    // the free stretches of road d metres ahead, as [lo, hi, lo, hi, ...]
+    const free = d => {
+      const i = mod(Math.round((k.s + d) / tr.ds), N);
+      let out = [-tr.hwR[i] + edge, tr.hwL[i] - edge];
+      for (let n = 0; n < obs.length; n += 3) {
+        const dd = Math.abs(obs[n] - d), w = obs[n + 2];
+        if (dd >= w) continue;
+        const half = Math.sqrt(w * w - dd * dd), b0 = obs[n + 1] - half, b1 = obs[n + 1] + half, next = [];
+        for (let m = 0; m < out.length; m += 2) {
+          const a = out[m], b = out[m + 1];
+          if (b0 >= b || b1 <= a) { next.push(a, b); continue; }
+          if (b0 > a) next.push(a, b0);
+          if (b1 < b) next.push(b1, b);
+        }
+        out = next;
+      }
+      return out;
+    };
+    const off = (x, a, b) => (x < a ? a - x : x > b ? x - b : 0);
+    const l0 = k.hit.lat, slope = Math.tan(clamp(wrapAngle(k.yaw - tr.yaw[k.hit.i]), -1.2, 1.2));   // + = the nose points left
+    // the stretch the kart is in now (inside an obstacle's padding, the nearer side of it)
+    let f = free(0), cLo = 0, cHi = 0, best = Infinity;
+    for (let m = 0; m < f.length; m += 2) {
+      const c = off(l0, f[m], f[m + 1]) + 0.25 * off(want, f[m], f[m + 1]);
+      if (c < best) { best = c; cLo = f[m]; cHi = f[m + 1]; }
+    }
+    if (best === Infinity) return clamp(want, -tr.hwR[k.hit.i] + edge, tr.hwL[k.hit.i] - edge);
+    let lo = -Infinity, hi = Infinity;
+    for (let d = STEP; d <= look; d += STEP) {
+      f = free(d); best = Infinity;
+      let a = 0, b = 0;
+      const ahead = l0 + slope * d;
+      for (let m = 0; m < f.length; m += 2) {
+        if (f[m + 1] < cLo - 1 || f[m] > cHi + 1) continue;   // not reachable from the stretch it is in
+        const c = off(ahead, f[m], f[m + 1]) + 0.5 * off(want, f[m], f[m + 1]);
+        if (c < best) { best = c; a = f[m]; b = f[m + 1]; }
+      }
+      if (best === Infinity) break;
+      // the straight run from the kart to the aim passes this station inside [a, b]
+      const nLo = Math.max(lo, l0 + (a - l0) * look / d), nHi = Math.min(hi, l0 + (b - l0) * look / d);
+      if (nLo > nHi) break;   // the near stations come first: they decide
+      lo = nLo; hi = nHi; cLo = a; cHi = b;
+    }
+    const iA = mod(Math.round((k.s + look) / tr.ds), N);
+    return clamp(clamp(want, lo, hi), -tr.hwR[iA] + edge, tr.hwL[iA] - edge);
+  }
+
   _follow(dt, throttleMul) {
     const k = this.kart, race = k.race, tr = race.track, inp = this.input, N = tr.N;
     const sp = k.speed, hit = k.hit;
@@ -320,10 +385,11 @@ export class AIDriver {
     // traffic and hazard avoidance
     const want = this._wantAvoid(sp) * (blind ? 0.5 : 1);
     this.avoid = lerp(this.avoid, clamp(want, -1, 1) * 3.4, 1 - Math.exp(-5 * dt));
-    lat = clamp(lat + this.avoid, -hwA, hwA);
+    lat = k.finished ? this._clearLat(lat + this.avoid, look) : clamp(lat + this.avoid, -hwA, hwA);
 
     tr.pointAt(k.s + look, lat, P);
     let ang = wrapAngle(Math.atan2(P.x - k.x, P.z - k.z) - k.yaw); // + = target is to the left
+    if (k.finished) ang = this._dodgeSolids(ang);                  // the cruise can be put off the road: round the trees, not into them
     let steer = clamp(-ang * 2.4, -1, 1);
 
     // corner speed and drifting
@@ -356,7 +422,7 @@ export class AIDriver {
       const plan = this.driftPlan; plan.wait = (plan.wait || 0) + dt;
       drift = true; steer = plan.steer;
       if (plan.wait > 0.7 || k.hitT > 0 || skipInsideDrift) { this.driftPlan = null; drift = false; }
-    } else if (!skipInsideDrift && k.grounded && sp > k.top * 0.62 && k.hitT <= 0 && !k.surface.offroad && !(this.cutPlan && loopDelta(k.s, this.cutPlan.s0, tr.length) < 70)) {   // no mini-turbo into a shortcut
+    } else if (!skipInsideDrift && !k.finished && k.grounded && sp > k.top * 0.62 && k.hitT <= 0 && !k.surface.offroad && !(this.cutPlan && loopDelta(k.s, this.cutPlan.s0, tr.length) < 70)) {   // no mini-turbo into a shortcut, nor on the cool-down lap (a hop into a corner off a stray line ends on the wall)
       // find a corner we are about to enter
       for (const c of tr.corners) {
         const d = loopDelta(k.s, c.i0 * tr.ds, tr.length);

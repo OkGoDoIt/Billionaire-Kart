@@ -20,7 +20,8 @@ previous = None
 if result.exists():                                     # the installer skips parts already live, so a repeat is harmless
     info = result.stat(); previous = (info.st_ino, info.st_mtime_ns)
 request = BASE / 'requests' / f'{sha}.json'
-temporary = request.with_suffix('.tmp'); temporary.write_text('{}'); temporary.replace(request)
+temporary = request.with_suffix('.tmp')                 # the installer goes live with the newest arrival only
+temporary.write_text(json.dumps({'arrived': time.time_ns()})); temporary.replace(request)
 for _ in range(480):                                   # migrations and a server restart can take a few minutes
     if result.exists():
         info = result.stat()

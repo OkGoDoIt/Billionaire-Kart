@@ -6,7 +6,9 @@
    confirm/back entries loads cleanly — menus DERIVE confirm/back from the
    Accelerate/Brake buttons now); a real Save persistence round-trip; and
    the real Input class driven by a fake gamepad (race polling + menu
-   edges, before and after a remap).
+   edges, before and after a remap); the Rescue button and rescue keys
+   (#354); a pad dropping out and coming back (#353); and the tilt axis for
+   every screen turn (#359).
    Run: node tools/pad-binds-test.mjs — exits non-zero on any failure. */
 
 // localStorage stub must exist before save.js is imported.
@@ -28,8 +30,8 @@ const ok = (cond, msg) => { if (!cond) { fails++; console.error(`FAIL ${msg}`); 
       item b(4)||b(3), rear b(11)||b(13), pause b(9). Menus confirmed on
       b(0) and went back on b(1) — exactly the Accelerate/Brake buttons,
       which is why the v2 derivation is byte-identical behaviour. */
-eq(PAD_DEFAULTS, { accelerate: [0], brake: [1], drift: [5, 2], item: [4, 3], rear: [11, 13], pause: [9] }, 'defaults match the previously hardcoded indices');
-eq(PAD_ACTIONS.map(a => a.id), ['accelerate', 'brake', 'drift', 'item', 'rear', 'pause'], 'six actions: menus have no bindings of their own');
+eq(PAD_DEFAULTS, { accelerate: [0], brake: [1], drift: [5, 2], item: [4, 3], rear: [11, 13], rescue: [8], pause: [9] }, 'defaults match the previously hardcoded indices, plus Rescue on View (#354)');
+eq(PAD_ACTIONS.map(a => a.id), ['accelerate', 'brake', 'drift', 'item', 'rear', 'rescue', 'pause'], 'seven actions: menus have no bindings of their own');
 
 /* 2. One friendly name per button, per family — never a raw index (#194) */
 eq(buttonName(0), 'A', 'xbox: button 0 is A'); eq(buttonName(0, 'ps'), 'Cross', 'playstation: button 0 is Cross');
@@ -56,7 +58,8 @@ eq(sanitizePadBindings({ item: [] }).item, [4, 3], 'empty list falls back to def
 { // a v1 save (#187) carried confirm/back entries: they are ignored, not errors
   const v1 = { accelerate: [0], brake: [1], drift: [5, 2], item: [4, 3], rear: [11, 13], pause: [9], confirm: [3], back: [2] };
   const migrated = sanitizePadBindings(v1);
-  eq(Object.keys(migrated).sort(), ['accelerate', 'brake', 'drift', 'item', 'pause', 'rear'], 'v1 save migrates: menu entries dropped, six actions remain');
+  eq(Object.keys(migrated).sort(), ['accelerate', 'brake', 'drift', 'item', 'pause', 'rear', 'rescue'], 'v1 save migrates: menu entries dropped, seven actions remain');
+  eq(migrated.rescue, [8], 'a save from before Rescue gets it on View');
   eq(migrated.accelerate, [0], 'v1 migration keeps the racing bindings');
   const v1b = sanitizePadBindings({ confirm: [3], back: [7], drift: [6] });
   eq(v1b.drift, [6], 'v1 save with a real remap keeps it through migration');
@@ -65,8 +68,11 @@ eq(sanitizePadBindings({ item: [] }).item, [4, 3], 'empty list falls back to def
 
 /* 4. applyPadBind semantics */
 let b = defaultPadBindings();
-eq(applyPadBind(b, 'accelerate', 8), { changed: true, swapped: null, droppedFrom: null }, 'free button: plain bind');
-eq(b.accelerate, [8], 'free button bound');
+eq(applyPadBind(b, 'accelerate', 10), { changed: true, swapped: null, droppedFrom: null }, 'free button: plain bind');
+eq(b.accelerate, [10], 'free button bound');
+b = defaultPadBindings();
+eq(applyPadBind(b, 'item', 8).swapped, 'rescue', 'Rescue is a racing action: taking View trades with it, so one button never both rescues and drives');
+eq(b.rescue, [4], 'Rescue receives the freed button');
 b = defaultPadBindings();
 const swap = applyPadBind(b, 'drift', 4);
 eq(swap.swapped, 'item', 'primary conflict reports the swap');
@@ -121,6 +127,11 @@ eq(describePadBind(PAD_DEFAULTS, 'pause'), 'Menu', 'describe pause');
   const s6 = new Save();
   eq(sanitizePadBindings(s6.settings.padBinds), PAD_DEFAULTS, 'a full v1 save in the store migrates to the six-action model');
 }
+
+/* 5b. A save from before Rescue (#354) that already gave View to another action */
+eq(sanitizePadBindings({ item: [8] }).rescue, [10], 'Rescue takes the left stick click when View is already used');
+eq(sanitizePadBindings({ item: [8], rear: [10] }).rescue, [16], 'then the Guide button');
+eq(sanitizePadBindings({ rescue: [2] }).rescue, [2], 'a stored Rescue binding is kept');
 
 /* 6. The real Input class against a fake gamepad */
 const fakePad = pressed => ({ connected: true, id: 'Fake', axes: [0, 0], buttons: Array.from({ length: 18 }, (_, i) => ({ pressed: pressed.includes(i), value: pressed.includes(i) ? 1 : 0 })) });
@@ -211,6 +222,53 @@ const fakePad = pressed => ({ connected: true, id: 'Fake', axes: [0, 0], buttons
   pads[0] = fakePad([12]); const before = events.length; input._padMenus(0.016);
   ok(events.slice(before).includes('up'), 'menu: D-pad up still navigates');
   ok(PAD_STEER_SOURCES.some(([id]) => id === 'both'), 'steer sources include the shipped behaviour');
+  // Rescue (#354): View sends a rescue for that pad's player, once per press; the app maps the pad to the player
+  const rescues = []; input.onMenu = (a, d) => { if (a === 'reset') rescues.push(d); };
+  pads[0] = null; pads[1] = fakePad([]); input._padMenus(0.016);
+  pads[1] = fakePad([8]); input._padMenus(0.016); input._padMenus(0.016);
+  pads[1] = fakePad([]); input._padMenus(0.016);
+  eq(rescues, ['pad1'], 'View rescues once per press, for the pad that pressed it');
+  pads[1] = null;
+}
+
+/* 7. A pad that drops out mid-race (#353): reported once, whether the browser fires gamepaddisconnected or the pad
+      simply vanishes from getGamepads(); and reported again when it comes back */
+{
+  const input = new Input(), log = [];
+  input.onPadLost = i => log.push('lost' + i); input.onPadFound = i => log.push('found' + i);
+  pads[0] = fakePad([]); pads[1] = fakePad([]); input.poll(0.016);
+  eq(log, ['found0', 'found1'], 'pads that appear are reported');
+  log.length = 0; pads[1] = null; input.poll(0.016); input.poll(0.016);
+  eq(log, ['lost1'], 'a pad gone from getGamepads() without an event is reported once');
+  log.length = 0; input._padGone(1); eq(log, [], 'a late gamepaddisconnected for the same pad is not a second loss');
+  pads[1] = fakePad([]); input.poll(0.016);
+  eq(log, ['found1'], 'the pad coming back is reported');
+  log.length = 0; input._padGone(1); input.poll(0.016);
+  eq(log, ['lost1', 'found1'], 'an event first, then the poll still sees it: lost once, then found again');
+  pads[0] = null; pads[1] = null;
+}
+
+/* 8. Rescue keys (#354): R is the keyboard player's; on a shared keyboard R is Player 1's and backslash Player 2's */
+{
+  const input = new Input();
+  input.assign = ['any']; eq([input._rescueDevice('KeyR'), input._rescueDevice('Backslash')], ['kb', null], 'solo: R rescues, backslash does nothing');
+  input.assign = ['kb1', 'kb2']; eq([input._rescueDevice('KeyR'), input._rescueDevice('Backslash')], ['kb1', 'kb2'], 'shared keyboard: R for Player 1, backslash for Player 2');
+  input.assign = ['pad0', 'kb2']; eq(input._rescueDevice('KeyR'), 'kb2', 'one keyboard player with a pad partner: R is theirs, whichever half they joined with');
+  input.assign = ['pad0', 'pad1']; eq(input._rescueDevice('KeyR'), null, 'no keyboard player: R rescues nobody');
+  input.assign = ['kb1', 'kb2']; input.keyBinds.kb2.item = ['Backslash'];
+  eq(input._rescueDevice('Backslash'), null, 'backslash bound to driving: it drives, and never rescues');
+}
+
+/* 9. Tilt steering and flick twist read the right axis for every way the screen can be turned (#359 item 6) */
+{
+  const { wheelAxis } = await import('../src/core/input.js');
+  const o = { beta: 10, gamma: 20 };
+  eq([0, 90, 180, 270].map(turn => wheelAxis(o, turn)), [20, 10, -20, -10], 'upright gamma, landscape beta, and the opposite turns flipped');
+  eq(wheelAxis({ beta: null, gamma: null }, 270), 0, 'an empty sensor reading steers nowhere');
+  globalThis.orientation = -90; eq(wheelAxis(o), -10, 'window.orientation -90 (older iOS) is the 270 turn');
+  globalThis.screen = { orientation: { angle: 270 } }; eq(wheelAxis(o), -10, 'screen.orientation 270 reads like -90');
+  globalThis.screen.orientation.angle = 180; eq(wheelAxis(o), -20, 'an upside-down tablet steers the right way round');
+  delete globalThis.screen; delete globalThis.orientation;
 }
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nALL PASS');

@@ -72,6 +72,7 @@ Client to server is marked →, server to client ←.
 - → `{t:"hello", proto, build}` first message.
 - ← `{t:"welcome", you: playerId, now}` or `{t:"old"}`.
 - → `{t:"ping", c: localMs}` ← `{t:"pong", c, now}`.
+- A socket not welcomed within 10 s is closed and tried again (`Conn`, `OPEN_TIMEOUT`), with the usual back-off. The hub shows "Can’t reach the online server" when the way in (the session, then the socket) takes longer than 10 s a leg, and when a connection that dropped has not come back within 30 s.
 
 ### Server updates
 
@@ -105,7 +106,7 @@ room = {
                  slots: [{ slot, racer, member: playerId|null, level: str|null, owner: playerId }],
                  finished: [{ slot, time, rank }] },
   offer: [trackId, ...] | null,    // public rooms: the tracks on offer this vote
-  cupState: null | { index, tracks: [id], totals: {racerId: points} },
+  cupState: null | { index, tracks: [id], totals: {racerId: points}, places: {racerId: [finish in each race, 0 = did not race]} },
   last: null | { trackId, results: [{ slot, racer, member, rank, time, estimated, points,
                  before: valuation|null, after: valuation|null }] }
 }

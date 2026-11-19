@@ -12,6 +12,7 @@ import { ITEMS, HIT_LINES, isFundingBoost } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
 import { RACERS, RACER_BY_ID, RIVAL_PASS, HIT_REPLY } from '../content/racers.js';
 import { trialKey } from '../core/save.js';
+import { GhostRecorder } from '../core/ghost.js';
 import { makeRng } from '../core/util.js';
 
 export const STEP = 1 / 60;
@@ -90,7 +91,7 @@ export class RaceSession {
     this.rec = null;
     if (config.mode === 'timetrial' && this.race.players.length === 1) {
       this.view.setGhost(app.save?.ghost(config.trackId, config.cc));
-      this.rec = { racer: this.race.players[0].racer.id, step: 0.1, d: [], next: 0 };
+      this.rec = new GhostRecorder(this.race.players[0].racer.id);
     }
     this.after = new AfterFinish(this);
     this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;
@@ -194,12 +195,13 @@ export class RaceSession {
     if (this.net) return this._frameOnline(dt);
     const frameTime = dt;
     const { race, view, app } = this;
-    if (this.paused) { app.gfx.render(0); return; }
+    if (this.paused) { this.carry = null; app.gfx.render(0); return; }
     if (this.phase === 'intro') {
       // in split screen the countdown waits for the screen to finish dividing, and the HUDs fade in as it lands
       if (view.intro.done && !view.splitting) { this.phase = 'countdown'; for (const c of view.cams) c.snap(); for (const h of this.huds) { h.setVisible(true); if (this.huds.length > 1) h.root.classList.add('hud-enter'); } this.board?.setVisible(true); this.board?.root.classList.add('hud-enter'); this.touch?.setVisible(true); app.onCountdown?.(); app.audio?.event('countdownStart', this.def); }
     } else {
-      const inputs = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
+      const inputs = this._withCarry(app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt));
+      let stepped = false;
       // hit pause: the world holds still for a few frames when a hit lands, so it feels heavy
       if (this.hitStopT > 0) { const hold = Math.min(this.hitStopT, dt); this.hitStopT -= hold; dt -= hold; }
       if (this.slowT > 0) { this.slowT -= dt; const f = 1 - Math.max(0, this.slowT) / SLOW_MO; dt *= 0.3 + 0.7 * f * f; }
@@ -209,9 +211,10 @@ export class RaceSession {
         let inp = inputs;
         if (this.autopilots) inp = this.autopilots.map(a => a.think(STEP));
         race.step(STEP, inp);
-        this.acc -= STEP;
-        if (this.rec && !race.frozen && race.time >= this.rec.next && this.rec.d.length < 4 * 4000) { const k = race.players[0]; this.rec.next += this.rec.step; this.rec.d.push(+k.x.toFixed(2), +k.y.toFixed(2), +k.z.toFixed(2), +k.yaw.toFixed(3)); }
+        this.acc -= STEP; stepped = true;
+        if (this.rec && !race.frozen) this.rec.sample(race.time, race.players[0]);
       }
+      this._keepCarry(inputs, stepped);
       for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
       if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
       this.touch?.sync(dt);
@@ -229,12 +232,23 @@ export class RaceSession {
     app.gfx.render(dt, frameTime);
   }
 
+  /** Buttons are read once a frame, but a frame can run no race step at all (a display faster than the
+      simulation, or the frame after a stall). A press seen only in such a frame is held over to the next step,
+      so every tap of item, drift, or a flick lands exactly as a press (#359). */
+  _withCarry(inputs) {
+    const c = this.carry; if (!c) return inputs;
+    return inputs.map((s, i) => !s || !c[i] ? s : { ...s, item: s.item || c[i].item, itemBack: s.item ? s.itemBack : c[i].itemBack, drift: s.drift || c[i].drift, trick: s.trick || c[i].trick, trickDir: s.trick ? s.trickDir : c[i].trickDir });
+  }
+  _keepCarry(inputs, stepped) {
+    this.carry = stepped ? null : inputs.map(s => s && (s.item || s.drift || s.trick) ? { item: s.item, itemBack: s.itemBack, drift: s.drift, trick: s.trick, trickDir: s.trickDir } : null);
+  }
+
   /* Online: step to the shared clock (always catching up; fast-forward without drawing when more than 2 s
      behind), never pause or hit-stop, and take the results from the server when the room reaches results. */
   _frameOnline(dt) {
     const { race, view, app, net } = this;
     const polled = app.inputs && app.inputs.length ? app.inputs : app.input.poll(dt);
-    const inputs = this.menuOpen ? [] : polled;   // the pause menu may be open, but the race goes on
+    const inputs = this.menuOpen ? [] : this._withCarry(polled);   // the pause menu may be open, but the race goes on
     const think = () => this.autopilots ? this.autopilots.map(a => a.kart.puppet ? undefined : a.think(STEP)) : inputs;
     let target = net.targetStep();
     if (target - net.n > 120) {
@@ -243,7 +257,9 @@ export class RaceSession {
       for (const c of view.cams) c.snap?.();
       target = net.targetStep();
     }
+    const n0 = net.n;
     while (net.n < target) { view.snapshot(); race.step(STEP, think()); }
+    this._keepCarry(inputs, net.n > n0);
     for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
     if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';
     this.touch?.sync(dt);
@@ -258,10 +274,11 @@ export class RaceSession {
     app.gfx.render(dt, dt);
   }
 
-  /** The server's results (room.last), shaped like race.results() plus slot, member, and the valuation before and after. */
+  /** The server's results (room.last), shaped like race.results() plus slot, member, and the valuation before and after.
+      A row naming no kart in this race is left out, so an unexpected answer cannot break the results screen. */
   onlineResults() {
-    const karts = this.race.karts;
-    return this.net.room.last.results.slice().sort((a, b) => a.rank - b.rank).map(r => {
+    const karts = this.race.karts, list = this.net.room.last?.results;
+    return (Array.isArray(list) ? list : []).filter(r => r && karts[r.slot]).sort((a, b) => a.rank - b.rank).map(r => {
       const k = karts[r.slot];
       return { kart: k, racer: k.racer, rank: r.rank, time: r.time ?? k.finishTime, bestLap: k.bestLap, points: r.points ?? 0, isPlayer: k.isPlayer, playerIndex: k.playerIndex,
         estimated: !!r.estimated, stats: k.stats, slot: r.slot, member: r.member, before: r.before ?? null, after: r.after ?? null };

@@ -3,6 +3,7 @@
    Sized in container units so it scales to split-screen panes. */
 import { ITEMS } from '../race/items.js';
 import { TUNE } from '../race/kart.js';
+import { CAP_COUNTDOWN } from '../race/race.js';
 import { fmtTime, ordinalSuffix, clamp } from '../core/util.js';
 
 /* kart.speed is metres per second (the class table in race/kart.js says so); the readout shows honest mph. */
@@ -291,6 +292,9 @@ export class Hud {
       }
     }
     $.wrong.classList.toggle('show', k.wrongWayT > 1 && !k.finished);
+    // split screen: another player has finished and time is running out to follow them (race.capT, #357)
+    const capN = race.state === 'racing' && race.capT > 0 && race.capT <= CAP_COUNTDOWN && !k.finished ? Math.ceil(race.capT) : 0;
+    if (capN !== this._capN) { this._capN = capN; if (capN) this.banner(String(capN), 'count cap', 900, 3); }   // the start countdown's look, in this pane's own callout slot
     $.ink.classList.toggle('show', k.inkT > 0);
     $.speedN.textContent = Math.round(k.speed * MPH_PER_MS);
     this.mapT -= dt; if (this.mapT <= 0 && !this.root.classList.contains('hud-nomap')) { this.mapT = 0.05; this._drawMap(); }

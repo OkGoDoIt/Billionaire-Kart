@@ -186,6 +186,17 @@ function decorate(ctx) {
   const far = (x, z, list, r) => list.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > r * r);
   const keepOut = [{ x: CLUB.x, z: CLUB.z, r: 17 }, { x: LIGHT.x, z: LIGHT.z, r: 14 }, { x: RUG.x, z: RUG.z, r: 28 }, { x: BULL.x, z: BULL.z, r: 34 }, { x: -170, z: -62, r: 14 }, { x: TOWER.x, z: TOWER.z, r: 8 }];
   const clear = (x, z) => !nearSandCut(x, z) && keepOut.every(o => (o.x - x) ** 2 + (o.z - z) ** 2 > o.r * o.r);
+  // keep trees out of the line between each roadside board and a driver coming up to it (#376: palms stood in
+  // front of the boards and the bull's plinth)
+  const sightlines = [], PV = new THREE.Vector3();
+  const sightTo = (x, z, s) => { track.pointAt(s, 0, PV); sightlines.push([x, z, PV.x - x, PV.z - z]); };
+  for (const [cp, side, off] of BOARDS) { const p = sc.beside(cp, side, off); sightTo(p.x, p.z, track.sAtCp(cp) - 42); }
+  sightTo(BULL.x, BULL.z, track.nearest(BULL.x, BULL.z) * track.ds - 50);
+  sightTo(RUG.x - RUG.ax * 18 + RUG.az * 4, RUG.z - RUG.az * 18 - RUG.ax * 4, track.sAtCp(3.9));   // the RUG PULL sign (see jokes)
+  const inSight = (x, z) => sightlines.some(([px, pz, dx, dz]) => {
+    const t = Math.max(0, Math.min(1, ((x - px) * dx + (z - pz) * dz) / (dx * dx + dz * dz)));
+    return Math.hypot(x - px - t * dx, z - pz - t * dz) < 6;
+  });
 
   // start/finish gantry and grandstands on the land side of the promenade
   const g0 = sc.beside(0, 1, -track.hwL[0]);
@@ -299,15 +310,15 @@ function decorate(ctx) {
     ...sc.along({ from: 9.9, to: 11.6, side: 1, offset: 13, spacing: 12 }),
     ...sc.along({ from: 9.9, to: 11.2, side: -1, offset: 13, spacing: 12 }),
     ...sc.along({ from: 16.6, to: 17.6, side: 1, offset: 13, spacing: 11 }),
-  ].filter(p => clear(p.x, p.z) && p.y > W + 0.6);
-  const sand = sc.scatter({ count: 120, min: 14, max: 90, maxSlope: 0.35, minGap: 7, where: (x, z, h) => h > W + 0.8 && h < 4.5 && coastDistance(x, z) < 45 && clear(x, z) });
+  ].filter(p => clear(p.x, p.z) && p.y > W + 0.6 && !inSight(p.x, p.z));
+  const sand = sc.scatter({ count: 120, min: 14, max: 90, maxSlope: 0.35, minGap: 7, where: (x, z, h) => h > W + 0.8 && h < 4.5 && coastDistance(x, z) < 45 && clear(x, z) && !inSight(x, z) });
   const palms = [...rows, ...sand].filter(p => Math.hypot(p.x - listing.x, p.z - listing.z) > 13);
   sc.instances(palmA, palms.filter((_, i) => i % 3 === 0), { scale: [0.9, 1.3], yaw: 'random' });
   sc.instances(palmB, palms.filter((_, i) => i % 3 === 1), { scale: [0.9, 1.3], yaw: 'random' });
   sc.instances(palmC, palms.filter((_, i) => i % 3 === 2), { scale: [0.85, 1.2], yaw: 'random' });
 
   // jungle over the hills
-  const jungle = sc.scatter({ count: 360, min: 15, max: 200, maxSlope: 0.75, minGap: 5, where: (x, z, h) => h > 4 && clear(x, z) && Math.hypot(x - CAVE.x, z - CAVE.z) > 30 });
+  const jungle = sc.scatter({ count: 360, min: 15, max: 200, maxSlope: 0.75, minGap: 5, where: (x, z, h) => h > 4 && clear(x, z) && !inSight(x, z) && Math.hypot(x - CAVE.x, z - CAVE.z) > 30 });
   const jA = partsOf(P.roundTree(21, { h: 8, leafA: 0x3f9e3a, leafB: 0x5dbb45 })), jB = partsOf(P.roundTree(22, { h: 6.5, leafA: 0x57b548, leafB: 0x86d16a })), jP = partsOf(P.palm(13, { h: 11 }));
   sc.instances(jA, jungle.filter((_, i) => i % 3 === 0), { scale: [0.9, 1.6], cast: false, yaw: 'random', tilt: 0.05 });
   sc.instances(jB, jungle.filter((_, i) => i % 3 === 1), { scale: [0.9, 1.5], cast: false, yaw: 'random', tilt: 0.05 });
@@ -491,9 +502,9 @@ const TOWER = { x: 92, z: 48 };
 const LIQ = { x: 84, z: 258 };
 const LAMBO = { x: 124, z: 286 };
 const BOARDS = [
-  [0.3, -1, 15, 'FULLY BACKED (BY VIBES)', '#ffd23c', '#1a1d29'], [1.2, 1, 24, 'IN IT FOR THE TECHNOLOGY', '#14213d', '#ffffff'],
+  [0.3, -1, 15, 'FULLY BACKED (BY VIBES)', '#ffd23c', '#1a1d29'], [1.5, 1, 22, 'IN IT FOR THE TECHNOLOGY', '#14213d', '#ffffff'],   // clear of the last grandstand, which hid it at 1.2 (#376)
   [2.3, 1, 22, 'FUNDS ARE SAFU (PROBABLY)', '#16a34a', '#ffffff'], [3.0, 1, 30, 'YOUR KEYS, OUR COINS', '#ef4444', '#ffffff'],
-  [4.4, 1, 24, 'AUDITED BY MY COUSIN', '#ffffff', '#7b5cff'], [10.4, 1, 15, 'DOWN 99%: STILL EARLY', '#1a1d29', '#38ff74'],
+  [4.95, 1, 24, 'AUDITED BY MY COUSIN', '#ffffff', '#7b5cff'],   // past the rug: at 4.4 it stood right behind the RUG PULL sign (#376) [10.4, 1, 15, 'DOWN 99%: STILL EARLY', '#1a1d29', '#38ff74'],
   [11.2, 1, 22, 'BUY HIGH, SELL LOW', '#ff6a3d', '#ffffff'], [12.6, -1, 22, 'ONE TWEET FROM ZERO', '#0ea5e9', '#ffffff'],
   [14.6, 1, 22, 'COMMUNITY OWNED, FOUNDER SOLD', '#ffffff', '#ef4444'], [15.4, -1, 18, 'PRESIDENTIAL MEMECOIN: DOWN BIGLY', '#ffd23c', '#1a1d29'],
   [16.2, -1, 24, 'FDIC INSURED (IT IS NOT)', '#7b5cff', '#ffffff'], [17.2, 1, 24, 'ROADMAP: MOON, THEN ???', '#1fc3c8', '#14213d'],
@@ -762,8 +773,9 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
     const signAt = { x: RUG.x - RUG.ax * 18 + bx * 4, z: RUG.z - RUG.az * 18 + bz * 4 }, sy = yawTo(signAt, roadPt(3.9));
     const s = atlas.add(1024, 340, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#ef4444'; g.fillRect(0, 0, w, h * 0.16); g.fillRect(0, h * 0.84, w, h * 0.16); fitText(g, 'RUG PULL', w / 2, h * 0.42, w * 0.9, 170, F, '#1a1d29', { lines: 1 }); fitText(g, 'IN PROGRESS', w / 2, h * 0.7, w * 0.6, 70, SANS, '#ef4444', { lines: 1 }); });
     const syG = sc.y(signAt.x, signAt.z);
-    atlas.place2(s, [signAt.x, syG + 8.6, signAt.z], sy, 21, 7);
-    for (const d of [-7, 7]) pole(signAt.x + Math.cos(sy) * d, signAt.z - Math.sin(sy) * d, syG - 0.5, syG + 5.4, 0.3);
+    // high enough that the tents bucking on the rug never cover IN PROGRESS from the road (#376)
+    atlas.place2(s, [signAt.x, syG + 12.4, signAt.z], sy, 21, 7);
+    for (const d of [-7, 7]) pole(signAt.x + Math.cos(sy) * d, signAt.z - Math.sin(sy) * d, syG - 0.5, syG + 9.2, 0.3);
     return (dt, time) => {
       for (let k = 0; k < base.length; k++) { const b = base[k]; pos[k * 3] = b[0]; pos[k * 3 + 1] = b[1] + wave(k, time); pos[k * 3 + 2] = b[2]; }
       geo.attributes.position.needsUpdate = true; geo.computeVertexNormals();

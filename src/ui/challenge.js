@@ -8,12 +8,21 @@ import { fmtTime } from '../core/util.js';
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-/** Fetch a challenge from the race server. Null when it is gone, unknown, or names something this build lacks. */
+/** Fetch a challenge from the race server. Null when it is gone, unknown, or names something this build lacks.
+    A slow or failed answer is asked again a couple of times; the title shows the challenge whenever it arrives. */
 export async function loadChallenge(id) {
   if (!/^[A-Za-z0-9]{10,16}$/.test(id || '')) return null;
+  for (const wait of [0, 2000, 5000]) {
+    if (wait) await new Promise(r => setTimeout(r, wait));
+    let res;
+    try { res = await fetch(`/api/shares/${id}`, { signal: AbortSignal.timeout(8000) }); } catch { continue; }
+    if (res.status >= 500) continue;
+    return res.ok ? readChallenge(res) : null;
+  }
+  return null;
+}
+async function readChallenge(res) {
   try {
-    const res = await fetch(`/api/shares/${id}`, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return null;
     const c = await res.json(), racer = RACER_BY_ID[c.racer];
     if (!racer || ![50, 100, 150, 200].includes(c.cc)) return null;
     if (c.mode === 'cup') {

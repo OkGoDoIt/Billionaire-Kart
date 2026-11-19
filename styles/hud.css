@@ -112,6 +112,7 @@
 /* the countdown sits under the start gantry's sign, not on it: the track name stays readable through 3, 2, 1 */
 .hud-banner.count { font-size: calc(var(--u) * 24); top: 37.5%; color: var(--gold); }
 .hud-banner.go { font-size: calc(var(--u) * 26); top: 37.5%; color: var(--mint); }
+.hud-banner.count.cap { font-size: calc(var(--u) * 13); top: 22%; }   /* split screen: seconds left to finish once another player has (race.capT) */
 .hud-banner.final { color: var(--hot); }
 .hud-banner.finish { color: var(--gold); font-size: calc(var(--u) * 17); top: 30%; }
 .hud-banner.good { color: var(--mint); }

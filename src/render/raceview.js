@@ -14,6 +14,7 @@ import { OBSTACLE_MODELS } from '../models/props.js';
 import { buildKart } from '../models/kart.js';
 import { RACER_BY_ID } from '../content/racers.js';
 import { clamp, lerp } from '../core/util.js';
+import { ghostAt } from '../core/ghost.js';
 
 const CONFETTI = [[1, 0.82, 0.24], [1, 0.3, 0.43], [0.22, 0.71, 1], [0.18, 0.9, 0.65], [0.62, 0.42, 1], [1, 1, 1]];
 /** Per-item feedback colour: the ring/burst an item use and a hit land in the item's own colour, so a
@@ -75,7 +76,9 @@ export class RaceView {
     });
 
     // karts and cameras
-    this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0, batch: race.players.length > 1 }));
+    // Rivals are always batched: on the grid all of them are in view and in the shadow pass at once, and unbatched
+    // they were most of the start frame's draw calls (#361). A lone player's own kart keeps its separate parts.
+    this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0, batch: race.players.length !== 1 || !k.isPlayer }));
     // real shadows cost one extra pass per view: with three or four views, use contact shadows instead
     const many = race.players.length > 2;
     gfx.sun.castShadow = gfx.q.shadow > 0 && !many; gfx.renderer.shadowMap.enabled = gfx.sun.castShadow;
@@ -208,7 +211,7 @@ export class RaceView {
     this.relayout();
   }
 
-  /** Time trial: show a translucent replay of the best run. ghost: { racer, step, time, d: [x,y,z,yaw,...] } */
+  /** Time trial: show a translucent replay of the best run. ghost: { racer, step, time, d: [x,y,z,yaw,...] } (src/core/ghost.js) */
   setGhost(ghost) {
     if (!ghost?.d?.length) return;
     const rig = buildKart(RACER_BY_ID[ghost.racer] || this.race.players[0].racer, { shadow: false });
@@ -218,11 +221,9 @@ export class RaceView {
   }
   _ghost() {
     const g = this.ghost; if (!g) return;
-    const d = g.data.d, n = d.length / 4, f = this.race.time / g.data.step, i = Math.min(n - 1, Math.floor(f)), j = Math.min(n - 1, i + 1), t = f - Math.floor(f);
-    g.rig.root.visible = !this.race.frozen && f < n - 1;
-    const yaw = d[i * 4 + 3] + Math.atan2(Math.sin(d[j * 4 + 3] - d[i * 4 + 3]), Math.cos(d[j * 4 + 3] - d[i * 4 + 3])) * t;
-    g.rig.root.position.set(d[i * 4] + (d[j * 4] - d[i * 4]) * t, d[i * 4 + 1] + (d[j * 4 + 1] - d[i * 4 + 1]) * t, d[i * 4 + 2] + (d[j * 4 + 2] - d[i * 4 + 2]) * t);
-    g.rig.root.rotation.y = yaw;
+    const p = ghostAt(g.data, this.race.time);
+    g.rig.root.visible = !this.race.frozen && !!p;
+    if (p) { g.rig.root.position.set(p.x, p.y, p.z); g.rig.root.rotation.y = p.yaw; }
   }
 
   /** Call before each sim step so rendering can interpolate. */

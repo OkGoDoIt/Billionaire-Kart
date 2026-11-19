@@ -335,19 +335,6 @@ export default {
       }
     });
 
-    // The eight-kart field is the costliest view of the Mall. Keep full projected
-    // shadows on human drivers and use the game's contact shadow for the rivals.
-    // Ghost mode restores materials and shadow flags when it ends.
-    const contactShadows = new Map();
-    anim.push(() => {
-      for (const rival of view.karts) {
-        if (rival.kart.isPlayer || contactShadows.get(rival) === rival.ghost) continue;
-        rival.rig.root.traverse(mesh => { if (mesh.isMesh) mesh.castShadow = false; });
-        rival.blob.visible = true;
-        contactShadows.set(rival, rival.ghost);
-      }
-    });
-
     // grandstands with crowds along the Avenue
     const stand = P.grandstand({ w: 30, rows: 6, color: 0xb3122a }), stand2 = P.grandstand({ w: 30, rows: 6, color: 0x1f3f8a });
     const seats = [], standsA = [], standsB = [];

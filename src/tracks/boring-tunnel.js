@@ -25,6 +25,64 @@ function signTex(text, { w = 1024, h = 296, bg = '#1a1d29', fg = '#ffd23c', size
   return tex;
 }
 
+/* #401: five exhibit bays dug out of the bore's outside wall, each where the
+   road points at it (the outside of a bend, or the end of a straight), so the
+   gag is dead ahead on the approach. Off the road: the bore's wall still runs
+   along the road edge in front of each bay. `look` is how far back up the
+   racing line the exhibit faces; `along` and `inset` (a share of the bay's
+   depth) place it, clear of the near mouth so its sign reads whole. */
+const EXHIBIT_BAYS = [
+  { at: 2.42, side: 1, len: 28, depth: 17, rise: 7, gag: 'pong', look: 55, along: 8, scale: 1.15 },        // end of the dive, outside of Portal Bend
+  { at: 9.05, side: 1, len: 34, depth: 17, rise: 7, gag: 'robots', look: 60, along: 12, inset: 0.3, scale: 1.45 },     // end of the deep run
+  { at: 11.0, side: 1, len: 30, depth: 17, rise: 7, gag: 'roadster', look: 45, along: 10, inset: 0.28 },   // the west climb's bend
+  { at: 13.25, side: 1, len: 28, depth: 17, rise: 7, gag: 'chip', look: 50 },      // the Ring Hairpin's exit, through the ring
+  { at: 14.3, side: 1, len: 38, depth: 17, rise: 7, gag: 'glass', look: 55 },      // the crown, off the jump
+];
+
+/** A gag's sign: a big headline and a smaller line under it, each fitted (never squashed). */
+function gagTex(head, sub, { w = 1400, h = 440, bg = '#141722', fg = '#ffd23c', subFg = '#ffffff', subLines = 1 } = {}) {
+  const draw = (g) => {
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    g.strokeStyle = fg; g.lineWidth = Math.max(6, h * 0.03); const m = h * 0.045; g.strokeRect(m, m, w - 2 * m, h - 2 * m);
+    fitText(g, head, w / 2, h * 0.35, w * 0.9, h * 0.44, 260, SIGN_FONT, { fill: fg });
+    fitText(g, sub, w / 2, h * 0.75, w * 0.88, h * 0.27, 150, SIGN_FONT, { fill: subFg, lines: subLines });
+  };
+  const tex = canvasTex(w, h, draw, { repeat: false });
+  if (typeof document !== 'undefined' && document.fonts?.ready) document.fonts.ready.then(() => { draw(tex.image.getContext('2d')); tex.needsUpdate = true; });
+  return tex;
+}
+
+/** Builds each bay's exhibit on its floor, turned to face the approach, and runs its motion. */
+function exhibits(ctx, track) {
+  const P = { x: 0, y: 0, z: 0 }, lineLat = s => track.lineLat[Math.round((((s % track.length) + track.length) % track.length) / track.ds) % track.N];
+  const build = {
+    pong: () => T.mindPong(gagTex('MINDPONG', 'HIGH SCORE: A MONKEY', { h: 414, bg: '#0b0d16', fg: '#37e6ff', subFg: '#ff7ac8' })),
+    robots: () => T.autonomousBar(gagTex('FULLY AUTONOMOUS', "(DON'T LOOK BEHIND THE CURTAIN)", { w: 1500, h: 360, bg: '#12131a', fg: '#5ff7ff', subFg: '#ffb2c8' })),
+    roadster: () => T.roadsterPickup(gagTex('ROADSTER 2 PICKUP', 'NOW WAITING SINCE 2017', { h: 440, bg: '#1b1e27', fg: '#ff4a4a' })),
+    chip: () => T.brainChipBay(gagTex('BRAIN CHIP INSTALL', 'PLEASE THINK QUIETLY', { w: 1400, h: 290, bg: '#c81f28', fg: '#ffffff', subFg: '#ffe066' })),
+    glass: () => T.armorGlassTruck(gagTex('ARMOR GLASS', '(MOSTLY)', { h: 410, bg: '#16191f', fg: '#e9eef5', subFg: '#ffd23c' })),
+  };
+  const moving = [];
+  for (const bay of EXHIBIT_BAYS) {
+    const s = track.sAtCp(bay.at) + (bay.along ?? 8), i = Math.round(s / track.ds) % track.N;   // a little past the middle: clear of the near mouth
+    const edge = bay.side > 0 ? track.hwL[i] : track.hwR[i], lat = bay.side * (edge + 0.7 + bay.depth * (bay.inset ?? 0.4));
+    const x = track.px[i] + track.lx[i] * lat, z = track.pz[i] + track.lz[i] * lat, y = track.py[i] + track.ly[i] * bay.side * edge;
+    track.pointAt(s - bay.look, lineLat(s - bay.look), P);
+    const obj = build[bay.gag]();
+    obj.position.set(x, y, z); obj.rotation.y = Math.atan2(P.x - x, P.z - z); obj.scale.setScalar(bay.scale ?? 1.3);
+    ctx.group.add(obj);
+    moving.push(obj.userData);
+  }
+  ctx.anim.push((dt, time) => {
+    for (const u of moving) {
+      if (u.tick) u.tick(Math.min(dt, 0.05));
+      if (u.puppet) { const k = Math.sin(time * 9); u.puppet.position.y = k * 0.12; u.stick.rotation.z = k * 0.45; }
+      if (u.arm) u.arm.rotation.y = -0.35 + Math.sin(time * 0.9) * 0.22;
+      if (u.turntable) u.turntable.rotation.y += dt * 0.35;
+    }
+  });
+}
+
 const PATH = [
     { p: [20, 0, -108] },                        // 0 start/finish on the portal straight, flat and bank-free
     { p: [140, -0.6, -108] },                    // 1 the dive begins, dead level across the grid first
@@ -342,8 +400,9 @@ export default {
     // strips, one merged geometry each; the colour wave runs on uTime.
     // The dig hall shares a continuous roof with the bore.
     const uTime = { value: 0 };
-    ctx.group.add(T.boreTube(track, uTime, JUNCTION));
+    ctx.group.add(T.boreTube(track, uTime, JUNCTION, EXHIBIT_BAYS));
     anim.push((dt, time) => { uTime.value = time; });
+    exhibits(ctx, track);
 
     // The road peels away from the cutter. Its working face points up the dive
     // while the express lane passes on the opposite side of the chamber.

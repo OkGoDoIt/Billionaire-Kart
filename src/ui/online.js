@@ -230,7 +230,7 @@ export class Online {
   join(code) { this.leaving = false; this.joining = code; this.conn?.send({ t: 'join', code }); }
   leaveRoom() {
     if (this.room && this.conn) this.conn.send({ t: 'leave' });
-    this.room = null; this.leaving = true; this.joining = null; this.nameSentFor = null; this.pendingRacer = null; this.askedRacer = null; this.startedN = null;
+    this.room = null; this.leaving = true; this.joining = null; this.nameSentFor = null; this.pendingRacer = null; this.askedRacer = null; this.startedN = null; this.standingsSeen = null;
     clearTimeout(this.lostTimer);
   }
   /** The room went away under us: back to the hub with one line saying so. */
@@ -265,6 +265,9 @@ export class Online {
     const prev = this.room; this.room = room; this.joining = null;
     clearTimeout(this.lostTimer);
     for (const m of room.members) this.names.set(m.id, { handle: m.handle, name: room.public ? null : m.name || null });
+    // a cup still under way: any earlier cup's "Done" no longer applies, so the same cup run again shows its own standings (#394)
+    const cs = room.cupState;
+    if (cs && Array.isArray(cs.tracks) && !cs.ended && cs.index < cs.tracks.length - 1) this.standingsSeen = null;
     const me = this.mine(room);
     // a friends' room: the name this player typed last time goes with them, once per room
     if (me && !room.public && this.nameSentFor !== room.code) { this.nameSentFor = room.code; const n = this.savedName; if (n && me.name !== n) this.conn.send({ t: 'name', name: n }); }

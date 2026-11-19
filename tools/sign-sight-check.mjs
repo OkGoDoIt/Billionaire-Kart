@@ -61,6 +61,8 @@ const ALLOW = [
   ...['EXIT LIQUIDITY SECTION', 'BAGHOLDERS ONLY'].map(text => ({ track: 'crypto-cove', text, why: STAND })),
   ...['SEATS PAID IN EQUITY', "VC BOX: LET'S CIRCLE BACK", 'INTERN SECTION (UNPAID)'].map(text => ({ track: 'silicon-valley', text, why: STAND })),
   ...['SAFE MODE SECTION', ':( / YOUR SEAT RAN INTO A PROBLEM'].map(text => ({ track: 'bliss-hills', text, why: STAND })),
+  { track: 'datacenter-dash', text: 'DEEPTHIRST / TRAINING HALL 9', why: 'Training Hall 9\'s rooftop name, for the skyline: the keynote arena joins straight onto its doorway, so no road faces it; the same name reads over that doorway inside the arena' },
+  ...['GASLIGHT ENERGY', 'PEAKER PLANT 2'].map(text => ({ track: 'datacenter-dash', text, why: 'a gas plant\'s 90 m name board, a skyline landmark: every road that faced it now runs inside a hall (more than half the lap indoors, Roger, 13 Nov), and its smoke still reads from the open stretches' })),
   ...['90 M', '120 M', 'K 140'].map(text => ({ track: 'davos', text, why: 'distance boards down the ski jump\'s landing hill, numbers on the slope rather than a joke' })),
   ...['OFFSHORE ACCOUNT', 'TAX EXEMPT'].map(text => ({ track: 'international-waters', text, why: 'a yacht\'s name runs round its bow in strips that follow the hull, and this check sees one strip at a time; the whole name reads along the quay' })),
   { track: 'bliss-hills', text: '56K', why: 'the badge on the giant modem\'s front, part of the prop; the board above it carries the joke' },
@@ -69,12 +71,9 @@ const ALLOW = [
    They print as "known" with --all and do not fail the check; once one reads, the check says to take it out of this list.
    Matched anywhere in the sign's text (a counter's digits change). */
 const KNOWN = [
-  ...["ZUNE"].map(text => ['bliss-hills', text]),
-  ...["4 JOBS CREATED", "TRAINING HALL 9", "HALL 2 · INFERENCE", "GASLIGHT ENERGY", "GPUs", "NEXT: THE LAKE (FOR NOW)", "OF GPUS", "OMNIMIND", "DEEPTHIRST DEVDAY", "PEAKER PLANT 2", "THINKING REALLY HARD", "WE BOUGHT ALL OF THEM", "IS THIS A ROAD?"].map(text => ['datacenter-dash', text]),
   ...["ELITE FORUM", "JETS ONLY", "STAKEHOLDER", "THE GREAT RESET", "VIP IGLOO"].map(text => ['davos', text]),
   ...["BLOCKERS:", "DONGLE SOLD SEPARATELY", "LAYOFFS (WE'RE", "OPENING BELL", "RIGHT. EVENTUALLY.", "THE OVAL", "THE QUAD", "WE'RE HIRING!", "WE'RE PIVOTING TO"].map(text => ['silicon-valley', text]),
   ...["#1", "(GENERATED IN 4 SECONDS)", "AI BENCHMARK RESULTS", "CONSCIOUS. PROBABLY.", "GO HUMANS! (WHILE", "NOW CONVERTING: EVERYTHING", "PAPERCLIPS MADE", "SINGULARITY SPEEDWAY", "THANK YOU FOR"].map(text => ['singularity-speedway', text]),
-  ...["ALL HANDS", "DO WHAT YOU L  VE"].map(text => ['wework-memorial', text]),
 ].map(([track, text]) => ({ track, text }));
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');

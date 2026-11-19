@@ -151,7 +151,7 @@
   .screen-results .scroll-fade, .screen-cupResults .scroll-fade { margin-left: calc(var(--u) * -2 - var(--safe-l)); margin-right: calc(var(--u) * -2 - var(--safe-r)); }
   .panel.results, .panel.cupres { width: 100%; margin: auto 0 0; }
   .panel.results { padding: calc(var(--u) * 1.8) calc(var(--u) * 1.8); }
-  .panel.results .badge { position: static; display: table; margin-top: calc(var(--u) * 0.8); }
+  .panel.results .badges { position: static; flex-direction: row; flex-wrap: wrap; align-items: flex-start; margin-top: calc(var(--u) * 0.8); }
   .panel.results .res-sub { display: block; margin-left: 0; }
   .res-row { gap: calc(var(--u) * 1); padding-right: calc(var(--u) * 1.2); grid-template-columns: calc(var(--u) * 3.4) calc(var(--u) * 3.6) minmax(0, 1fr) auto; }
   .res-table.gp .res-row { grid-template-columns: calc(var(--u) * 3.4) calc(var(--u) * 3.6) minmax(0, 1fr) auto calc(var(--u) * 4) calc(var(--u) * 4); }

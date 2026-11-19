@@ -14,6 +14,7 @@ const SHELL = [
   'src/content/racers.js',
   'src/content/snark.js',
   'src/content/tracks.js',
+  'src/core/ghost.js',
   'src/core/input.js',
   'src/core/keyboard.js',
   'src/core/save.js',

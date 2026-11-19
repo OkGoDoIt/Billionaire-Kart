@@ -70,11 +70,8 @@ const ALLOW = [
    Matched anywhere in the sign's text (a counter's digits change). */
 const KNOWN = [
   ...["ZUNE"].map(text => ['bliss-hills', text]),
-  ...["(VIP ENTRANCE)", "CARBON NEUTRAL (VIBES)", "EL PULPO MECÁNICO", "KEYS LEFT IN IGNITION", "NO REQUESTS", "OPULENT TEMPLE", "QUESTIONMARK"].map(text => ['burning-circuit', text]),
-  ...["BUY THE DIP", "FINALLY GOT", "FUNDAMENTALS: ONE DOG", "LIQUIDITY", "NOW $4", "THIS IS GOOD", "YOUR KEYS,"].map(text => ['crypto-cove', text]),
   ...["4 JOBS CREATED", "TRAINING HALL 9", "HALL 2 · INFERENCE", "GASLIGHT ENERGY", "GPUs", "NEXT: THE LAKE (FOR NOW)", "OF GPUS", "OMNIMIND", "DEEPTHIRST DEVDAY", "PEAKER PLANT 2", "THINKING REALLY HARD", "WE BOUGHT ALL OF THEM", "IS THIS A ROAD?"].map(text => ['datacenter-dash', text]),
   ...["ELITE FORUM", "JETS ONLY", "STAKEHOLDER", "THE GREAT RESET", "VIP IGLOO"].map(text => ['davos', text]),
-  ...["BACK TO MARS (SORRY)", "COMPANY STORE", "EARTH: HAD ITS CHANCE", "FULL SELF-LANDING:", "I MISS / TREES", "N/A", "NOW HIRING: EXTREMELY HARDCORE", "OXYGEN: $9.99/MO", "TREES: 31"].map(text => ['mars-colony', text]),
   ...["BLOCKERS:", "DONGLE SOLD SEPARATELY", "LAYOFFS (WE'RE", "OPENING BELL", "RIGHT. EVENTUALLY.", "THE OVAL", "THE QUAD", "WE'RE HIRING!", "WE'RE PIVOTING TO"].map(text => ['silicon-valley', text]),
   ...["#1", "(GENERATED IN 4 SECONDS)", "AI BENCHMARK RESULTS", "CONSCIOUS. PROBABLY.", "GO HUMANS! (WHILE", "NOW CONVERTING: EVERYTHING", "PAPERCLIPS MADE", "SINGULARITY SPEEDWAY", "THANK YOU FOR"].map(text => ['singularity-speedway', text]),
   ...["ALL HANDS", "DO WHAT YOU L  VE"].map(text => ['wework-memorial', text]),

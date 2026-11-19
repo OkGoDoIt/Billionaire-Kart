@@ -297,7 +297,10 @@ export default {
     const boards = BOARDS.map(([cp, side, off, text, bg, fg]) => {
       const p = sc.beside(cp, side, off);
       taken.push([p.x, p.z, 10]);
-      return { p, yaw: faceTraffic(p, cp), text, bg, fg };
+      const yaw = faceTraffic(p, cp);
+      // and a sight line to each end of the 15 m board: with one to its middle, an oak could stand in front of an end (#397)
+      for (const u of [-7, 7]) faceTraffic({ x: p.x + Math.cos(yaw) * u, z: p.z - Math.sin(yaw) * u }, cp, 42, 4);
+      return { p, yaw, text, bg, fg };
     });
     const kit = { faceTraffic, clearView, THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, local, sign, board, legs, anim, view };
     gags(kit);
@@ -690,11 +693,11 @@ function gags({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken, l
 
   // ---- the final corner: the HQ whose sign can't make up its mind ----
   {
-    // It stands 100 m up the hairpin's exit line, just right of the Quad's arch, and faces the karts coming out:
+    // It stands 100 m up the hairpin's exit line, just right of the Quad's arch and over it, facing the karts coming out:
     // beside the exit (cp 14.35, 26 m out) its sign sat at the edge of the screen and climbed out of the top of it
     // before anyone could read it (#397).
-    const p = { x: -130, z: 54 }; p.y = track.terrainHeight(p.x, p.z);
-    const fyaw = faceTraffic(p, 13.3, 0, 10), FL = 4, UP = 6;   // its sight line keeps the oaks out of the way
+    const p = { x: -118, z: 58 }; p.y = track.terrainHeight(p.x, p.z);
+    const fyaw = faceTraffic(p, 13.3, 0, 10), FL = 4, UP = 5.5;   // its sight line keeps the oaks out of the way
     const hq = P.campusBlock(2, { w: 36, d: 18, floors: FL, accent: 0x1f6bff });
     sc.place(hq, p.x, p.z, { yaw: fyaw, y: p.y - 0.4 }); bake.add(hq);
     const roof = p.y - 0.4 + FL * 3.4 + 0.6, mast = S.post(UP - 4.2, 0.5); sc.place(mast, p.x, p.z, { y: roof }); bake.add(mast);

@@ -9,15 +9,82 @@ const DEFAULTS = {
   drivingGuide: {},    // per-device successes and exposures for each control lesson
 };
 const clone = o => JSON.parse(JSON.stringify(o));
-function merge(base, over) { for (const k in over) { if (over[k] && typeof over[k] === 'object' && !Array.isArray(over[k]) && base[k] && typeof base[k] === 'object') merge(base[k], over[k]); else base[k] = over[k]; } return base; }
+
+/* The stored save is read through these checks, section by section and field by field, so a damaged, old, or
+   hand-made save (bit rot, an old version, a #moved= import from the old address) can never hand the game a shape
+   it would trip on: anything that does not fit is replaced by its default, the rest is kept. Keyboard and
+   controller bindings are checked in full where they are read (keyboardBindings, sanitizePadBindings). */
+const CCS = [50, 100, 150, 200];                          // the engine classes (CLASSES in src/race/kart.js)
+const LEVEL_IDS = ['easy', 'normal', 'hard'], QUALITIES = ['auto', 'low', 'medium', 'high', 'ultra'], PAD_STEERS = ['both', 'stick', 'dpad'];
+const MAX_ID = 120, MAX_ENTRIES = 2000, MAX_TEXT = 200;
+const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const count = v => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+const time = v => (Number.isFinite(v) && v > 0 ? v : undefined);
+const text = (v, max = MAX_ID) => (typeof v === 'string' && v.length <= max ? v : undefined);
+const oneOf = (list, v, fallback) => (list.includes(v) ? v : fallback);
+/** A stored map with short keys: each value goes through `fix`, which returns undefined to drop it. */
+function table(raw, fix) {
+  const out = {};
+  if (!isObj(raw)) return out;
+  let n = 0;
+  for (const k of Object.keys(raw)) {
+    if (n >= MAX_ENTRIES || k.length > MAX_ID || k === '__proto__') continue;
+    const v = fix(raw[k]);
+    if (v !== undefined) { out[k] = v; n++; }
+  }
+  return out;
+}
+function cleanSettings(raw) {
+  const d = DEFAULTS.settings, out = clone(d), r = isObj(raw) ? raw : {};
+  for (const k of Object.keys(d)) if (typeof d[k] === 'boolean' && typeof r[k] === 'boolean') out[k] = r[k];
+  for (const k of ['music', 'sfx']) if (Number.isFinite(r[k])) out[k] = Math.min(1, Math.max(0, r[k]));
+  out.quality = oneOf(QUALITIES, r.quality, d.quality);
+  out.padSteer = oneOf(PAD_STEERS, r.padSteer, d.padSteer);
+  if (isObj(r.padBinds)) out.padBinds = r.padBinds;
+  if (isObj(r.keyBinds)) out.keyBinds = r.keyBinds;
+  return out;
+}
+function cleanLast(raw) {
+  const d = DEFAULTS.last, r = isObj(raw) ? raw : {}, racers = Array.isArray(r.racer) ? r.racer : [];
+  return {
+    racer: d.racer.map((id, i) => text(racers[i]) ?? id),
+    cc: oneOf(CCS, r.cc, d.cc), trialCc: oneOf(CCS, r.trialCc, d.trialCc), level: oneOf(LEVEL_IDS, r.level, d.level),
+    cup: text(r.cup) ?? d.cup, track: text(r.track) ?? d.track,
+  };
+}
+const cleanBest = b => {
+  if (!isObj(b)) return undefined;
+  const out = {};
+  if (time(b.race)) { out.race = b.race; if (text(b.racer)) out.racer = b.racer; }
+  if (time(b.lap)) out.lap = b.lap;
+  return out;
+};
+const cleanTrophy = t => (isObj(t) && Number.isInteger(t.rank) && t.rank >= 1 && t.rank <= 99 ? { rank: t.rank, points: count(t.points), stars: Math.min(3, count(t.stars)) } : undefined);
+const cleanLesson = l => (isObj(l) && text(l.binding, MAX_TEXT) !== undefined ? { binding: l.binding, uses: count(l.uses), shows: count(l.shows) } : undefined);
+/** A whole save as the game may use it, from whatever was stored (anything at all, or nothing). */
+export function cleanSave(raw) {
+  const r = isObj(raw) ? raw : {};
+  const data = {
+    settings: cleanSettings(r.settings),
+    last: cleanLast(r.last),
+    trophies: table(r.trophies, cleanTrophy),
+    best: table(r.best, cleanBest),
+    stats: Object.fromEntries(Object.keys(DEFAULTS.stats).map(k => [k, count(isObj(r.stats) ? r.stats[k] : 0)])),
+    drivingGuide: table(r.drivingGuide, p => (isObj(p) ? table(p, cleanLesson) : undefined)),
+  };
+  const name = isObj(r.online) ? text(r.online.name, 40) : undefined;
+  if (name !== undefined) data.online = { name };
+  return data;
+}
 
 // Older time trials used the single 'tt' key and did not record the engine class.
 export const trialKey = cc => `tt:${cc}`;
 
 export class Save {
   constructor() {
-    this.data = clone(DEFAULTS);
-    try { const raw = localStorage.getItem(KEY); if (raw) merge(this.data, JSON.parse(raw)); } catch { /* private mode or bad data: start fresh */ }
+    let raw = null;
+    try { const stored = localStorage.getItem(KEY); if (stored) raw = JSON.parse(stored); } catch { /* private mode or bad data: start fresh */ }
+    this.data = cleanSave(raw);
   }
   write() { try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* storage unavailable */ } }
   get settings() { return this.data.settings; }

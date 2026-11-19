@@ -49,6 +49,25 @@ const events = (k, type) => k.events.filter(e => e.type === type);
   assert.equal(open.stats.hitsTaken, 1);
   assert.equal(user.stats.hitsGiven, 1);
 }
+/* A kart already spinning from another hit is still shrunk and loses its item (Mario Kart's Lightning), but its
+   spin is not started again */
+{
+  const r = race([PLAIN[0], PLAIN[1], PLAIN[2]]);
+  const [user, spinning] = r.karts;
+  [[user, 20], [spinning, 60]].forEach(([k, s]) => put(k, s));
+  r.step(dt);
+  r.items.give(spinning, 'leak');
+  assert.ok(spinning.hurt('spin', null), 'set up: a shell spins it');
+  const spinLeft = spinning.hitT;
+  r.items.give(user, 'crash');
+  r.step(dt, [{ item: true }]);
+  assert.ok(spinning.shrinkT > 0, 'a spinning kart is still shrunk by the crash');
+  assert.equal(spinning.item, null, 'and loses its item');
+  assert.equal(spinning.hitKind, 'spin', 'its spin carries on as it was');
+  assert.ok(spinning.hitT < spinLeft, 'and is not started again');
+  assert.equal(spinning.stats.hitsTaken, 2);
+  assert.equal(user.stats.hitsGiven, 2, "the spinning kart and the third, open kart");
+}
 
 /* ---------- #359.1: a weaker boost never stretches a stronger one ---------- */
 {

@@ -4,6 +4,9 @@
    line a rival can say, the longest feed entries, each kind of banner, the incoming-item warning. Then it measures.
    It fails if any text sits on other text, any HUD block overlaps another, or any text is cut off or leaves its pane.
    A real race shows two or three of these at a time, so a pass here means no combination can collide.
+   With three or four players it also checks the shared field map and clock (issue #375): exactly one map and one clock
+   on screen (the board in a spare cell, or the hub where the panes meet; Thiel's own minimap aside), and no pane's
+   position, coins and lap, item, or speed under the hub, including after the window is resized live to another layout.
    Usage: node tools/hud-check.mjs [--out dir] [--only name] [--split: split-screen cases only]      exits 1 on any fault; saves two screenshots per case */
 import http from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -37,6 +40,15 @@ const CASES = [
   { name: 'four-players-upright', w: 820, h: 1180, racers: 4 },
   { name: 'two-players-iphone', w: 852, h: 393, racers: 2, safe: [0, 59, 21, 59] }, { name: 'four-players-iphone', w: 852, h: 393, racers: 4, safe: [0, 59, 21, 59] },
   { name: 'ipad-upright-2p', w: 820, h: 1180, racers: 2, safe: [24, 0, 20, 0] },
+  // the shared map and clock where the panes meet: four rows on a small upright window, three and four rows on a phone
+  { name: 'four-players-500x900', w: 500, h: 900, racers: 4 }, { name: 'three-players-phone', w: 390, h: 844, racers: 3 },
+  { name: 'four-players-phone', w: 390, h: 844, racers: 4 },
+  // and live resizing through every layout: the board, rows, columns, the junction, and back
+  { name: 'three-players-resize', w: 1280, h: 720, racers: 3, resize: [[820, 1180], [2000, 800], [500, 900], [1280, 720]] },
+  { name: 'four-players-resize', w: 1280, h: 720, racers: 4, resize: [[500, 900], [2560, 720], [1024, 768], [852, 393], [1280, 720]] },
+  // Thiel keeps his own minimap (his special draws rivals' items on it), and it makes way for the hub like the rest of his corner
+  { name: 'four-players-thiel', w: 1280, h: 720, racers: 4, r: ['larrysergey', 'elon', 'thiel', 'zuck'] },
+  { name: 'four-players-thiel-tall', w: 500, h: 900, racers: 4, r: ['larrysergey', 'elon', 'thiel', 'zuck'] },
 ].filter(c => (!opt.only || c.name === opt.only) && (!opt.split || c.racers > 1));
 
 /* ---------- issue #132 guard: a held item's description must always show ----------
@@ -79,6 +91,28 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 let browser;
 try { browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] }); }
 catch { browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'] }); }
+
+/* Runs in the page (injected as window.bkShared). Three or four players share one field map and one clock: count the
+   ones on screen and check that the hub, if that is where they are, covers none of a pane's corner readouts. */
+const shared = (faults, tag) => {
+  const huds = BK.session.huds; if (huds.length < 3) return;
+  const vis = e => { if (!e) return null; for (let a = e; a; a = a.parentElement) { const s = getComputedStyle(a); if (s.display === 'none' || s.visibility === 'hidden' || +s.opacity < 0.3) return null; } const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2 ? r : null; };
+  const own = huds.filter(h => !h.kart.sp?.seeItems);   // Thiel keeps his minimap: his special draws rivals' items on it
+  const maps = [...own.map(h => vis(h.root.querySelector('.hud-map'))), vis(document.querySelector('.board-map'))].filter(Boolean);
+  const clocks = [...huds.map(h => vis(h.root.querySelector('.hud-time'))), vis(document.querySelector('.board-clock'))].filter(Boolean);
+  if (maps.length !== 1) faults.add(`${tag}: ${maps.length} field maps on screen, wanted one`);
+  if (clocks.length !== 1) faults.add(`${tag}: ${clocks.length} race clocks on screen, wanted one`);
+  const hub = document.querySelector('.board-hub'); if (!vis(hub)) return;
+  const parts = [vis(hub.querySelector('.board-mapwrap')), vis(hub.querySelector('.board-clock'))].filter(Boolean);
+  const W = innerWidth, H = innerHeight;
+  for (const p of parts) if (p.left < -1 || p.top < -1 || p.right > W + 1 || p.bottom > H + 1) faults.add(`${tag}: the shared map is off screen`);
+  huds.forEach((h, i) => {
+    for (const sel of ['.hud-rank', '.hud-bl', '.hud-item', '.hud-item-info', '.hud-speed', '.hud-map']) {
+      const q = vis(h.root.querySelector(sel)); if (!q) continue;
+      for (const p of parts) { const w = Math.min(p.right, q.right) - Math.max(p.left, q.left), hh = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top); if (w > 1 && hh > 1) faults.add(`${tag}, player ${i + 1}: the shared map covers ${sel} by ${Math.round(w)}x${Math.round(hh)}px`); }
+    }
+  });
+};
 
 /* Runs in the page. Returns the list of faults for the race that is on screen. */
 const stress = async () => {
@@ -135,7 +169,7 @@ const stress = async () => {
     if (banner === 'finish') h.onKartEvent({ type: 'finish', data: 1 }); else if (banner) h.banner(banner[0], banner[1], 9000);
     h.warn(nameItem.id);
   });
-  const settle = async tag => { await wait(650); huds.forEach((h, i) => scan(h.root, `${tag}, player ${i + 1}`, faults)); };
+  const settle = async tag => { await wait(650); huds.forEach((h, i) => scan(h.root, `${tag}, player ${i + 1}`, faults)); window.bkShared(faults, tag); };
   // what you hold, with its description showing, and nothing in the feed
   for (const item of [nameItem, descItem]) for (const b of [['SLIPSTREAM!', 'good small'], ['FINAL LAP!', 'final'], ['ROCKET START!', 'good']]) {
     huds.forEach(h => { h._infoId = null; h.lastItem = undefined; h.$.feed.replaceChildren(); }); load(item, false, b); await settle(`${item.name} + ${b[0]}`);
@@ -191,12 +225,20 @@ for (const c of CASES) {
   const ctx = await browser.newContext({ viewport: { width: c.w, height: c.h }, hasTouch: !!c.touch, isMobile: !!c.touch, deviceScaleFactor: c.touch ? 2 : 1, serviceWorkers: 'block' });
   const page = await ctx.newPage(); const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto(`${base}?track=bliss-hills&intro=0&seed=3&r=${RACERS4.slice(0, c.racers || 1).join(',')}`, { waitUntil: 'load' });
+  await page.goto(`${base}?track=bliss-hills&intro=0&seed=3&r=${(c.r || RACERS4.slice(0, c.racers || 1)).join(',')}`, { waitUntil: 'load' });
   if (c.safe) { const [t, r, b, l] = c.safe; await page.addStyleTag({ content: `:root { --safe-t: ${t}px; --safe-r: ${r}px; --safe-b: ${b}px; --safe-l: ${l}px; }` }); }
   await page.waitForFunction('window.BK && BK.race', null, { timeout: 40000 });
   await page.exposeFunction('bkShot', tag => page.screenshot({ path: join(out, `${c.name}-${tag}.jpg`), type: 'jpeg', quality: 85 }).then(() => null));
   if (c.name === 'phone' || c.name === 'desktop-16x9') await page.evaluate(() => { window.__BK_DESC_HOLD__ = true; });   // issue #132: the 7 s hold test runs on Roger's shape + desktop
+  await page.evaluate(`window.bkShared = ${shared.toString()}`);
   const res = await page.evaluate(`(${stress.toString()})()`).catch(e => ({ panes: 0, faults: ['could not run: ' + e.message] }));
+  // resized live: the split lays itself out again, and the shared map and clock follow it
+  for (const [w, h] of c.resize || []) {
+    await page.setViewportSize({ width: w, height: h }); await page.waitForTimeout(900);
+    const more = await page.evaluate(tag => { const f = new Set(); window.bkShared(f, tag); return [...f]; }, `resized to ${w}x${h}`).catch(e => ['could not check after resize: ' + e.message]);
+    res.faults.push(...more);
+    await page.screenshot({ path: join(out, `${c.name}-${w}x${h}.jpg`), type: 'jpeg', quality: 85 });
+  }
   const faults = [...res.faults, ...errors.map(e => 'page error: ' + e)];
   // the same fault usually shows in every scenario and every pane: report each kind once, with how often it came up
   const kinds = new Map(); for (const f of faults) { const k = f.replace(/^.*?: /, ''); kinds.set(k, (kinds.get(k) || 0) + 1); }

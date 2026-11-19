@@ -203,17 +203,17 @@ export function colonyFlag({ h = 8, a = 0xc1440e, c = 0xf2efe6 } = {}) {
 }
 
 /** The big sign on a frame: text drawn into a canvas texture (made when called). */
-export function hiringSign(text = 'MARS: NOW HIRING', { w = 30, h = 7, legs = 8 } = {}) {
+export function hiringSign(text = 'MARS: NOW HIRING', { w = 30, h = 7, legs = 8, lines = 1 } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder();
   for (const sx of [-1, -0.33, 0.33, 1]) strut(b, 'frame', [sx * w * 0.45, 0, -0.4], [sx * w * 0.45, legs + h, -0.4], 0.5);
   for (const sx of [-1, 1]) for (const k of [0, 1, 2]) strut(b, 'frame', [sx * w * 0.45, k * legs / 3, -0.4], [sx * w * 0.15, (k + 1) * legs / 3, -0.4], 0.22);
   b.add('frame', box(w + 1, h + 1, 0.5, 0.15, 2), { p: [0, legs + h / 2, -0.3] });
   for (let i = 0; i < 6; i++) b.add('lamp', box(0.7, 0.2, 0.6, 0.05, 1), { p: [(i - 2.5) * w * 0.17, legs + h + 0.6, 0.8] });
   grp.add(b.build({ frame: plastic(0x2a2026, 0.55, 0.3), lamp: glow(0xfff0c8, 1.8) }));
-  const tex = canvasTex(1024, 240, (g, cw, ch) => {
+  const tex = canvasTex(1024, Math.round(1024 * h / w), (g, cw, ch) => {
     g.fillStyle = '#f2efe6'; g.fillRect(0, 0, cw, ch);
     g.fillStyle = '#c1440e'; g.fillRect(0, 0, cw, 22); g.fillRect(0, ch - 22, cw, 22);
-    fitText(g, text, cw / 2, ch / 2 + 8, cw - 60, ch - 60, 150, '"Luckiest Guy", "Arial Black", sans-serif', { fill: '#1f1418' });
+    fitText(g, text, cw / 2, ch / 2 + 8, cw - 60, ch - 60, 150 * lines, '"Luckiest Guy", "Arial Black", sans-serif', { fill: '#1f1418', lines });
   }, { repeat: false, aniso: 8 });
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.2, roughness: 0.55 }));
   panel.position.set(0, legs + h / 2, 0.0); grp.add(panel);

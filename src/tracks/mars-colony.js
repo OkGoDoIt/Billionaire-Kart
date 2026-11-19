@@ -304,7 +304,7 @@ function dress(ctx) {
     };
   })();
   /** A painted poster on a board beside the road (poster k of the atlas), with a lettered back. */
-  const poster = (at, side, off, k, back, { w = 15, h = 10, up = 9, turn = 1.8, roadLevel = false } = {}) => {
+  const poster = (at, side, off, k, back, { w = 15, h = 10, up = 9, turn = 1.8, roadLevel = false, strap = 0.14 } = {}) => {
     let p, yaw, rx, rz;
     for (let n = 0; n < 40; n++, at += 0.02) { p = sc.beside(at, side, off); yaw = faceIn(p.i, side, turn); rx = Math.cos(yaw) * w / 2; rz = -Math.sin(yaw) * w / 2; if (!crosses(p.x, p.z, rx, rz)) break; }
     if (!clear(p.x, p.z, 0.5) || !clear(p.x + rx, p.z + rz, 0.5) || !clear(p.x - rx, p.z - rz, 0.5)) return null;
@@ -313,14 +313,14 @@ function dress(ctx) {
     bake.add(sc.place(f, p.x, p.z, { yaw, y: ground })); take(p.x, p.z, w * 0.55); boards.push({ x: p.x, z: p.z, rx, rz });
     posters.place(k, [p.x + Math.sin(yaw) * 0.03, y0 + up, p.z + Math.cos(yaw) * 0.03], yaw, w, h);
     // Marquee below the illustration: a one-way race should see both halves of the joke.
-    const strap = atlas.add(1024, 150, K.board(back, { bg: INK, fg: CREAM, size: 96, lines: 1, pad: 0.04 }));
-    atlas.place(strap, [p.x + Math.sin(yaw) * 0.05, y0 + up - h / 2 - w * 0.068, p.z + Math.cos(yaw) * 0.05], yaw, w, w * 0.14);
+    const sh = w * strap, line = atlas.add(1024, Math.round(1024 * strap * 150 / 143), K.board(back, { bg: INK, fg: CREAM, size: 96 * strap / 0.14, lines: strap > 0.17 ? 2 : 1, pad: 0.04 }));
+    atlas.place(line, [p.x + Math.sin(yaw) * 0.05, y0 + up - h / 2 - sh * 0.486, p.z + Math.cos(yaw) * 0.05], yaw, w, sh);
     const r = atlas.add(768, 512, K.board(back, { bg: INK, fg: CREAM, size: 120, stripe: RUST_HEX }));
     atlas.place(r, [p.x - Math.sin(yaw) * 0.39, y0 + up, p.z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
     return p;
   };
   // spots the gags will stand on, kept clear of the domes, rocks, and solar panels
-  for (const [at, side, off, r] of [[0.55, 1, 9, 13], [4.3, 1, 32, 10], [7.0, 1, 36, 20], [20.48, -1, 17, 18], [19.6, 1, 20, 12], [26.3, -1, 18, 14], [1.35, 1, 18, 11], [4.2, -1, 18, 11], [8.32, -1, 10, 13], [5.58, -1, 10.5, 13], [13.9, -1, 18, 11], [18.4, 1, 18, 11], [22.28, -1, 20.5, 11], [25.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
+  for (const [at, side, off, r] of [[0.55, 1, 9, 13], [4.3, 1, 32, 10], [7.0, 1, 36, 20], [20.48, -1, 17, 18], [19.6, 1, 20, 12], [26.3, -1, 18, 14], [1.35, 1, 18, 11], [5.1, -1, 12, 11], [8.32, -1, 10, 13], [5.58, -1, 10.5, 13], [13.8, -1, 21, 11], [18.4, 1, 18, 11], [22.28, -1, 20.5, 11], [25.6, -1, 18, 11]]) { const p = sc.beside(at, side, off); take(p.x, p.z, r); }
 
   // ---- start/finish on Main Street: gantry, grandstands, a pale-suited crowd ----
   const g0 = sc.beside(0, 1, -track.hwL[0]);
@@ -356,9 +356,9 @@ function dress(ctx) {
     const regions = CROWD.map((t, k) => atlas.add(512, 318, K.board(t, { bg: cols[k % cols.length], fg: INK, size: 120, border: INK, pad: 0.05 })));
     const sticks = new ModelBuilder();
     placards.forEach((s, k) => {
-      const y = s.y + 2.6 + (k % 2) * 0.3, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
-      for (const o of [-1.1, 1.1]) sticks.add('s', cyl(0.06, 0.06, 2.2, 5), { p: [s.x - fx * 0.05 + Math.cos(s.yaw) * o, s.y + 1.3, s.z - fz * 0.05 - Math.sin(s.yaw) * o] });
-      atlas.place(regions[k % regions.length], [s.x + fx * 0.1, y, s.z + fz * 0.1], s.yaw, 4.2, 2.6);
+      const y = s.y + 3 + (k % 2) * 0.3, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);   // big enough to read going by
+      for (const o of [-1.5, 1.5]) sticks.add('s', cyl(0.07, 0.07, 2.6, 5), { p: [s.x - fx * 0.05 + Math.cos(s.yaw) * o, s.y + 1.5, s.z - fz * 0.05 - Math.sin(s.yaw) * o] });
+      atlas.place(regions[k % regions.length], [s.x + fx * 0.1, y, s.z + fz * 0.1], s.yaw, 5.6, 3.45);
     });
     const g = sticks.build({ s: MAT_STICK }); ctx.group.add(g); bake.add(g, false);
   }
@@ -394,18 +394,20 @@ function dress(ctx) {
       tex.needsUpdate = true;
     };
   })();
-  // the big dome sells the air
+  // the airlock sells the air: a board on the roof of the tube's mouth, where Main Street points, so it sits dead
+  // ahead of the karts all the way down the straight
   {
-    const d = { x: 12, z: -46 }, top = track.terrainHeight(d.x, d.z) + 12.6, yaw = -0.5, mb = new ModelBuilder();
-    for (const sx of [-6, 6]) mb.add('m', box(0.6, 7, 0.6, 0.1, 1), { p: [d.x + Math.cos(yaw) * sx, top + 2.5, d.z - Math.sin(yaw) * sx] });
-    mb.add('m', box(24.6, 10, 0.3, 0.05, 1), { p: [d.x + Math.sin(yaw) * 0.2, top + 9, d.z + Math.cos(yaw) * 0.2], r: [0, yaw, 0] });
+    const i = track.indexAtCp(1.8), H = track.def.tunnelHeight ?? 7.5, w = 24, h = 9.4, yaw = track.yaw[i] + Math.PI;
+    const x = track.px[i], z = track.pz[i], roof = track.py[i] + H + 0.4, up = roof + 1.6 + h / 2, rx = Math.cos(yaw), rz = -Math.sin(yaw), mb = new ModelBuilder();
+    for (const sx of [-w * 0.3, w * 0.3]) mb.add('m', box(0.6, up - roof, 0.6, 0.1, 1), { p: [x + rx * sx, (roof + up) / 2, z + rz * sx] });
+    mb.add('m', box(w + 0.6, h + 0.6, 0.3, 0.05, 1), { p: [x - Math.sin(yaw) * 0.2, up, z - Math.cos(yaw) * 0.2], r: [0, yaw, 0] });
     const g = mb.build({ m: plastic(0x2a2026, 0.5) }); ctx.group.add(g); bake.add(g);
     const r = atlas.add(1280, 500, (gg, w, h) => {
       gg.fillStyle = '#ffffff'; gg.fillRect(0, 0, w, h); gg.fillStyle = '#1f6bff'; gg.fillRect(0, 0, w, h * 0.12); gg.fillRect(0, h * 0.88, w, h * 0.12);
       K.fitText(gg, 'OXYGEN: $9.99/MO', w / 2, h * 0.35, w * 0.9, 190, K.FONT, '#1f6bff', { lines: 1 });
       K.fitText(gg, 'AD-FREE AIR: $19.99', w / 2, h * 0.68, w * 0.9, 130, K.FONT, INK, { lines: 1 });
     });
-    atlas.both(r, [d.x + Math.sin(yaw) * 0.38, top + 9, d.z + Math.cos(yaw) * 0.38], yaw, 24, 9.4, 0.36);
+    atlas.both(r, [x, up, z], yaw, w, h, 0.36);
   }
   // lamps and flags down Main Street
   const board = sc.beside(0.55, 1, 9), inFront = p => p.x > board.x - 45 && p.x < board.x + 14;   // nothing tall between the grid and the countdown board
@@ -718,9 +720,10 @@ function dress(ctx) {
     for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, c = new THREE.Vector3(Math.sin(a) * pl.z, pl.y, Math.cos(a) * pl.z).applyMatrix4(st.matrixWorld); atlas.place(r, [c.x, c.y, c.z], yaw + a, pl.w, pl.h); }
     bake.add(st);
   }
-  const signP = sc.beside(12.75, -1, 26);
-  sc.place(M.hiringSign('NOW HIRING: EXTREMELY HARDCORE', { w: 30, h: 7, legs: 7 }), signP.x, signP.z, { yaw: signP.yaw + 0.35, y: signP.y - 0.3 });
-  take(signP.x, signP.z, 18);
+  // the hiring sign stands where the landing deck points, on the outside of the bend into the bowl, two lines tall
+  const signP = sc.beside(12.75, -1, 14);
+  sc.place(M.hiringSign('NOW HIRING: EXTREMELY HARDCORE', { w: 24, h: 9, legs: 6, lines: 2 }), signP.x, signP.z, { yaw: signP.yaw + 0.6, y: signP.y - 0.3 });
+  take(signP.x, signP.z, 15);
   const lander2 = sc.beside(21.6, 1, 46);
   if (clear(lander2.x, lander2.z, 8)) { bake.add(sc.place(M.lander({ h: 8 }), lander2.x, lander2.z, { yaw: 0.6 })); take(lander2.x, lander2.z, 12); }
 
@@ -760,13 +763,18 @@ function dress(ctx) {
       const approach = track.indexAtCp(19.9), yaw = Math.atan2(track.px[approach] - p.x, track.pz[approach] - p.z);
       const st = M.companyStore({ w: 18, d: 10 });
       bake.add(sc.place(st, p.x, p.z, { yaw, y: p.y - 0.2 })); take(p.x, p.z, 15);
-      const fx = Math.sin(yaw), fz = Math.cos(yaw), r = atlas.add(1024, 400, K.board('COMPANY STORE', { bg: '#e9e4d8', fg: RUST_HEX, size: 170, sub: 'PAID IN COMPANY SCRIP ONLY', subFg: INK, subScale: 0.5, lines: 1 }));
-      atlas.place(r, [p.x + fx * 0.34, p.y + 7.2, p.z + fz * 0.34], yaw, 17.4, 4.2);
-      const menuX = p.x + Math.cos(yaw) * 14.5, menuZ = p.z - Math.sin(yaw) * 14.5;
-      const menuFrame = K.signFrame(9.9, 7.2, 5, { color: 0x27313a });
+      // The store sits in a dip below the road: its name stands on the roof and the price board on tall legs, so
+      // both clear the roadside on the way in.
+      const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      { const mb = new ModelBuilder(); for (const sx of [-6, 6]) mb.add('m', box(0.5, 2.4, 0.5, 0.1, 1), { p: [p.x + rx * sx - fx * 0.2, p.y + 10.4, p.z + rz * sx - fz * 0.2] }); const g = mb.build({ m: plastic(0x2a2026, 0.5) }); ctx.group.add(g); bake.add(g); }
+      const r = atlas.add(1024, 300, K.board('COMPANY STORE', { bg: '#e9e4d8', fg: RUST_HEX, size: 190, sub: 'PAID IN COMPANY SCRIP ONLY', subFg: INK, subScale: 0.42, lines: 1, border: RUST_HEX }));
+      atlas.both(r, [p.x, p.y + 14.4, p.z], yaw, 20, 5.9, 0.3);
+      { const mb = new ModelBuilder(); mb.add('m', box(20.4, 6.3, 0.26, 0.05, 1), { p: [p.x - fx * 0.15, p.y + 14.4, p.z - fz * 0.15], r: [0, yaw, 0] }); const g = mb.build({ m: plastic(0x2a2026, 0.5) }); ctx.group.add(g); bake.add(g); }
+      const menuX = p.x + rx * 16.5, menuZ = p.z + rz * 16.5;
+      const menuFrame = K.signFrame(12.4, 9, 9.5, { color: 0x27313a });
       bake.add(sc.place(menuFrame, menuX, menuZ, { yaw, y: p.y }));
-      const pr = atlas.add(768, 540, (g, w, h) => { g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); const rows = [['AIR', '40 SCRIP'], ['WATER', '90 SCRIP'], ['RIDE HOME', 'N/A']]; rows.forEach(([a, b2], k) => { K.fitText(g, a, w * 0.3, h * (0.2 + k * 0.3), w * 0.5, 104, K.SANS, '#ffffff', { lines: 1 }); K.fitText(g, b2, w * 0.74, h * (0.2 + k * 0.3), w * 0.44, 104, K.SANS, k === 2 ? '#ff3b30' : '#38ff74', { lines: 1 }); }); });
-      atlas.place(pr, [menuX + fx * 0.05, p.y + 5, menuZ + fz * 0.05], yaw, 9.9, 7.2);
+      const pr = atlas.add(768, 557, (g, w, h) => { g.fillStyle = '#101418'; g.fillRect(0, 0, w, h); const rows = [['AIR', '40 SCRIP'], ['WATER', '90 SCRIP'], ['RIDE HOME', 'N/A']]; rows.forEach(([a, b2], k) => { K.fitText(g, a, w * 0.3, h * (0.2 + k * 0.3), w * 0.5, 112, K.SANS, '#ffffff', { lines: 1 }); K.fitText(g, b2, w * 0.74, h * (0.2 + k * 0.3), w * 0.44, 112, K.SANS, k === 2 ? '#ff3b30' : '#38ff74', { lines: 1 }); }); });
+      atlas.place(pr, [menuX + fx * 0.05, p.y + 9.5, menuZ + fz * 0.05], yaw, 12.4, 9);
     }
     sign(19.6, 1, 20, K.board('NO UNIONS ON MARS', { bg: RUST_HEX, fg: '#ffffff', size: 150, sub: '(NO AIR EITHER)', subFg: '#ffd23c', subScale: 0.75, lines: 1 }), 20, 8, 10, { turn: 0.5 });
   }
@@ -802,6 +810,7 @@ function dress(ctx) {
     }
     // the two airlock portals where the road meets the glass: chunky white arches with a rust band
     const ports = [];
+    let entryArch = null;
     for (let i = 0, was = Math.hypot(track.px[track.N - 1] - DOME.x, track.pz[track.N - 1] - DOME.z) < DOME.r; i < track.N; i++) {
       const inside = Math.hypot(track.px[i] - DOME.x, track.pz[i] - DOME.z) < DOME.r;
       if (inside !== was) ports.push({ i, entry: inside });
@@ -816,12 +825,28 @@ function dress(ctx) {
       mb.add('rust', arch2, { p: [0, 0, entry ? -0.9 : 0.9] });
       for (const sx of [-1, 1]) mb.add('white', box(2.4, 2.2, 3.2, 0.3, 2), { p: [sx * half, 1.1, 0] });
       const g = mb.build({ white: plastic(0xf2efe6, 0.45), rust: plastic(0xc1440e, 0.5) }); g.position.set(track.px[i], track.py[i] - 0.2, track.pz[i]); g.rotation.y = yaw; ctx.group.add(g); bake.add(g);
-      // the lettering over the entry arch faces the oncoming karts; the exit arch says goodbye from the inside
-      const r = atlas.add(1024, 220, entry
-        ? K.board('TERRAFORMING PILOT', { bg: CREAM, fg: '#1d7a3a', size: 150, stripe: '#1d7a3a', lines: 1, pad: 0.05 })
-        : K.board('BACK TO MARS (SORRY)', { bg: INK, fg: CREAM, size: 150, stripe: RUST_HEX, lines: 1, pad: 0.05 }));
+      // the lettering over the entry arch faces the oncoming karts (the tree counter stands on top of it, below)
       const face = yaw + Math.PI, fx = Math.sin(face), fz = Math.cos(face), bw = half * 1.5;
-      atlas.place(r, [track.px[i] + fx * 1.25, track.py[i] + H + 0.6, track.pz[i] + fz * 1.25], face, bw, bw * 220 / 1024);
+      if (entry) {
+        const r = atlas.add(1024, 220, K.board('TERRAFORMING PILOT', { bg: CREAM, fg: '#1d7a3a', size: 150, stripe: '#1d7a3a', lines: 1, pad: 0.05 }));
+        atlas.place(r, [track.px[i] + fx * 1.25, track.py[i] + H + 0.6, track.pz[i] + fz * 1.25], face, bw, bw * 220 / 1024);
+        entryArch = { i, H, face, top: track.py[i] + H + 0.6 + bw * 110 / 1024 };
+        continue;
+      }
+      // The exit says goodbye from inside: above the arch the glass curves in over the road, so the board hangs
+      // from the dome's struts a little way in from the airlock, where nothing stands between it and the karts.
+      const j = (i - Math.round(9 / track.ds) + track.N) % track.N, bh = bw * 220 / 1024, cy = track.py[j] + 11.4;
+      const ex = track.px[j], ez = track.pz[j], ey = track.yaw[j] + Math.PI, rx = Math.cos(ey), rz = -Math.sin(ey), sx = Math.sin(ey), sz = Math.cos(ey);
+      const r = atlas.add(1024, 220, K.board('BACK TO MARS (SORRY)', { bg: INK, fg: CREAM, size: 150, stripe: RUST_HEX, lines: 1, pad: 0.05 }));
+      atlas.place(r, [ex, cy, ez], ey, bw, bh);
+      const hb = new ModelBuilder();
+      hb.add('back', box(bw + 0.4, bh + 0.4, 0.25, 0.05, 1), { p: [ex - sx * 0.16, cy, ez - sz * 0.16], r: [0, ey, 0] });
+      for (const o of [-bw * 0.36, bw * 0.36]) {
+        const cx = ex + rx * o - sx * 0.16, cz = ez + rz * o - sz * 0.16, rr = Math.hypot(cx - DOME.x, cz - DOME.z) / DOME.r;
+        const roof = dy + DOME.h * Math.sqrt(Math.max(0, 1 - rr * rr)), y0 = cy + bh / 2 + 0.2;
+        if (roof > y0) hb.add('cable', cyl(0.06, 0.06, roof - y0, 5), { p: [cx, (roof + y0) / 2, cz] });
+      }
+      const hg = hb.build({ back: plastic(0x2a2026, 0.5), cable: plastic(0xf2efe6, 0.4) }); ctx.group.add(hg); bake.add(hg);
     }
     // the garden: trees in clumps, bushes, two ponds with fountains
     const inDome = (x, z, m) => Math.hypot(x - DOME.x, z - DOME.z) < DOME.r - m;
@@ -877,10 +902,12 @@ function dress(ctx) {
     });
     // what the pilot has achieved so far
     // the tree counter is a live board: 31 trees, until the dust gets in
+    // It stands on top of the entry arch, outside the glass, so it reads all the way up the approach.
     const treeBoard = (() => {
-      const p = sc.beside(21.72, 1, 12.5), yaw = faceIn(p.i, 1, 0.45), w = 13, h = 6, up = 6.5;
-      if (!clear(p.x, p.z, 0.5)) return () => {};
-      const y0 = sc.y(p.x, p.z), f = K.signFrame(w, h, up, { color: 0x2a2026, legs: 2 }); sc.place(f, p.x, p.z, { yaw, y: y0 }); bake.add(f);
+      if (!entryArch) return () => {};
+      const { i: ei, face: yaw } = entryArch, w = 13, h = 6, y0 = entryArch.top + 0.5, up = h / 2, ax = Math.cos(yaw), az = -Math.sin(yaw);
+      const p = { x: track.px[ei] + Math.sin(yaw) * 0.9, z: track.pz[ei] + Math.cos(yaw) * 0.9 };
+      { const mb = new ModelBuilder(); for (const o of [-w * 0.3, w * 0.3]) mb.add('m', box(0.5, y0 + 0.4 - (entryArch.top - 3.2), 0.5, 0.1, 1), { p: [p.x + ax * o - Math.sin(yaw) * 0.4, (y0 + 0.4 + entryArch.top - 3.2) / 2, p.z + az * o - Math.cos(yaw) * 0.4] }); mb.add('m', box(w + 0.5, h + 0.5, 0.3, 0.08, 1), { p: [p.x - Math.sin(yaw) * 0.2, y0 + up, p.z - Math.cos(yaw) * 0.2], r: [0, yaw, 0] }); const g = mb.build({ m: plastic(0x2a2026, 0.6, 0.3) }); ctx.group.add(g); bake.add(g); }
       const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 472;
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
       const q = new K.Quads(); q.panel([p.x + Math.sin(yaw) * 0.03, y0 + up, p.z + Math.cos(yaw) * 0.03], yaw, w, h, [0, 0, 1, 1]);
@@ -1030,15 +1057,17 @@ function dress(ctx) {
 
   // ---- billboards where you are looking anyway ----
   const BOARDS = [
-    [1.35, 1, 22, 'FUNDING SECURED', INK, '#38ff74'], [4.2, -1, 18, 'FULL SELF-LANDING: NEXT YEAR', CREAM, RUST_HEX],
+    [1.35, 1, 22, 'FUNDING SECURED', INK, '#38ff74'],
     [18.4, 1, 18, 'BREATHING IS NOW A SUBSCRIPTION', '#ffd23c', INK],
     [25.6, -1, 18, 'MARS: NO REGULATORS', RUST_HEX, '#ffffff', '(OR ATMOSPHERE)'],
   ];
   for (const [at, side, off, text, bg, fg, sub] of BOARDS) sign(at, side, off, K.board(text, { bg, fg, size: 130, sub, subFg: fg, subScale: 0.6 }), 20, 6.6, 10, { turn: 0.45 });
+  // out of the airlock the road runs straight at the outside of the next bend: the board stands there, square to it
+  { const i = track.indexAtCp(4.3); sign(5.1, -1, 12, K.board('FULL SELF-LANDING: NEXT YEAR', { bg: CREAM, fg: RUST_HEX, size: 130, subScale: 0.6 }), 20, 6.6, 10, { yaw: Math.atan2(-track.tx[i], -track.tz[i]) }); }
   // the painted posters: the travel poster at the pad, Earth as a holiday spot before the crater, the recruiting
   // poster on the rim road, and the terraforming promise inside the dome
   poster(8.32, -1, 10, 0, 'NO REFUNDS', { w: 17, h: 11.3, up: 10, turn: 2.4, roadLevel: true });
-  poster(13.9, -1, 18, 1, 'EARTH: HAD ITS CHANCE');
+  poster(13.8, -1, 21, 1, 'EARTH: HAD ITS CHANCE', { w: 20, h: 13.3, up: 19, strap: 0.28 });   // raised so its strapline clears the crater rim, and a strapline big enough to read from the landing deck
   poster(5.38, -1, 10.5, 2, 'MUST BRING OWN OXYGEN', { w: 18, h: 12, up: 9.5, turn: 2, roadLevel: true });
   poster(22.28, -1, 20.5, 3, 'WORK FROM DOME: MANDATORY', { w: 14, h: 9.3, up: 8.2, turn: 2.7 });
   posters.flush();

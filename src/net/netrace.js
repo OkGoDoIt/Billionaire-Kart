@@ -16,6 +16,8 @@ import { ITEMS } from '../race/items.js';
 import { TUNE } from '../race/kart.js';
 import { makeRng, wrapAngle, lerp, clamp } from '../core/util.js';
 import { makeGroundHit } from '../track/track.js';
+/* Relayed events (NetRace#_apply): the numbers each kind of event needs, which must be finite. */
+const EVENT_NUMBERS = { shot: ['x', 'y', 'z', 'vx', 'vy', 'vz', 'yaw', 'speed'], hazard: ['x', 'y', 'z'], boom: ['x', 'y', 'z'], shock: ['x', 'y', 'z'], ink: ['rank'] };
 
 export const STEP_MS = 1000 / 60;
 const STEP = 1 / 60;
@@ -270,6 +272,9 @@ export class NetRace {
   }
 
   _apply(e, from) {
+    // relayed as sent: a position or speed that is not a finite number (missing, a string, 1e400) would carry NaN into
+    // shots, hazards, and explosions, and through them into our own karts, so such an event is dropped
+    if (!e || typeof e !== 'object' || !(EVENT_NUMBERS[e.k] || []).every(f => Number.isFinite(e[f]))) return;
     const race = this.race, items = race.items, kart = this.kart(e.s);
     this.stats.rx[e.k] = (this.stats.rx[e.k] || 0) + 1;
     this.log?.push({ n: this.n, e, from });

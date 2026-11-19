@@ -82,20 +82,29 @@ export function encodeSnap(k, step) {
   return buf;
 }
 
-/** Read the fixed header: { type, slot, step, rd } (the part the server reads too). */
+export const HEADER_BYTES = 10;
+/* Frames come from other players' devices and the server relays them unchanged, so a frame with a float that is not a
+   number, or a place no track reaches, is dropped whole: puppets interpolate, and simply wait for the next good one. */
+const MAX_COORD = 100000, MAX_RD = 10000000;   // m: far beyond every track's bounds and any race's length
+const sane = (v, max) => Number.isFinite(v) && Math.abs(v) <= max;
+
+/** Read the fixed header: { type, slot, step, rd } (the part the server reads too). Null for a frame too short to have one. */
 export function readHeader(data) {
   const v = view(data);
+  if (v.byteLength < HEADER_BYTES) return null;
   return { type: v.getUint8(0), slot: v.getUint8(1), step: v.getUint32(2, true), rd: v.getFloat32(6, true) };
 }
 
-/** Decode a snapshot into a plain object with the kart's field names. Returns null for anything else. */
+/** Decode a snapshot into a plain object with the kart's field names. Returns null for anything else, and for a
+    snapshot whose floats are not finite or are out of any track's reach. */
 export function decodeSnap(data) {
   const v = view(data);
   if (v.byteLength < SNAP_BYTES || v.getUint8(0) !== SNAP) return null;
+  const rd = v.getFloat32(6, true), x = v.getFloat32(10, true), y = v.getFloat32(14, true), z = v.getFloat32(18, true);
+  if (!sane(rd, MAX_RD) || !sane(x, MAX_COORD) || !sane(y, MAX_COORD) || !sane(z, MAX_COORD)) return null;
   const f = v.getUint16(35, true), tb = v.getUint8(37);
   const d = {
-    slot: v.getUint8(1), step: v.getUint32(2, true), rd: v.getFloat32(6, true),
-    x: v.getFloat32(10, true), y: v.getFloat32(14, true), z: v.getFloat32(18, true),
+    slot: v.getUint8(1), step: v.getUint32(2, true), rd, x, y, z,
     yaw: v.getInt16(22, true) / ANG, pitch: v.getInt16(24, true) / ANG, roll: v.getInt16(26, true) / ANG,
     vx: v.getInt16(28, true) / 100, vy: v.getInt16(30, true) / 100, vz: v.getInt16(32, true) / 100,
     steer: v.getInt8(34) / 127,
@@ -114,6 +123,7 @@ export function decodeSnap(data) {
 }
 
 function view(data) {
+  if (data == null) return new DataView(new ArrayBuffer(0));
   if (data instanceof DataView) return data;
   if (data instanceof ArrayBuffer) return new DataView(data);
   return new DataView(data.buffer, data.byteOffset, data.byteLength);   // Uint8Array, Node Buffer

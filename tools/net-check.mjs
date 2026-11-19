@@ -77,7 +77,7 @@ class Relay {
     m.lastFrame = this.now;
     if (m.silenced) this._giveBack(m);
     if (typeof data !== 'string') {
-      const h = readHeader(data), slot = this.room.race?.slots[h.slot];
+      const h = readHeader(data), slot = h && this.room.race?.slots[h.slot];
       if (!slot || slot.owner !== id || this.room.phase !== 'race') { this.rejected++; return; }
       this.latest.set(h.slot, h);
       this.others(id, data);
@@ -261,6 +261,32 @@ function checkCodec() {
   const k0 = race.karts[0], d0 = decodeSnap(encodeSnap(k0, 0));
   if (d0.item !== null || d0.hitKind !== '' || d0.boostKind !== '' || d0.driftDir !== 0) errs.push('fresh kart');
   result(!errs.length, 'codec: snapshot round trip', `${SNAP_BYTES} bytes${errs.length ? '; ' + errs.join(', ') : ''}`);
+
+  // a frame from a modified client (#378, #380): any float that is not finite, or out of every track's reach, drops the
+  // whole frame; short frames are no frame at all, and never throw
+  const poisoned = [];
+  for (const [off, name] of [[6, 'rd'], [10, 'x'], [14, 'y'], [18, 'z']]) for (const bad of [NaN, Infinity, -Infinity, 3e38]) {
+    const b = buf.slice(0), v = new DataView(b); v.setFloat32(off, bad, true);
+    if (decodeSnap(b) !== null) poisoned.push(`${name}=${bad}`);
+  }
+  result(!poisoned.length, 'codec: a snapshot with NaN, Infinity, or an impossible place is dropped whole', poisoned.join(', '));
+  const shorts = [];
+  for (const n of [0, 1, 5, 6, 9, 10, SNAP_BYTES - 1]) {
+    try {
+      const part = buf.slice(0, n), hd = readHeader(part);
+      if (decodeSnap(part) !== null) shorts.push(`decode ${n}`);
+      if ((n < 10) !== (hd === null)) shorts.push(`header ${n}`);
+    } catch (e) { shorts.push(`${n} threw ${e.message}`); }
+  }
+  try { if (readHeader(null) !== null || decodeSnap(new Uint8Array(3)) !== null) shorts.push('null / typed array'); } catch (e) { shorts.push('null threw ' + e.message); }
+  result(!shorts.length, 'codec: short frames read as no header and no snapshot, without throwing', shorts.join(', '));
+  // relayed item events: one whose position or speed is not a finite number never reaches the race
+  const reached = ev => { try { NetRace.prototype._apply.call({ get race() { throw new Error('reached'); } }, ev); return false; } catch (e) { return e.message === 'reached'; } };
+  const shot = { k: 'shot', nid: 'a1', type: 'tweet', s: 0, x: 1, y: 2, z: 3, vx: 4, vy: 0, vz: 5, yaw: 0.5, speed: 30, target: -1, phase: 'fly' };
+  const leaks = [[{ ...shot, x: 'NaN' }, 'shot x string'], [{ ...shot, speed: 1e400 }, 'shot speed Infinity'], [{ ...shot, yaw: undefined }, 'shot no yaw'],
+    [{ k: 'hazard', s: 0, x: 1, y: null, z: 3 }, 'hazard y null'], [{ k: 'boom', s: 0, x: 1, y: 2 }, 'boom no z'], [{ k: 'shock', s: 0, x: {}, y: 0, z: 0 }, 'shock x object'],
+    [{ k: 'ink', s: 0, rank: 'first' }, 'ink rank string'], ['ev', 'a string']].filter(([ev]) => reached(ev)).map(([, name]) => name);
+  result(!leaks.length && reached(shot) && reached({ k: 'coin', s: 0, i: 3 }), 'events: relayed events with non-finite numbers are dropped, good ones go through', leaks.join(', '));
 }
 
 /* ---------- tracking and smoothness ---------- */

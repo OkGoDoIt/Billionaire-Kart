@@ -59,6 +59,15 @@ const LEVELS = [['easy', 'Relaxed', 'Rivals cruise, sit on their items, and stay
 const CC_LIST = [50, 100, 150, 200];
 const STAT_LABELS = [['speed', 'Speed'], ['accel', 'Acceleration'], ['handling', 'Handling'], ['weight', 'Weight']];
 
+/* The results screen's record callouts, as saved (App._finishRace): with several players racing, each names who set it.
+   One player's new best time covers their best lap too. */
+function recordBadges(records) {
+  if (!records || !(records.newBestRace || records.newBestLap)) return null;
+  const by = p => (records.players > 1 && p != null ? ` by P${p + 1}` : '');
+  const lap = records.newBestLap && !(records.newBestRace && records.lapBy === records.raceBy);
+  return h('div', { class: 'badges' }, records.newBestRace && h('div', { class: 'badge' }, 'New best time' + by(records.raceBy)), lap && h('div', { class: 'badge' }, 'New best lap' + by(records.lapBy)));
+}
+
 export class Menus {
   constructor(app) {
     this.app = app; this.layer = h('div', { class: 'menu-layer' }); app.ui.appendChild(this.layer);
@@ -533,7 +542,7 @@ export class Menus {
         ? h('div', { class: 'cupres-head' }, trophyImg(best), h('div', {}, h('h1', {}, head), h('p', { class: 'res-sub' }, track.name)))
         : h('h1', {}, track.name),
       gp && h('p', { class: 'res-sub' }, `Race ${gp.index + 1} of ${gp.count}`),
-      records?.newBestRace && h('div', { class: 'badge' }, 'New best time'), records?.newBestLap && !records.newBestRace && h('div', { class: 'badge' }, 'New best lap'),
+      recordBadges(records),
       !gp && vsLine,
       h('div', { class: 'res-table' + (gp ? ' gp' : '') }, rows),
       strips.length && h('div', { class: 'res-strips' }, strips),

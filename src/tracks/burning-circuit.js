@@ -237,11 +237,12 @@ export default {
       };
     })();
     /** Poster k on a board at (x, z) facing yaw, with a lettered back. */
-    const posterAt = (x, z, yaw, k, back, { w = 15, h = 10, up = 9, legs = 2 } = {}) => {
+    /** backArt: the painted art on the back too (a two-sided billboard), for a poster whose back faces a road it cannot read from */
+    const posterAt = (x, z, yaw, k, back, { w = 15, h = 10, up = 9, legs = 2, backArt = false } = {}) => {
       const y0 = sc.y(x, z), f = B.signFrame(w, h, up, { color: 0x3a2c34, legs }); sc.place(f, x, z, { yaw, y: y0 }); bake.add(f); take(x, z, w * 0.55);
       posters.place(k, [x + Math.sin(yaw) * 0.03, y0 + up, z + Math.cos(yaw) * 0.03], yaw, w, h);
-      const r = atlas.add(768, 512, B.board(back, { bg: '#1a1d29', fg: '#ffd23c', size: 120, stripe: '#ff6a2a' }));
-      atlas.place(r, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
+      if (backArt) posters.place(k, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h);
+      else { const r = atlas.add(768, 512, B.board(back, { bg: '#1a1d29', fg: '#ffd23c', size: 120, stripe: '#ff6a2a' })); atlas.place(r, [x - Math.sin(yaw) * 0.39, y0 + up, z - Math.cos(yaw) * 0.39], yaw + Math.PI, w, h); }
       // The payoff belongs under the poster art on its approach face. Both share the same frame.
       const bandH = Math.min(3.5, h * 0.26), bandY = y0 + up - (h + bandH) / 2;
       const rail = new ModelBuilder();
@@ -289,7 +290,8 @@ export default {
     };
     /** True when (x, z) is on a grandstand's footprint, its roof included, by margin m. */
     const onStand = (x, z, m = 0.6) => standSpots.some(s => { const dx = x - s.x, dz = z - s.z, u = dx * Math.cos(s.yaw) - dz * Math.sin(s.yaw), v = dx * Math.sin(s.yaw) + dz * Math.cos(s.yaw); return Math.abs(u) < 15.4 + m && v > -10 - m && v < 2.3 + m; });
-    sc.along({ from: 26.9, to: 1.0, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
+    const homeStands = sc.along({ from: 26.9, to: 1.0, side: -1, offset: 6.5, spacing: 34 });   // the run home's stands carry the camp names
+    homeStands.forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
     sc.along({ from: 27.3, to: 0.7, side: 1, offset: 17, spacing: 34, phase: 12 }).forEach((p, i) => putStand(i % 2 ? stand : stand2, p));
     sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
     {
@@ -482,7 +484,8 @@ export default {
         return { x: tip.x, y: tip.y, z: tip.z, dx: out.x, dz: out.z };
       });
       bake.add(pu); take(PU.x, PU.z, 13);
-      signAt(39, -288, 1.1, B.board('EL PULPO MECÁNICO', { bg: '#1a1d29', fg: '#ffb020', size: 130, sub: 'BREATHES FIRE. STAND BACK.', subFg: '#ff6a2a', subScale: 0.6, lines: 1 }), 15, 5.4, 6.5, { frame: 0x1a1d29 });
+      // its name stands up beside it, clear of the dunes' runoff, high enough to read past the ring of fire, turned to the slalom
+      signAt(40, -280, 0.52, B.board('EL PULPO MECÁNICO', { bg: '#1a1d29', fg: '#ffb020', size: 130, sub: 'BREATHES FIRE. STAND BACK.', subFg: '#ff6a2a', subScale: 0.6, lines: 1 }), 18, 6.5, 13, { frame: 0x1a1d29 });
       anim.push((dt, time) => {
         const live = nozzles.filter((nz, k) => (time * 0.22 + k * 0.17) % 1 < 0.3);
         if (!live.length) return;
@@ -502,8 +505,14 @@ export default {
 
       // the camp row: named camps along the run home, and one out in the dunes
       sign(26.55, -1, 17, B.board('CAMP CRYPTO', { ...STYLE.ink, size: 130, sub: 'KEYS LOST. VIBES IMMUTABLE.', subFg: '#7dff6a', subScale: 0.55 }), 17, 5.8, 8.5, { turn: 0.5 });
-      sign(26.85, -1, 17, B.board('OPULENT TEMPLE OF NOISE', { ...STYLE.hot, size: 120, sub: 'DECIBELS: ALL OF THEM', subScale: 0.55 }), 18, 5.8, 8.5, { turn: 0.5 });
-      sign(27.15, -1, 18, B.board('CAMP QUESTIONMARK', { ...STYLE.sky, size: 130, sub: 'ASK US ANYTHING. NO ANSWERS.', subFg: '#b0102c', subScale: 0.55 }), 17, 5.8, 8.5, { turn: 0.5 });
+      // The next two camps' names stand on the roofs of the run home's first two grandstands, turned to the
+      // oncoming karts: a stand apart, each has its own approach, and the stands sit below them, not in front.
+      [B.board('OPULENT TEMPLE OF NOISE', { ...STYLE.hot, size: 120, sub: 'DECIBELS: ALL OF THEM', subScale: 0.5 }),
+        B.board('CAMP QUESTIONMARK', { ...STYLE.sky, size: 130, sub: 'ASK US ANYTHING. NO ANSWERS.', subFg: '#b0102c', subScale: 0.5 })].forEach((draw, k) => {
+        const st = homeStands[k]; if (!st) return;
+        const x = st.x - Math.sin(st.yaw) * 3.6, z = st.z - Math.cos(st.yaw) * 3.6;   // the middle of the roof
+        signAt(x, z, faceIn(st.i, -1, 0.5), draw, 20, 7.4, 4.5, { y: st.y + 9.45, frame: 0x1a1d29 });
+      });
       sign(16.8, -1, 34, B.board('CAMP BURNING FUNDS', { ...STYLE.fire, size: 130, sub: "S'MORES & DILUTION", subFg: '#ffd23c', subScale: 0.6 }), 17, 5.8, 9, { turn: 0.6 });
 
       // the Gate: an arch over the Esplanade just past the start line, and the
@@ -584,7 +593,7 @@ export default {
       const runs = []; let run = []; pts.forEach((p, k) => { if (k && Math.abs(p[2] - pts[k - 1][2]) > 4) { runs.push(run); run = []; } run.push(p); }); runs.push(run);
       for (const r of runs) if (r.length > 1) { const g = B.velvetRope(r); ctx.group.add(g); bake.add(g, false); }
       // the way in: an arch, a bouncer, a clipboard
-      const ax = 55.5, az = -200, yaw = Math.PI / 2 + 0.25, mb = new ModelBuilder();
+      const ax = 55.5, az = -200, yaw = Math.PI / 2 - 0.25, mb = new ModelBuilder();   // the board turns to the oncoming karts
       for (const dz of [-4.6, 4.6]) mb.add('m', box(0.7, 7.6, 0.7, 0.1, 1), { p: [ax, sc.y(ax, az + dz) + 3.8, az + dz] });
       mb.add('m', box(11, 3.4, 0.3, 0.05, 1), { p: [ax + 0.25, sc.y(ax, az) + 7.4, az], r: [0, yaw, 0] });
       const g = mb.build({ m: plastic(0x1a1d29, 0.5) }); ctx.group.add(g); bake.add(g);
@@ -604,7 +613,8 @@ export default {
     // ---- the jet park beside the fire slalom: a runway, a row of private jets, and the sign ----
     {
       const jets = [], cols = [0x1f2a44, 0xb21e3a, 0x0e7490, 0x1a1d29, 0x7b5cff, 0xc2410c, 0x16a34a];
-      for (let k = 0; k < 7; k++) { const x = 124, z = -136 - k * 23; if (clear(x - 8.5, z + 8.5, 2) && clear(x - 7, z - 7, 2)) jets.push({ x, z }); }
+      const CN = { x: 113, z: -236 };   // the carbon-neutral poster stands in one jet's slot
+      for (let k = 0; k < 7; k++) { const x = 124, z = -136 - k * 23; if (clear(x - 8.5, z + 8.5, 2) && clear(x - 7, z - 7, 2) && !near(x, z, CN, 14)) jets.push({ x, z }); }
       jets.forEach(({ x, z }, k) => { const j = B.privateJet({ accent: cols[k % cols.length] }); sc.place(j, x, z, { yaw: -Math.PI / 4 + 0.08 * ((k % 3) - 1) }); bake.add(j); });
       // the runway behind them, with a centre line
       const rw = new ModelBuilder(), rx = 166;
@@ -612,7 +622,7 @@ export default {
       for (let z = -100; z > -290; z -= 12) rw.add('line', box(0.6, 0.06, 6, 0.02, 1), { p: [rx, sc.y(rx, z) + 0.15, z] });
       for (const sx of [-9, 9]) for (let z = -98; z > -292; z -= 8) rw.add('lamp', box(0.3, 0.3, 0.3, 0.05, 1), { p: [rx + sx, sc.y(rx + sx, z) + 0.2, z] });
       const g = rw.build({ tar: plastic(0x3a3540, 0.9), line: plastic(0xf4f4f0, 0.6), lamp: glow(0x46d6ff, 2.2) }, { cast: false }); ctx.group.add(g); bake.add(g, false);
-      posterAt(142, -214, -0.4, 3, 'CARBON NEUTRAL (VIBES)', { w: 27, h: 18, up: 14, legs: 3 });
+      posterAt(CN.x, CN.z, -0.25, 3, 'CARBON NEUTRAL (VIBES)', { w: 22, h: 14.7, up: 12, legs: 3 });   // at the front of the jet park, square to the slalom
     }
     // fire jets in the slalom: product placement
     sign(11.4, 1, 14.5, B.board('NOT A FLAMETHROWER', { bg: '#1a1d29', fg: '#ff6a2a', size: 140, border: '#ff6a2a' }), 12, 4, 6.5, { turn: 0.25 });
@@ -847,8 +857,12 @@ export default {
     for (const [at, side, off, text, st, sub] of BOARDS) sign(at, side, off, B.board(text, { ...STYLE[st], size: 130, sub, subFg: sub ? STYLE[st].fg : null, subScale: 0.55 }), 20, 6.6, 10, { turn: 0.45 });
 
     // the painted posters: the gig poster round the Bowl, the valet stand on the slalom, the playa's terms by the camp
-    poster(6.3, -1, 22, 0, 'NO REQUESTS');
-    poster(9.95, 1, 26, 2, 'KEYS LEFT IN IGNITION', { turn: 0.35 });
+    poster(6.3, -1, 22, 0, 'NO REQUESTS', { up: 12.5 });   // its caption clears the Bowl's banked rim
+    // the valet stand: on the outside of the right-hander onto the slalom, where the road out of the Bowl points
+    {
+      const P0 = { x: 62, z: -52 }, i = track.indexAtCp(9.3), yaw = Math.atan2(track.px[i] - P0.x, track.pz[i] - P0.z), rx = Math.cos(yaw) * 9, rz = -Math.sin(yaw) * 9;
+      if (clear(P0.x, P0.z, 0.5) && clear(P0.x + rx, P0.z + rz, 0.5) && clear(P0.x - rx, P0.z - rz, 0.5)) posterAt(P0.x, P0.z, yaw, 2, 'KEYS LEFT IN IGNITION', { w: 18, h: 12, up: 13.5, backArt: true });   // its back faces the Esplanade, behind the stands there
+    }
     poster(24.6, -1, 19, 1, 'RADICAL SELF-RELIANCE (CATERED)');
     posters.flush();
     bake.flush();

@@ -11,7 +11,7 @@ import * as P from '../models/props.js';
 import * as M from '../models/props-mars-colony.js';
 import { makeBaker } from '../models/props-international-waters.js';
 import * as K from '../models/props-burning-circuit.js';   // the sign atlas and boards
-import { ModelBuilder, cyl, box, sphere, plastic, glow } from '../models/build.js';
+import { ModelBuilder, cyl, box, sphere, tube, plastic, glow } from '../models/build.js';
 
 /* The canyon the jump crosses: a winding cut along the east side of the rim road. */
 const CANYON = [[330, -10], [270, -100], [242, -165], [240, -215], [258, -262], [260, -320], [216, -371], [176, -392], [148, -386]];
@@ -1070,9 +1070,157 @@ function dress(ctx) {
   poster(13.8, -1, 21, 1, 'EARTH: HAD ITS CHANCE', { w: 20, h: 13.3, up: 19, strap: 0.28 });   // raised so its strapline clears the crater rim, and a strapline big enough to read from the landing deck
   poster(5.38, -1, 10.5, 2, 'MUST BRING OWN OXYGEN', { w: 18, h: 12, up: 9.5, turn: 2, roadLevel: true });
   poster(22.28, -1, 20.5, 3, 'WORK FROM DOME: MANDATORY', { w: 14, h: 9.3, up: 8.2, turn: 2.7 });
+  xGags({ ctx, sc, track, atlas, bake, faceIn });
   posters.flush();
 
   staticProps.flush();
   atlas.flush();
+}
+
+/* ---------- the X and Grok gags: five set pieces added on top of the finished track. They run last, draw no random
+   numbers, and reserve no ground, so nothing placed before them moves. Lettering goes on the shared sign atlas. ---------- */
+const X_HEX = '#1d9bf0', POST_INK = '#0f1419', POST_GREY = '#536471';
+function xGags({ ctx, sc, track, atlas, bake, faceIn }) {
+  const { anim } = ctx, SANS = K.SANS;
+  /** Put a model at c facing yaw, its top leaned toward the viewer by `lean`, and bake it. */
+  const put = (obj, c, yaw, lean = 0) => { obj.rotation.order = 'YXZ'; obj.position.set(c[0], c[1], c[2]); obj.rotation.set(lean, yaw, 0); ctx.group.add(obj); bake.add(obj); };
+  /** A frame of reference at c facing yaw: o across (to the right as you look at the face), y up, f out of the face. */
+  const frame = (c, yaw) => { const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw); return (o, y, f = 0) => [c[0] + rx * o + fx * f, c[1] + y, c[2] + rz * o + fz * f]; };
+
+  // ---- 1. The company store is verified: a paid checkmark on its roof sign, with the price tag still on ----
+  {
+    const p = sc.beside(20.48, -1, 17), ai = track.indexAtCp(19.9), yaw = Math.atan2(track.px[ai] - p.x, track.pz[ai] - p.z);
+    const at = frame([p.x, p.y, p.z], yaw), R = 5, BX = 11.2, BY = 22.8;
+    put(M.verifiedBadge({ r: R }), at(BX, BY, 0.55), yaw);
+    const tw = 15.5, th = 7.4, TX = -1, TY = 21.5;
+    put(M.priceTag({ w: tw, h: th }), at(TX, TY, 0.6), yaw);
+    const mb = new ModelBuilder();
+    mb.add('m', box(0.55, BY - 9, 0.55, 0.1, 1), { p: at(BX, (BY + 9) / 2, -0.75) });       // the mast, down behind the name board to the roof
+    // the string loops from the tag's grommet to the badge's rim
+    mb.add('m', tube([at(TX + tw / 2 - th * 0.25, TY, 0.6), at((TX + tw / 2 + BX - R) / 2 + 0.3, TY - 0.5, 0.75), at(BX - R * 0.86, BY + R * 0.25, 0.6)], 0.07, 10, 5));
+    const g = mb.build({ m: plastic(0x2a2026, 0.5) }); ctx.group.add(g); bake.add(g);
+    const r = atlas.add(1024, 652, (gg, w, h) => {
+      gg.fillStyle = '#f7f9f9'; gg.fillRect(0, 0, w, h);
+      K.fitText(gg, 'VERIFIED: $8/MO', w / 2, h * 0.37, w * 0.92, 200, SANS, X_HEX, { lines: 2, maxH: h * 0.66 });
+      gg.fillStyle = '#cfd9de'; gg.fillRect(w * 0.08, h * 0.725, w * 0.84, 6);
+      K.fitText(gg, 'IDENTITY OPTIONAL', w / 2, h * 0.85, w * 0.92, 100, SANS, POST_INK, { lines: 1 });
+    });
+    atlas.both(r, at(TX - th * 0.25, TY, 0.6 + 0.17), yaw, tw - th * 0.5 - 0.3, th - 0.3, 0.34);
+  }
+
+  // ---- 2. Colony HQ: the giant X on the roof, gently pulsing, and a permit still pending ----
+  {
+    // Dead ahead down the straight out of the hairpin, beyond the last corner, on the slope right of the little dome
+    // (clear of it and of the grandstands from the whole straight). A podium levels it: the floor sits at the highest
+    // ground along the forecourt's front edge, and the podium reaches down to the lowest ground under it.
+    const i0 = track.indexAtCp(26.4), D = 138, lat = -14, hx = Math.hypot(track.lx[i0], track.lz[i0]) || 1;
+    const cx = track.px[i0] + track.tx[i0] * D + track.lx[i0] / hx * lat, cz = track.pz[i0] + track.tz[i0] * D + track.lz[i0] / hx * lat;
+    const ai = track.indexAtCp(26.2), yaw = Math.atan2(track.px[ai] - cx, track.pz[ai] - cz), W = 30, H = 16, DD = 16;
+    const ground = frame([cx, 0, cz], yaw);
+    let y0 = -Infinity, low = Infinity;
+    for (let o = -W / 2 - 3; o <= W / 2 + 3; o += 3) for (let f = -DD / 2 - 3.5; f <= DD / 2 + 8.5; f += 3) {
+      const q = ground(o, 0, f), y = track.terrainHeight(q[0], q[2]); low = Math.min(low, y);
+      if (f > DD / 2 + 6) y0 = Math.max(y0, y + 0.1);
+    }
+    const hq = M.colonyHQ({ w: W, h: H, d: DD, plinth: y0 - low + 1 }), X = hq.userData.x, at = frame([cx, y0, cz], yaw);
+    put(hq, [cx, y0, cz], yaw);
+    const letter = M.rooftopX({ s: X.s });
+    put(letter.rim, at(0, X.y, -0.6), yaw);
+    letter.face.position.set(...at(0, X.y, -0.6)); letter.face.rotation.y = yaw; ctx.group.add(letter.face);
+    const mat = letter.face.children[0].material;
+    anim.push((dt, time) => { mat.emissiveIntensity = 0.45 + 0.5 * (0.5 + 0.5 * Math.sin(time * Math.PI / 2)); });   // a slow breath, four seconds a cycle: never a flash
+    // the notice: a plywood board nailed up on the porch roof, over the front doors
+    const nw = 15, nh = 7, up = 5.65 + nh / 2, nat = frame(at(0, 0, DD / 2 + 2.9), yaw), nb = new ModelBuilder();
+    nb.add('ply', box(nw + 0.4, nh + 0.4, 0.22, 0.04, 1), { p: nat(0, up, -0.12), r: [0, yaw, 0] });
+    for (const sx of [-0.3, 0.3]) nb.add('post', box(0.3, nh * 0.8, 0.3, 0.05, 1), { p: nat(sx * nw, 5.45 + nh * 0.4, -1.1), r: [0, yaw, 0] });
+    for (const sx of [-1, 1]) nb.add('post', box(nw * 0.5, 0.3, 0.2, 0.04, 1), { p: nat(sx * nw * 0.2, up, -0.32), r: [0, yaw, sx * 0.3] });
+    const ng = nb.build({ post: plastic(0x8a6a44, 0.85), ply: plastic(0xc9a46a, 0.85) }); ctx.group.add(ng); bake.add(ng);
+    const r = atlas.add(1024, 478, (gg, w, h) => {
+      gg.fillStyle = '#d2ad72'; gg.fillRect(0, 0, w, h);
+      gg.fillStyle = 'rgba(120,80,40,0.35)'; for (let k = 1; k < 4; k++) gg.fillRect(0, (h * k) / 4 - 2, w, 4);
+      for (const [x, y] of [[0.04, 0.1], [0.96, 0.1], [0.04, 0.9], [0.96, 0.9]]) { gg.beginPath(); gg.arc(w * x, h * y, 7, 0, 7); gg.fill(); }
+      gg.strokeStyle = '#b3261e'; gg.lineWidth = 10; gg.strokeRect(34, 34, w - 68, h - 68);
+      K.fitText(gg, 'PERMIT PENDING', w / 2, h / 2, w * 0.84, 210, K.FONT, '#b3261e', { lines: 2, maxH: h * 0.76 });
+    });
+    atlas.place(r, nat(0, up, 0.02), yaw, nw, nh);
+  }
+
+  // ---- 3 and 4. In the crater: a post saying Mars is terraformed, its community note, and Grok's answer ----
+  /** A dark billboard frame `off` beyond the outside edge at `at`, panel centre `up` above the road. */
+  const billboard = (at, off, w, h, up, turn) => {
+    const p = sc.beside(at, -1, off), yaw = faceIn(p.i, -1, turn), gy = sc.y(p.x, p.z), lift = Math.max(up, p.roadY + up - gy);
+    put(K.signFrame(w, h, lift, { color: 0x15181c, legs: 2 }), [p.x, gy, p.z], yaw);
+    return { c: [p.x, gy + lift, p.z], yaw };
+  };
+  {
+    const { c, yaw } = billboard(15.0, 15, 22, 14, 13.5, 0.55), at = frame(c, yaw);
+    const card = atlas.add(1024, 410, (g, w, h) => {
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#c1440e'; g.beginPath(); g.arc(92, 92, 62, 0, 7); g.fill();          // the avatar: a little red planet
+      g.fillStyle = '#e0763c'; g.beginPath(); g.arc(72, 76, 16, 0, 7); g.arc(112, 112, 10, 0, 7); g.fill();
+      g.fillStyle = '#cfd9de'; g.fillRect(180, 58, 300, 26); g.fillRect(180, 104, 190, 20);
+      K.fitText(g, 'MARS: FULLY TERRAFORMED', w / 2, h * 0.64, w * 0.92, 150, SANS, POST_INK, { lines: 2, maxH: h * 0.6 });
+    });
+    atlas.place(card, at(0, 2.7, 0.02), yaw, 22, 8.6);
+    // the note stands proud of the post
+    const nw = 19.5, nh = 5.6, mb = new ModelBuilder();
+    mb.add('n', box(nw + 0.5, nh + 0.5, 0.5, 0.2, 2));
+    put(mb.build({ n: plastic(0xcfd9de, 0.5) }), at(0, -3.9, 0.3), yaw);
+    const note = atlas.add(1024, 294, (gg, w, h) => {
+      gg.fillStyle = '#f2f5f6'; gg.fillRect(0, 0, w, h);
+      gg.fillStyle = POST_GREY; gg.beginPath(); gg.arc(78, 70, 40, 0, 7); gg.fill();      // the people icon
+      gg.fillStyle = '#f2f5f6'; gg.beginPath(); gg.arc(66, 62, 10, 0, 7); gg.arc(92, 62, 10, 0, 7); gg.fill();
+      gg.fillRect(54, 78, 24, 16); gg.fillRect(80, 78, 24, 16);
+      K.fitText(gg, 'READERS ADDED CONTEXT:', 140 + (w - 170) / 2, 72, w - 190, 76, SANS, POST_INK, { lines: 1 });
+      K.fitText(gg, 'NO', w / 2, h * 0.67, w * 0.6, 190, SANS, POST_INK, { lines: 1 });
+    });
+    atlas.place(note, at(0, -3.9, 0.57), yaw, nw, nh);
+  }
+  {
+    const { c, yaw } = billboard(16.35, 15, 24, 17, 14, 0.55), at = frame(c, yaw);
+    // two avatars, built facing +Z: a colonist in a helmet, and Grok's disc with its slash
+    const face = [Math.PI / 2, 0, 0], mb = new ModelBuilder();
+    mb.add('rust', cyl(1.7, 1.7, 0.5, 20), { p: [-9.9, -1.5, 0], r: face });
+    mb.add('cream', cyl(1.0, 1.0, 0.56, 16), { p: [-9.9, -1.25, 0.05], r: face });
+    mb.add('cream', cyl(1.6, 1.6, 0.5, 20), { p: [9.9, -6.7, 0], r: face });
+    mb.add('ink', box(0.45, 2.5, 0.56, 0.1, 1), { p: [9.9, -6.7, 0.07], r: [0, 0, -0.7] });
+    put(mb.build({ rust: plastic(0xc1440e, 0.5), cream: plastic(0xf2efe6, 0.5), ink: plastic(0x0f1419, 0.4) }), at(0, 0, 0.35), yaw);
+    // the question, then the answer: each bubble in two big lines so it reads from across the bowl
+    const BH = 6.6, B1 = [-2.2, 4.6, 17], B2 = [2.4, -2.6, 15];
+    put(M.chatBubble({ w: B1[2], h: BH, dir: -1, color: 0xffffff }), at(B1[0], B1[1], 0.45), yaw);
+    put(M.chatBubble({ w: B2[2], h: BH, dir: 1, color: 0x1d9bf0 }), at(B2[0], B2[1], 0.45), yaw);
+    const px = (bw) => Math.round(1024 * (BH - 0.8) / (bw - 1.4));
+    const q1 = atlas.add(1024, px(B1[2]), (gg, w, h) => { gg.fillStyle = '#ffffff'; gg.fillRect(0, 0, w, h); K.fitText(gg, '@GROK', w / 2, h * 0.27, w * 0.94, 190, SANS, X_HEX, { lines: 1, maxH: h * 0.46 }); K.fitText(gg, 'IS THIS TRUE?', w / 2, h * 0.73, w * 0.94, 190, SANS, POST_INK, { lines: 1, maxH: h * 0.46 }); });
+    const q2 = atlas.add(1024, px(B2[2]), (gg, w, h) => { gg.fillStyle = X_HEX; gg.fillRect(0, 0, w, h); K.fitText(gg, 'YES. ALSO NO.', w / 2, h / 2, w * 0.92, 210, SANS, '#ffffff', { lines: 2, maxH: h * 0.92 }); });
+    atlas.place(q1, at(B1[0], B1[1], 0.77), yaw, B1[2] - 1.4, BH - 0.8);
+    atlas.place(q2, at(B2[0], B2[1], 0.77), yaw, B2[2] - 1.4, BH - 0.8);
+  }
+
+  // ---- 5. Inside the biodome: one pane on the way out is blacked out behind a paywall ----
+  {
+    const D = { x: 9, z: -242, r: 40, h: 25, y: 14.6 };
+    let ex = 0; for (let i = track.indexAtCp(22); i < track.N; i++) if (Math.hypot(track.px[i] - D.x, track.pz[i] - D.z) > D.r) { ex = i; break; }
+    // the window beside the exit arch, where the glass looks out at Mars: a point left of the road at the exit, pushed
+    // out onto the glass at height Y
+    const hx = Math.hypot(track.lx[ex], track.lz[ex]) || 1, L = 24, qx = track.px[ex] + track.lx[ex] / hx * L, qz = track.pz[ex] + track.lz[ex] / hx * L;
+    const Y = 7.5, d = D.r * Math.sqrt(1 - (Y / D.h) ** 2) - 0.9, qd = Math.hypot(qx - D.x, qz - D.z), ux = (qx - D.x) / qd, uz = (qz - D.z) / qd;
+    const c = [D.x + ux * d, D.y + Y, D.z + uz * d], yaw = Math.atan2(-ux, -uz);
+    const lean = Math.atan2(Y / D.h ** 2, d / D.r ** 2);       // the glass's slope there: the panel lies along it
+    const w = 15, h = 8.8, mb = new ModelBuilder();
+    mb.add('rim', box(w + 1, h + 1, 0.5, 0.2, 2), { p: [0, 0, -0.1] });
+    mb.add('face', box(w, h, 0.3, 0.1, 1), { p: [0, 0, 0.1] });
+    const panel = mb.build({ rim: plastic(0xf2efe6, 0.45), face: plastic(0x07080a, 0.6) }), lock = M.padlock({ h: 2.1 });
+    lock.position.set(0, h / 2 - 2.15, 0.25); panel.add(lock);
+    put(panel, c, yaw, lean);
+    const r = atlas.add(1024, 595, (g, cw, ch) => {
+      g.fillStyle = '#07080a'; g.fillRect(0, 0, cw, ch);
+      K.fitText(g, 'VIEW LIMIT REACHED', cw / 2, ch * 0.5, cw * 0.94, 190, SANS, '#ffffff', { lines: 2, maxH: ch * 0.47 });
+      const pw = cw * 0.86, ph = ch * 0.19, px = (cw - pw) / 2, py = ch * 0.76;
+      g.fillStyle = X_HEX; g.beginPath(); g.arc(px + pw - ph / 2, py + ph / 2, ph / 2, -Math.PI / 2, Math.PI / 2); g.arc(px + ph / 2, py + ph / 2, ph / 2, Math.PI / 2, Math.PI * 1.5); g.closePath(); g.fill();
+      K.fitText(g, 'SUBSCRIBE TO SEE MARS', cw / 2, py + ph / 2, pw * 0.88, 84, SANS, '#ffffff', { lines: 1 });
+    });
+    const f = [Math.sin(yaw) * Math.cos(lean), -Math.sin(lean), Math.cos(yaw) * Math.cos(lean)];
+    atlas.place(r, [c[0] + f[0] * 0.27, c[1] + f[1] * 0.27, c[2] + f[2] * 0.27], yaw, w - 0.2, h - 0.2, -lean);
+  }
 }
 

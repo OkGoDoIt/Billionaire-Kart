@@ -26,7 +26,7 @@ export class DrivingGuide {
       else return null;
     }
     if (this.touch && device === 'kb' && !i.kbUsed) device = 'touch';
-    if (device === 'touch') return { profile: 'touch', touch: true, gas: 'Hold right', steer: i.tilt.enabled ? 'Tilt' : 'Slide left thumb', item: 'Flick up', drift: 'Steer sharply', trick: `Flick your ${handheldWord()}` };
+    if (device === 'touch') return { profile: 'touch', touch: true, gas: 'Hold right', steer: i.tilt.enabled ? 'Tilt' : 'Slide left thumb', item: 'Tap left', drift: 'Steer sharply', trick: `Flick your ${handheldWord()}` };
     if (family) {
       const name = action => describePadBind(i.padBinds, action, family);
       return { profile: assigned === 'any' ? family : device + family, gas: name('accelerate'), steer: i.padSteer === 'dpad' ? 'D-pad' : 'Left stick', item: name('item'), drift: name('drift') };
@@ -107,7 +107,7 @@ export class DrivingGuide {
         else if (this.touch.autoGo) parts = [c.steer, ' to steer'];
         else parts = [c.gas, ' to go  ·  ', c.steer, ' to steer'];
         break;
-      case 'item': parts = [c.item, c.touch ? ' on the pedal to use item' : ' Use item']; break;
+      case 'item': parts = c.touch ? [c.item, ' or ', 'Flick up', ' to use item'] : [c.item, ' Use item']; break;   // touch: both ways How to Play teaches (src/ui/touch.js)
       case 'drift': parts = [c.drift, c.touch ? ' to drift' : ' Hold while turning to drift']; break;
       case 'release': parts = c.touch ? ['Straighten up', ' to boost'] : [c.drift, ' Release to boost']; break;
       // on touch this only shows with flick to trick on and working: otherwise the kart tricks by itself (k.autoTrick)

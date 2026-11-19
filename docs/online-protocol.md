@@ -105,7 +105,7 @@ room = {
                  slots: [{ slot, racer, member: playerId|null, level: str|null, owner: playerId }],
                  finished: [{ slot, time, rank }] },
   offer: [trackId, ...] | null,    // public rooms: the tracks on offer this vote
-  cupState: null | { index, tracks: [id], totals: {racerId: points} },
+  cupState: null | { index, tracks: [id], totals: {racerId: points}, places: {racerId: [finish in each race, 0 = did not race]} },
   last: null | { trackId, results: [{ slot, racer, member, rank, time, estimated, points,
                  before: valuation|null, after: valuation|null }] }
 }

@@ -11,6 +11,7 @@ import { ITEMS, HIT_LINES, isFundingBoost } from '../race/items.js';
 import { getTrack, TRACK_BY_ID } from '../content/tracks.js';
 import { RACERS, RACER_BY_ID, RIVAL_PASS, HIT_REPLY } from '../content/racers.js';
 import { trialKey } from '../core/save.js';
+import { GhostRecorder } from '../core/ghost.js';
 import { makeRng } from '../core/util.js';
 
 export const STEP = 1 / 60;
@@ -86,7 +87,7 @@ export class RaceSession {
     this.rec = null;
     if (config.mode === 'timetrial' && this.race.players.length === 1) {
       this.view.setGhost(app.save?.ghost(config.trackId, config.cc));
-      this.rec = { racer: this.race.players[0].racer.id, step: 0.1, d: [], next: 0 };
+      this.rec = new GhostRecorder(this.race.players[0].racer.id);
     }
     this.after = new AfterFinish(this);
     this.acc = 0; this.phase = config.intro === false ? 'countdown' : 'intro'; this.paused = false; this.doneT = 0; this.reported = false;
@@ -206,7 +207,7 @@ export class RaceSession {
         if (this.autopilots) inp = this.autopilots.map(a => a.think(STEP));
         race.step(STEP, inp);
         this.acc -= STEP;
-        if (this.rec && !race.frozen && race.time >= this.rec.next && this.rec.d.length < 4 * 4000) { const k = race.players[0]; this.rec.next += this.rec.step; this.rec.d.push(+k.x.toFixed(2), +k.y.toFixed(2), +k.z.toFixed(2), +k.yaw.toFixed(3)); }
+        if (this.rec && !race.frozen) this.rec.sample(race.time, race.players[0]);
       }
       for (let i = 0; i < view.cams.length && i < race.players.length; i++) view.cams[i].rear = !!inputs[i]?.rear && !this.autopilots;
       if (this.phase === 'countdown' && !race.frozen) this.phase = 'racing';

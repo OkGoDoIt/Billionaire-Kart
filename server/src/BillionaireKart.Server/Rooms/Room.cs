@@ -486,7 +486,12 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
             changes.TryGetValue(sl.Member ?? Guid.Empty, out var ch);
             rows.Add(new ResultRow(sl.Index, sl.Racer, sl.Member, i + 1, TimeOf(sl), !finishedSlots.Contains(sl.Index), points,
                 ch?.Before, ch?.After));
-            if (Cup != null) Cup.Totals[sl.Racer] = Cup.Totals.GetValueOrDefault(sl.Racer) + points;
+            if (Cup != null)
+            {
+                Cup.Totals[sl.Racer] = Cup.Totals.GetValueOrDefault(sl.Racer) + points;
+                if (!Cup.Places.TryGetValue(sl.Racer, out var places)) Cup.Places[sl.Racer] = places = new int[Cup.Tracks.Count];
+                if (Cup.Index < places.Length) places[Cup.Index] = i + 1;
+            }
         }
 
         Last = new LastResults(race.TrackId, rows);

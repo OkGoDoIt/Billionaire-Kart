@@ -501,10 +501,10 @@ const RUG = { x: 226, z: 188, ax: 0.37, az: 0.93, L: 32, W: 18 };   // centre, t
 const BOAT = { x: 266, z: 293 };
 const TOWER = { x: 92, z: 48 };
 const LIQ = { x: 84, z: 258 };
-const LAMBO = { x: 124, z: 286 };
+const LAMBO = { x: 102, z: 286 };   // where the pier points out of its bend
 const BOARDS = [
   [0.3, -1, 15, 'FULLY BACKED (BY VIBES)', '#ffd23c', '#1a1d29'], [1.5, 1, 22, 'IN IT FOR THE TECHNOLOGY', '#14213d', '#ffffff'],   // clear of the last grandstand, which hid it at 1.2 (#376)
-  [2.3, 1, 22, 'FUNDS ARE SAFU (PROBABLY)', '#16a34a', '#ffffff'], [3.0, 1, 30, 'YOUR KEYS, OUR COINS', '#ef4444', '#ffffff'],
+  [2.3, 1, 22, 'FUNDS ARE SAFU (PROBABLY)', '#16a34a', '#ffffff'], [3.0, 1, 22, 'YOUR KEYS, OUR COINS', '#ef4444', '#ffffff'],
   [4.95, 1, 24, 'AUDITED BY MY COUSIN', '#ffffff', '#7b5cff'],   // past the rug: at 4.4 it stood right behind the RUG PULL sign (#376) [10.4, 1, 15, 'DOWN 99%: STILL EARLY', '#1a1d29', '#38ff74'],
   [11.2, 1, 22, 'BUY HIGH, SELL LOW', '#ff6a3d', '#ffffff'], [12.8, -1, 12, 'ONE TWEET FROM ZERO', '#0ea5e9', '#ffffff'],
   [15, 1, 18, 'COMMUNITY OWNED, FOUNDER SOLD', '#ffffff', '#ef4444'], [15.4, -1, 12, 'PRESIDENTIAL MEMECOIN: DOWN BIGLY', '#ffd23c', '#1a1d29'],
@@ -597,7 +597,13 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
     g.fillStyle = '#1a1d29'; g.fillRect(0, 0, w, h); fitText(g, 'BUY THE DIP', w * 0.42, h * 0.54, w * 0.72, 140, F, '#ffd23c', { lines: 1 });
     g.fillStyle = '#ffd23c'; g.beginPath(); g.moveTo(w * 0.86, h * 0.86); g.lineTo(w * 0.97, h * 0.48); g.lineTo(w * 0.9, h * 0.48); g.lineTo(w * 0.9, h * 0.14); g.lineTo(w * 0.82, h * 0.14); g.lineTo(w * 0.82, h * 0.48); g.lineTo(w * 0.75, h * 0.48); g.closePath(); g.fill();
   });
-  { atlas.place2(sDip, cw(STEP * 25 + 15, RAIL_V + 3, W + 6), CHART_YAW, 22, 6.3); const p = cw(STEP * 25 + 15, RAIL_V + 2.7, 0); pole(p[0], p[2], W - 2, W + 2.9, 0.35); }
+  // BUY THE DIP stands over the bottom of the dive, beside the landing, where the pier and the jump point: it sits dead
+  // ahead from halfway down the pier, all the way through the air, and its arrow points at where you come down
+  {
+    const q = sc.beside(10.35, 1, 16), rp = roadPt(9.0), yaw = Math.atan2(rp.x - q.x, rp.z - q.z), ground = sc.y(q.x, q.z), cy = Math.max(ground, W) + 16;
+    atlas.place2(sDip, [q.x, cy, q.z], yaw, 32, 9.2);
+    for (const d of [-9, 9]) pole(q.x + Math.cos(yaw) * d - Math.sin(yaw) * 0.4, q.z - Math.sin(yaw) * d - Math.cos(yaw) * 0.4, Math.min(ground, W) - 1, cy - 4.4, 0.45);
+  }
   // the price ticker, the chart's own title board, on two poles
   const tick = C.ledPanel(group, 1024, 352, [{ c: cw(26, 0.45, 30), yaw: CHART_YAW }, { c: cw(26, -0.45, 30), yaw: CHART_YAW + Math.PI }], 26, 8.9);
   for (const u of [15, 37]) { const p = cw(u, 0, 0); pole(p[0], p[2], W - 2, 25.6, 0.45); }
@@ -668,8 +674,10 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
   plinth.add('wood', cyl(0.18, 0.18, 0.6, 8), { p: [6.98, 1.9, 0], r: [0, 0, Math.PI / 2] });
   const stage = plinth.build({ stage: plastic(0x123744), brass: paint(0xe6aa38), wood: plastic(0xa16b43) });
   stage.position.set(listing.x, listing.y, listing.z); stage.rotation.y = listing.yaw; bake.add(stage);
-  const value = atlas.add(960, 144, signDraw('FUNDAMENTALS: ONE DOG', { bg: '#123744', fg: '#fff1cb', size: 120, lines: 1, pad: 0.025 }));
-  atlas.place(value, toWorld(listing, [0, 1.25, 2.52]), listing.yaw, 11.8, 1.75);
+  // the ceremony's banner stands behind the stage, over the dog, big enough to read up the climb
+  const value = atlas.add(1024, 300, signDraw('FUNDAMENTALS: ONE DOG', { bg: '#123744', fg: '#fff1cb', size: 150, lines: 2, pad: 0.05 }));
+  atlas.place2(value, toWorld(listing, [0, 9.6, -2.6]), listing.yaw, 15, 4.4);
+  for (const x of [-6.2, 6.2]) { const q = toWorld(listing, [x, 0, -2.75]); pole(q[0], q[2], listing.y - 0.5, listing.y + 11.6, 0.26); }
   const utility = atlas.add(384, 96, signDraw('UTILITY', { bg: '#f4d5a2', fg: '#42291e', size: 76, lines: 1 }));
   atlas.place(utility, toWorld(listing, [3.8, 3.38, 1.14]), listing.yaw, 2.7, 0.68);
   const dog = C.listingBalloon();
@@ -698,7 +706,7 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
   const beamMats = [];
   bull.userData.beams.forEach(pv => pv.traverse(o => { if (o.isMesh && !beamMats.some(bm => bm.m === o.material)) beamMats.push({ m: o.material, o: o.material.opacity }); }));
   const sBull = atlas.add(1024, 300, (g, w, h) => { g.fillStyle = '#14161c'; g.fillRect(0, 0, w, h); g.strokeStyle = '#ffbf2e'; g.lineWidth = 10; g.strokeRect(14, 14, w - 28, h - 28); fitText(g, 'THIS IS GOOD FOR BITCOIN', w / 2, h * 0.54, w * 0.88, 150, F, '#ffbf2e'); });
-  atlas.place(sBull, toWorld(bo, [0, 3.0, 12.04]), byaw, 16.4, 4.8);
+  atlas.place(sBull, toWorld(bo, [0, 3.0, 12.04]), byaw, 24, 7);   // the plinth's whole face: it reads from the promenade
   const sBull2 = atlas.add(1024, 160, signDraw('BULL MARKET (EST. TUESDAY)', { bg: '#14161c', fg: '#ffbf2e', size: 100, lines: 1 }));
   for (const s of [1, -1]) atlas.place(sBull2, toWorld(bo, [s * 5.54, 3.0, 0]), byaw + s * Math.PI / 2, 34, 5.3);
 
@@ -799,14 +807,15 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
 
   /* ---- 6. off the pier: the yacht LIQUIDITY, half sunk, and a supercar that finally arrived ---- */
   {
-    const y = C.superyacht('LIQUIDITY', { accent: 0x14213d, L: 40, bigName: true });
+    const y = C.superyacht('LIQUIDITY', { accent: 0x14213d, L: 40, topName: true });   // the hull sits too low to show its name over the pier
     y.rotation.set(-0.3, -Math.PI / 2 + 0.25, 0.12, 'YXZ'); y.position.set(LIQ.x, W - 3.4, LIQ.z); group.add(y);
     y.traverse(o => { if (o.isMesh) o.castShadow = false; });
     const car = C.supercar(0xa3e635); car.rotation.set(0.85, Math.atan2(-0.45, -0.9), 0.1, 'YXZ'); car.scale.setScalar(1.5); car.position.set(LAMBO.x, W - 2.6, LAMBO.z); group.add(car); bake.add(car, false);
-    const at = { x: LAMBO.x + 6, z: LAMBO.z + 4 }, yaw = yawTo(at, roadPt(7.3));
+    const at = { x: LAMBO.x - 6, z: LAMBO.z + 4 }, yaw = yawTo(at, roadPt(7.6));
     const s = atlas.add(768, 240, (g, w, h) => { g.fillStyle = '#a3e635'; g.fillRect(0, 0, w, h); g.strokeStyle = '#1a1d29'; g.lineWidth = 10; g.strokeRect(8, 8, w - 16, h - 16); fitText(g, 'FINALLY GOT THE LAMBO', w / 2, h * 0.53, w * 0.86, 110, F, '#1a1d29'); });
-    atlas.place2(s, [at.x, W + 4.2, at.z], yaw, 10, 3.1);
-    pole(at.x, at.z, W - 2, W + 2.7, 0.2);
+    // up on a tall pole, so it reads over the pier's candles from the bend
+    atlas.place2(s, [at.x, W + 11, at.z], yaw, 16, 5);
+    pole(at.x, at.z, W - 2, W + 8.6, 0.3);
   }
 
   /* ---- 7. the gas-fee gate at the pier ---- */
@@ -830,10 +839,10 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
     const o = { x: spot.x, y, z: spot.z, yaw, scale: VS }, f = vm.userData.face;
     const s = atlas.add(560, 1000, (g, w, h) => {
       g.fillStyle = '#0f172a'; g.fillRect(0, 0, w, h);
-      fitText(g, 'NFTs', w / 2, h * 0.08, w * 0.8, 110, F, '#ffd23c', { lines: 1 });
+      fitText(g, 'NFTs', w / 2, h * 0.085, w * 0.84, 160, F, '#ffd23c', { lines: 1 });   // lettering big enough to read off the headland
       const cols = ['#7dd3fc', '#fca5a5', '#fde68a', '#a7f3d0', '#c4b5fd', '#fdba74'];
-      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-        const x0 = 22 + c * 174, y0 = 170 + r * 196, cw2 = 164, ch = 150;
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
+        const x0 = 22 + c * 174, y0 = 190 + r * 196, cw2 = 164, ch = 150;
         g.fillStyle = cols[(r * 3 + c) % cols.length]; g.fillRect(x0, y0, cw2, ch);
         const mx = x0 + cw2 / 2, my = y0 + ch * 0.48;
         g.fillStyle = '#7a4a26'; for (const s2 of [-1, 1]) { g.beginPath(); g.arc(mx + s2 * 44, my - 6, 16, 0, 7); g.fill(); }
@@ -845,9 +854,9 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
         g.fillRect(mx - 12, my + 22, 24, 3);
         g.fillStyle = '#ffffff'; g.fillRect(x0 + cw2 - 56, y0 + ch - 34, 50, 28); fitText(g, '$4', x0 + cw2 - 31, y0 + ch - 19, 44, 26, SANS, '#16a34a', { lines: 1 });
       }
-      fitText(g, 'WAS $400,000', w / 2, h * 0.82, w * 0.86, 72, SANS, '#ffffff', { lines: 1 });
-      g.strokeStyle = '#ef4444'; g.lineWidth = 9; g.beginPath(); g.moveTo(w * 0.08, h * 0.83); g.lineTo(w * 0.92, h * 0.81); g.stroke();
-      fitText(g, 'NOW $4', w / 2, h * 0.93, w * 0.8, 100, F, '#38ff74', { lines: 1 });
+      fitText(g, 'WAS $400,000', w / 2, h * 0.65, w * 0.86, 84, SANS, '#ffffff', { lines: 1 });
+      g.strokeStyle = '#ef4444'; g.lineWidth = 10; g.beginPath(); g.moveTo(w * 0.08, h * 0.66); g.lineTo(w * 0.92, h * 0.64); g.stroke();
+      fitText(g, 'NOW $4', w / 2, h * 0.84, w * 0.9, 190, F, '#38ff74', { lines: 1 });
     });
     atlas.place(s, toWorld(o, f.c), yaw, f.w * VS, f.h * VS);
   }

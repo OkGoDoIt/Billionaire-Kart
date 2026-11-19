@@ -27,7 +27,7 @@ const HB = { x0: 100.5, x1: 196, z0: -141.3, z1: 20, H: 13, ceil: 10.8, door: 8.
 const ENTRY = { z0: -11.5, z1: 11 }, EXIT = { x0: 160.5, x1: 183.5 };
 /* Campus halls (centre, yaw, length, width, height, accent, company sign). The ground around each is paved. */
 const HALLS = [
-  { x: 30, z: -88, yaw: 0, L: 92, W: 26, H: 15, c: 0x1f6bff, name: 'OMNIMIND' },
+  { x: 30, z: -88, yaw: 0, L: 92, W: 26, H: 15, c: 0x1f6bff, name: 'OMNIMIND', nameBack: true },   // the arena roofs over the road its front faces: the name faces the switchback hairpin instead (#397)
   { x: 60, z: -175, yaw: 0, L: 64, W: 24, H: 14, c: 0x16a34a, name: 'THIRSTCOMPUTE', mural: 'WATER: 100% RECYCLED (INTO STEAM)' },
   { x: 55, z: -245, yaw: 0, L: 56, W: 24, H: 13, c: 0xff6a00, name: 'NEURAL ACRES', mural: 'YOUR JOB, NOW AS A SERVICE' },
   { x: 255, z: -55, yaw: Math.PI / 2, L: 84, W: 26, H: 15, c: 0x7b5cff, name: 'HYPERSCALE HOLDINGS', mural: 'OUR CHATBOT SAYS THE LAKE IS FINE' },
@@ -75,8 +75,9 @@ const HALL_DEFS = [
     panel: ['#2a1416', '#38191c', '#1a0c0e', '#ff5a2a'], glow: 0xffb08a, band: 0xff4a2a, accent: 0xe23b3b,
     portal: ['NOW TRAINING', 'ON YOU', '#ff7847'], signIn: ['GPU HALL · 41°C AND RISING', '#ff8a5c'], signOut: ['COOL DOWN AHEAD (NOT REALLY)', '#ffd23c'], jokes: ['WE BOUGHT ALL OF THEM', 'FAN SPEED: YES', 'SPICY TENSORS INSIDE'] },
   { id: 'inference', from: 21.85, to: 26.45, wide: [23.5, 26.1], wideIn: 9.5, wideOut: 16, inAt: 24.0, narrow: 4.6, up: 9.8, upWide: 11.8, skin: 'neon',
-    panel: ['#1d2333', '#262e42', '#121620', '#3dc8ff'], glow: 0x9fe6ff, band: 0x9fe6ff, accent: 0x1f6bff, tanks: [24.42, 25.2],
-    signIn: ['HALL 2 · INFERENCE', '#7fd0ff'], signOut: ['NOW LEAVING THE CLOUD', '#ffd23c'], signOutSub: 'NEXT: THE KEYNOTE (ATTENDANCE MANDATORY)',
+    panel: ['#1d2333', '#262e42', '#121620', '#3dc8ff'], glow: 0x9fe6ff, band: 0x9fe6ff, accent: 0x1f6bff, tanks: [24.42, 25.2], screen: 24.05,
+    // the door sign tells a joke: the hall's name is on the roof right above it
+    signIn: ['ANSWERS: 100% CONFIDENT', '#7fd0ff'], signOut: ['NOW LEAVING THE CLOUD', '#ffd23c'], signOutSub: 'NEXT: THE KEYNOTE (ATTENDANCE MANDATORY)',
     jokes: ['PLEASE HOLD. YOUR LAP IS IMPORTANT TO US', 'TRAINING RUN 7 OF ∞', 'NO GPUs WERE HARMED (MOST)', 'THIS HALL RUNS ON YOUR LAKE'] },
 ];
 /** Lap ranges that are indoors, Hall 9 included: for the tunnel zones, and for the sim/report. */
@@ -270,13 +271,14 @@ const PIPE_X = [2, 8, 14];
 const RACK_TILE = 4.8;   // metres of rack front per repeat of the rack texture (four 1.2 m cabinets)
 const FONT = '"Luckiest Guy", "Arial Black", sans-serif', SANS = '"Arial Black", "Helvetica Neue", Arial, sans-serif', MONO = '"Courier New", Courier, monospace';
 /* roadside boards [cp, side, offset, text, bg, fg]: all on the open-air stretches (4-6, 9.15-15, 17.55-21.85), since a board
-   beside a hall faces its wall */
+   beside a hall faces its wall. WE ARE OUT OF GPUS has the last one before Hall 2 (#397: beside the hall it never read); NOW
+   TRAINING ON YOU, which stood there, still reads on the GPU hall's portal and the blimp. */
 const BOARDS = [
   [6.4, -1, 26, 'YOUR LAKE, NOW IN THE CLOUD', '#1f6bff', '#ffffff'], [13, -1, 16, 'CARBON NEUTRAL BY 2099', '#16a34a', '#ffffff'],
   [20.0, 1, 16, 'POWERED BY GAS AND VIBES', '#ffd23c', '#1a1d29'], [11.4, -1, 16, 'ASK US ABOUT OUR LAKE', '#ffffff', '#1f6bff'],
-  [21.2, 1, 14, 'NOW TRAINING ON YOU', '#db2777', '#ffffff'], [4.8, 1, 16, 'THIRSTY? SO ARE WE', '#0ea5e9', '#ffffff'],
+  [21.2, 1, 14, 'WE ARE OUT OF GPUS', '#ffffff', '#e23b3b'], [4.8, 1, 16, 'THIRSTY? SO ARE WE', '#0ea5e9', '#ffffff'],
   [18.3, -1, 14, 'CLEAN ENERGY (COMING SOON)', '#ff6a00', '#ffffff'],
-  [22.9, -1, 16, 'WE ARE OUT OF GPUS', '#ffffff', '#e23b3b'], [14.6, -1, 16, 'SKY STILL MOSTLY BLUE', '#7b5cff', '#ffffff'],
+  [14.6, -1, 16, 'SKY STILL MOSTLY BLUE', '#7b5cff', '#ffffff'],
   [10.55, -1, 13, 'BEFORE', '#0ea5e9', '#ffffff'], [12.0, -1, 14, 'DRINK RESPONSIBLY. WE WILL.', '#ffffff', '#1f6bff'], [13.4, -1, 14, 'SHORTCUT OPENS AT 1%', '#ffd23c', '#1a1d29'],
 ];
 const PROTEST = ['WATER IS NOT A FEATURE', 'MY LAKE ≠ YOUR CACHE', 'BRING BACK THE FISH', "HONK IF YOU'RE THIRSTY", 'THE FISH WERE HERE FIRST', 'LEAVE SOME FOR US', 'UNPLUG IT', 'NOT MY RESERVOIR', 'TOUCH GRASS (WHILE IT LASTS)'];
@@ -587,11 +589,11 @@ function decorate(ctx) {
     const g = D.dataHall({ L: h.L, W: h.W, H: h.H, accent: h.c, ...opts }); sc.place(g, h.x, h.z, { yaw: h.yaw, y: h.y ?? sc.y(h.x, h.z) - 0.4 }); bake.add(g);
     const base = h.y ?? sc.y(h.x, h.z) - 0.4, c = Math.cos(h.yaw), s = Math.sin(h.yaw), W3 = (u, v, y) => [h.x + u * c + v * s, y, h.z - u * s + v * c];
     const col = '#' + new THREE.Color(h.c).getHexString();
-    if (h.name) {   // the company name stands on the roof at the front edge, so nothing in front of the hall hides it
-      const w = Math.min(h.L * 0.6, 46), hh = w / 5.2, u = -h.L / 2 + w / 2 + 4, v = h.W / 2 - 1.2, y = base + h.H + 1.4 + hh / 2;
+    if (h.name) {   // the company name stands on the roof at the front edge (or the back, nameBack), so nothing in front of the hall hides it
+      const back = h.nameBack ? -1 : 1, w = Math.min(h.L * 0.6, 46), hh = w / 5.2, u = -h.L / 2 + w / 2 + 4, v = back * (h.W / 2 - 1.2), y = base + h.H + 1.4 + hh / 2;
       const r = atlas.add(780, 150, (g, W2, H2) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, W2, H2); g.fillStyle = col; g.beginPath(); g.arc(H2 * 0.5, H2 * 0.5, H2 * 0.34, 0, 7); g.fill(); g.fillStyle = '#ffffff'; g.beginPath(); g.arc(H2 * 0.5 + H2 * 0.1, H2 * 0.5 - H2 * 0.08, H2 * 0.16, 0, 7); g.fill(); fitText(g, h.name, W2 * 0.55, H2 * 0.54, W2 * 0.8, 96, SANS, col, { lines: 1 }); });
-      atlas.place(r, W3(u, v, y), h.yaw, w, hh, 0, true);
-      const fr = new ModelBuilder(); for (const du of [-w * 0.35, 0, w * 0.35]) { const p = W3(u + du, v - 0.4, base + h.H + 0.8 + hh / 2); fr.add('f', box(0.5, 1.6 + hh, 0.5, 0.1, 1), { p: [p[0], p[1], p[2]] }); }
+      atlas.place(r, W3(u, v, y), h.yaw + (back < 0 ? Math.PI : 0), w, hh, 0, true);
+      const fr = new ModelBuilder(); for (const du of [-w * 0.35, 0, w * 0.35]) { const p = W3(u + du, v - back * 0.4, base + h.H + 0.8 + hh / 2); fr.add('f', box(0.5, 1.6 + hh, 0.5, 0.1, 1), { p: [p[0], p[1], p[2]] }); }
       bake.builder(fr, { f: plastic(0x6b7380, 0.5, 0.4) }, false);
     }
     if (h.mural) {  // the long front wall is the biggest canvas on the track: a joke you can read at speed
@@ -867,6 +869,9 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
   // delivery bay on the south side of the entry leg: a rack being dropped off (see below) — keep its floor clear of cabinets
   const DV = { x: 128, z: -13.5 };
   const inDV = (x, zm) => Math.abs(x - DV.x) < 5.4 && Math.abs(zm - DV.z) < 4.4;
+  // the GPU loading bay in front of the big door on the north wall: no cabinets, so the door reads down the whole northbound leg (#397)
+  const GB = { x0: 144, x1: 163, z1: -117, door: 151, tiny: 158 };
+  const inGB = (x, zA) => x > GB.x0 && x < GB.x1 && zA < GB.z1;
   const ruv = (f, a, b, c, d) => {
     if (f === 'pz' || f === 'nz') { const s = f === 'pz' ? 1 : -1; return [[s * a[0] / RACK_TILE, 0.2 + 0.8 * (a[1] - FY) / HR], [s * b[0] / RACK_TILE, 0.2 + 0.8 * (b[1] - FY) / HR], [s * c[0] / RACK_TILE, 0.2 + 0.8 * (c[1] - FY) / HR], [s * d[0] / RACK_TILE, 0.2 + 0.8 * (d[1] - FY) / HR]]; }
     return [[0, 0.04], [0.2, 0.04], [0.2, 0.16], [0, 0.16]];
@@ -879,7 +884,7 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
     let k = 0;
     for (let x = HB.x0 + 4.5; x + CAB < HB.x1 - 4.5; x += CAB, k++) {
       if (k % 23 >= 20) { xs.push(null); continue; }                 // a cross aisle every 20 cabinets
-      const ok = [zA, zC, (zA + zC) / 2].every(zz => edgeDist(x, zz) > CLR && edgeDist(x + CAB, zz) > CLR) && !inDV(x + CAB / 2, (zA + zC) / 2);
+      const ok = [zA, zC, (zA + zC) / 2].every(zz => edgeDist(x, zz) > CLR && edgeDist(x + CAB, zz) > CLR) && !inDV(x + CAB / 2, (zA + zC) / 2) && !inGB(x + CAB / 2, zA);
       xs.push(ok ? x : null);
     }
     // runs of consecutive cabinets
@@ -929,22 +934,28 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
   // cooling units round the walls, inside
   const units = [], free = (x, z) => edgeDist(x, z) > 2.5;
   for (let z = HB.z0 + 4; z < HB.z1 - 3; z += 3.4) { if (free(HB.x0 + 1.4, z)) units.push({ x: HB.x0 + 1.2, y: FY, z, yaw: Math.PI / 2 }); if (free(HB.x1 - 1.4, z)) units.push({ x: HB.x1 - 1.2, y: FY, z, yaw: -Math.PI / 2 }); }
-  for (let x = HB.x0 + 4; x < HB.x1 - 3; x += 3.4) { if (free(x, HB.z1 - 1.4)) units.push({ x, y: FY, z: HB.z1 - 1.2, yaw: Math.PI }); if (free(x, HB.z0 + 1.4) && (x < 133 || x > 156)) units.push({ x, y: FY, z: HB.z0 + 1.2, yaw: 0 }); }
+  for (let x = HB.x0 + 4; x < HB.x1 - 3; x += 3.4) { if (free(x, HB.z1 - 1.4)) units.push({ x, y: FY, z: HB.z1 - 1.2, yaw: Math.PI }); if (free(x, HB.z0 + 1.4) && (x < GB.x0 || x > GB.x1)) units.push({ x, y: FY, z: HB.z0 + 1.2, yaw: 0 }); }
   sc.instances(partsOf(D.crah()), units, { cast: false });
   // fire suppression by both doors
   for (const [x, z, yaw] of [[HB.x0 + 1.4, 15.5, Math.PI / 2], [HB.x0 + 1.4, -17, Math.PI / 2], [EXIT.x1 + 7, HB.z0 + 1.4, 0]]) { const fb = D.fireBank(8); sc.place(fb, x, z, { yaw, y: FY }); bake.add(fb, false); }
 
   /* the silly bits */
   const roadAt = cp => track.indexAtCp(cp);
-  // a big door for GPUs and a tiny one for humans, on the far wall as you head for the exit
+  // a big door for GPUs and a tiny one for humans, on the far wall beside the exit, at the end of a clear loading bay
   {
     const zf = HB.z0 + T + 0.05;
     const big = atlas.add(512, 448, (g, w, h) => { g.fillStyle = '#8d96a6'; g.fillRect(0, 0, w, h); g.fillStyle = '#7a8392'; for (let y = 0; y < h; y += 16) g.fillRect(0, y, w, 4); g.fillStyle = '#ffc928'; g.fillRect(0, h - 26, w, 26); fitText(g, 'GPUs', w / 2, h * 0.36, w * 0.8, 150, SANS, '#1a1d29', { lines: 1 }); fitText(g, 'AUTHORIZED SILICON ONLY', w / 2, h * 0.62, w * 0.85, 40, SANS, '#1a1d29', { lines: 1 }); });
-    atlas.place(big, [140, FY + 3.5, zf], 0, 8, 7);
+    atlas.place(big, [GB.door, FY + 3.5, zf], 0, 8, 7);
     const tiny = atlas.add(96, 192, (g, w, h) => { g.fillStyle = '#5b636f'; g.fillRect(0, 0, w, h); g.fillStyle = '#7d8590'; g.fillRect(6, 6, w - 12, h - 12); g.fillStyle = '#ffd23c'; g.beginPath(); g.arc(w * 0.78, h * 0.55, 5, 0, 7); g.fill(); });
-    atlas.place(tiny, [150, FY + 0.7, zf], 0, 0.7, 1.4);
+    atlas.place(tiny, [GB.tiny, FY + 0.7, zf], 0, 0.7, 1.4);
     const hs = atlas.add(256, 72, signDraw('HUMANS', { bg: '#ffffff', fg: '#1a1d29', font: SANS, size: 50, lines: 1, border: '#1a1d29' }));
-    atlas.place(hs, [150, FY + 2.25, zf], 0, 3.4, 0.96);
+    atlas.place(hs, [GB.tiny, FY + 2.25, zf], 0, 3.4, 0.96);
+    // the bay's floor markings: a yellow box with hatched corners
+    const bay = new ModelBuilder(), bx0 = GB.x0 + 1, bx1 = GB.x1 - 1.5, bz0 = HB.z0 + 1.2, bz1 = GB.z1 - 1.5;
+    for (const [w, d, px, pz] of [[bx1 - bx0, 0.3, (bx0 + bx1) / 2, bz0], [bx1 - bx0, 0.3, (bx0 + bx1) / 2, bz1], [0.3, bz1 - bz0, bx0, (bz0 + bz1) / 2], [0.3, bz1 - bz0, bx1, (bz0 + bz1) / 2]])
+      bay.add('paint', new THREE.BoxGeometry(w, 0.03, d), { p: [px, FY + 0.02, pz] });
+    for (let k = 0; k < 7; k++) bay.add('paint', new THREE.BoxGeometry(0.3, 0.03, 3.2), { p: [bx0 + 2 + k * 1.9, FY + 0.02, bz1 - 1.6], r: [0, 0.7, 0] });
+    bake.builder(bay, { paint: plastic(0xffc928, 0.6) }, false);
   }
   // a rack all of its own, labelled YOUR DATA, on the walkway beside the road
   {
@@ -1111,6 +1122,7 @@ function trainingHall({ THREE, track, ctx, sc, rng, bake, atlas, view, rackSys, 
       const x = track.px[i] + track.lx[i] * lat, z = track.pz[i] + track.lz[i] * lat;
       if (Math.hypot(x - drip.x, z - drip.z) < 6) continue;
       if (Math.abs(x - DV.x) < 6.5 && Math.abs(z - DV.z) < 5.5) continue;         // the delivery bay floor stays clear
+      if (x > GB.x0 - 2 && x < GB.x1 + 2 && z < GB.z1 + 8) continue;               // ...and so does the GPU bay's, so the big door reads
       const yaw = Math.atan2(-side * track.lx[i], -side * track.lz[i]), [bg, fg] = cols[k % cols.length];
       const r = atlas.add(900, 300, signDraw(eye[k % eye.length], { bg, fg, font: FONT, size: 110, border: fg }));
       atlas.place(r, [x, FY + 2.2, z], yaw, 6.6, 2.2, 0, true);
@@ -1295,7 +1307,8 @@ function roadHall(ctxs, cfg, kit) {
     // a sign over the doorway, facing the drivers: the name outside the entrance, the way on inside the exit
     const sign = j === 0 ? cfg.signIn : cfg.signOut;
     if (!sign) return;
-    const yawBack = Math.atan2(-track.tx[i], -track.tz[i]), so = j === 0 ? -0.1 : -0.45, sp = at(i, 0, DOOR + 1.7), w = 2 * o - 2;
+    // the way-out sign inside hangs below the ceiling (#397: in a low hall its top half was in it), over the top of the doorway if need be
+    const w = 2 * o - 2, yawBack = Math.atan2(-track.tx[i], -track.tz[i]), so = j === 0 ? -0.1 : -0.45, sp = at(i, 0, j === 0 ? DOOR + 1.7 : Math.min(DOOR + 1.7, U - 0.65 - w / 12.8));
     const P = dy => [sp[0] + track.tx[i] * so, sp[1] + dy, sp[2] + track.tz[i] * so];
     atlas.place(atlas.add(1024, 160, signDraw(sign[0], { bg: '#1a1d29', fg: sign[1], font: SANS, size: 92, lines: 1, stripe: '#' + new THREE.Color(cfg.band).getHexString() })), P(0.5), yawBack, w, w / 6.4);
     if (j > 0 && cfg.signOutSub) atlas.place(atlas.add(1024, 128, signDraw(cfg.signOutSub, { bg: '#20242c', fg: '#7dff9a', font: SANS, size: 64, lines: 1 })), P(-1.15), yawBack, w * 0.85, w * 0.85 / 8);
@@ -1329,13 +1342,19 @@ function roadHall(ctxs, cfg, kit) {
   }
 
   // cable gantries across the road, jokes hung from some of them
+  // the first joke gantry past the hall's screen carries its banner instead (inference, below)
+  let bannerK = -1; if (cfg.screen != null) for (let k = 3; k < n - 3; k += 14) if (cpOf(idx[k]) > cfg.screen) { bannerK = k; break; }
   if (cfg.gantries !== false) {
     let gj = 0;
     for (let k = 3; k < n - 3; k += 7) {
       const i = idx[k], U = UPf(i), yaw = Math.atan2(track.tx[i], track.tz[i]);
-      ov.add('tray', new THREE.BoxGeometry(0.6, 0.14, Wd(i, 1) + Wd(i, -1)), { p: at(i, (Wd(i, 1) - Wd(i, -1)) / 2, U - 2.6), r: [0, yaw + Math.PI / 2, 0] });
-      for (const sd of [-1, 1]) for (const l of [0.6, 0.3]) ov.add('rod', new THREE.BoxGeometry(0.06, 2.5, 0.06), { p: at(i, sd * Wd(i, sd) * l, U - 1.3) });
-      if (cfg.jokes && (k - 3) % 14 === 0) {
+      // a tray in front of the hall's hanging screen stops short of it on that side, so it does not cross it (#397)
+      const nearScreen = cfg.screen != null && cpOf(i) > cfg.screen - 0.75 && cpOf(i) < cfg.screen + 0.2, ext = sd => nearScreen && sd === -inSide ? hw(i) + 5 : Wd(i, sd);
+      ov.add('tray', new THREE.BoxGeometry(0.6, 0.14, ext(1) + ext(-1)), { p: at(i, (ext(1) - ext(-1)) / 2, U - 2.6), r: [0, yaw + Math.PI / 2, 0] });
+      for (const sd of [-1, 1]) for (const l of [0.6, 0.3]) ov.add('rod', new THREE.BoxGeometry(0.06, 2.5, 0.06), { p: at(i, sd * ext(sd) * l, U - 1.3) });
+      // each joke once (#397: a repeat hung near the exit hid the way-out sign), and none just before the screen or on the gantry after it,
+      // which carries the hall's banner (see inference below), so neither is read through a joke
+      if (cfg.jokes && (k - 3) % 14 === 0 && gj < cfg.jokes.length && !nearScreen && k !== bannerK) {
         const r = atlas.add(1024, 150, signDraw(cfg.jokes[gj++ % cfg.jokes.length], { bg: '#0f131c', fg: '#' + new THREE.Color(cfg.glow).getHexString(), font: SANS, size: 70, lines: 1, border: '#' + new THREE.Color(cfg.band).getHexString() }));
         atlas.place(r, at(i, 0, U - 3.6), Math.atan2(-track.tx[i], -track.tz[i]), 12.5, 1.83, 0, true);
         for (const sd of [-1, 1]) ov.add('rod', new THREE.BoxGeometry(0.04, 1.0, 0.04), { p: at(i, sd * 5, U - 3.0) });
@@ -1343,7 +1362,7 @@ function roadHall(ctxs, cfg, kit) {
     }
   }
 
-  const api = { THREE, track, sc, bake, atlas, at, idx, n, hw, Wd, UPf, wideK, inSide, ov, cpOf, kit, cfg, ctxs };
+  const api = { THREE, track, sc, bake, atlas, at, idx, n, hw, Wd, UPf, wideK, inSide, ov, cpOf, kit, cfg, ctxs, bannerK };
   const extra = HALL_EXTRAS[cfg.id]?.(api);
 
   bake.geo(panelMat, inner.geometry(THREE), false);
@@ -1375,6 +1394,18 @@ function wallFan(api, i, sd, up, r = 2.2) {
   kit.fans.push({ x: c[0] + Math.sin(yaw) * 0.14, y: c[1], z: c[2] + Math.cos(yaw) * 0.14, yaw, r });
 }
 
+/** A screen or board hung from the ceiling beside the road at cp, turned by `turn` radians from the wall on side sd toward
+ * the oncoming karts, so it reads on the approach instead of side-on (#397). Its upstream end stays by the wall. Hangs it
+ * on two rods and returns { c, yaw } for the panel. */
+function angledPanel(api, cp, sd, up, w, h, turn) {
+  const { at, Wd, UPf, ov, track, THREE } = api, i = track.indexAtCp(cp), ct = Math.cos(turn), st = Math.sin(turn);
+  const c = at(i, sd * (Wd(i, sd) - 0.6 - (w / 2) * st), up);
+  const n = [-sd * track.lx[i] * ct - track.tx[i] * st, -sd * track.lz[i] * ct - track.tz[i] * st];   // toward the road and back up it
+  const d = [n[1], -n[0]], rod = UPf(i) - 0.05 - (up + h / 2);   // d runs along the panel
+  if (rod > 0.05) for (const o of [-0.36, 0.36]) ov.add('rod', new THREE.BoxGeometry(0.06, rod, 0.06), { p: [c[0] + d[0] * w * o - n[0] * 0.1, up + h / 2 + rod / 2 + (c[1] - up), c[2] + d[1] * w * o - n[1] * 0.1] });
+  return { c, yaw: Math.atan2(n[0], n[1]) };
+}
+
 /** Each hall's own set pieces. Each gets the hall's api and may return { update(dt, time) }. */
 const HALL_EXTRAS = {
   /* The keynote arena: the start line runs down the red carpet of a product launch. Stands on the right, a rack
@@ -1382,12 +1413,18 @@ const HALL_EXTRAS = {
   arena(api) {
     const { THREE, track, sc, bake, atlas, at, idx, n, hw, Wd, UPf, ov, ctxs } = api;
     // the stage screen, high on the left wall, cycling launch slides
-    const iS = track.indexAtCp(27.55), sP = at(iS, Wd(iS, 1) - 0.3, 9.4);
-    const screen = ledSign(THREE, ctxs.ctx.group, 1024, 320, sP, Math.atan2(-track.lx[iS], -track.lz[iS]), 30, 9.4);
-    { const i0 = track.indexAtCp(27.2), i1 = track.indexAtCp(27.9); for (const i of [i0, i1]) ov.add('stage', new THREE.BoxGeometry(1.2, 11, 1.2), { p: at(i, Wd(i, 1) - 0.7, 9.2) }); }
+    // (hung from the roof and turned toward the karts coming in: flat on the wall it was read side-on, #397)
+    const sP = angledPanel(api, 27.55, 1, 9.8, 26, 8.1, 0.36);
+    const screen = ledSign(THREE, ctxs.ctx.group, 1024, 320, sP.c, sP.yaw, 26, 8.1);
     // murals: the old campus jokes, now on the arena walls
     { const i = track.indexAtCp(0.35), r = atlas.add(1600, 260, muralDraw('TRAINING ON YOUR DATA (THANKS)', '#ff3dbb')); atlas.place(r, at(i, Wd(i, 1) - 0.2, 11.6), Math.atan2(-track.lx[i], -track.lz[i]), 46, 7.4); }
-    { const i = track.indexAtCp(27.6), r = atlas.add(1600, 300, muralDraw('4 JOBS CREATED', '#3dc8ff')); atlas.place(r, at(i, -(Wd(i, -1) - 0.2), 12.4), Math.atan2(track.lx[i], track.lz[i]), 34, 6.2); }
+    { // a keynote banner hung across the straight (#397: on the side wall the stands' roofs and the ceiling hid it)
+      // just past the stage screen and narrower than the gap beside it, so the screen never stands in front of it; above the
+      // start gantry's sign as seen down the straight
+      const i = track.indexAtCp(27.95), p = at(i, 0, 11.8), yaw = Math.atan2(-track.tx[i], -track.tz[i]), r = atlas.add(1600, 300, muralDraw('4 JOBS CREATED', '#3dc8ff'));
+      atlas.place(r, p, yaw, 20, 3.75, 0, true);
+      const rod = UPf(i) - 0.05 - 13.675; for (const o of [-7.5, 7.5]) ov.add('rod', new THREE.BoxGeometry(0.06, rod, 0.06), { p: [p[0] + Math.cos(yaw) * o, p[1] + 1.875 + rod / 2, p[2] - Math.sin(yaw) * o] });
+    }
     // the wall at the far end carries the hall it leads to: the gallons counter and the name over the door
     const iE = idx[n - 1], ty = Math.atan2(-track.tx[iE], -track.tz[iE]), e = (lat, up, o) => { const p = at(iE, lat, up); return [p[0] - track.tx[iE] * o, p[1], p[2] - track.tz[iE] * o]; };
     ctxs.counterAt = { c: e(0, DOORH + 2.05, 0.5), yaw: ty };
@@ -1458,13 +1495,15 @@ const HALL_EXTRAS = {
   /* The GPU hall: hot aisles glowing red, heat shimmer off every rack, and the fans roaring. */
   gpu(api) {
     const { THREE, track, at, idx, n, hw, view = api.ctxs.view, atlas, Wd } = api;
-    { // the wall curves, so the 26 m mural goes up in four flat strips that follow it rather than one board whose ends sink in
-      const i = idx[Math.floor(n * 0.45)], N = track.N, W = j => at((j + N) % N, -(Wd((j + N) % N, -1) - 0.2), 8.7), step = 6.5 / Math.hypot(...W(i + 1).map((v, a) => v - W(i)[a]));
+    { // the wall curves, so the 26 m mural goes up in four flat strips that follow it rather than one board whose ends sink in;
+      // it sits past the apex, where the outside wall turns to face the karts (#397: at the apex it was read side-on), under the ceiling
+      const i = idx[Math.floor(n * 0.6)], N = track.N, W = j => at((j + N) % N, -(Wd((j + N) % N, -1) - 0.2), 8.1), step = 6.5 / Math.hypot(...W(i + 1).map((v, a) => v - W(i)[a]));
       const P = [0, 1, 2, 3, 4].map(k => W(i + Math.round((k - 2) * step)));
       if ((P[4][0] - P[0][0]) * track.lz[i] - (P[4][2] - P[0][2]) * track.lx[i] < 0) P.reverse();   // left to right as seen from the road
+      const whole = document.createElement('canvas'); whole.width = 1600; whole.height = 310;   // painted whole, then cut into the strips
       for (let k = 0; k < 4; k++) {
-        const [a, b] = [P[k], P[k + 1]], r = atlas.add(400, 260, (g, w, h) => { g.translate(-k * w, 0); muralDraw('WE BOUGHT ALL OF THEM', '#e23b3b')(g, w * 4, h); });
-        atlas.place(r, a.map((v, j) => (v + b[j]) / 2), Math.atan2(a[2] - b[2], b[0] - a[0]), Math.hypot(b[0] - a[0], b[2] - a[2]), 4.2);
+        const [a, b] = [P[k], P[k + 1]], r = atlas.add(400, 310, (g, w, h) => { if (k === 0) muralDraw('WE BOUGHT ALL OF THEM', '#e23b3b')(whole.getContext('2d'), whole.width, whole.height); g.drawImage(whole, k * 400, 0, 400, 310, 0, 0, w, h); });
+        atlas.place(r, a.map((v, j) => (v + b[j]) / 2), Math.atan2(a[2] - b[2], b[0] - a[0]), Math.hypot(b[0] - a[0], b[2] - a[2]), 5.0);
       }
       // wall fans up and down the hall, but none over the mural
       for (let k = 3; k < n - 2; k += 5) for (const sd of [-1, 1]) if (sd > 0 || Math.abs(idx[k] - i) > 2 * step + 4) wallFan(api, idx[k], sd, 8.0, 1.6);
@@ -1507,11 +1546,15 @@ const HALL_EXTRAS = {
       atlas.place(r, c, Math.atan2(-out * track.lx[i], -out * track.lz[i]), 15, 3.2, 0, true);
       for (const o of [-6, 6]) ov.add('rod', new THREE.BoxGeometry(0.05, UPf(i) - 8, 0.05), { p: [c[0] + track.tx[i] * o, c[1] + 1.6 + (UPf(i) - 8) / 2, c[2] + track.tz[i] * o] });
     }
-    const iS = track.indexAtCp(24.05), sP = at(iS, out * (Wd(iS, out) - 0.25), 8.4);
-    const screen = ledSign(THREE, ctxs.ctx.group, 1024, 384, sP, Math.atan2(-out * track.lx[iS], -out * track.lz[iS]), 19, 7.1);
-    { const i = track.indexAtCp(25.0), p = at(i, inSide * (Wd(i, inSide) - 0.2), 9.4), r = atlas.add(1600, 300, muralDraw('THINKING REALLY HARD', '#3dc8ff')); atlas.place(r, p, Math.atan2(-inSide * track.lx[i], -inSide * track.lz[i]), 24, 4.5); }
-    {
-      const i = track.indexAtCp(23.9), p = at(i, 0, UPf(i) + 5.4), yaw = Math.atan2(-118 - p[0], -300 - p[2]);
+    // the inference screen hangs over the hall floor turned toward the karts (on the wall it was read side-on and its top was in the ceiling, #397)
+    const sP = angledPanel(api, cfg.screen, out, 8.7, 14.4, 5.4, 0.6);
+    const screen = ledSign(THREE, ctxs.ctx.group, 1024, 384, sP.c, sP.yaw, 14.4, 5.4);
+    { // a banner hung under the first cable gantry after the screen, facing the karts (#397: on the inside wall it was read side-on)
+      const i = api.idx[api.bannerK], yaw = Math.atan2(-track.tx[i], -track.tz[i]), p = at(i, 0, UPf(i) - 2.6 - 0.09 - 3.75 / 2), r = atlas.add(1600, 300, muralDraw('THINKING REALLY HARD', '#3dc8ff'));
+      atlas.place(r, [p[0] - track.tx[i] * 0.36, p[1], p[2] - track.tz[i] * 0.36], yaw, 20, 3.75, 0, true);
+    }
+    { // the company name on the roof over the way in, turned to the hairpin it is seen from (#397: deeper in, only the GPU hall faced it)
+      const i = api.idx[0], h = track.indexAtCp(20.65), q = at(i, 0, UPf(i) + 5.4), p = [q[0] + track.tx[i] * 2.5, q[1], q[2] + track.tz[i] * 2.5], yaw = Math.atan2(track.px[h] - p[0], track.pz[h] - p[2]);
       const r = atlas.add(1280, 240, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#1f6bff'; g.beginPath(); g.arc(h * 0.5, h * 0.5, h * 0.34, 0, 7); g.fill(); g.fillStyle = '#7fd0ff'; g.beginPath(); g.arc(h * 0.5, h * 0.5, h * 0.15, 0, 7); g.fill(); fitText(g, 'DEEPTHIRST', w * 0.58, h * 0.4, w * 0.72, 150, SANS, '#1a1d29', { lines: 1 }); fitText(g, 'HALL 2 · INFERENCE', w * 0.58, h * 0.8, w * 0.7, 56, SANS, '#1f6bff', { lines: 1 }); });
       atlas.place(r, p, yaw, 32, 6, 0, true);
       for (const o of [-11, 0, 11]) ov.add('steel', box(0.6, 6.4, 0.6, 0.1, 1), { p: [p[0] + Math.cos(yaw) * o - Math.sin(yaw) * 0.4, p[1] - 3.0, p[2] - Math.sin(yaw) * o - Math.cos(yaw) * 0.4] });
@@ -1535,8 +1578,8 @@ const HALL_EXTRAS = {
           screen.draw((g, w, h) => {
             g.fillStyle = '#04070b'; g.fillRect(0, 0, w, h);
             g.fillStyle = '#3dc8ff'; g.font = `bold 40px ${MONO}`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('INFERENCE IN PROGRESS', 34, 46);
-            fitText(g, q, w / 2, 150, w - 80, 92, SANS, '#ffffff', { lines: 1 });
-            fitText(g, a, w / 2, 262, w - 80, 104, SANS, a === 'YES' || a === 'US' ? '#38ff74' : '#ffb020', { lines: 1 });
+            fitText(g, q, w / 2, 148, w - 60, 100, SANS, '#ffffff', { lines: 1 });
+            fitText(g, a, w / 2, 268, w - 80, 136, SANS, a === 'YES' || a === 'US' ? '#38ff74' : '#ffb020', { lines: 1 });
             g.fillStyle = '#5a6a78'; g.font = `bold 32px ${MONO}`; g.textAlign = 'right'; g.fillText(`CONFIDENCE ${pc}%`, w - 34, h - 30);
           });
         }
@@ -1854,7 +1897,13 @@ function reservoir({ THREE, track, ctx, sc, rng, bake, atlas, palette, view }) {
   }
   const gauge = ledSign(THREE, group, 768, 384, [8, 32.6, zc - 6.4], Math.PI, 15, 7.5);
   {
-    const s = atlas.add(768, 120, signDraw('H₂O → GPU', { bg: '#ffc928', fg: '#1a1d29', font: SANS, size: 80, lines: 1 }));
+    // the subscript 2 is drawn small in the sign's own face: Arial Black has no '₂', so it fell back to another font
+    const s = atlas.add(768, 120, (g, w, h) => {
+      g.fillStyle = '#ffc928'; g.fillRect(0, 0, w, h); g.fillStyle = '#1a1d29'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+      const big = `80px ${SANS}`, small = `52px ${SANS}`, parts = [['H', big, 0], ['2', small, 14], ['O → GPU', big, 0]];
+      const width = parts.reduce((t, [txt, f]) => { g.font = f; return t + g.measureText(txt).width; }, 0), y = h / 2 + 28;
+      let x = (w - width) / 2; for (const [txt, f, dy] of parts) { g.font = f; g.fillText(txt, x, y + dy); x += g.measureText(txt).width; }
+    });
     atlas.place(s, [8, 25.1, -347.4 - 0.95], Math.PI, 11, 1.72);
   }
 

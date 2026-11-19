@@ -171,10 +171,11 @@ export function flagShop() {
   }));
   const cols = [0xd33a2c, 0x2456a6, 0xf2f2f2, 0x1d7a4f, 0xf2b234, 0x7030a0];
   const fb = new ModelBuilder();
+  // the poles stand just behind the sign and the flags fly above it: in front of it they covered its lower line (#376)
   cols.forEach((c, i) => {
-    const x = -8 + i * 3.3, z = i % 2 ? 4.6 : 3.4;
-    fb.add('pole', cyl(0.07, 0.09, 6.4, 6), { p: [x, 3.4, z] });
-    fb.add('f' + i, box(2.3, 1.35, 0.06, 0.05, 1), { p: [x + 1.2, 5.9, z], r: [0, (i % 3 - 1) * 0.16, 0] });
+    const x = -8 + i * 3.3, z = i % 2 ? 2.85 : 2.55, top = 9.6 + (i % 2) * 0.5;
+    fb.add('pole', cyl(0.07, 0.09, top + 0.5, 6), { p: [x, (top + 0.5) / 2, z] });
+    fb.add('f' + i, box(2.3, 1.35, 0.06, 0.05, 1), { p: [x + 1.2, top - 0.5, z], r: [0, (i % 3 - 1) * 0.16, 0] });
   });
   const mats = { pole: MAT.steel };
   cols.forEach((c, i) => mats['f' + i] = paint(c, { rough: 0.7 }));

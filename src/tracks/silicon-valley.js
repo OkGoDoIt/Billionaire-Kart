@@ -45,8 +45,8 @@ const PIVOT = { x: 125, z: 72, yaw: -2.03, w: 36, h: 36, legs: 16 };
 /* Billboards: [cp, side, metres beyond the road edge, text, background, ink]. */
 const BOARDS = [
   [20.22, -1, 13, 'EVERY RIDE LOSES MONEY. VOLUME!', '#1a1d29', '#ffd23c'],
-  [2.76, -1, 13, 'HIRING: 10X ENGINEER, 0.1X SALARY', '#ffffff', '#1f6bff'],
-  [4.4, 1, 11, 'UNLIMITED PTO (DO NOT TAKE IT)', '#2ee6a6', '#1a1d29'],
+  [2.72, 1, 13, 'HIRING: 10X ENGINEER, 0.1X SALARY', '#ffffff', '#1f6bff'],   // across the road from the firms' row: on its side it stood behind the fish board (#376)
+  [4.7, 1, 11, 'UNLIMITED PTO (DO NOT TAKE IT)', '#2ee6a6', '#1a1d29'],   // past the valuation ticker, which stood in front of it at 4.4 (#376)
   [5.2, 1, 12, 'A BETTER WORLD (FOR SHAREHOLDERS)', '#7b5cff', '#ffffff'],
   [6.0, -1, 12, 'RETURN TO OFFICE. OR ELSE.', '#ffd23c', '#1a1d29'],
   [7.5, -1, 12, 'FREE KOMBUCHA. NO RAISES.', '#ff8a3c', '#1a1d29'],
@@ -115,7 +115,7 @@ export default {
   ],
   ramps: [
     { at: 6.25, lat: -3.6, w: 7.2, len: 10, lift: 2.1 },
-    { at: 22.32, len: 7, lift: 1.2 },   // the climax's air crest: a kick as the deck exit drops away — a short hop landing mid-sweeper, before the boost pad (lift 1.8 at 22.55 flew karts over the line into the fork entry)
+    { at: 22.17, len: 7, lift: 1.2 },   // the climax's air crest: a kick as the deck exit drops away — a short hop landing mid-sweeper, before the boost pad (lift 1.8 at 22.55 flew karts over the line into the fork entry). It ends behind the back row's chase camera (#376: at 22.32 its blue deck filled the bottom of the last-place grid view)
   ],
   boosts: [
     { at: 19.55, lat: 0, w: 5 },
@@ -295,7 +295,7 @@ export default {
       taken.push([p.x, p.z, 10]);
       return { p, yaw: faceTraffic(p, cp), text, bg, fg };
     });
-    const kit = { faceTraffic, THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, local, sign, board, legs, anim, view };
+    const kit = { faceTraffic, clearView, THREE, track, group: ctx.group, sc, rng, atlas, bake, taken, local, sign, board, legs, anim, view };
     gags(kit);
     campus(kit);
     sandHill(kit);
@@ -383,6 +383,7 @@ export default {
       for (let k = 0; k < n; k++) {
         const i = (c.i0 + Math.round(((k + 0.6) / n) * (c.len / track.ds))) % track.N;
         const p = sc.beside(track.cp[i], side, (side > 0 ? track.outerL[i] : track.outerR[i]) + 1.2);
+        if (!clearView(p.x, p.z)) continue;   // never in front of a billboard (#376)
         const b = chev.clone(); sc.place(b, p.x, p.z, { yaw: p.yaw, lift: 0.05 }); if (c.dir > 0) b.scale.x = -1;   // the posts plant on the ground (#242: lift 0.9 left every board hovering)
         bake.add(b, false);
       }
@@ -888,7 +889,7 @@ const xz = a => ({ x: a[0], z: a[2] });
 const xzArgs = a => [a[0], a[2]];
 
 /* ---------- The Farm: Palm Drive, the chapel, the Oval, the Quad, the Founder's Fountain ---------- */
-function campus({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken, local, board, legs, anim, view }) {
+function campus({ faceTraffic, clearView, THREE, track, group, sc, rng, atlas, bake, taken, local, board, legs, anim, view }) {
   const PV = new THREE.Vector3();
   /** Road-frame point at a control-point param: {x, y, z} at lat, the travel yaw, and the yaw facing oncoming karts. */
   const at = (cp, lat = 0) => { const s = track.sAtCp(cp); track.pointAt(s, lat, PV); const yaw = track.yawAt(s); return { x: PV.x, y: PV.y, z: PV.z, yaw, back: yaw + Math.PI, i: track.indexAtCp(cp) }; };
@@ -913,7 +914,8 @@ function campus({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, taken,
     for (const [side, list] of [[1, tops[0]], [-1, tops[1]]]) {
       for (const p of sc.along({ from: 8.75, to: 10.3, side, offset: 4.4, spacing: 18, phase: side > 0 ? 0 : 9 })) {
         // Leave a gap in the left-hand bunting where two banners masked the garage auction.
-        if (side === 1 && track.cp[p.i] > 9.46 && track.cp[p.i] < 9.73) {
+        // and wherever a lamp would stand in front of a billboard (#376: DROP OUT covered the standup's whiteboard)
+        if ((side === 1 && track.cp[p.i] > 9.46 && track.cp[p.i] < 9.73) || !clearView(p.x, p.z)) {
           list.push(null); k++; continue;
         }
         const L = lamp.clone(); sc.place(L, p.x, p.z, { yaw: p.yaw - Math.PI / 2 }); bake.add(L, false);
@@ -1074,9 +1076,11 @@ function sandHill({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, take
     atlas.place(board('SAND HILL RD', { bg: '#0f6b3a', fg: '#ffffff', kicker: 'VENTURE CAPITAL · NEXT 2 MI', kfg: '#ffffff', border: '#ffffff', size: 124 }, 768, 260), local(sp, 0, 0, sp.y + 8.4), sp.yaw, 15, 5.1);
     taken.push([sp.x, sp.z, 10]);
     const frame = P.billboard(null, { w: 15, h: 5, legs: 6 }); frame.remove(frame.children[frame.children.length - 1]);
-    [[2.2, 1, 17, 0], [2.55, -1, 15, 1], [2.95, -1, 14, 2], [3.73, -1, 11, 3]].forEach(([cp, side, off, k]) => {
+    // alternating sides up the climb, so no board stands in front of another: from the racing line each one reads
+    // whole for 25-45 m (#376: in a row on the inside of the bend, the fish board hid the two behind it)
+    [[2.45, 1, 12, 0], [2.5, -1, 11, 1], [3.35, 1, 12, 2], [3.73, -1, 11, 3, 60]].forEach(([cp, side, off, k, lead]) => {
       const q = sc.beside(cp, side, off), f = frame.clone();
-      const yaw = k === 3 ? faceTraffic(q, cp, 60, 15) : faceTraffic(q, cp);
+      const yaw = lead ? faceTraffic(q, cp, lead, 15) : faceTraffic(q, cp);
       // planted on the lower leg in the rendered terrain, like the big boards (#242)
       const gy = Math.min(...[-4.8, 4.8].map(u => { const [x, , z] = local({ ...q, yaw }, u, -0.3, 0); return track.terrainHeight(x, z); })) - 0.05;
       sc.place(f, q.x, q.z, { yaw, y: gy }); bake.add(f);

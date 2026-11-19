@@ -111,7 +111,7 @@ export class Kart {
     this.grounded = true; this.airT = 0; this.landed = 0;
     this.pitch = 0; this.roll = 0; this.gy = 0;
     this.drifting = false; this.driftDir = 0; this.driftCharge = 0; this.driftTier = 0; this.driftPaused = false; this.hopping = false; this.driftArmed = false;
-    this.boostT = 0; this.boostMul = 1; this.boostKind = ''; this.lastBoostPad = null;
+    this.boostT = 0; this.boostMul = 1; this.boostKind = ''; this.boostNext = null; this.lastBoostPad = null;
     this.coins = 0; this.item = null; this.itemUses = 0; this.rouletteT = 0; this.nextItem = null;
     this.hitT = 0; this.hitKind = ''; this.hitDur = 1; this.invulnT = 0; this.starT = 0; this.shrinkT = 0; this.ghostT = 0; this.inkT = 0; this.bulletT = 0; this.goldenT = 0;
     this.squashT = 0; this.landingSpeedKeep = 1;
@@ -160,12 +160,31 @@ export class Kart {
     const base = t == null ? TUNE[kind] : { t, mul };
     if (!base) return;
     const b = { t: base.t * (this.sp.boostDur || 1), mul: base.mul * (this.sp.boostMul || 1) };   // special: longer or faster boosts
-    // a stronger boost replaces a weaker one; otherwise extend
-    if (b.mul >= this.boostMul || this.boostT <= 0) this.boostMul = Math.max(b.mul, this.boostT > 0 ? this.boostMul : 0);
-    this.boostT = Math.max(this.boostT, b.t);
-    this.boostKind = kind; this.stats.boosts++;
+    // Every boost runs its own length at its own strength (#359). A stronger one takes over now, and whatever is
+    // left of the one it replaced follows at that weaker strength; a weaker one never stretches a stronger one,
+    // it only carries on after it if it would have outlasted it. boostKind is always the boost in effect.
+    const T = this.boostT, M = this.boostMul, next = this.boostNext;
+    if (T <= 0) { this.boostT = b.t; this.boostMul = b.mul; this.boostKind = kind; this.boostNext = null; }
+    else if (b.mul > M) {
+      this.boostNext = null;
+      if (next && next.t + T - b.t > 0) this._queueBoost({ ...next, t: next.t + T - b.t });
+      if (T > b.t) this._queueBoost({ t: T - b.t, mul: M, kind: this.boostKind });
+      this.boostT = b.t; this.boostMul = b.mul; this.boostKind = kind;
+    } else if (b.mul === M) {
+      if (b.t > T) { this.boostT = b.t; this.boostKind = kind; if (next) { next.t += T - b.t; if (next.t <= 0) this.boostNext = null; } }
+    } else if (b.t > T) this._queueBoost({ t: b.t - T, mul: b.mul, kind });
+    this.stats.boosts++;
     this.emit('boost', kind);
   }
+  /** One boost waiting under the current one: c.t is how long it runs once the current one ends. The stronger
+      of two waiting boosts is kept, so the queue can drop a weak tail but never makes anything stronger or longer. */
+  _queueBoost(c) {
+    const q = this.boostNext;
+    if (!q || c.mul > q.mul) this.boostNext = { t: c.t, mul: c.mul, kind: c.kind };
+    else if (c.mul === q.mul && c.t > q.t) q.t = c.t;
+  }
+  /** Every boost, running and waiting, ends now (a hit, a rescue). */
+  clearBoost() { this.boostT = 0; this.boostMul = 1; this.boostKind = ''; this.boostNext = null; }
 
   addCoins(n) {
     const before = this.coins;
@@ -185,18 +204,21 @@ export class Kart {
     }
   }
 
-  /** Apply a hit. kinds: spin | tumble | squash. Returns true if it landed. */
+  /** Apply a hit: the one path every weapon, hazard, and bump takes, so mercy invulnerability, the absorb special,
+      invincibility, ghosting, rescue, and finishing protect a kart from all of them alike (#349).
+      kinds: spin | tumble | squash | zap (Market Crash's jolt; the shrink and the lost item are the item's).
+      Returns true if it landed. */
   hurt(kind, from = null) {
     if (this.puppet || !this.vulnerable || this.hitT > 0) return false;   // online: only a kart's owner hurts it
     if (this.absorbs > 0) { this.absorbs--; this.invulnT = TUNE.invuln; this.emit('absorbed', { kind, from }); return false; }   // special: the first hit of the race is covered
     this.streak = 0;                                                                                                          // special: a hit resets a charging streak
     this.hitKind = kind;
-    this.hitDur = this.hitT = (kind === 'tumble' ? TUNE.tumbleT : kind === 'squash' ? TUNE.squashT : TUNE.spinT) * this.stunMul;
-    this.slowFromHit(kind === 'tumble' ? 0.18 : kind === 'squash' ? 0.2 : 0.42);
+    this.hitDur = this.hitT = kind === 'zap' ? 0.55 : (kind === 'tumble' ? TUNE.tumbleT : kind === 'squash' ? TUNE.squashT : TUNE.spinT) * this.stunMul;
+    this.slowFromHit(kind === 'tumble' ? 0.18 : kind === 'squash' ? 0.2 : kind === 'zap' ? 0.6 : 0.42);
     if (kind === 'tumble' && this.landingSpeedKeep === 1) { this.vy = 11; this.grounded = false; this.airT = 0.2; }
     if (kind === 'squash') this.squashT = 2.4;
-    this.endDrift(false); this.boostT = 0; this.boostMul = 1; this.trick = false; this.draftT = 0;
-    const lost = Math.min(this.coins, 3);
+    this.endDrift(false); this.clearBoost(); this.trick = false; this.draftT = 0;
+    const lost = kind === 'zap' ? 0 : Math.min(this.coins, 3);   // the crash takes the item instead
     if (lost) { this.coins -= lost; this.emit('dropCoins', lost); }
     this.stats.hitsTaken++; if (from && from !== this) from.stats.hitsGiven++;
     this.emit('hit', { kind, from });
@@ -388,7 +410,14 @@ export class Kart {
       // gentle gravity along slopes
       vf -= this.pitch * 5.2 * dt;
     }
-    if (this.boostT > 0) { this.boostT -= dt; if (this.boostT <= 0) { this.boostMul = 1; this.boostKind = ''; } }
+    if (this.boostT > 0) {
+      this.boostT -= dt;
+      if (this.boostT <= 0) {
+        const q = this.boostNext; this.boostNext = null;
+        if (q && q.t + this.boostT > 0) { this.boostT += q.t; this.boostMul = q.mul; this.boostKind = q.kind; }   // the weaker boost waiting underneath carries on
+        else { this.boostT = 0; this.boostMul = 1; this.boostKind = ''; }
+      }
+    }
 
     // ----- sideways grip
     // Off-road surfaces also steal sideways grip, which bleeds speed in every turn; the star
@@ -479,7 +508,7 @@ export class Kart {
         this.lastBoostPad = hit.boost;
       } else if (this.boostKind === 'pad') {
         this.boostT = Math.max(this.boostT, T.pad.t * (this.sp.boostDur || 1));
-      }
+      } else if (this.boostT > 0) this._queueBoost({ t: T.pad.t * (this.sp.boostDur || 1), mul: T.pad.mul * (this.sp.boostMul || 1), kind: 'pad' });   // under a stronger boost, the strip waits its turn
     }
     if (this.trick) this.trickSpin += dt;
 
@@ -613,7 +642,7 @@ export class Kart {
 
   startRescue() {
     if (this.rescueT > 0) return;
-    this.rescueT = 2.1; this.landingSpeedKeep = 1; this.endDrift(false); this.boostT = 0; this.boostMul = 1; this.trick = false; this.hitT = 0;
+    this.rescueT = 2.1; this.landingSpeedKeep = 1; this.endDrift(false); this.clearBoost(); this.trick = false; this.hitT = 0;
     const lost = Math.min(this.coins, 2); if (lost) this.coins -= lost;
     this.emit('rescue');
   }

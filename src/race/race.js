@@ -8,6 +8,11 @@ import { makeGroundHit } from '../track/track.js';
 
 export const GP_POINTS = [15, 12, 10, 8, 6, 4, 2, 1];
 const NO_INPUT = { steer: 0, throttle: 0, brake: 0, drift: false, item: false };
+/** Split screen (#357): once the first local player finishes, the others have this many seconds to follow before
+    they are placed by running position with an estimated time, as rivals still out on the track are. Their own
+    pane counts down the last CAP_COUNTDOWN of them. */
+export const HUMAN_FINISH_CAP = 60;
+export const CAP_COUNTDOWN = 10;
 
 export class Race {
   /**
@@ -20,7 +25,7 @@ export class Race {
     this.mode = opts.mode || 'race';           // race | timetrial
     this.rng = makeRng(opts.seed ?? 12345);
     this.time = 0; this.countdown = opts.countdown ?? 3.6; this.frozen = true; this.state = 'countdown';
-    this.events = []; this.hazards = []; this.finishOrder = []; this.endT = 0;
+    this.events = []; this.hazards = []; this.finishOrder = []; this.endT = 0; this.capT = null;
     this.karts = [];
     // per-race AI form (issue #138): deal the field its pace spread before anyone is
     // built — best draw to a randomly chosen designated rival — see assignFieldForm.
@@ -44,6 +49,9 @@ export class Race {
       const g = this.track.gridSlot(slot);
       kart.place(g.x, g.y, g.z, g.yaw, this.track.N - 4);
       kart.lap = 0; kart.cpNext = 4;
+      // a player's item button must be seen up during the countdown before a press counts, so a button held
+      // since the menu (Enter and Space also confirm) never fires at GO; one pressed in the countdown does
+      if (kart.isPlayer) kart.prevItem = true;
       this.karts.push(kart);
     });
     this.players = this.karts.filter(k => k.isPlayer).sort((a, b) => a.playerIndex - b.playerIndex);
@@ -84,8 +92,9 @@ export class Race {
       if (k.puppet) continue;   // online: another device steps this kart
       const inp = k.ai ? k.ai.think(dt) : k.finished ? this._cruise(k).think(dt) : (inputs[k.playerIndex] || NO_INPUT);
       k.step(dt, inp);
-      if (inp.item && !k.prevItem && !this.frozen) this.items.use(k, inp);
-      k.prevItem = !!inp.item;
+      // During the countdown a press only arms: held through GO, it fires at GO (#359). A release clears it.
+      if (this.frozen) k.prevItem = k.prevItem && !!inp.item;
+      else { if (inp.item && !k.prevItem) this.items.use(k, inp); k.prevItem = !!inp.item; }
     }
     this._collide();
     this._obstacles(dt);
@@ -113,13 +122,13 @@ export class Race {
       // star or rocket beats everything
       if (A.invincible !== B.invincible) {
         const strong = A.invincible ? A : B, weak = A.invincible ? B : A;
-        if (weak.hurt(strong.bulletT > 0 ? 'tumble' : 'spin', strong)) this.emit('kartHit', { by: strong, victim: weak, with: strong.bulletT > 0 ? 'bailout' : 'star' });
+        if (!strong.finished && weak.hurt(strong.bulletT > 0 ? 'tumble' : 'spin', strong)) this.emit('kartHit', { by: strong, victim: weak, with: strong.bulletT > 0 ? 'bailout' : 'star' });
         continue;
       }
       // a full-size kart flattens a shrunken one
       if ((A.shrinkT > 0) !== (B.shrinkT > 0)) {
         const big = A.shrinkT > 0 ? B : A, small = A.shrinkT > 0 ? A : B;
-        if (small.hurt('squash', big)) this.emit('kartHit', { by: big, victim: small, with: 'squash' });
+        if (!big.finished && small.hurt('squash', big)) this.emit('kartHit', { by: big, victim: small, with: 'squash' });
       }
       const d = Math.sqrt(d2), nx = dx / d, nz = dz / d, overlap = rr - d;
       const mA = A.mass * (A.shrinkT > 0 ? 0.4 : 1), mB = B.mass * (B.shrinkT > 0 ? 0.4 : 1), sum = mA + mB;
@@ -196,7 +205,12 @@ export class Race {
       if (!k.finished && k.lap === this.laps && !k.finalLapAnnounced) { k.finalLapAnnounced = true; k.emit('finalLap'); }
     }
     if (this.net) return;   // online: the server ends the race and owns the finishing order
-    if (this.state === 'racing' && this.players.length && this.players.every(k => k.finished)) { this.state = 'finishing'; this.endT = 4.5; }
+    if (this.state === 'racing' && this.players.length && this.players.every(k => k.finished)) { this.state = 'finishing'; this.endT = 4.5; this.capT = null; }
+    // split screen: a player who has stopped (walked away, a dead controller) cannot hold everyone else on the track
+    if (this.state === 'racing' && this.players.length > 1) {
+      if (this.capT == null && this.players.some(k => k.finished)) this.capT = HUMAN_FINISH_CAP;
+      else if (this.capT != null && (this.capT -= dt) <= 0) { this.capT = 0; this.state = 'finishing'; this.endT = 0; }
+    }
     if (this.state === 'racing' && !this.players.length && this.karts.every(k => k.finished)) { this.state = 'done'; this.emit('done'); }
     if (this.state === 'finishing') {
       this.endT -= dt;

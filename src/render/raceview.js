@@ -76,7 +76,9 @@ export class RaceView {
     });
 
     // karts and cameras
-    this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0, batch: race.players.length > 1 }));
+    // Rivals are always batched: on the grid all of them are in view and in the shadow pass at once, and unbatched
+    // they were most of the start frame's draw calls (#361). A lone player's own kart keeps its separate parts.
+    this.karts = race.karts.map(k => new KartView(k, this.root, this.fx, { shadow: gfx.q.shadow > 0, batch: race.players.length !== 1 || !k.isPlayer }));
     // real shadows cost one extra pass per view: with three or four views, use contact shadows instead
     const many = race.players.length > 2;
     gfx.sun.castShadow = gfx.q.shadow > 0 && !many; gfx.renderer.shadowMap.enabled = gfx.sun.castShadow;

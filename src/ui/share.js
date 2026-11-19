@@ -178,8 +178,8 @@ async function pack(r, words) {
 /** The card, drawn once; a failed drawing is tried again on the next ask. */
 function card(p) {
   if (!p.card) {
-    p.card = pack(p.result, p.words).then(c => (p.ready = c));
-    p.card.catch(() => { p.card = null; });
+    p.card = pack(p.result, p.words).then(c => { p.failed = false; return (p.ready = c); });
+    p.card.catch(() => { p.card = null; p.failed = true; });
   }
   return p.card;
 }
@@ -188,7 +188,7 @@ function card(p) {
     Call it when the results open, so the tap that shares has everything to hand. */
 export function prepareShare(result, { base = null } = {}) {
   const words = cardWords(result), id = newId();
-  const p = { result, words, id, url: base ? `${base.replace(/\/$/, '')}/s/${id}` : null, card: null, ready: null, upload: null };
+  const p = { result, words, id, url: base ? `${base.replace(/\/$/, '')}/s/${id}` : null, card: null, ready: null, failed: false, upload: null };
   card(p).catch(() => {});
   return p;
 }
@@ -198,7 +198,7 @@ function upload(p) {
   if (!p.upload) {
     p.upload = (async () => {
       const { blob } = await card(p), r = p.result;
-      await fetch('/api/session', { method: 'POST', credentials: 'same-origin' });   // the player cookie the upload is checked against
+      await fetch('/api/session', { method: 'POST', credentials: 'same-origin', signal: AbortSignal.timeout(10000) });   // the player cookie the upload is checked against
       const f = new FormData(), put = (k, v) => { if (v != null && v !== '') f.set(k, String(v)); };
       put('id', p.id); put('mode', r.mode); put('racer', r.racer.id); put('cc', r.cc);
       if (r.mode === 'cup') { put('cup', r.cup?.id); put('points', r.points); } else put('track', r.track?.id);
@@ -206,7 +206,7 @@ function upload(p) {
       if (r.mode !== 'cup' && !r.estimated && isFinite(r.time)) put('timeMs', Math.round(r.time * 1000));
       put('title', p.words.title); put('description', p.words.head);
       f.set('image', blob, 'card.jpg');
-      const res = await fetch('/api/shares', { method: 'POST', body: f, credentials: 'same-origin' });
+      const res = await fetch('/api/shares', { method: 'POST', body: f, credentials: 'same-origin', signal: AbortSignal.timeout(30000) });   // a stalled upload gives way to the next tap's
       if (!res.ok && res.status !== 409) throw new Error(`The share upload failed (${res.status})`);
     })();
     p.upload.catch(() => { p.upload = null; });
@@ -227,7 +227,8 @@ export async function sharePrepared(p) {
     // a computer without a share sheet: the link goes on the clipboard, where a chat app will unfurl it
     try { await navigator.clipboard.writeText(p.url); return 'copied'; } catch { return 'failed'; }
   }
-  // no race server to hold the link: the picture itself
+  // no race server to hold the link: the picture itself (a drawing that failed is tried again now, and says so if it fails again)
+  if (!p.ready && p.failed) { try { await card(p); } catch { return 'failed'; } }
   if (!p.ready) { card(p).catch(() => {}); return 'preparing'; }
   const data = { files: [p.ready.file] };
   if (navigator.canShare?.(data)) {

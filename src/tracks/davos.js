@@ -286,11 +286,15 @@ function dress(ctx) {
     bake.add(g);
   };
   sc.along({ from: 30.55, to: 1.25, side: 1, offset: 7, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
-  // the hotel on the far side of the stands, its name on the roof where the grid can read it
-  const hotel = sc.beside(0.42, 1, 41);
+  // The hotel closes the end of the straight, on the outside of the turn, facing the karts, its name on the roof:
+  // behind the stands and square to the road, the grid never saw it (#397).
+  const hotel = { x: 176, z: -12 }; hotel.y = sc.y(hotel.x, hotel.z);
+  { const eye = track.pointAt(track.sAtCp(0.4), 0, {}); hotel.yaw = Math.atan2(eye.x - hotel.x, eye.z - hotel.z); }
   if (clear(hotel.x, hotel.z, 16)) {
     put(M.grandHotel({ sign: false }), hotel.x, hotel.z, { yaw: hotel.yaw, y: hotel.y + 0.1 }); take(hotel.x, hotel.z, 19);
-    atlas.place(board('HOTEL STAKEHOLDER', { bg: NAVY, fg: '#ffffff', kicker: 'SUITES FROM $90,000 A NIGHT', kfg: '#f2c94c', border: GOLD, size: 120 }, 1024, 300), local(hotel, 0, 4.2, hotel.y + 15.5), hotel.yaw, 20, 5.9);
+    // on two posts over the gable's ridge (16.5 m), not cut into it, its name on one line
+    atlas.place(board('HOTEL STAKEHOLDER', { bg: NAVY, fg: '#ffffff', kicker: 'SUITES FROM $90,000 A NIGHT', kfg: '#f2c94c', border: GOLD, size: 150, lines: 1 }, 1024, 272), local(hotel, 0, 4.2, hotel.y + 21.5), hotel.yaw, 32, 8.5);
+    for (const u of [-10.5, 10.5]) { const [x, , z] = local(hotel, u, 4.0, 0), post = S.post(8.4, 0.32, 0x3c424c); sc.place(post, x, z, { y: hotel.y + 8.9 }); bake.add(post); }
   }
   const flagsN = [], flagsG = [];
   sc.along({ from: 0.14, to: 1.58, side: 1, offset: 4.2, spacing: 9 }).forEach((p, k) => (k % 2 ? flagsG : flagsN).push({ ...p, y: p.y - 0.1 }));
@@ -309,7 +313,7 @@ function dress(ctx) {
     put(M.privateJet(3 + i * 5, { accent: [0xc9a227, 0x8a2f2a, 0x1f2a44][i] }), p.x, p.z, { yaw: p.along + dyaw, y: p.y, solid: 7 });
     take(p.x, p.z, 13);
   });
-  roadSign(1.85, -1, 13.5, 'PRIVATE JETS ONLY', { bg: NAVY, fg: '#ffffff', kicker: 'CLIMATE PANEL PARKING', kfg: '#f2c94c', size: 120 }, { w: 11, h: 3.2, tw: 768, th: 224 });
+  roadSign(1.85, -1, 13.5, 'PRIVATE JETS ONLY', { bg: NAVY, fg: '#ffffff', kicker: 'CLIMATE PANEL PARKING', kfg: '#f2c94c', size: 120 }, { w: 15, h: 4.4, tw: 1024, th: 300 });   // a size up: at 11 m its lettering came into reading size too late (#397)
   {
     const jet = M.privateJet(41, { accent: 0xc9a227 }); jet.scale.setScalar(1.15); group.add(jet);
     const A = new THREE.Vector3(-520, 130, 120), B = new THREE.Vector3(80, 6, 22), D = B.clone().sub(A);
@@ -371,7 +375,7 @@ function dress(ctx) {
   const igloos = [[14.7, 32], [15.3, 36], [15.6, 36]].map(([at, off]) => sc.beside(at, 1, off)).filter(p => clear(p.x, p.z, 4));
   igloos.forEach(p => take(p.x, p.z, 7));
   sc.instances(partsOf(M.igloo()), igloos.map(p => ({ ...p, yaw: p.yaw + 1.12, y: p.y - 0.2 })), {});
-  roadSign(15.2, 1, 13.5, 'VIP IGLOO — $80,000', { bg: '#e8f3ff', fg: '#1f2a44', kicker: 'PER NIGHT · BRING A COAT', kfg: '#8a2f2a', border: NAVY, size: 118 }, { w: 9.5, h: 2.9, legs: 2.4 });
+  roadSign(15.2, 1, 13.5, 'VIP IGLOO — $80,000', { bg: '#e8f3ff', fg: '#1f2a44', kicker: 'PER NIGHT · BRING A COAT', kfg: '#8a2f2a', border: NAVY, size: 118 }, { w: 13, h: 4, legs: 2.4, tw: 1024, th: 315 });   // a size up (#397)
 
   /* ================= the high traverse and the summit ================= */
   roadSign(19.4, -1, 14, 'YOU ARE NOW ABOVE IT ALL', { bg: NAVY, fg: '#ffffff', kicker: 'ELEVATION 70 M · NET WORTH: YES', kfg: '#f2c94c', size: 118 }, { w: 11, h: 3, legs: 2.6 });
@@ -494,7 +498,9 @@ function dress(ctx) {
     atlas.place(board('BIG AIR', { bg: '#e23b3b', fg: '#ffffff', size: 140, lines: 1 }, 512, 186), local({ ...k0, yaw: k0.along + Math.PI }, 0, 0.09, k0.roadY + 2.6 + 1), k0.along + Math.PI, 5.5, 2);
     // Three snowy delegates hold up their scores beyond the outrun. The
     // last judge is bought; the final placard is a cheque. Read from midair.
-    for (const [x, z, score, bg] of [[31, 145, '9.8', NAVY], [13, 140, '9.9', NAVY], [-5, 133, '$10M', RED]]) {
+    // They stand east of the panel stage and the forum: straight down the hill, their placards hid its screen and
+    // the forum's name (#397).
+    for (const [x, z, score, bg] of [[102, 146, '9.8', NAVY], [86, 150, '9.9', NAVY], [70, 152, '$10M', RED]]) {
       const y = sc.y(x, z);
       if (!clear(x, z, 3)) continue;
       const yaw = Math.atan2(-x, 232 - z);
@@ -543,7 +549,7 @@ function dress(ctx) {
     { tints: COATS, scale: [1.06, 1.34], cast: false });
   let screenSign = null;
   {
-    const sx = 6, sz = 112, sy = track.terrainHeight(sx, sz);
+    const sx = -2, sz = 104, sy = track.terrainHeight(sx, sz);   // straight down the outrun, between its two stands (#397)
     if (clear(sx, sz, 10)) {
       screenSign = dynSign(THREE, 1024, 400, (g, w, h, lap, last) => {
         g.fillStyle = '#101623'; g.fillRect(0, 0, w, h);
@@ -571,9 +577,10 @@ function dress(ctx) {
     put(M.congressHall(), hx, hz, { yaw: 0, y: hy - 0.2 }); take(hx, hz, 40);
     // the name on the roof, both ways: up the hill to the jump, and down to the grid
     const wef = board('WORLD ELITE FORUM', { bg: '#ffffff', fg: NAVY, kicker: 'ANNUAL MEETING OF THE ALREADY RICH', kfg: '#8a2f2a', border: GOLD, size: 130 }, 1024, 300);
-    atlas.place(wef, [hx, hy + 17.5, hz + 0.4], 0, 42, 12.3);
-    atlas.place(wef, [hx, hy + 17.5, hz - 0.4], Math.PI, 42, 12.3);
-    for (const dx of [-15, 15]) { const post = S.post(7, 0.3, 0x3c424c); sc.place(post, hx + dx, hz, { y: hy + 10.5 }); bake.add(post); }
+    // high on its posts, over the judges' placards from the foot of the jump (#397)
+    atlas.place(wef, [hx, hy + 26, hz + 0.4], 0, 42, 12.3);
+    atlas.place(wef, [hx, hy + 26, hz - 0.4], Math.PI, 42, 12.3);
+    for (const dx of [-15, 15]) { const post = S.post(15.5, 0.36, 0x3c424c); sc.place(post, hx + dx, hz, { y: hy + 10.5 }); bake.add(post); }
     atlas.place(board('IMPROVING THE STATE OF OUR PORTFOLIOS', { bg: NAVY, fg: '#ffffff', size: 110 }, 1024, 130), [hx, hy + 9.2, hz + 15.8], 0, 40, 5);
     // the town around it: chalets, the hotel's cousins, a church
     const homes = [], big = [];

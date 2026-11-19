@@ -189,15 +189,17 @@ export function chalet(seed = 1, { sign = null } = {}) {
 /* ---------- the summit and the plunge ---------- */
 /** The GREAT RESET panel stage: a stage, a big screen, and rows of the owners of everything. */
 export function panelStage({ screenMat = null } = {}) {
+  // The screen is the size of a stadium board and the canopy rides over it: the stage sits in the valley below the
+  // jump's outrun, and from the landing hill a 21 m screen under a 10.6 m canopy was too small, and half hidden (#397).
   const grp = new THREE.Group(), b = new ModelBuilder();
   b.add('deck', box(26, 1.2, 10, 0.15, 2), { p: [0, 0.6, 0] });
-  b.add('back', box(26, 9, 0.6, 0.15, 2), { p: [0, 5.4, -4.6] });
+  b.add('back', box(34, 15.4, 0.6, 0.15, 2), { p: [0, 8.6, -4.6] });
   for (const sx of [-1, 1]) {
-    b.add('post', cyl(0.3, 0.35, 10.5, 10), { p: [sx * 12, 5.2, 3.8] });
+    b.add('post', cyl(0.34, 0.4, 16.8, 10), { p: [sx * 16.5, 8.4, 3.8] });
     b.add('stack', box(2.2, 5.5, 1.6, 0.12, 2), { p: [sx * 13.6, 3.4, 1.5] });                       // speaker stacks
     for (let k = 0; k < 3; k++) b.add('dark', cyl(0.55, 0.55, 0.3, 12), { p: [sx * 13.6, 2 + k * 1.5, 2.35], r: [Math.PI / 2, 0, 0] });
   }
-  b.add('roof', box(28, 0.5, 11, 0.12, 2), { p: [0, 10.6, 0], r: [0.1, 0, 0] });
+  b.add('roof', box(36, 0.5, 11, 0.12, 2), { p: [0, 17, 0], r: [0.1, 0, 0] });
   for (let i = 0; i < 5; i++) b.add('chair', box(1.1, 1.6, 1.0, 0.15, 2), { p: [(i - 2) * 3.4, 2.0, -1.2] }); // the panel's chairs
   for (let rI = 0; rI < 3; rI++) for (let i = 0; i < 9; i++)                                       // audience benches below the deck
     b.add('chair', box(1.5, 0.5, 0.5, 0.08, 1), { p: [(i - 4) * 2.6, 0.4 - rI * 0.0, 8.5 + rI * 2.2] });
@@ -209,10 +211,10 @@ export function panelStage({ screenMat = null } = {}) {
       fitText(g, 'THE GREAT RESET', cw / 2, ch / 2 - 42, cw - 60, 140, 118, '"Luckiest Guy", "Arial Black", sans-serif', { fill: '#f4f6f8' });
       fitText(g, 'PANEL 4: THE SNOW — OWNING IT', cw / 2, ch / 2 + 62, cw - 80, 64, 52, '"Arial", sans-serif', { fill: '#9fd4e8' });
     }, { repeat: false, aniso: 8 });
-    return new THREE.Mesh(new THREE.PlaneGeometry(21, 8.2), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.4 }));
+    return new THREE.Mesh(new THREE.PlaneGeometry(31, 12.1), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.4 }));
   })();
   if (screenMat) screen.material = screenMat;
-  screen.position.set(0, 5.6, -4.25);
+  screen.position.set(0, 9.2, -4.25);
   grp.add(screen);
   return grp;
 }

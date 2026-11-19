@@ -8,7 +8,7 @@ import { Input, DEVICE_LABEL, PAD_ACTIONS, buttonName, describePadBind, defaultP
 import { handheldWord } from './touch.js';
 import { ITEMS } from '../race/items.js';
 import { itemIcon } from './hud.js';
-import { installButton, installPanel, onInstallChange, autoInstall } from './install.js';
+import { installButton, installPanel, onInstallChange, autoInstall, ROOM_RE } from './install.js';
 import { KEY_LAYOUTS, KEY_ACTIONS, keyName, bindKey, resetKeys } from '../core/keyboard.js';
 import { trialKey } from '../core/save.js';
 import { fmtTime, ordinalSuffix } from '../core/util.js';
@@ -199,7 +199,7 @@ export class Menus {
     // a shared room link (?room=CODE) goes straight on into that room after this first tap
     // a friend's challenge (?c=ID, from a shared result's link) shows under the logo, and the tap goes to race it
     const A = this.app, coarse = matchMedia('(pointer: coarse)').matches;
-    const roomNow = () => (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+    const roomNow = () => { const code = (new URLSearchParams(location.search).get('room') || '').trim().toUpperCase(); return ROOM_RE.test(code) ? code : ''; };
     const cid = new URLSearchParams(location.search).get('c');
     if (cid && !A.challengeAsk) A.challengeAsk = loadChallenge(cid);
     let challenge = null;

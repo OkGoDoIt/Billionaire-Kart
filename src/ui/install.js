@@ -41,7 +41,9 @@ const store = {
 };
 
 /* ---------- the room a link brought this phone ---------- */
-const ROOM_RE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
+/** A room code: four of these twenty consonants (the server's alphabet; online.js, menus.js, and install.js all use these). */
+export const ROOM_LETTERS = 'BCDFGHJKLMNPQRSTVWXZ';
+export const ROOM_RE = new RegExp(`^[${ROOM_LETTERS}]{4}$`);
 const server = (method, path, body) => ONLINE_HOSTS.includes(location.host)
   ? fetch(path, { method, credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined, keepalive: true, signal: AbortSignal.timeout(8000) })
   : Promise.reject(new Error('no race server here'));

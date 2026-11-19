@@ -15,10 +15,10 @@ import { RaceSession } from '../game/session.js';
 import { fmtTime } from '../core/util.js';
 import { HANDLE_TITLES, handleName } from '../content/handles.js';
 import { tierOf, fmtMoney, fmtMoneyChange } from '../content/valuation.js';
+import { ROOM_LETTERS as CODE_LETTERS, ROOM_RE } from './install.js';
 
 /* eight members, eight colors: the four player colors, then four more in the same bright family */
 const COLORS = [...PLAYER_COLORS, '#a66bff', '#ff9f43', '#ff8ad8', '#b4f05a'];
-const CODE_LETTERS = 'BCDFGHJKLMNPQRSTVWXZ';
 const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const QS = new URLSearchParams(location.search);
 const BACKSPACE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h11v14H9l-6-7z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="m12 9 5 6m0-6-5 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
@@ -35,8 +35,10 @@ function roomFromText(text) {
   let code = String(text || '').trim();
   try { code = new URL(code).searchParams.get('room') || ''; } catch { /* not a link: maybe the code itself */ }
   code = code.toUpperCase();
-  return code.length === 4 && [...code].every(c => CODE_LETTERS.includes(c)) ? code : null;
+  return ROOM_RE.test(code) ? code : null;
 }
+/** The objects in a list from the server, or none if it is not a list. */
+const listOf = v => (Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : []);
 /** A room's address: what Share sends and what the QR code holds. */
 const roomUrl = code => location.origin + location.pathname + '?room=' + code;
 /** The QR code for a room's address as SVG: dark modules on white, with the quiet zone the readers need. */
@@ -102,7 +104,7 @@ export class Online {
     if (code) { const u = new URL(location.href); u.searchParams.delete('room'); history.replaceState(history.state, '', u); }
     await this.css;
     this.notice = null;
-    this.pendingJoin = code ? String(code).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) : null;
+    this.pendingJoin = code ? roomFromText(code) : null;
     this.show('online');
     if (!this.conn) this.connect();
     else if (this.conn.ready && this.pendingJoin) { this.join(this.pendingJoin); this.pendingJoin = null; }
@@ -630,11 +632,11 @@ export class Online {
       }
       if (M.focusEl?.disabled || (M.focusEl && (!M.focusEl.isConnected || M.focusEl.offsetParent === null) && M.focusEl !== big)) M.focus(M.screen?.el.querySelector('[data-f]:not(.back):not(:disabled)'), false);
       // a cup that just ended: its final standings over the room, until the player is done with them
-      const cs = r.cupState, cup = CUP_BY_ID[r.rules.cup], key = cs && r.last && `${code}:${cs.tracks.join()}:${r.last.trackId}`;
+      const cs = r.cupState, cup = CUP_BY_ID[r.rules.cup], key = cs && Array.isArray(cs.tracks) && r.last && `${code}:${cs.tracks.join()}:${r.last.trackId}`;
       if (key && cup && cs.index >= cs.tracks.length - 1 && this.standingsSeen !== key) {
         if (!standings.firstChild) {
-          const rows = Object.entries(cs.totals).sort((a, b) => b[1] - a[1]);
-          const humans = new Map(r.last.results.filter(x => x.member).map(x => [x.racer, x.member]));
+          const rows = Object.entries(cs.totals || {}).sort((a, b) => b[1] - a[1]);
+          const humans = new Map(listOf(r.last.results).filter(x => x.member).map(x => [x.racer, x.member]));
           const done = M.btn('Done', () => { this.standingsSeen = key; standings.replaceChildren(); M.focus(M.screen.el.querySelector('[data-f]:not(.back):not(:disabled)'), false); }, { cls: 'small go', def: true });
           standings.replaceChildren(h('div', { class: 'panel ol-standings' }, h('h3', {}, `${cup.name} · Final standings`),
             h('div', { class: 'res-table final' }, rows.map(([id, pts], i) => { const racer = RACER_BY_ID[id], who = humans.get(id); return h('div', { class: 'res-row' + (who === this.you ? ' me' : ''), style: `--d:${i * 50}ms;--rc:${hex(racer?.color || 0xffffff)}` + (who ? `;--pc:${this.colorOf(who, r)}` : '') }, h('b', { class: 'res-rank' }, String(i + 1)), h('img', { src: racer?.portrait, alt: '' }), h('span', { class: 'res-name' }, racer?.name || id), h('span', { class: 'res-total' }, String(pts))); })),
@@ -781,7 +783,7 @@ export class Online {
     const M = this.menus, room = this.room, last = room?.last;
     if (!last) return this.s_online();
     const pub = room.public, cs = room.cupState, inCup = room.rules.mode === 'cup' && !!cs, track = TRACK_BY_ID[last.trackId];
-    const results = last.results.slice().sort((a, b) => a.rank - b.rank);
+    const results = listOf(last.results).sort((a, b) => a.rank - b.rank);
     const rows = results.map((r, i) => {
       const racer = RACER_BY_ID[r.racer], me = r.member && r.member === this.you;
       const who = r.member ? this.nameOf(r.member, room) : 'CPU';
@@ -841,7 +843,7 @@ export class Online {
       const n = ++seq;
       for (const [id, b] of chips) { b.classList.toggle('sel', id === board); b.setAttribute('aria-pressed', String(id === board)); }
       let data;
-      try { const res = await fetch(`/api/leaderboard?board=${board}&limit=50`, { credentials: 'same-origin', signal: AbortSignal.timeout(ASK_MS) }); if (!res.ok) throw 0; data = await res.json(); }
+      try { const res = await fetch(`/api/leaderboard?board=${board}&limit=50`, { credentials: 'same-origin', signal: AbortSignal.timeout(ASK_MS) }); if (!res.ok) throw 0; data = await res.json(); if (!Array.isArray(data?.rows)) throw 0; }
       catch {
         if (n !== seq) return;
         const again = M.btn('Try again', () => { const f = M.focusEl === again; load().then(() => { if (f && !again.isConnected) M.focus(list.querySelector('[data-f]') || chips.find(([id]) => id === board)[1], false); }); }, { cls: 'small' });
@@ -849,9 +851,10 @@ export class Online {
         return;
       }
       if (n !== seq) return;
-      list.replaceChildren(...(data.rows.length ? data.rows.map(r => row(r, r.me)) : [h('p', { class: 'ol-line' }, 'Nobody has raced yet. Somebody has to be first.')]));
-      const listed = data.rows.some(r => r.me);
-      meSlot.replaceChildren(...(!listed && data.me && this.me ? [row({ rank: data.me.rank, handle: this.me.handle, valuation: data.me.valuation, current: this.me.rating?.valuation }, true)] : []));
+      const rows = listOf(data.rows).filter(r => Number.isFinite(r.valuation));
+      list.replaceChildren(...(rows.length ? rows.map(r => row(r, r.me)) : [h('p', { class: 'ol-line' }, 'Nobody has raced yet. Somebody has to be first.')]));
+      const listed = rows.some(r => r.me);
+      meSlot.replaceChildren(...(!listed && Number.isFinite(data.me?.valuation) && this.me ? [row({ rank: data.me.rank, handle: this.me.handle, valuation: data.me.valuation, current: this.me.rating?.valuation }, true)] : []));
       M.screen?._scrollCheck?.();
     };
     const chips = [['all', 'All time'], ['week', 'This week']].map(([id, label]) => [id, h('button', { class: 'chip', 'data-f': true, 'data-default': id === 'all', onclick: () => { if (board !== id) { board = id; load(); } } }, label)]);

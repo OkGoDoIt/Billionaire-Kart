@@ -837,8 +837,10 @@ function furnishOffice(ctx, H) {
       box(x+dx,12.1,-24.55,.44,.36,3.58,0xc59a56);
     }
   }
-  // Four actual side flights meet full-depth half landings. Sloping, continuous handrails and
-  // enclosed risers distinguish these from a line of barriers beside a metal road.
+  // Side flights hug the outside of three driving flights and meet full-depth half landings. Sloping,
+  // continuous handrails and enclosed risers distinguish these from a line of barriers beside a metal road.
+  // None beside the fire stair's lower flight: one there ran through the ALL HANDS room with its foot on
+  // the kitchen corner, so from the kitchen the road seemed to climb a stair to nowhere.
   const tread = (x0,x1,z,w,base,rise) => {
     const steps=18, dx=(x1-x0)/steps, bottom=Math.min(base,base+rise)-.25;
     for(let i=0;i<steps;i++) {
@@ -856,7 +858,7 @@ function furnishOffice(ctx, H) {
     }
   };
   tread(114,146,-15.1,4.4,0,3); tread(146,110,-71,4.0,3,4.1);
-  tread(92,122,69.2,3.8,6,-3); tread(122,92,19.4,3.8,3,-3);
+  tread(92,122,69.2,3.8,6,-3);
   // Continue the stair into the driving surface. A smooth dolly ramp runs
   // between the two banks of concrete treads and opens onto each flat landing.
   const tr = ctx.track;

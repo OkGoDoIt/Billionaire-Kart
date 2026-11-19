@@ -124,6 +124,8 @@ public sealed class CupState
     public Dictionary<string, int> Totals { get; } = [];
     /// <summary>Each racer's finish in every race of the cup (index = race; 0 = did not race), for the countback on a points tie.</summary>
     public Dictionary<string, int[]> Places { get; } = [];
+    /// <summary>The cup stopped before its last race because everyone else left a room without CPUs.</summary>
+    public bool Ended { get; set; }
     /// <summary>Kept for the whole cup so the CPU field (and its totals) stays the same. Not sent.</summary>
     public List<string> CpuRacers { get; } = [];
 }

@@ -502,8 +502,22 @@ public sealed class Room(string code, bool isPublic, RoomManager manager, long n
         Broadcast();
     }
 
+    /// <summary>A friends' race without CPUs that had company and now has one person (or nobody) left to race.</summary>
+    bool EveryoneElseLeft() =>
+        !IsPublic && !Rules.Cpus && Last is { } last && last.Results.Count(x => x.Member != null) >= 2
+        && Members.Count(m => m.Connected) < 2;
+
     void AfterResults(long now)
     {
+        // Nobody to race: the room goes back to its lobby rather than starting a race of one (a cup ends where it stands).
+        if (EveryoneElseLeft())
+        {
+            if (Cup != null) Cup.Ended = Cup.Index + 1 < Cup.Tracks.Count;
+            Phase = Phase.Lobby;
+            Until = null;
+            Broadcast();
+            return;
+        }
         if (Rules.Mode == RaceMode.Cup && Cup != null && !IsPublic)
         {
             if (Cup.Index + 1 < Cup.Tracks.Count)

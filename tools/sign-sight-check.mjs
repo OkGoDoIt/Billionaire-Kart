@@ -64,6 +64,7 @@ const ALLOW = [
   ...['90 M', '120 M', 'K 140'].map(text => ({ track: 'davos', text, why: 'distance boards down the ski jump\'s landing hill, numbers on the slope rather than a joke' })),
   ...['OFFSHORE ACCOUNT', 'TAX EXEMPT'].map(text => ({ track: 'international-waters', text, why: 'a yacht\'s name runs round its bow in strips that follow the hull, and this check sees one strip at a time; the whole name reads along the quay' })),
   { track: 'bliss-hills', text: '56K', why: 'the badge on the giant modem\'s front, part of the prop; the board above it carries the joke' },
+  { track: 'singularity-speedway', text: 'SINGULARITY SPEEDWAY', why: 'the start gantry\'s name board on its far side: on the grid side the AGI countdown has taken it over (the gag), so this face is only seen from the far straight' },
 ];
 /* Signs this check found hidden that are not moved yet, listed for their tracks' owners in issue #397: [track, start of text].
    They print as "known" with --all and do not fail the check; once one reads, the check says to take it out of this list.
@@ -75,7 +76,6 @@ const KNOWN = [
   ...["4 JOBS CREATED", "TRAINING HALL 9", "HALL 2 · INFERENCE", "GASLIGHT ENERGY", "GPUs", "NEXT: THE LAKE (FOR NOW)", "OF GPUS", "OMNIMIND", "DEEPTHIRST DEVDAY", "PEAKER PLANT 2", "THINKING REALLY HARD", "WE BOUGHT ALL OF THEM", "IS THIS A ROAD?"].map(text => ['datacenter-dash', text]),
   ...["ELITE FORUM", "JETS ONLY", "STAKEHOLDER", "THE GREAT RESET", "VIP IGLOO"].map(text => ['davos', text]),
   ...["BACK TO MARS (SORRY)", "COMPANY STORE", "EARTH: HAD ITS CHANCE", "FULL SELF-LANDING:", "I MISS / TREES", "N/A", "NOW HIRING: EXTREMELY HARDCORE", "OXYGEN: $9.99/MO", "TREES: 31"].map(text => ['mars-colony', text]),
-  ...["#1", "(GENERATED IN 4 SECONDS)", "AI BENCHMARK RESULTS", "CONSCIOUS. PROBABLY.", "GO HUMANS! (WHILE", "NOW CONVERTING: EVERYTHING", "PAPERCLIPS MADE", "SINGULARITY SPEEDWAY", "THANK YOU FOR"].map(text => ['singularity-speedway', text]),
   ...["ALL HANDS", "DO WHAT YOU L  VE"].map(text => ['wework-memorial', text]),
 ].map(([track, text]) => ({ track, text }));
 

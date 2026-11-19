@@ -255,7 +255,7 @@ function dress(ctx) {
     const t = (dx * line.dx + dz * line.dz) / (line.dx ** 2 + line.dz ** 2);
     return t < 0 || t > 1 || Math.hypot(dx - t * line.dx, dz - t * line.dz) > 5;
   });
-  const signs = new Map();
+  const signs = new Map(), signSpots = [];
   const board = (text, opts = {}, w = 768, h = 256) => { const k = text + JSON.stringify(opts) + w + 'x' + h; if (!signs.has(k)) signs.set(k, atlas.add(w, h, S.signDraw(text, opts))); return signs.get(k); };
   /** Place and bake a static object. */
   const put = (obj, x, z, o = {}) => { sc.place(obj, x, z, o); bake.add(obj, o.cast !== false); return obj; };
@@ -268,7 +268,7 @@ function dress(ctx) {
     const tile = board(text, opts, tw, th), mid = p.y - 0.15 + legs + h / 2;
     atlas.place(tile, local(p, 0, 0.09, mid), p.yaw, w, h);
     atlas.place(tile, local(p, 0, -0.40, mid), p.yaw + Math.PI, w, h);
-    take(p.x, p.z, w * 0.5);
+    take(p.x, p.z, w * 0.5); signSpots.push(taken.at(-1));
     return p;
   };
 
@@ -611,10 +611,12 @@ function dress(ctx) {
     const saplings = [-3.2, 0, 3.2].map(u => { const [x, , z] = local(p, u, -3.4, 0); return { x, y: sc.y(x, z), z, yaw: rng() * 6 }; });
     sc.instances(partsOf(M.snowPine(51, { h: 1.6 })), saplings, {});
   }
-  const pad = { x: -86, z: 100 }; pad.y = sc.y(pad.x, pad.z);
+  // The pad sits level on the highest snow under its H, its plinth reaching down to the lowest under the rim, so the H is never buried.
+  const pad = { x: -86, z: 100 }, ring = r => Array.from({ length: 16 }, (_, k) => track.terrainHeight(pad.x + Math.cos(k * Math.PI / 8) * r, pad.z + Math.sin(k * Math.PI / 8) * r));
+  pad.y = Math.max(sc.y(pad.x, pad.z), ...ring(3), ...ring(5.8)); const padH = 0.5 + pad.y - Math.min(...ring(7.4));
   if (clear(pad.x, pad.z, 6)) {
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.4, 0.5, 28), frameMat(0x3c424c));
-    disc.position.set(pad.x, pad.y + 0.05, pad.z); group.add(disc); bake.add(disc, false);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.4, padH, 28), frameMat(0x3c424c));
+    disc.position.set(pad.x, pad.y + 0.3 - padH / 2, pad.z); group.add(disc); bake.add(disc, false);
     atlas.place(board('H', { bg: '#3c424c', fg: '#ffffff', border: '#f2c94c', size: 200, lines: 1, shadow: false }, 256, 256), [pad.x, pad.y + 0.32, pad.z], 0, 8, 8, -Math.PI / 2);
     take(pad.x, pad.z, 9);
     const heli = M.helicopter(); heli.position.set(pad.x, pad.y + 0.3, pad.z); group.add(heli);
@@ -694,7 +696,10 @@ function dress(ctx) {
   sc.instances(partsOf(M.snowBank(2)), drifts, { scale: [0.6, 0.95], sink: 0.15, cast: false });
 
   // Sponsor boards stand further up the slope so their faces clear the parapets.
+  // Each slides on along the road past any sign already standing there, so no two faces pass through each other.
   [[1.95, -1, 17, 'SUMMIT NOW, PAY LATER'], [10.0, 1, 16, 'CONSCIOUS COCOA'], [16.8, -1, 16, 'NO PUBLIC MONEY BEYOND THIS POINT'], [25.9, 1, 14, 'BUILD BACK BUTTER'], [28.2, -1, 30, 'AGENDA COLA']].forEach(([at, side, off, text], i) => {
+    const apart = q => signSpots.every(t => !near(q.x, q.z, t, t.r + 8));
+    for (let k = 0; k < 12 && !apart(sc.beside(at, side, off)); k++) at += 0.05;
     const p = sc.beside(at, side, off);
     if (!clear(p.x, p.z, 3)) return;
     const colors = [RED, BROWN, NAVY, '#bb301b', '#19643e'];

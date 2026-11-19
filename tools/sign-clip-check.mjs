@@ -3,10 +3,11 @@
    by other geometry: a poster whose corner sinks into a tunnel wall, a board half inside a building, a panel
    standing in the ground. text-check reads what is painted onto the canvas; this reads where it ends up in the world.
    A sign is every face of a sign atlas (the merged sheets of signs that makeAtlas builds) and every flat plane
-   that carries a canvas texture. For each one it samples a grid of points just inside the edges, and from each
+   that carries a canvas texture (a plane bent out of flat on purpose is left out). For each one it samples a grid of points just inside the edges, and from each
    point looks a short way out of the face: if a surface that passes through the sign's plane lies between the point
    and that spot, the sign is buried in it there (walls, buildings, and the ground all count; a head or a post standing in
-   front of a sign does not, since it does not cut into it). A sign is flagged when two or more points are
+   front of a sign does not, since it does not cut into it). Points where the sign's picture is transparent are skipped,
+   and so are a small sign model's own parts (a receipt's curl, a board's frame). A sign is flagged when two or more points are
    buried (one alone is usually the post the sign stands on).
    For each flagged sign it saves a crop of the sign's own picture, so the report says which sign it is.
    Usage: node tools/sign-clip-check.mjs [--track id[,id]] [--out dir] [--depth 0.45] [--min 2] [--shots]      exits 1 if anything is flagged */
@@ -62,14 +63,18 @@ const scan = ([DEPTH, MIN]) => {
       }
       if (n) signMeshes.add(o);
     } else if (g.type === 'PlaneGeometry') {
+      let bent = 0; for (let i = 0; i < pos.count; i++) bent = Math.max(bent, Math.abs(pos.getZ(i)));
+      if (bent > 0.01) return;   // bent out of flat on purpose (a curling receipt): the flat-sign test does not apply
       const { width: w, height: h } = g.parameters;
-      signs.push({ mesh: o, corners: [[-w / 2, -h / 2, 0], [w / 2, -h / 2, 0], [w / 2, h / 2, 0], [-w / 2, h / 2, 0]].map(p => tf(wm, p)), uv: [0, 0, 1, 1], img, kind: 'plane' });
+      // a plane belongs to a small model (a receipt, a board): its own frame, lip, or curl is part of the design, not a clip
+      let own = null; if (o.parent && o.parent !== scene) { const parts = []; o.parent.traverse(c => { if (c.isMesh) parts.push(c); }); if (parts.length < 40) own = new Set(parts); }
+      signs.push({ mesh: o, corners: [[-w / 2, -h / 2, 0], [w / 2, -h / 2, 0], [w / 2, h / 2, 0], [-w / 2, h / 2, 0]].map(p => tf(wm, p)), uv: [0, 0, 1, 1], img, kind: 'plane', own });
       signMeshes.add(o);
     }
   });
 
   /* 2. everything that could hide them, as world triangles in a 4 m grid */
-  const CELL = 4, grid = new Map(), tris = [], names = [];
+  const CELL = 4, grid = new Map(), tris = [], names = [], objs = [];
   const key = (x, y, z) => x + ',' + y + ',' + z;
   const addTri = (a, b, c, owner) => {
     const id = tris.length; tris.push(a, b, c, owner);
@@ -83,7 +88,7 @@ const scan = ([DEPTH, MIN]) => {
     if (mats(o).every(m => !m || m.visible === false || (m.transparent && m.opacity < 0.6) || m.colorWrite === false)) return;
     let vis = true; for (let p = o; p; p = p.parent) if (!p.visible) vis = false; if (!vis) return;
     const g = o.geometry, pos = g.attributes.position; if (!pos) return;
-    const idx = g.index, n = idx ? idx.count : pos.count, m0 = mats(o)[0], owner = names.push(`${o.name || o.parent?.name || o.geometry.type} (${m0?.name || (m0?.color ? '#' + m0.color.getHexString() : '?')})`) - 1;
+    const idx = g.index, n = idx ? idx.count : pos.count, m0 = mats(o)[0], owner = names.push(`${o.name || o.parent?.name || o.geometry.type} (${m0?.name || (m0?.color ? '#' + m0.color.getHexString() : '?')})`) - 1; objs[owner] = o;
     const mats4 = o.isInstancedMesh ? Array.from({ length: o.count }, (_, k) => { const m = new THREE.Matrix4(); o.getMatrixAt(k, m); return m.premultiply(o.matrixWorld); }) : [o.matrixWorld];
     for (const wm of mats4) {
       const P = []; for (let i = 0; i < pos.count; i++) P.push(tf(wm, V(pos, i)));
@@ -105,22 +110,26 @@ const scan = ([DEPTH, MIN]) => {
     const [a, b, c, d] = s.corners, n = norm(cross(sub(b, a), sub(d, a)));
     const w = Math.hypot(...sub(b, a)), h = Math.hypot(...sub(d, a)); if (w < 0.3 || h < 0.3) continue;
     let hidden = 0, total = 0; const by = new Map(), where = [];
+    // the sign's picture, to skip points where it is transparent (padding round cut-out letters is not part of the sign)
+    const W = s.img.width, H = s.img.height, sx = Math.min(s.uv[0], s.uv[2]) * W, sy = (1 - Math.max(s.uv[1], s.uv[3])) * H, sw = Math.abs(s.uv[2] - s.uv[0]) * W, sh = Math.abs(s.uv[3] - s.uv[1]) * H;
+    let px = null; try { px = s.img.getContext('2d').getImageData(Math.floor(sx), Math.floor(sy), Math.max(1, Math.round(sw)), Math.max(1, Math.round(sh))); } catch {}
+    const clear = (u, v) => { if (!px) return false; const fu = s.uv[2] >= s.uv[0] ? u : 1 - u, fv = s.uv[3] >= s.uv[1] ? v : 1 - v, x = Math.min(px.width - 1, Math.floor(fu * px.width)), y = Math.min(px.height - 1, Math.floor((1 - fv) * px.height)); return px.data[(y * px.width + x) * 4 + 3] < 32; };
     const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
     for (const p of [a, b, c, d]) for (const e of [p, add(p, mul(n, DEPTH))]) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], e[k]); hi[k] = Math.max(hi[k], e[k]); }
     const cand = new Set();
     for (let x = Math.floor(lo[0] / CELL); x <= Math.floor(hi[0] / CELL); x++) for (let y = Math.floor(lo[1] / CELL); y <= Math.floor(hi[1] / CELL); y++) for (let z = Math.floor(lo[2] / CELL); z <= Math.floor(hi[2] / CELL); z++) for (const id of grid.get(key(x, y, z)) || []) cand.add(id);
     for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) {
       const u = 0.04 + 0.92 * i / (G - 1), v = 0.04 + 0.92 * j / (G - 1);
+      if (clear(u, v)) continue;
       const p = add(add(a, mul(sub(b, a), u)), mul(sub(d, a), v)); total++;
       let why = null;
       const o = add(p, mul(n, DEPTH)), dir = mul(n, -1);
       // only a surface that passes through the sign's plane buries it: a head or a post standing in front only hides it from one side
-      for (const id of cand) { const t = hit(o, dir, tris[id], tris[id + 1], tris[id + 2]); if (t > 0 && t < DEPTH - 0.015 && [0, 1, 2].some(k => dot(sub(tris[id + k], p), n) < -0.01)) { why = names[tris[id + 3]]; break; } }
+      for (const id of cand) { const t = hit(o, dir, tris[id], tris[id + 1], tris[id + 2]); if (t > 0 && t < DEPTH - 0.015 && [0, 1, 2].some(k => dot(sub(tris[id + k], p), n) < -0.01) && !s.own?.has(objs[tris[id + 3]])) { why = names[tris[id + 3]]; break; } }
       if (why) { hidden++; by.set(why, (by.get(why) || 0) + 1); where.push((v > 0.66 ? 'top' : v < 0.34 ? 'bottom' : 'middle') + '-' + (u > 0.66 ? 'right' : u < 0.34 ? 'left' : 'centre')); }
     }
     if (hidden < MIN) continue;
     // a crop of the sign's own picture, so the report says which sign it is
-    const W = s.img.width, H = s.img.height, sx = Math.min(s.uv[0], s.uv[2]) * W, sy = (1 - Math.max(s.uv[1], s.uv[3])) * H, sw = Math.abs(s.uv[2] - s.uv[0]) * W, sh = Math.abs(s.uv[3] - s.uv[1]) * H;
     const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(Math.min(400, sw))); cv.height = Math.max(1, Math.round(cv.width * sh / Math.max(1, sw)));
     try { cv.getContext('2d').drawImage(s.img, sx, sy, sw, sh, 0, 0, cv.width, cv.height); } catch {}
     const mid = mul(add(a, c), 0.5);
@@ -136,8 +145,10 @@ const ctx = await browser.newContext({ viewport: { width: 640, height: 360 }, se
 try {
   for (const id of tracks) {
     const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
-    await page.goto(base + `?track=${id}&r=larrysergey&intro=0&seed=3&q=high`, { waitUntil: 'load' });
-    await page.waitForFunction('window.BK && BK.race', null, { timeout: 60000 }); await page.waitForTimeout(1500);
+    try {
+      await page.goto(base + `?track=${id}&r=larrysergey&intro=0&seed=3&q=high`, { waitUntil: 'load' });
+      await page.waitForFunction('window.BK && BK.race', null, { timeout: 120000 }); await page.waitForTimeout(1500);
+    } catch (e) { console.log(`\n== ${id}: did not load (${e.message.split('\n')[0]})${errs.length ? ' ERR ' + errs[0] : ''}`); total++; await page.close(); continue; }
     const res = await page.evaluate(scan, [DEPTH, MIN]);
     console.log(`\n== ${id}: ${res.signs} signs against ${res.tris} triangles, ${res.flagged.length} flagged${errs.length ? ' ERR ' + errs[0] : ''}`);
     let k = 0;

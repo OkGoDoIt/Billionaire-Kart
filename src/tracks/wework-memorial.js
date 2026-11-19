@@ -506,7 +506,7 @@ function dressSectors(ctx, H) {
 
   /* ================= S1: lobby & start ================= */
   putSign([{ t: '$47,000,000,000', fg: '#ffd9d0', strike: '#ff3b30' }, { t: '$0 (COMMUNITY-ADJUSTED)', fg: '#7dffce' }], 17.4, 3.8, 40, 10.7, 58, -90, { bg: '#1c1410', size: 150, h: 512, w: 1400 });
-  putSign(['THIS COMMUNITY OPENED 2019'], 5, .8, -24, 1.7, 75.6, 180, { bg: '#8a6d2f', fg: '#fff3c4', size: 90 });
+  putSign(['THIS COMMUNITY OPENED 2019'], 5, .8, -24, 4.2, 78.48, 180, { bg: '#8a6d2f', fg: '#fff3c4', size: 90 });   // on the oak wall's battens, above the work pods
   putSign(['PIVOT!'], 10, 2.4, -52, 4.5, 75.6, 180, { bg: '#274b63', fg: '#ffe9a8' });
   putSign(['THOUGHTS & PRAYERS CAPITAL'], 11, 2.4, 52, 4.5, 75.6, 180, { bg: '#3a2a4a', fg: '#e8d8ff' });
   putSign(['SPACE AS A SERVICE'], 10, 2.4, -99.6, 6, 48, 90, { bg: '#274b63', fg: '#ffe9a8' });
@@ -578,9 +578,9 @@ function dressSectors(ctx, H) {
   bakePlace(W.paperStack(), 73, 29, { yaw: 1.2, y: 0 });
 
   /* ================= S2: mezzanine / phone booth alley ================= */
-  putSign(['CHIEF VIBES OFFICER'], 5.2, 1.0, 81.2, 6.0, 21, -62, { bg: '#3c4149', fg: '#f5efe0', size: 80 });
-  putSign(['HEAD OF SYNERGY'], 5.2, 1.0, 81.2, 6.0, 7, -62, { bg: '#3c4149', fg: '#f5efe0', size: 80 });
-  putSign(['REGIONAL MANAGER OF COMMUNITY'], 6.8, 1.05, 81.2, 6.0, -6, -62, { bg: '#3c4149', fg: '#f5efe0', size: 70 });
+  // door plates angled toward the oncoming karts, the far end just touching the frosted fronts (x 82)
+  const plate = (text, w, h, z, size) => putSign([text], w, h, 81.95 - w / 2 * Math.cos(62 * DEG), 6.0, z, -62, { bg: '#3c4149', fg: '#f5efe0', size });
+  plate('CHIEF VIBES OFFICER', 5.2, 1.0, 21, 80); plate('HEAD OF SYNERGY', 5.2, 1.0, 7, 80); plate('REGIONAL MANAGER OF COMMUNITY', 6.8, 1.05, -6, 70);
   putSign(['COFFEE — BACK IN 5 MIN (2019)'], 6.1, 1.0, 81.2, 5.1, 30, -62, { bg: '#4a3a22', fg: '#ffe9a8', size: 70 });
   bakePlace(W.keg(), 77.6, 30.5, { yaw: -Math.PI / 2, y: 3.44 });
   bakePlace(W.deskUnit(), 78.2, 14, { yaw: -Math.PI / 2, y: 3.44 });       // the lone lit office
@@ -679,7 +679,7 @@ function dressSectors(ctx, H) {
   /* ================= S7: executive row ================= */
   for (const x of [-64,-40,-16,8,32]) { const rise=Math.max(0,(x+21)/72)*2.8; bakePut(W.boardTable(),x,6.36+rise,-25.4); }
   bakePlace(W.parachuteCase(), 20, -3.4, { y: 5.94, scale: 1.35 });
-  putSign(['IN CASE OF BANKRUPTCY'], 2.6, .5, 20, 7.9, -3.95, 180, { bg: '#8a6d2f', fg: '#fff3c4', size: 80 });
+  putSign(['IN CASE OF BANKRUPTCY'], 2.6, .5, 20, 8.9, -3.4 - .65 * 1.35 - .03, 180, { bg: '#8a6d2f', fg: '#fff3c4', size: 80 });   // on the glass over the canopy's tip, not through its brim
   putSign(['DREAM BIG.', 'EXIT BIGGER.'], 4.2, 2.0, -40, 8.7, -22.35, 0, { bg: '#3a2a4a', fg: '#e8d8ff', size: 105 });
   putSign(['COMMUNITY-ADJUSTED EBITDA'], 9.5, 2.7, -16, 8.9, -21.6, 0, {
     bg: '#20242c', fg: '#ffe9a8', size: 84,

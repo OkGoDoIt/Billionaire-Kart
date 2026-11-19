@@ -49,14 +49,15 @@ function nameTex(text, { w = 512, h = 128, bg = '#f6f4ef', fg = '#14213d', strok
 export function superyacht(name = 'LIQUIDITY', { accent = 0x14213d, L = 40, bigName = false } = {}) {
   const grp = new THREE.Group(), b = new ModelBuilder(), h = L / 2;
   // hull along Z, bow at +Z; y is the centre of each section
-  b.add('hull', loft([
+  const hull = loft([
     { z: -h, w: 3.9, h: 1.7, y: 1.6, n: 3.2 },
     { z: -h * 0.7, w: 4.4, h: 2.1, y: 1.3, n: 3.2 },
     { z: 0, w: 4.6, h: 2.3, y: 1.2, n: 3.0 },
     { z: h * 0.55, w: 3.9, h: 2.4, y: 1.4, n: 2.8 },
     { z: h * 0.85, w: 2.2, h: 2.4, y: 1.9, n: 2.4 },
     { z: h, w: 0.25, h: 1.4, y: 2.9, n: 2.2 },
-  ], 28, 5));
+  ], 28, 5);
+  b.add('hull', hull);
   b.add('stripe', loft([
     { z: -h * 0.98, w: 3.97, h: 0.32, y: 0.55, n: 4 },
     { z: 0, w: 4.66, h: 0.32, y: 0.15, n: 4 },
@@ -93,10 +94,18 @@ export function superyacht(name = 'LIQUIDITY', { accent = 0x14213d, L = 40, bigN
   const plate = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 1.6), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 }));
   plate.position.set(0, 2.15, -h - 0.02); plate.rotation.y = Math.PI; grp.add(plate);
   const big = bigName ? nameTex(name, { w: 1024, h: 180, bg: '#f6f4ef', fg: '#' + new THREE.Color(accent).getHexString(), size: 160 }) : null;
+  // the bow plate follows the hull as it narrows toward the bow: the hull's half-width over the plate's height, from the loft's own rings
+  // (a plate set square at one x had its aft end, and the first letters, inside the hull)
+  const rows = new Map(), hp = hull.attributes.position;
+  for (let i = 0; i < hp.count; i++) { const y = hp.getY(i); if (y < 1.55 || y > 3.25) continue; const z = +hp.getZ(i).toFixed(3); rows.set(z, Math.max(rows.get(z) || 0, Math.abs(hp.getX(i)))); }
+  const zs = [...rows.keys()].sort((a, b) => a - b), hullX = z => { const k = Math.max(1, zs.findIndex(v => v >= z)), z0 = zs[k - 1], z1 = zs[k]; return rows.get(z0) + (rows.get(z1) - rows.get(z0)) * (z - z0) / (z1 - z0 || 1); };
+  const zc = h * 0.42, za = zc - 3, zb = zc + 3, slope = (hullX(zb) - hullX(za)) / 6;
+  const xc = Math.max(...[0, 0.25, 0.5, 0.75, 1].map(t => { const z = za + 6 * t; return hullX(z) - slope * (z - zc); })) + 0.06;
   for (const s of [1, -1]) {   // and along the bow, readable from the shore (or right down the hull, huge)
     const side = new THREE.Mesh(new THREE.PlaneGeometry(big ? 16 : 6, big ? 2.8 : 1.5), new THREE.MeshStandardMaterial({ map: big || tex, roughness: 0.4, transparent: false }));
-    if (big) side.position.set(s * 4.7, 1.9, -h * 0.05); else side.position.set(s * 4.02, 2.4, h * 0.42);
-    side.rotation.y = s * Math.PI / 2; grp.add(side);
+    if (big) { side.position.set(s * 4.7, 1.9, -h * 0.05); side.rotation.y = s * Math.PI / 2; }
+    else { side.position.set(s * xc, 2.4, zc); side.rotation.y = s * (Math.PI / 2 + Math.atan(slope)); }
+    grp.add(side);
   }
   return grp;
 }

@@ -55,6 +55,8 @@ const BOARDS = [
 ];
 const STANDS = ['SEATS PAID IN EQUITY', 'INTERN SECTION (UNPAID)', "VC BOX: LET'S CIRCLE BACK", 'LAID OFF? FREE SEATS!'];
 const PLACARDS = ['SHIP IT!', 'IS IT AGI YET?', "MOM, I'M A UNICORN", 'WHERE IS MY EQUITY', 'PIVOT!', '996 OR BUST', 'NO REVENUE, NO PROBLEM', 'I FUNDED THIS'];
+/* The Quad's arcades run along both sides of the road between these checkpoints. */
+const QUAD = [14.72, 16.12];
 
 export default {
   id: 'silicon-valley',
@@ -254,12 +256,14 @@ export default {
       g.updateMatrixWorld(true); M.copy(g.matrixWorld);
       for (const s of proto.seats) if (rng() < 0.82) { V.set(s[0], s[1], s[2]).applyMatrix4(M); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
       bake.add(g);
+      taken.push([p.x, p.z, 22]);   // no oak grows up through the stand or its placards
       // a banner under the roof, and the front row holding up placards
       const k = nStand++;
       atlas.place(board(STANDS[k % STANDS.length], { bg: k % 2 ? '#ffd23c' : '#ffffff', fg: '#1a1d29', size: 120, lines: 1 }, 1024, 96), local(p, 0, 2.3, gy + 7.9), p.yaw, 28, 2.6);
       [-10, 0.5, 10.5].forEach((u, j) => {
-        const text = PLACARDS[(k * 3 + j) % PLACARDS.length];
-        atlas.place(board(text, { bg: ['#ffffff', '#ff4d6d', '#38b6ff', '#2ee6a6'][(k + j) % 4], fg: '#1a1d29', size: 110, border: '#1a1d29' }, 384, 224), local(p, u + rng.range(-1.5, 1.5), 0.4, gy + 3.9), p.yaw + rng.range(-0.15, 0.15), 3.0, 1.75);
+        const text = PLACARDS[(k * 3 + j) % PLACARDS.length], at = local(p, u + rng.range(-1.5, 1.5), 0.4, gy + 3.9), yw = p.yaw + rng.range(-0.15, 0.15);
+        const c = track.cp[track.nearest(at[0], at[2], p.i)]; if (c > QUAD[0] - 0.08 && c < QUAD[1] + 0.08) return;   // the end of the stand that runs into the Quad's arcade holds no placard
+        atlas.place(board(text, { bg: ['#ffffff', '#ff4d6d', '#38b6ff', '#2ee6a6'][(k + j) % 4], fg: '#1a1d29', size: 110, border: '#1a1d29' }, 384, 224), at, yw, 3.0, 1.75);
       });
     };
     sc.along({ from: 16.25, to: 20.3, side: 1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
@@ -951,19 +955,20 @@ function campus({ faceTraffic, clearView, THREE, track, group, sc, rng, atlas, b
     track.addCollider(ox, oz, 3.4);
     const beds = [];
     for (let k = 0; k < 26; k++) { const a = (k / 26) * Math.PI * 2, r = 5.5 + (k % 2) * 0.9, x = ox + Math.cos(a) * r, z = oz + Math.sin(a) * r * 0.8; beds.push({ x, z, y: track.terrainHeight(x, z), yaw: rng() * 6.28 }); }
-    sc.instances(partsOf(P.bush(6, { color: 0x4fae3f, flower: 0xe8273a })), beds, { scale: [0.65, 0.9], cast: false, sink: 0.2 });
     // The campus name belongs on the plinth. A freestanding sign here masked the
     // entire dollar from a kart halfway down Palm Drive.
-    const yaw = t.rotation.y;
+    const yaw = t.rotation.y, lp = local({ x: ox, z: oz, yaw }, 0, 3.65, oy + 1.48);
+    // the flower bed leaves a gap in front of the name, so no bush grows up over its bottom edge
+    sc.instances(partsOf(P.bush(6, { color: 0x4fae3f, flower: 0xe8273a })), beds.filter(b => Math.hypot(b.x - lp[0], b.z - lp[2]) > 4.8), { scale: [0.65, 0.9], cast: false, sink: 0.2 });
     const label = board('THE OVAL', { bg: '#245036', fg: '#fff4cc', kicker: 'NO PITCHING ON THE LAWN', kfg: '#ffda68', size: 118 }, 768, 256);
-    atlas.place(label, local({ x: ox, z: oz, yaw }, 0, 3.65, oy + 1.48), yaw, 7.2, 2.1);
+    atlas.place(label, lp, yaw, 7.2, 2.1);
     taken.push([ox, oz, 18]);
   }
 
   // ---- the Quad: an arcade either side, and a great arch over each end ----
   {
     const bay = partsOf(S.arcadeBay()), mats = [];
-    const s0 = track.sAtCp(14.72), s1 = track.sAtCp(16.12), P2 = new THREE.Vector3(), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
+    const s0 = track.sAtCp(QUAD[0]), s1 = track.sAtCp(QUAD[1]), P2 = new THREE.Vector3(), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
     const students = [];
     for (let s = s0; s < s1; s += 4.05) {
       const i = Math.floor(s / track.ds) % track.N;
@@ -1101,8 +1106,12 @@ function sandHill({ faceTraffic, THREE, track, group, sc, rng, atlas, bake, take
       p.y = Math.min(...[[-15.65, 7.65], [15.65, 7.65], [-15.65, -7.65], [15.65, -7.65]].map(([u, v]) => { const [x, , z] = local(p, u, v, 0); return track.terrainHeight(x, z); })) - 0.25 + 0.4;
       sc.place(hq, p.x, p.z, { yaw: p.yaw, y: p.y - 0.4 }); bake.add(hq);
       const m = sc.beside(cp, 1, off - 13), mon = S.monument(6.4);
-      const my = Math.min(...[[-3.2, 0.5], [3.2, 0.5], [-3.2, -0.5], [3.2, -0.5]].map(([u, v]) => { const [x, , z] = local(m, u, v, 0); return track.terrainHeight(x, z); })) - 0.2;
+      // slid along the drive until it stands clear of the rocket's mesa (15 m across at its foot): Burn Rate's stood inside it
+      for (let n = 0; n < 30 && Math.hypot(m.x - ROCKET.x, m.z - ROCKET.z) < 19.5; n++) { const s = Math.sign(Math.cos(m.yaw) * (m.x - ROCKET.x) - Math.sin(m.yaw) * (m.z - ROCKET.z)) || 1; m.x += Math.cos(m.yaw) * s; m.z -= Math.sin(m.yaw) * s; }
+      // seated on the highest corner so the bowl slope never covers the name, on a granite footing down to the lowest
+      const hs = [[-3.4, 0.6], [3.4, 0.6], [-3.4, -0.6], [3.4, -0.6]].map(([u, v]) => { const [x, , z] = local(m, u, v, 0); return track.terrainHeight(x, z); }), my = Math.max(...hs) - 0.1, lo = Math.min(...hs) - 0.3;
       sc.place(mon, m.x, m.z, { yaw: m.yaw, y: my }); bake.add(mon, false);
+      if (my - lo > 0.3) { const foot = new THREE.Mesh(new THREE.BoxGeometry(6.8, my - lo + 0.05, 1.3), new THREE.MeshStandardMaterial({ color: 0x3a3f48, roughness: 0.6 })); foot.position.set(m.x, (my + lo + 0.05) / 2, m.z); foot.rotation.y = m.yaw; group.add(foot); bake.add(foot); }
       const pn = mon.userData.panel; atlas.place(firmPlate(k), [m.x + Math.sin(m.yaw) * pn.z, my + pn.y, m.z + Math.cos(m.yaw) * pn.z], m.yaw, pn.w, pn.h);
       for (const u of [-9, 9]) { const [x, , z] = local(m, u, -2, 0); sprays.push({ x, z, y: track.terrainHeight(x, z) + 0.3, ph: rng() * 6 }); }
       taken.push([p.x, p.z, 24], [m.x, m.z, 6]);

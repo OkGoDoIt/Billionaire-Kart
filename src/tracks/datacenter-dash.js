@@ -743,9 +743,11 @@ function decorate(ctx) {
   const frame = P.billboard(null, { w: 15, h: 5, legs: 6, frame: 0x3a414c }); frame.remove(frame.children[frame.children.length - 1]);   // keep the frame, drop the blank panel
   const BS = 1.5;   // billboards half again as big as the stock ones
   BOARDS.forEach(([cp, side, off, text, bg, fg], i) => {
-    const p = sc.beside(cp, side, off + 4); if (!clear(p.x, p.z, 0.5) || inHallBox(p.x, p.z, 3) || campus.inside(p.x, p.z, 3)) return;
-    const approach = track.indexAtCp(cp - 0.65);
-    const yaw = Math.atan2(track.px[approach] - p.x, track.pz[approach] - p.z), f = frame.clone(); sc.place(f, p.x, p.z, { yaw, scale: BS }); bake.add(f);
+    // a board whose end would sink into a hall steps further back from the road until both ends are out in the open
+    const spot = (c, o = 0) => { const p = sc.beside(c, side, off + 4 + o), a = track.indexAtCp(c - 0.65), yaw = Math.atan2(track.px[a] - p.x, track.pz[a] - p.z), ex = Math.cos(yaw) * 7.5 * BS, ez = -Math.sin(yaw) * 7.5 * BS; return { p, yaw, ends: !inHall(p.x + ex, p.z + ez, 1) && !inHall(p.x - ex, p.z - ez, 1) }; };
+    let s = spot(cp); for (let k = 1; k <= 12 && !s.ends; k++) { const t = spot(cp, k); if (t.ends) s = t; }
+    const { p, yaw } = s; if (!clear(p.x, p.z, 0.5) || inHallBox(p.x, p.z, 3) || campus.inside(p.x, p.z, 3)) return;
+    const f = frame.clone(); sc.place(f, p.x, p.z, { yaw, scale: BS }); bake.add(f);
     const r = atlas.add(768, 256, text === 'BEFORE' ? lakeMural : (g, w, h) => {
       g.fillStyle = bg; g.fillRect(0, 0, w, h);
       const sh = g.createLinearGradient(0, 0, w, h); sh.addColorStop(0, 'rgba(255,255,255,0.16)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.14)'); g.fillStyle = sh; g.fillRect(0, 0, w, h);
@@ -1454,8 +1456,17 @@ const HALL_EXTRAS = {
   /* The GPU hall: hot aisles glowing red, heat shimmer off every rack, and the fans roaring. */
   gpu(api) {
     const { THREE, track, at, idx, n, hw, view = api.ctxs.view, atlas, Wd } = api;
-    for (let k = 3; k < n - 2; k += 5) for (const sd of [-1, 1]) wallFan(api, idx[k], sd, 8.0, 1.6);
-    { const i = idx[Math.floor(n * 0.45)], p = at(i, -(Wd(i, -1) - 0.2), 8.7), r = atlas.add(1600, 260, muralDraw('WE BOUGHT ALL OF THEM', '#e23b3b')); atlas.place(r, p, Math.atan2(track.lx[i], track.lz[i]), 26, 4.2); }
+    { // the wall curves, so the 26 m mural goes up in four flat strips that follow it rather than one board whose ends sink in
+      const i = idx[Math.floor(n * 0.45)], N = track.N, W = j => at((j + N) % N, -(Wd((j + N) % N, -1) - 0.2), 8.7), step = 6.5 / Math.hypot(...W(i + 1).map((v, a) => v - W(i)[a]));
+      const P = [0, 1, 2, 3, 4].map(k => W(i + Math.round((k - 2) * step)));
+      if ((P[4][0] - P[0][0]) * track.lz[i] - (P[4][2] - P[0][2]) * track.lx[i] < 0) P.reverse();   // left to right as seen from the road
+      for (let k = 0; k < 4; k++) {
+        const [a, b] = [P[k], P[k + 1]], r = atlas.add(400, 260, (g, w, h) => { g.translate(-k * w, 0); muralDraw('WE BOUGHT ALL OF THEM', '#e23b3b')(g, w * 4, h); });
+        atlas.place(r, a.map((v, j) => (v + b[j]) / 2), Math.atan2(a[2] - b[2], b[0] - a[0]), Math.hypot(b[0] - a[0], b[2] - a[2]), 4.2);
+      }
+      // wall fans up and down the hall, but none over the mural
+      for (let k = 3; k < n - 2; k += 5) for (const sd of [-1, 1]) if (sd > 0 || Math.abs(idx[k] - i) > 2 * step + 4) wallFan(api, idx[k], sd, 8.0, 1.6);
+    }
     const hot = idx.filter((_, k) => k % 3 === 1).map(i => ({ i, sd: (i & 1) ? 1 : -1 }));
     void THREE;
     return {

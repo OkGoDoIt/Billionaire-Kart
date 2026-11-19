@@ -40,6 +40,14 @@ node tools/hud-check.mjs        # the HUD at fourteen screen shapes with the lon
 node tools/text-check.mjs       # sign text on every track: nothing squashed or cut off
 ```
 
+If you placed signs, boards, posters, or anything near them (trees, stands, walls), also run:
+
+```bash
+node tools/sign-clip-check.mjs  # no sign on any track buried in a wall, the ground, or another prop: prints "sign-clip-check: ok"
+```
+
+It names each buried sign with its lap position and saves a crop of it; add `--shots` for a close-up of each one as a player would see it.
+
 If you added scenery, props, or a whole track, also run the draw-call check:
 
 ```bash

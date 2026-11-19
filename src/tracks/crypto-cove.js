@@ -212,6 +212,7 @@ function decorate(ctx) {
     const g = proto.group.clone(); sc.place(g, p.x, p.z, { yaw: p.yaw, y: track.py[p.i] - 0.3 }); standSpots.push({ x: p.x, z: p.z, yaw: p.yaw, y: track.py[p.i] - 0.3 });
     g.updateMatrixWorld(true); M.copy(g.matrixWorld); staticProps.add(g);
     for (const s of proto.seats) if (rng() < 0.82) { V.set(s[0], s[1], s[2]).applyMatrix4(M); seats.push({ x: V.x, y: V.y, z: V.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
+    keepOut.push({ x: p.x, z: p.z, r: 20 });   // no palm or bush grows up through the stand and the signs in the crowd
   };
   sc.along({ from: 18.3, to: 0.95, side: 1, offset: 6.5, spacing: 36 }).forEach((p, i) => putStand(i % 2 ? stand2 : stand, p));
   sc.instances(partsOf(P.spectator()), seats, { scale: [0.95, 1.2], tints: P.CROWD_TINTS, cast: false });
@@ -707,8 +708,8 @@ function jokes(ctx, sc, { standSpots, seats, gantryAt, listing }) {
     sc.place(tw, TOWER.x, TOWER.z, { yaw, y }); bake.add(tw);
     const o = { x: TOWER.x, y, z: TOWER.z, yaw };
     const s = atlas.add(768, 360, (g, w, h) => { g.fillStyle = '#ef4444'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffffff'; g.fillRect(14, 14, w - 28, h - 28); fitText(g, 'HODL', w / 2, h * 0.4, w * 0.8, 230, F, '#ef4444', { lines: 1 }); fitText(g, 'LIFEGUARD SOLD THE BOTTOM', w / 2, h * 0.8, w * 0.86, 52, SANS, '#1a1d29', { lines: 1 }); });
-    atlas.place2(s, toWorld(o, [0, 10.2, 0.6]), yaw, 9, 4.2);
-    const sp = new ModelBuilder(); for (const x of [-2.6, 2.6]) sp.add('p', cyl(0.12, 0.12, 2.0, 6), { p: toWorld(o, [x, 8.6, 0.4]) }); bake.builder(sp, { p: plastic(0xf4f4f0, 0.6) }, false);
+    atlas.place2(s, toWorld(o, [0, 10.9, 0.6]), yaw, 9, 4.2);   // its bottom edge clears the hut's roof (at 10.2 it ran through it)
+    const sp = new ModelBuilder(); for (const x of [-2.6, 2.6]) sp.add('p', cyl(0.12, 0.12, 2.0, 6), { p: toWorld(o, [x, 9.3, 0.4]) }); bake.builder(sp, { p: plastic(0xf4f4f0, 0.6) }, false);
   }
 
   /* ---- 4. the beach club is now the collapsed exchange ---- */

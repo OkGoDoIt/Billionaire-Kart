@@ -10,6 +10,7 @@ import { Scenery, partsOf } from '../render/scenery.js';
 import * as P from '../models/props.js';
 import * as C from '../models/props-capitol-hill.js';
 import { canvasTex } from '../render/textures.js';
+import { tunnelWallLat } from '../track/trackmesh.js';
 import { ModelBuilder, cyl, box, plastic, paint } from '../models/build.js';
 
 export const CAPITOL = { x: -85, z: 147, y: 27, ax: 66, az: 34 };   // plateau (half-axes) the capitol stands on
@@ -341,7 +342,8 @@ export default {
     const M = new THREE.Matrix4(), V = new THREE.Vector3(), Q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
     const putStand = (list, proto, p) => {
       list.push(p); M.compose(V.set(p.x, p.y, p.z), Q.setFromAxisAngle(UP, p.yaw), ONE);
-      for (const st of proto.seats) if (rng() < 0.82) { const w = new THREE.Vector3(st[0], st[1], st[2]).applyMatrix4(M); seats.push({ x: w.x, y: w.y, z: w.z, yaw: p.yaw + rng.range(-0.4, 0.4) }); }
+      const endX = Math.max(...proto.seats.map(st => Math.abs(st[0]))) - 0.6;   // a placard held at the end of a row would poke into the stand's end wall (#389)
+      for (const st of proto.seats) if (rng() < 0.82) { const w = new THREE.Vector3(st[0], st[1], st[2]).applyMatrix4(M); seats.push({ x: w.x, y: w.y, z: w.z, yaw: p.yaw + rng.range(-0.4, 0.4), face: p.yaw, end: Math.abs(st[0]) > endX }); }
       taken.push([p.x, p.z, 20]);
     };
     sc.along({ from: 44.15, to: 1.0, side: -1, offset: 6.5, spacing: 34 }).forEach((p, i) => putStand(i % 2 ? standsB : standsA, i % 2 ? stand2 : stand, p));
@@ -822,7 +824,7 @@ const BOARDS = [
   [16.8, -1, 18, 'I YIELD MY TIME TO MY DONORS', '#1f3f8a', '#ffd23c'],
   [24.0, 1, 22, 'INSIDER TRADING: MEMBERS ONLY', '#16a34a', '#ffffff'], [28.0, 1, 16, 'BILL: 4,000 PAGES. READ: 0', '#ffffff', '#12142b'],
   [31.5, -1, 20, 'PASS IT. READ IT LATER.', '#b3122a', '#ffffff'], [31.8, -1, 19, 'SHUTDOWN SEASON TICKETS ON SALE', '#ffd23c', '#12142b'],
-  [37.5, -1, 22, 'NEW TARIFF? CHECK YOUR NOTIFICATIONS', '#12142b', '#ffffff'], [42.0, 1, 18, 'CAMPAIGN PROMISES RECYCLED HERE', '#16a34a', '#ffffff'],
+  [38.15, -1, 18, 'NEW TARIFF? CHECK YOUR NOTIFICATIONS', '#12142b', '#ffffff'], [42.0, 1, 18, 'CAMPAIGN PROMISES RECYCLED HERE', '#16a34a', '#ffffff'],
   [44.3, 1, 26, 'LOBBYISTS: USE SIDE ENTRANCE', '#d4af37', '#12142b'],
 ];
 const CROWD = ['OBJECTION!', 'I YIELD', 'NO COMMENT', 'PAY TO PLAY', 'SO MOVED', 'RECESS!', 'FILIBUSTER!', 'SPEAK UP, SENATOR', 'HONK FOR GRIDLOCK', 'MORE HEARINGS'];
@@ -905,7 +907,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
   const Ms = new THREE.Matrix4(), Qs = new THREE.Quaternion(), Ps = new THREE.Vector3(), Ss = new THREE.Vector3(2.5, 2.5, 2.5), Ys = new THREE.Vector3(0, 1, 0);
 
   /* ---- 2. the Avenue: the congressional portfolio, on a stock ticker you cannot miss ---- */
-  const tickAt = sc.beside(44.15, -1, 23), tickYaw = yawTo(tickAt, roadPt(43.05)), tickY = tickAt.y + 13;
+  const tickAt = sc.beside(44.15, -1, 29), tickYaw = yawTo(tickAt, roadPt(43.05)), tickY = tickAt.y + 13;   // 29 m out: at 23 its left post stood in the start grandstand (#389)
   const ticker = C.ledPanel(group, 1024, 300, [{ c: [tickAt.x, tickY, tickAt.z], yaw: tickYaw }], 36, 10.5);
   for (const d of [-12, 12]) pole(tickAt.x + Math.cos(tickYaw) * d - Math.sin(tickYaw) * 0.4, tickAt.z - Math.sin(tickYaw) * d - Math.cos(tickYaw) * 0.4, tickAt.y - 0.5, tickY - 4, 0.45);
   const TAPE = 'BOUGHT DEFENSE STOCK ▲ DAY BEFORE THE VOTE ▲ SOLD EVERYTHING ▲ DAY BEFORE THE CRASH ▲ STOCK ACT? NEVER HEARD OF IT ▲ DISCLOSURE FILED 2 YEARS LATE ▲ ';
@@ -1006,7 +1008,7 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
 
   /* ---- 6b. inside the capitol: the tunnel is a hearing-room corridor, with its own brighter atlas so it reads in the tunnel light ---- */
   {
-    const inside = C.makeAtlas(group, 2048, { emissive: 0.5 }), TH = track.def.tunnelHeight ?? 7.5;
+    const inside = C.makeAtlas(group, 2048, { emissive: 0.5 });
     const dark = inside.add(32, 32, g => { g.fillStyle = '#1a1d29'; g.fillRect(0, 0, 32, 32); });
     const at = (i, lat, up) => [track.px[i] + track.lx[i] * lat + track.ux[i] * up, track.py[i] + track.ly[i] * lat + track.uy[i] * up, track.pz[i] + track.lz[i] * lat + track.uz[i] * up];
     // banners across the ceiling, facing the karts coming in
@@ -1029,15 +1031,32 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
       g.fillStyle = '#c9ccd2'; g.beginPath(); g.arc(cx, top + 52, 46, Math.PI, 0); g.fill();
       g.fillStyle = '#23262e'; g.beginPath(); g.arc(cx - 15, top + 64, 5, 0, 7); g.arc(cx + 15, top + 64, 5, 0, 7); g.fill();
       g.strokeStyle = '#23262e'; g.lineWidth = 5; g.beginPath(); g.arc(cx, top + 76, 20, 0.2, Math.PI - 0.2); g.stroke();   // the grin
-      for (let k = 0; k < 5; k++) { g.save(); g.translate(cx + 80, top + 150); g.rotate(-0.6 + k * 0.25); g.fillStyle = '#9fd6a0'; g.fillRect(0, -14, 70, 28); g.strokeStyle = '#2f6b3a'; g.lineWidth = 3; g.strokeRect(0, -14, 70, 28); g.restore(); }
+      for (let k = 0; k < 5; k++) { g.save(); g.translate(cx + 80, top + 150); g.rotate(-0.6 + k * 0.25); g.fillStyle = '#9fd6a0'; g.fillRect(0, -14, 44, 28); g.strokeStyle = '#2f6b3a'; g.lineWidth = 3; g.strokeRect(0, -14, 44, 28); g.restore(); }
       fitText(g, cap, w * 0.72, h * 0.5, w * 0.48, 80, F, '#12142b', { maxH: h * 0.7 });
     };
+    // Each frame is fitted to the wall as it is drawn (#389): the arch is flat facets, so a panel leaning at the ideal
+    // curve's slope sank its top and bottom edges into the wall. Rest both edges on the facets, then pull the frame in
+    // until no corner or edge midpoint is behind the wall, measured at the sample nearest each point (bends close in).
+    const PW = 4.4, PH = 2.58, UP = 2.7, GAP = 0.06, N = track.N, near = (q, i0, span) => { let best = i0, bd = 1e18; for (let j = i0 - span; j <= i0 + span; j++) { const jj = ((j % N) + N) % N, dd = (track.px[jj] - q[0]) ** 2 + (track.pz[jj] - q[2]) ** 2; if (dd < bd) { bd = dd; best = jj; } } return best; };
     let n = 0;
     for (let cp = 20.08; cp < 21.95; cp += 0.17) for (const s of [1, -1]) {
-      const i = track.indexAtCp(cp), half = (track.hwL[i] + track.hwR[i]) / 2 + 0.7, up = 2.7, lat = s * (half * Math.sqrt(1 - (up / TH) ** 2) - 0.12);
-      const yaw = Math.atan2(-s * track.lx[i], -s * track.lz[i]), k = n++;
+      const i = track.indexAtCp(cp), yaw = Math.atan2(-s * track.lx[i], -s * track.lz[i]), k = n++;
+      let lo = UP - PH / 2, hi = UP + PH / 2, wl = 0, wh = 0, lean = 0;
+      for (let it = 0; it < 3; it++) { wl = tunnelWallLat(track, i, s, lo); wh = tunnelWallLat(track, i, s, hi); lean = Math.atan2(Math.abs(wl - wh), hi - lo); lo = UP - PH / 2 * Math.cos(lean); hi = UP + PH / 2 * Math.cos(lean); }
+      let lat = (wl + wh) / 2 - s * GAP;
+      const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw), ux = fx * Math.sin(lean), uy = Math.cos(lean), uz = fz * Math.sin(lean), span = Math.ceil(PW / track.ds) + 2;
+      for (let it = 0; it < 3; it++) {
+        const c = at(i, lat, UP); let pull = 0;
+        for (const [sx, sy] of [[-1, -1], [0, -1], [1, -1], [-1, 1], [0, 1], [1, 1], [-1, 0], [1, 0]]) {
+          const q = [c[0] + rx * PW / 2 * sx + ux * PH / 2 * sy, c[1] + uy * PH / 2 * sy, c[2] + rz * PW / 2 * sx + uz * PH / 2 * sy], j = near(q, i, span);
+          const d = [q[0] - track.px[j], q[1] - track.py[j], q[2] - track.pz[j]], ql = d[0] * track.lx[j] + d[1] * track.ly[j] + d[2] * track.lz[j], qu = d[0] * track.ux[j] + d[1] * track.uy[j] + d[2] * track.uz[j];
+          pull = Math.max(pull, s * (ql - tunnelWallLat(track, j, s, qu)) + GAP);
+        }
+        if (pull <= 0.005) break;
+        lat -= s * pull;
+      }
       const r = k % 3 === 1 ? inside.add(512, 300, cutout(CUTS[Math.floor(k / 3) % CUTS.length])) : inside.add(512, 300, signDraw(NOTES[k % NOTES.length], { bg: k % 2 ? '#12142b' : '#f2efe6', fg: k % 2 ? '#ffd23c' : '#1f3f8a', size: 90, border: '#d4af37' }));
-      inside.place(r, at(i, lat, up), yaw, 4.4, 2.58, -0.4);
+      inside.place(r, at(i, lat, UP), yaw, PW, PH, -lean);
     }
     inside.flush();
   }
@@ -1113,8 +1132,8 @@ function jokes(ctx, sc, { seats, stands, gantryAt, reach, atlas }) {
     const crowd = CROWD.map((t, k) => atlas.add(256, 150, signDraw(t, { bg: ['#ffffff', '#ffd23c', '#f7b8d0', '#e9f4ff', '#f2efe6'][k % 5], fg: ['#b3122a', '#1f3f8a', '#12142b'][k % 3], size: 64, border: '#12142b' })));
     const sticks = new ModelBuilder();
     seats.forEach((st, k) => {
-      if (rng() > 0.16) return;
-      atlas.place(crowd[k % crowd.length], [st.x, st.y + 1.95, st.z], st.yaw + rng.range(-0.15, 0.15), 1.4, 0.82, rng.range(-0.1, 0.1));
+      if (rng() > 0.16 || st.end) return;
+      atlas.place(crowd[k % crowd.length], [st.x, st.y + 1.95, st.z], st.face + rng.range(-0.15, 0.15), 1.4, 0.82, rng.range(-0.1, 0.1));   // squared to the stand: a placard turned with its holder's head swung into the neighbours (#389)
       sticks.add('s', cyl(0.025, 0.025, 0.8, 4), { p: [st.x, st.y + 1.3, st.z] });
     });
     bake.builder(sticks, { s: plastic(0x8a5a36, 0.8) }, false);

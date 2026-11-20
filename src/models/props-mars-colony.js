@@ -523,6 +523,121 @@ export function nutrientTower() {
   return b.build({ tank: WHITE, pipe: PANEL, leaf: plastic(0x278a4b, 0.68), fruit: plastic(0xe43840, 0.45) });
 }
 
+/* ---------- the X and Grok gags ---------- */
+const X_BLUE = plastic(0x1d9bf0, 0.35), INK = plastic(0x1f1418, 0.55, 0.2), CARD = plastic(0xf7f9f9, 0.5);
+
+/** A slab cut from a 2D outline (pairs of [x, y]), `depth` thick and centred on z = 0, with softened edges. */
+function slab(outline, depth, bevel = 0.18) {
+  const s = new THREE.Shape(); outline.forEach(([x, y], k) => k ? s.lineTo(x, y) : s.moveTo(x, y));
+  const g = new THREE.ExtrudeGeometry(s, { depth: depth - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 4 });
+  g.translate(0, 0, -(depth - bevel * 2) / 2);
+  return g;
+}
+/** A rounded rectangle outline, w by h, centred on the origin. */
+function roundRect(w, h, r, seg = 4) {
+  const pts = [];
+  for (const [cx, cy, a0] of [[w / 2 - r, h / 2 - r, 0], [-w / 2 + r, h / 2 - r, Math.PI / 2], [-w / 2 + r, -h / 2 + r, Math.PI], [w / 2 - r, -h / 2 + r, Math.PI * 1.5]])
+    for (let k = 0; k <= seg; k++) { const a = a0 + (k / seg) * Math.PI / 2; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return pts;
+}
+
+/** The paid checkmark: a scalloped blue badge, r across the lobes, with a white tick standing proud of both faces.
+    Faces +Z, centred on its middle. */
+export function verifiedBadge({ r = 4.2, depth = 1.1 } = {}) {
+  const b = new ModelBuilder(), pts = [];
+  for (let k = 0; k < 128; k++) { const a = (k / 128) * Math.PI * 2; const rr = r * (0.94 + 0.06 * Math.cos(a * 8)); pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); }
+  b.add('blue', slab(pts, depth, 0.22));
+  // the tick: a short arm and a long arm meeting low and left of centre, through the badge so it shows on both faces
+  const t = r * 0.19, arm = (x0, y0, x1, y1) => {
+    const len = Math.hypot(x1 - x0, y1 - y0) * r + t;
+    b.add('white', box(len, t, depth + 0.36, t * 0.45, 2), { p: [(x0 + x1) / 2 * r, (y0 + y1) / 2 * r, 0], r: [0, 0, Math.atan2(y1 - y0, x1 - x0)] });
+  };
+  const B = [-0.1, -0.3];
+  arm(-0.42, 0.02, B[0], B[1]);
+  arm(B[0], B[1], 0.44, 0.36);
+  return b.build({ blue: X_BLUE, white: plastic(0xffffff, 0.4) });
+}
+
+/** A swing price tag, w by h, its pointed end (with a brass grommet) to +x. The track letters the card. */
+export function priceTag({ w = 12, h = 5 } = {}) {
+  const b = new ModelBuilder(), p = h * 0.5;
+  b.add('card', slab([[-w / 2, -h / 2], [w / 2 - p, -h / 2], [w / 2, 0], [w / 2 - p, h / 2], [-w / 2, h / 2]], 0.3, 0.08));
+  b.add('brass', torus(h * 0.1, h * 0.035, 6, 14), { p: [w / 2 - p * 0.5, 0, 0] });
+  return b.build({ card: CARD, brass: plastic(0xd6a640, 0.35, 0.6) });
+}
+
+/** The colony headquarters: a chunky white block, w wide, h tall, d deep, facing +Z, with rust trim, lit window rows, a
+    porch, and a steel frame on the roof to carry the letter (the track adds it). It stands on a concrete podium reaching
+    `plinth` metres down, for sloping ground, with a forecourt in front. userData.x is where the letter's centre goes and
+    how big it is. */
+export function colonyHQ({ w = 30, h = 16, d = 16, plinth = 0 } = {}) {
+  const b = new ModelBuilder();
+  b.add('wall', box(w, h, d, 0.6, 2), { p: [0, h / 2, 0] });
+  b.add('base', box(w + 1.2, 1.4, d + 1.2, 0.3, 1), { p: [0, 0.7, 0] });
+  if (plinth > 0) {
+    b.add('podium', box(w + 6, plinth + 1, d + 12, 0.4, 1), { p: [0, -(plinth + 1) / 2 + 0.2, 2.5] });
+    b.add('rust', box(w + 6.3, 0.45, d + 12.3, 0.15, 1), { p: [0, 0.05, 2.5] });
+  }
+  b.add('rust', box(w + 0.8, 1.3, d + 0.8, 0.3, 1), { p: [0, h - 0.4, 0] });
+  b.add('rust', box(w + 0.4, 0.5, d + 0.4, 0.15, 1), { p: [0, h * 0.36, 0] });
+  for (const sx of [-1, 1]) b.add('rust', box(1.2, h - 1, 1.2, 0.2, 1), { p: [sx * (w / 2 - 0.1), h / 2, d / 2 - 0.1] });
+  // window bands on the front and both ends
+  for (const [y, hh] of [[h * 0.56, 1.9], [h * 0.78, 1.9]]) {
+    for (let k = 0; k < 7; k++) b.add('win', box(2.6, hh, 0.3, 0.12, 1), { p: [(k - 3) * (w - 4) / 7, y, d / 2 + 0.05] });
+    for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) b.add('win', box(0.3, hh, 2.6, 0.12, 1), { p: [sx * (w / 2 + 0.05), y, (k - 1) * (d - 5) / 3] });
+  }
+  // the porch: glass doors under a rust canopy on two posts
+  b.add('door', box(6, 3.8, 0.3, 0.12, 1), { p: [0, 1.9 + 0.8, d / 2 + 0.05] });
+  b.add('rust', box(9, 0.5, 3.6, 0.15, 1), { p: [0, 5.2, d / 2 + 1.7] });
+  for (const sx of [-1, 1]) b.add('wall', cyl(0.22, 0.22, 4.4, 8), { p: [sx * 4, 3, d / 2 + 3.2] });
+  // roof clutter: two service boxes
+  for (const [x, z] of [[-w * 0.36, -d * 0.2], [w * 0.38, -d * 0.25]]) b.add('base', box(3.4, 1.6, 2.6, 0.2, 1), { p: [x, h + 0.8, z] });
+  // the frame that carries the letter: two trussed legs and a walkway
+  const X = { y: h + 9.8, s: 15 };
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) strut(b, 'steel', [sx * 4.2, h, sz * 1.1 - 1.2], [sx * 3.1, X.y - 1.5, sz * 0.6 - 1.2], 0.36);
+    for (let k = 0; k < 3; k++) strut(b, 'steel', [sx * (4.2 - k * 0.36), h + k * 2.7, -2.3], [sx * (3.8 - k * 0.36), h + (k + 1) * 2.7, -0.1], 0.18);
+  }
+  b.add('steel', box(14, 0.4, 2.2, 0.1, 1), { p: [0, h + 2.2, -1.2] });
+  const g = b.build({ wall: plastic(0xe9e4d8, 0.7), base: plastic(0xb9b2a6, 0.8), podium: plastic(0xcfc6b8, 0.9), rust: RUST, win: glow(0xffd9a0, 1.4), door: glow(0x9fe0ff, 1.2), steel: plastic(0x6b6f78, 0.6) });
+  g.userData.x = X;
+  return g;
+}
+
+/** The rooftop letter: a chunky X, s across, one thick stroke and one thin like the mark, in a dark rim. Faces +Z,
+    centred on its middle. Returns { face, rim } groups: the face is what the track lights. */
+export function rooftopX({ s = 15 } = {}) {
+  const face = new ModelBuilder(), rim = new ModelBuilder(), len = s * 1.36;
+  face.add('face', box(len, s * 0.2, 1.0, 0.3, 2), { r: [0, 0, -Math.PI / 4] });
+  face.add('face', box(len * 0.98, s * 0.09, 1.1, 0.2, 2), { r: [0, 0, Math.PI / 4] });
+  rim.add('rim', box(len + 0.8, s * 0.2 + 0.8, 0.8, 0.3, 1), { p: [0, 0, -0.45], r: [0, 0, -Math.PI / 4] });
+  rim.add('rim', box(len * 0.98 + 0.8, s * 0.09 + 0.8, 0.8, 0.2, 1), { p: [0, 0, -0.45], r: [0, 0, Math.PI / 4] });
+  return { face: face.build({ face: new THREE.MeshStandardMaterial({ color: 0xf4f6fa, emissive: 0xe8f1ff, emissiveIntensity: 1, roughness: 0.4 }) }), rim: rim.build({ rim: INK }) };
+}
+
+/** A padlock, about h tall, facing +Z: a chunky gold body and a steel shackle. */
+export function padlock({ h = 4 } = {}) {
+  const b = new ModelBuilder(), bw = h * 0.72, bh = h * 0.56;
+  b.add('gold', box(bw, bh, h * 0.32, h * 0.08, 2), { p: [0, bh / 2, 0] });
+  b.add('steel', torus(bw * 0.3, h * 0.07, 8, 18, Math.PI), { p: [0, bh, 0] });
+  for (const sx of [-1, 1]) b.add('steel', cyl(h * 0.07, h * 0.07, h * 0.12, 8), { p: [sx * bw * 0.3, bh + h * 0.02, 0] });
+  b.add('ink', cyl(h * 0.07, h * 0.07, h * 0.36, 8), { p: [0, bh * 0.55, 0], r: [Math.PI / 2, 0, 0] });
+  b.add('ink', box(h * 0.06, h * 0.16, h * 0.36), { p: [0, bh * 0.4, 0] });
+  return b.build({ gold: plastic(0xf2b632, 0.3, 0.5), steel: MAT.steel, ink: INK });
+}
+
+/** A chat bubble, w by h, with its tail at the bottom on the left (dir = -1) or right (dir = 1). Faces +Z. */
+export function chatBubble({ w = 14, h = 4.5, dir = -1, color = 0xffffff } = {}) {
+  const b = new ModelBuilder(), r = Math.min(h * 0.45, 2), pts = roundRect(w, h, r);
+  // splice a tail into the bottom edge
+  const tx = dir * (w / 2 - r - 1.2), tail = [[tx + dir * 0.6, -h / 2], [tx - dir * 0.2, -h / 2 - Math.min(h * 0.42, 1.9)], [tx - dir * 1.6, -h / 2]];
+  const k = pts.findIndex(([, y], i) => i > 0 && y <= -h / 2 + 1e-6);
+  // the bottom edge runs left to right, so the tail goes in in order of x
+  const outline = [...pts.slice(0, k + 1), ...(dir < 0 ? tail : tail.reverse()), ...pts.slice(k + 1)];
+  b.add('bubble', slab(outline, 0.6, 0.14));
+  return b.build({ bubble: plastic(color, 0.45) });
+}
+
 
 // Static Mars paint uses the native PBR channels: G = roughness, B = metalness.
 // Geometry and material caches are scoped to this scene because each race owns its buffers.
